@@ -49,14 +49,7 @@ const navItems = [
       { href: '/configuracoes', label: 'Configurações', icon: '⬡', color: 'text-zinc-400' },
     ],
   },
-  {
-    group: 'SaaS',
-    items: [
-      { href: '/admin/empresas', label: 'Clientes SaaS', icon: '◈', color: 'text-amber-400' },
-      { href: '/onboarding', label: 'Nova empresa', icon: '◈', color: 'text-amber-400' },
-      { href: '/configuracoes/bot', label: 'Meu bot', icon: '◈', color: 'text-purple-400' },
-    ],
-  },
+
 ]
 
 export function Sidebar() {
