@@ -70,12 +70,13 @@ export function Sidebar() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data } = await supabase.from('funcionarios').select('*').eq('email', user.email || '').single()
+        const { data } = await supabase.from('usuarios').select('*').eq('email', user.email || '').single()
         const func = data as any
         if (func) {
-          setIsAdmin(false)
+          const isUserAdmin = func.role === 'admin' || func.setor === 'todos'
+          setIsAdmin(isUserAdmin)
           setPermissoes(func.permissoes || [])
-          setUserData({ nome: func.nome, cargo: func.cargo })
+          setUserData({ nome: func.nome, cargo: func.cargo || (isUserAdmin ? 'Administrador' : 'Membro') })
         } else {
           // É o dono / admin
           setIsAdmin(true)
