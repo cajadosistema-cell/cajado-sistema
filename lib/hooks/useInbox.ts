@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const API = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://visiopro-inbox-backend-production.up.railway.app'
+const API = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://visiopro-unified01-production.up.railway.app'
 const INBOX_TOKEN_KEY = 'cajado_inbox_token'
 
 // ── Tipos ──────────────────────────────────────────────────────
