@@ -47,7 +47,7 @@ function ModalLancamento({ onClose, onSave, contas, categorias }: {
           valor: valor / parcelas, tipo: form.tipo, regime: form.regime,
           status: 'pendente', data_competencia: data.toISOString().split('T')[0],
           categoria_id: form.categoria_id || null, parcela_atual: i, total_parcelas: parcelas,
-        })
+        } as any)
       }
     } else {
       await insert({
@@ -55,7 +55,7 @@ function ModalLancamento({ onClose, onSave, contas, categorias }: {
         tipo: form.tipo, regime: form.regime, status: 'pendente',
         data_competencia: form.data_competencia,
         categoria_id: form.categoria_id || null, total_parcelas: 1,
-      })
+      } as any)
     }
     onSave(); onClose()
   }
