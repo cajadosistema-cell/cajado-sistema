@@ -38,6 +38,8 @@ type Atividade = {
 type Parceiro = {
   id: string
   nome: string
+  telefone: string
+  email: string | null
   status: 'ativo' | 'inativo' | 'suspenso'
   comissao_percentual: number
   total_indicacoes: number
