@@ -8,8 +8,8 @@ import { createClient } from '@/lib/supabase/client'
 
 Chart.register(DoughnutController, LineController, BarController, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Filler)
 
-const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+const MESES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 const ANOS = [2026, 2025, 2024, 2023, 2022, 2021]
 
 // ── Modal Lançamento inline ──────────────────────────────
@@ -71,15 +71,15 @@ function ModalLancamento({ onClose, onSave, contas, categorias }: {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-4 gap-1 bg-zinc-800/50 p-1 rounded-lg">
-            {(['despesa','receita','investimento','transferencia'] as const).map(t => (
+            {(['despesa', 'receita', 'investimento', 'transferencia'] as const).map(t => (
               <button key={t} type="button"
                 onClick={() => setForm(f => ({ ...f, tipo: t, categoria_id: '' }))}
                 className={cn('py-1.5 rounded-md text-xs font-medium transition-colors capitalize',
                   form.tipo === t
                     ? t === 'receita' ? 'bg-emerald-500/20 text-emerald-400'
                       : t === 'despesa' ? 'bg-red-500/20 text-red-400'
-                      : t === 'investimento' ? 'bg-blue-500/20 text-blue-400'
-                      : 'bg-zinc-700 text-zinc-300'
+                        : t === 'investimento' ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-zinc-700 text-zinc-300'
                     : 'text-zinc-500 hover:text-zinc-300'
                 )}>{t === 'transferencia' ? 'Transf.' : t.charAt(0).toUpperCase() + t.slice(1)}</button>
             ))}
@@ -221,28 +221,28 @@ export default function InicioClient() {
 
     const mesL = parseInt(l.data_competencia.substring(5, 7)) - 1
     if (l.tipo === 'receita') {
-       receitasNoAno[mesL] += l.valor
+      receitasNoAno[mesL] += l.valor
     } else if (l.tipo === 'despesa') {
-       despesasNoAno[mesL] += l.valor
-       
-       const catName = l.categoria_id 
-          ? (categorias?.find?.((c: any) => c.id === l.categoria_id)?.nome || 'Diversos')
-          : 'Outros'
-          
-       mapaDespAno.set(catName, (mapaDespAno.get(catName) || 0) + l.valor)
-       totalDespAno += l.valor
-       if (mesL === selectedMonth) {
-         mapaDespMes.set(catName, (mapaDespMes.get(catName) || 0) + l.valor)
-         totalDespMes += l.valor
-       }
+      despesasNoAno[mesL] += l.valor
+
+      const catName = l.categoria_id
+        ? (categorias?.find?.((c: any) => c.id === l.categoria_id)?.nome || 'Diversos')
+        : 'Outros'
+
+      mapaDespAno.set(catName, (mapaDespAno.get(catName) || 0) + l.valor)
+      totalDespAno += l.valor
+      if (mesL === selectedMonth) {
+        mapaDespMes.set(catName, (mapaDespMes.get(catName) || 0) + l.valor)
+        totalDespMes += l.valor
+      }
     }
   })
 
   // Prepara os arrays para os Donuts (Top 5)
-  const topCatsMes = Array.from(mapaDespMes.entries()).sort((a,b) => b[1] - a[1]).slice(0, 5)
-  while(topCatsMes.length < 5) topCatsMes.push(['-', 0])
-  const topCatsAno = Array.from(mapaDespAno.entries()).sort((a,b) => b[1] - a[1]).slice(0, 5)
-  while(topCatsAno.length < 5) topCatsAno.push(['-', 0])
+  const topCatsMes = Array.from(mapaDespMes.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  while (topCatsMes.length < 5) topCatsMes.push(['-', 0])
+  const topCatsAno = Array.from(mapaDespAno.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  while (topCatsAno.length < 5) topCatsAno.push(['-', 0])
   const dColors = ['#7c5cfc', '#22d3ee', '#f472b6', '#f5a623', '#10b981']
 
   useEffect(() => {
@@ -341,10 +341,10 @@ export default function InicioClient() {
 
     const d1Data = topCatsMes.map(t => t[1] as number)
     const d2Data = topCatsAno.map(t => t[1] as number)
-    
+
     // Fallback if empty to draw empty rings
-    donut('d1', d1Data.reduce((a,b)=>a+b,0) === 0 ? [1] : d1Data, d1Data.reduce((a,b)=>a+b,0) === 0 ? ['#2a3045'] : dColors)
-    donut('d2', d2Data.reduce((a,b)=>a+b,0) === 0 ? [1] : d2Data, d2Data.reduce((a,b)=>a+b,0) === 0 ? ['#2a3045'] : dColors)
+    donut('d1', d1Data.reduce((a, b) => a + b, 0) === 0 ? [1] : d1Data, d1Data.reduce((a, b) => a + b, 0) === 0 ? ['#2a3045'] : dColors)
+    donut('d2', d2Data.reduce((a, b) => a + b, 0) === 0 ? [1] : d2Data, d2Data.reduce((a, b) => a + b, 0) === 0 ? ['#2a3045'] : dColors)
 
     // ── MINI RINGS ──────────────
     const ring = (id: string, pct: number, color: string) => {
@@ -363,11 +363,11 @@ export default function InicioClient() {
         }
       })
     }
-    
+
     // Rings dinamicos baseados nas categorias anuais vs total gasto
     topCatsAno.forEach((cat, idx) => {
-       const pct = totalDespAno > 0 ? ((cat[1] as number) / totalDespAno) * 100 : 0
-       ring(`r${idx+1}`, pct, dColors[idx])
+      const pct = totalDespAno > 0 ? ((cat[1] as number) / totalDespAno) * 100 : 0
+      ring(`r${idx + 1}`, pct, dColors[idx])
     })
 
     // ── LINE CHART ──────────────
@@ -433,7 +433,8 @@ export default function InicioClient() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
         .custom-dashboard * { margin:0; padding:0; box-sizing:border-box; border: none; }
         .custom-dashboard {
@@ -749,7 +750,7 @@ export default function InicioClient() {
                       <canvas id="d1"></canvas>
                       <div className="donut-inner">
                         <div className="donut-pct" style={{ color: 'var(--gold)' }}>
-                           {(totalDespMes > 0 ? (((topCatsMes[0]?.[1] as number) / totalDespMes) * 100).toFixed(0) : 0)}%
+                          {(totalDespMes > 0 ? (((topCatsMes[0]?.[1] as number) / totalDespMes) * 100).toFixed(0) : 0)}%
                         </div>
                         <div className="donut-sub">{topCatsMes[0]?.[0]}</div>
                       </div>
@@ -762,7 +763,7 @@ export default function InicioClient() {
                           <div className="dl-item" key={'m' + i}>
                             <div className="dl-dot" style={{ background: dColors[i] }}></div>
                             <span className="dl-name">{cat[0] as string}</span>
-                            <span className="dl-pct">{pct.toFixed(1).replace('.0','')}%</span>
+                            <span className="dl-pct">{pct.toFixed(1).replace('.0', '')}%</span>
                           </div>
                         )
                       })}
@@ -775,7 +776,7 @@ export default function InicioClient() {
                       <canvas id="d2"></canvas>
                       <div className="donut-inner">
                         <div className="donut-pct" style={{ color: 'var(--purple2)' }}>
-                           {(totalDespAno > 0 ? (((topCatsAno[0]?.[1] as number) / totalDespAno) * 100).toFixed(0) : 0)}%
+                          {(totalDespAno > 0 ? (((topCatsAno[0]?.[1] as number) / totalDespAno) * 100).toFixed(0) : 0)}%
                         </div>
                         <div className="donut-sub">{topCatsAno[0]?.[0]}</div>
                       </div>
@@ -808,7 +809,7 @@ export default function InicioClient() {
                       const val = cat[1] as number
                       let pct = totalDespMes > 0 ? (val / totalDespMes) * 100 : 0
                       if (pct < 5 && val > 0) pct = 5 // minimum visibility
-                      
+
                       const barGradients = [
                         'linear-gradient(90deg,var(--purple),var(--purple2))',
                         'linear-gradient(90deg,var(--cyan),#0ea5e9)',
@@ -833,9 +834,9 @@ export default function InicioClient() {
                     {topCatsAno.map((cat, idx) => {
                       const pct = totalDespAno > 0 ? ((cat[1] as number) / totalDespAno) * 100 : 0
                       return (
-                        <div className="ring-item" key={'ring'+idx}>
+                        <div className="ring-item" key={'ring' + idx}>
                           <div style={{ position: 'relative', width: '46px', height: '46px' }}>
-                            <canvas id={`r${idx+1}`}></canvas>
+                            <canvas id={`r${idx + 1}`}></canvas>
                             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <span style={{ fontFamily: 'Syne', fontSize: '11px', fontWeight: 700, color: pct > 0 ? 'var(--text1)' : 'var(--text3)' }}>
                                 {pct.toFixed(0)}%

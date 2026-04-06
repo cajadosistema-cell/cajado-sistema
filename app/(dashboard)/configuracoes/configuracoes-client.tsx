@@ -65,6 +65,25 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
     } as any)
     
     if (result) {
+      // Sincronizar o acesso para o módulo de Inbox do WhatsApp (Railway)
+      try {
+        await fetch("https://visiopro-unified01-production.up.railway.app/auth/integrations/sync-user", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            nome: form.nome,
+            email: form.email,
+            senha: form.senha,
+            role: form.cargo === "manager" ? "admin" : "atendente",
+            integration_key: "fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb"
+          })
+        });
+      } catch (e) {
+        console.error("Aviso: Falha ao sincronizar atendente com o Inbox", e);
+      }
+
       onSave()
       onClose()
     } else {
