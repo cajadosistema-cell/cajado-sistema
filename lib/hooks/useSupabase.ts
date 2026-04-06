@@ -18,6 +18,9 @@ export function useSupabaseQuery<T>(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Stable serialised key so useCallback doesn't need JSON.stringify in deps
+  const optionsKey = JSON.stringify(options)
+
   const fetch = useCallback(async () => {
     if (options?.enabled === false) return
     setLoading(true)
@@ -25,26 +28,25 @@ export function useSupabaseQuery<T>(
 
     try {
       const supabase = createClient()
-      let query = supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query: any = supabase
         .from(table)
         .select(options?.select ?? '*')
 
       if (options?.filters) {
-        let q = query;
         for (const [key, value] of Object.entries(options.filters)) {
-          q = q.eq(key, value as any) as any;
+          query = query.eq(key, value)
         }
-        query = q as any;
       }
 
       if (options?.orderBy) {
         query = query.order(options.orderBy.column, {
           ascending: options.orderBy.ascending ?? false,
-        }) as typeof query
+        })
       }
 
       if (options?.limit) {
-        query = query.limit(options.limit) as typeof query
+        query = query.limit(options.limit)
       }
 
       const { data: result, error: err } = await query
@@ -56,7 +58,8 @@ export function useSupabaseQuery<T>(
     } finally {
       setLoading(false)
     }
-  }, [table, JSON.stringify(options)])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, optionsKey])
 
   useEffect(() => { fetch() }, [fetch])
 
@@ -102,18 +105,29 @@ export function useSupabaseMutation(table: string) {
   const insert = async (data: Record<string, unknown>) => {
     setLoading(true)
     setError(null)
-    const { data: result, error: err } = await (supabase.from(table) as any).insert(data as any).select().single()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder = supabase.from(table) as any
+    const { data: result, error: err } = await builder
+      .insert(data)
+      .select()
+      .single()
     setLoading(false)
-    if (err) { setError(err.message); return null }
+    if (err) { setError(err.message as string); return null }
     return result
   }
 
   const update = async (id: string, data: Record<string, unknown>) => {
     setLoading(true)
     setError(null)
-    const { data: result, error: err } = await (supabase.from(table) as any).update(data as any).eq('id', id).select().single()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder = supabase.from(table) as any
+    const { data: result, error: err } = await builder
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single()
     setLoading(false)
-    if (err) { setError(err.message); return null }
+    if (err) { setError(err.message as string); return null }
     return result
   }
 
