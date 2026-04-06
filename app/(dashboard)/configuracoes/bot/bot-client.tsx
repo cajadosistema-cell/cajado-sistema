@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 
-const API = process.env.NEXT_PUBLIC_INBOX_API_URL!
+const API = 'https://visiopro-unified01-production.up.railway.app'
 
 function getToken() {
   return typeof window !== 'undefined' ? localStorage.getItem('cajado_inbox_token') : null
