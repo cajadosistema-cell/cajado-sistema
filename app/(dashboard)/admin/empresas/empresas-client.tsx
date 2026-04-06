@@ -1,0 +1,290 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { formatCurrency, formatDate } from '@/lib/utils'
+
+const API = process.env.NEXT_PUBLIC_INBOX_API_URL!
+
+function getToken() {
+  return typeof window !== 'undefined' ? localStorage.getItem('cajado_inbox_token') : null
+}
+
+async function apiGet(path: string) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  })
+  return res.json()
+}
+
+async function apiPatch(path: string, body: unknown) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+    body: JSON.stringify(body),
+  })
+  return res.json()
+}
+
+// ── Tipos ──────────────────────────────────────────────────────
+
+interface Empresa {
+  id: string
+  nome: string
+  status: string
+  plano: string
+  data_vencimento: string | null
+  created_at: string
+  admin: { nome: string; email: string } | null
+  canais: Array<{ id: string; nome: string; ativo: boolean }>
+  total_usuarios: number
+}
+
+interface Stats {
+  total_empresas: number
+  total_usuarios: number
+  total_conversas: number
+  por_status: Record<string, number>
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+
+const statusColor: Record<string, string> = {
+  ativo:     'badge-green',
+  trial:     'badge-amber',
+  suspenso:  'badge-red',
+  cancelado: 'badge-zinc',
+}
+
+const planoLabel: Record<string, string> = {
+  starter:     'Starter',
+  pro:         'Pro',
+  enterprise:  'Enterprise',
+}
+
+// ── Componente de empresa ──────────────────────────────────────
+
+function EmpresaRow({ empresa, onUpdate }: { empresa: Empresa; onUpdate: () => void }) {
+  const [editando, setEditando] = useState(false)
+  const [form, setForm] = useState({
+    status: empresa.status || 'ativo',
+    plano: empresa.plano || 'starter',
+    data_vencimento: empresa.data_vencimento || '',
+  })
+  const [salvando, setSalvando] = useState(false)
+
+  async function handleSalvar() {
+    setSalvando(true)
+    await apiPatch(`/admin/empresas/${empresa.id}`, form)
+    setEditando(false)
+    setSalvando(false)
+    onUpdate()
+  }
+
+  const vencendo = empresa.data_vencimento &&
+    new Date(empresa.data_vencimento) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+  return (
+    <div className="border border-zinc-800 rounded-lg overflow-hidden mb-3">
+      {/* Header da empresa */}
+      <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/30">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center">
+            <span className="text-amber-400 font-bold text-sm">{empresa.nome?.[0]?.toUpperCase()}</span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-zinc-200">{empresa.nome}</p>
+            <p className="text-xs text-zinc-500">{empresa.admin?.email || 'Sem admin'}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`badge ${statusColor[empresa.status] || 'badge-zinc'}`}>
+            {empresa.status || 'ativo'}
+          </span>
+          <span className="badge badge-zinc text-xs">
+            {planoLabel[empresa.plano] || empresa.plano || 'Starter'}
+          </span>
+          {vencendo && (
+            <span className="badge badge-red text-xs">⚠ Vence em breve</span>
+          )}
+          <button
+            onClick={() => setEditando(!editando)}
+            className="btn-ghost text-xs py-1"
+          >
+            {editando ? 'Cancelar' : 'Editar'}
+          </button>
+        </div>
+      </div>
+
+      {/* Detalhes */}
+      <div className="px-4 py-3 grid grid-cols-4 gap-4 text-center border-t border-zinc-800">
+        <div>
+          <p className="text-xs text-zinc-500">Canais WA</p>
+          <p className="text-sm font-semibold text-zinc-200">{empresa.canais?.length || 0}</p>
+        </div>
+        <div>
+          <p className="text-xs text-zinc-500">Usuários</p>
+          <p className="text-sm font-semibold text-zinc-200">{empresa.total_usuarios || 0}</p>
+        </div>
+        <div>
+          <p className="text-xs text-zinc-500">Admin</p>
+          <p className="text-sm font-semibold text-zinc-200">{empresa.admin?.nome || '—'}</p>
+        </div>
+        <div>
+          <p className="text-xs text-zinc-500">Vencimento</p>
+          <p className={`text-sm font-semibold ${vencendo ? 'text-red-400' : 'text-zinc-200'}`}>
+            {empresa.data_vencimento ? formatDate(empresa.data_vencimento) : '—'}
+          </p>
+        </div>
+      </div>
+
+      {/* Canais */}
+      {empresa.canais?.length > 0 && (
+        <div className="px-4 pb-3 flex gap-2 flex-wrap border-t border-zinc-800 pt-3">
+          {empresa.canais.map(c => (
+            <span key={c.id} className={`text-xs px-2 py-0.5 rounded-full border ${c.ativo ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-zinc-700 text-zinc-500'}`}>
+              📱 {c.nome}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Form de edição */}
+      {editando && (
+        <div className="px-4 pb-4 pt-3 bg-zinc-800/20 border-t border-zinc-800 grid grid-cols-3 gap-3">
+          <div>
+            <label className="label block mb-1">Status</label>
+            <select className="input text-xs" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+              <option value="ativo">Ativo</option>
+              <option value="trial">Trial</option>
+              <option value="suspenso">Suspenso</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+          <div>
+            <label className="label block mb-1">Plano</label>
+            <select className="input text-xs" value={form.plano} onChange={e => setForm(f => ({ ...f, plano: e.target.value }))}>
+              <option value="starter">Starter</option>
+              <option value="pro">Pro</option>
+              <option value="enterprise">Enterprise</option>
+            </select>
+          </div>
+          <div>
+            <label className="label block mb-1">Vencimento</label>
+            <input className="input text-xs" type="date" value={form.data_vencimento} onChange={e => setForm(f => ({ ...f, data_vencimento: e.target.value }))} />
+          </div>
+          <div className="col-span-3 flex justify-end">
+            <button onClick={handleSalvar} disabled={salvando} className="btn-primary text-xs">
+              {salvando ? 'Salvando...' : 'Salvar alterações'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Página principal ───────────────────────────────────────────
+
+export default function SuperAdminClient() {
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [filtro, setFiltro] = useState('')
+  const [filtroStatus, setFiltroStatus] = useState('')
+
+  async function carregarDados() {
+    setLoading(true)
+    const [emps, st] = await Promise.all([
+      apiGet('/admin/empresas'),
+      apiGet('/admin/stats'),
+    ])
+    setEmpresas(Array.isArray(emps) ? emps : [])
+    setStats(st)
+    setLoading(false)
+  }
+
+  useEffect(() => { carregarDados() }, [])
+
+  const empresasFiltradas = empresas.filter(e => {
+    const matchNome = e.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
+      e.admin?.email?.toLowerCase().includes(filtro.toLowerCase())
+    const matchStatus = !filtroStatus || e.status === filtroStatus
+    return matchNome && matchStatus
+  })
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-100">Gestão de Clientes</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Painel super admin — todas as empresas</p>
+        </div>
+        <a href="/onboarding" className="btn-primary text-sm">
+          + Nova empresa
+        </a>
+      </div>
+
+      {/* Stats */}
+      {stats && (
+        <div className="grid grid-cols-4 gap-3 mb-6">
+          <div className="card">
+            <p className="text-xs text-zinc-500">Total de empresas</p>
+            <p className="text-lg font-bold text-zinc-100">{stats.total_empresas}</p>
+          </div>
+          <div className="card">
+            <p className="text-xs text-zinc-500">Ativas</p>
+            <p className="text-lg font-bold text-emerald-400">{stats.por_status?.ativo || 0}</p>
+          </div>
+          <div className="card">
+            <p className="text-xs text-zinc-500">Trial</p>
+            <p className="text-lg font-bold text-amber-400">{stats.por_status?.trial || 0}</p>
+          </div>
+          <div className="card">
+            <p className="text-xs text-zinc-500">Total usuários</p>
+            <p className="text-lg font-bold text-zinc-100">{stats.total_usuarios}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div className="flex gap-3 mb-4">
+        <input
+          className="input flex-1 max-w-xs"
+          placeholder="Buscar empresa ou e-mail..."
+          value={filtro}
+          onChange={e => setFiltro(e.target.value)}
+        />
+        <select
+          className="input w-auto"
+          value={filtroStatus}
+          onChange={e => setFiltroStatus(e.target.value)}
+        >
+          <option value="">Todos os status</option>
+          <option value="ativo">Ativo</option>
+          <option value="trial">Trial</option>
+          <option value="suspenso">Suspenso</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+        <button onClick={carregarDados} className="btn-secondary text-xs">
+          Atualizar
+        </button>
+      </div>
+
+      {/* Lista */}
+      {loading && (
+        <p className="text-sm text-zinc-500 text-center py-12">Carregando empresas...</p>
+      )}
+      {!loading && empresasFiltradas.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-sm text-zinc-500">Nenhuma empresa encontrada</p>
+          <a href="/onboarding" className="btn-primary mt-3 inline-block text-sm">
+            + Adicionar primeira empresa
+          </a>
+        </div>
+      )}
+      {empresasFiltradas.map(emp => (
+        <EmpresaRow key={emp.id} empresa={emp} onUpdate={carregarDados} />
+      ))}
+    </div>
+  )
+}
