@@ -230,7 +230,7 @@ function StepWhatsApp({
           {canal.qrcode ? (
             <div className="inline-block bg-white p-3 rounded-xl">
               <img
-                src={`data:image/png;base64,${canal.qrcode}`}
+                src={canal.qrcode.startsWith('data:image') ? canal.qrcode : `data:image/png;base64,${canal.qrcode}`}
                 alt="QR Code WhatsApp"
                 className="w-48 h-48"
               />
