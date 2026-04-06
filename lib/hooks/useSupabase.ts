@@ -31,7 +31,7 @@ export function useSupabaseQuery<T>(
 
       if (options?.filters) {
         Object.entries(options.filters).forEach(([key, value]) => {
-          query = query.eq(key, value) as typeof query
+          query = query.eq(key, value as any) as typeof query
         })
       }
 
@@ -100,7 +100,7 @@ export function useSupabaseMutation(table: string) {
   const insert = async (data: Record<string, unknown>) => {
     setLoading(true)
     setError(null)
-    const { data: result, error: err } = await supabase.from(table).insert(data).select().single()
+    const { data: result, error: err } = await supabase.from(table).insert(data as any).select().single()
     setLoading(false)
     if (err) { setError(err.message); return null }
     return result
@@ -109,7 +109,7 @@ export function useSupabaseMutation(table: string) {
   const update = async (id: string, data: Record<string, unknown>) => {
     setLoading(true)
     setError(null)
-    const { data: result, error: err } = await supabase.from(table).update(data).eq('id', id).select().single()
+    const { data: result, error: err } = await supabase.from(table).update(data as any).eq('id', id).select().single()
     setLoading(false)
     if (err) { setError(err.message); return null }
     return result
