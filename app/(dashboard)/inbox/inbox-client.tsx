@@ -11,6 +11,8 @@ import {
   type Conversa,
 } from '@/lib/hooks/useInbox'
 
+import ConfiguracoesBotClient from '../configuracoes/bot/bot-client'
+
 // ── Tipos locais ───────────────────────────────────────────────
 
 interface ClienteCajado {
@@ -333,10 +335,11 @@ export default function InboxClient() {
   const [nota, setNota] = useState(false)
   const [filtro, setFiltro] = useState('')
   const [enviando, setEnviando] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { conversas, loading, refetch } = useInbox()
-  const { conversa, refetch: refetchConversa } = useConversaDetalhe(autenticado ? numeroAtivo : null)
+  const { conversa, refetch: refetchConversa } = useConversaDetalhe(autenticado && !showConfig ? numeroAtivo : null)
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('cajado_inbox_token') : null
@@ -400,11 +403,18 @@ export default function InboxClient() {
                 </span>
               )}
               <button 
+                onClick={() => setShowConfig(!showConfig)}
+                className={cn('text-xs transition-colors', showConfig ? 'text-emerald-400' : 'text-zinc-600 hover:text-emerald-400')}
+                title="Configurar WhatsApp do Inbox"
+              >
+                ⚙️ Configurar
+              </button>
+              <button 
                 onClick={() => {
                   localStorage.removeItem('cajado_inbox_token')
                   setAutenticado(false)
                 }}
-                className="text-zinc-600 hover:text-red-400 text-xs transition-colors"
+                className="text-zinc-600 hover:text-red-400 text-xs transition-colors ml-1"
                 title="Sair do Inbox"
               >
                 Sair
@@ -430,16 +440,22 @@ export default function InboxClient() {
             <ConversaItem
               key={c.numero}
               conv={c}
-              ativa={c.numero === numeroAtivo}
-              onClick={() => setNumeroAtivo(c.numero)}
+              ativa={c.numero === numeroAtivo && !showConfig}
+              onClick={() => { setNumeroAtivo(c.numero); setShowConfig(false); }}
             />
           ))}
         </div>
       </div>
 
-      {/* ── Coluna 2: Chat ────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#080b14] relative">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20 pointer-events-none mix-blend-overlay"></div>
+      {showConfig ? (
+        <div className="flex-1 overflow-y-auto bg-[#080b14] p-8">
+          <ConfiguracoesBotClient inModal={true} />
+        </div>
+      ) : (
+        <>
+          {/* ── Coluna 2: Chat ────────────────────────────────────── */}
+          <div className="flex-1 flex flex-col min-w-0 bg-[#080b14] relative">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20 pointer-events-none mix-blend-overlay"></div>
         {!numeroAtivo ? (
           <div className="flex items-center justify-center h-full relative z-10">
             <div className="text-center">
@@ -479,7 +495,7 @@ export default function InboxClient() {
                       : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
                   )}
                 >
-                  {conversa?.botOn !== false ? '🤖 Bot Ativo' : '👤 Atendimento Humano'}
+                  {conversa?.botOn !== false ? '🤖 Bot Ativo' : '👤 Humano'}
                 </button>
               </div>
             </div>
@@ -566,6 +582,8 @@ export default function InboxClient() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   )
 }

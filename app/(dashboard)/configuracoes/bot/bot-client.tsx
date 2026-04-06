@@ -353,31 +353,144 @@ function SecaoUsuarios() {
   )
 }
 
-// ── Página principal ───────────────────────────────────────────
+// ── Seção: WhatsApp ──────────────────────────────────────────────
 
-export default function ConfiguracoesBotClient() {
-  const [aba, setAba] = useState<'prompt' | 'times' | 'usuarios'>('prompt')
+function SecaoWhatsApp() {
+  const [nomeCanal, setNomeCanal] = useState('WhatsApp Principal')
+  const [canal, setCanal] = useState<{ instanceName: string; canalId: string; qrcode: string | null } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [verificando, setVerificando] = useState(false)
+  const [conectado, setConectado] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleCriarInstancia() {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await apiPost('/canais/criar-instancia', { nome: nomeCanal })
+      setCanal(data)
+      iniciarVerificacao(data.instanceName)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao criar instância')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function iniciarVerificacao(instanceName: string) {
+    setVerificando(true)
+    const interval = setInterval(async () => {
+      try {
+        const res = await apiGet(`/canais/${instanceName}/status`)
+        if (res && res.connected) {
+          clearInterval(interval)
+          setConectado(true)
+          setVerificando(false)
+        }
+      } catch {}
+    }, 3000)
+    setTimeout(() => {
+      clearInterval(interval)
+      setVerificando(false)
+    }, 120000)
+  }
+
+  if (conectado && canal) {
+    return (
+      <div className="card text-center space-y-4 py-12">
+        <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
+          <span className="text-3xl">✓</span>
+        </div>
+        <div>
+          <p className="text-emerald-400 font-semibold text-lg">WhatsApp conectado com sucesso!</p>
+          <p className="text-sm text-zinc-500 mt-1">Sua instância <strong className="text-zinc-300">{canal.instanceName}</strong> está ativa.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div>
+    <div className="card space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold text-zinc-200">Conexão do WhatsApp</h2>
+        <p className="text-xs text-zinc-500 mt-0.5">Escaneie o QR Code para conectar seu número e começar a usar o Inbox.</p>
+      </div>
+
+      {!canal ? (
+        <div className="bg-zinc-800/50 rounded-lg p-5 space-y-4 max-w-sm">
+          <div>
+            <label className="label block mb-1">Nome do canal</label>
+            <input
+              className="input text-xs w-full"
+              value={nomeCanal}
+              onChange={e => setNomeCanal(e.target.value)}
+              placeholder="Ex: WhatsApp Atravessador"
+            />
+          </div>
+          {error && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded">{error}</p>}
+          <button onClick={handleCriarInstancia} disabled={loading} className="btn-primary text-xs w-full">
+            {loading ? 'Gerando...' : 'Gerar QR Code'}
+          </button>
+        </div>
+      ) : (
+        <div className="bg-zinc-800/50 rounded-lg p-6 flex flex-col items-center max-w-md mx-auto">
+          <p className="text-sm text-zinc-300 mb-1 font-semibold">Escaneie o QR Code</p>
+          <p className="text-xs text-zinc-500 mb-5 text-center">
+            Abra o WhatsApp no celular → Três pontos → Aparelhos conectados → Conectar aparelho
+          </p>
+          
+          {canal.qrcode ? (
+            <div className="bg-white p-3 rounded-xl shadow-xl">
+              <img
+                src={canal.qrcode.startsWith('data:image') ? canal.qrcode : `data:image/png;base64,${canal.qrcode}`}
+                alt="QR Code WhatsApp"
+                className="w-56 h-56"
+              />
+            </div>
+          ) : (
+            <div className="w-56 h-56 bg-zinc-800 rounded-xl flex items-center justify-center border border-zinc-700">
+              <p className="text-xs text-zinc-500">QR Code indisponível</p>
+            </div>
+          )}
+          
+          {verificando && (
+            <p className="text-xs text-zinc-400 mt-5 animate-pulse flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              Aguardando conexão ser estabelecida...
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Página principal ───────────────────────────────────────────
+
+export default function ConfiguracoesBotClient({ inModal }: { inModal?: boolean }) {
+  const [aba, setAba] = useState<'whatsapp' | 'prompt' | 'times' | 'usuarios'>('whatsapp')
+
+  return (
+    <div className={inModal ? 'max-w-4xl mx-auto' : ''}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-100">Configurações do Bot</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Personalize o assistente e os setores do seu negócio</p>
+          <h1 className="text-xl font-semibold text-zinc-100">Configurações do Inbox</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">Conecte o WhatsApp, configure o bot e adicione atendentes.</p>
         </div>
       </div>
 
       <div className="flex gap-1 mb-6 bg-zinc-900 p-1 rounded-lg w-fit border border-zinc-800">
         {([
-          { key: 'prompt', label: '🤖 Personalidade' },
+          { key: 'whatsapp', label: '📱 WhatsApp' },
+          { key: 'prompt', label: '🤖 Personalidade da IA' },
           { key: 'times', label: '👥 Setores' },
-          { key: 'usuarios', label: '🔑 Usuários' },
+          { key: 'usuarios', label: '🔑 Atendentes' },
         ] as const).map(tab => (
           <button
             key={tab.key}
             onClick={() => setAba(tab.key)}
             className={`text-xs px-4 py-2 rounded-md transition-colors ${
-              aba === tab.key ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              aba === tab.key ? 'bg-zinc-700 text-zinc-100 font-medium shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
             }`}
           >
             {tab.label}
@@ -385,6 +498,7 @@ export default function ConfiguracoesBotClient() {
         ))}
       </div>
 
+      {aba === 'whatsapp' && <SecaoWhatsApp />}
       {aba === 'prompt'   && <SecaoPrompt />}
       {aba === 'times'    && <SecaoTimes />}
       {aba === 'usuarios' && <SecaoUsuarios />}
