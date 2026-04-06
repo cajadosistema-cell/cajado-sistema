@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-const API = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://visiopro-unified01-production.up.railway.app'
+const rawApi = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://visiopro-unified01-production.up.railway.app'
+const API = rawApi.startsWith('http') ? rawApi : `https://${rawApi}`
 const INBOX_TOKEN_KEY = 'cajado_inbox_token'
 
 // ── Tipos ──────────────────────────────────────────────────────
