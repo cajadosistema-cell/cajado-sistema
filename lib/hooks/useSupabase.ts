@@ -30,9 +30,11 @@ export function useSupabaseQuery<T>(
         .select(options?.select ?? '*')
 
       if (options?.filters) {
-        Object.entries(options.filters).forEach(([key, value]) => {
-          query = query.eq(key, value as any) as typeof query
-        })
+        let q = query;
+        for (const [key, value] of Object.entries(options.filters)) {
+          q = q.eq(key, value as any) as any;
+        }
+        query = q as any;
       }
 
       if (options?.orderBy) {
