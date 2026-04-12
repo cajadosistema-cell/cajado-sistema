@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env*.local
+.next
+node_modules
+cajado-backend
+cajado-deploy
+README.md
+*.md
+.DS_Store
+Thumbs.db
