@@ -278,10 +278,67 @@ function ModalTendencia({ onClose, onSave }: { onClose: () => void; onSave: () =
 }
 
 export default function InteligenciaClient() {
-  const [tab, setTab] = useState<'analises' | 'tendencias'>('analises')
+  const [tab, setTab] = useState<'analises' | 'tendencias' | 'assistente'>('analises')
   const [modalAnalise, setModalAnalise] = useState(false)
   const [modalAnaliseIA, setModalAnaliseIA] = useState(false)
   const [modalTendencia, setModalTendencia] = useState(false)
+
+  // Chatbot state
+  const [chatMessages, setChatMessages] = useState<{role: 'user'|'vivi', text: string}[]>([
+     { role: 'vivi', text: 'Olá! Sou a Vivi, assistente do Sistema Cajado.\n\nComo posso ajudar você a usar nossa plataforma hoje? Se tiver alguma dúvida sobre onde lançar gastos, vendas ou como configurar o bot, é só perguntar!' }
+  ])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+
+  const handleSendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!chatInput.trim() || chatLoading) return
+    
+    const userText = chatInput.trim()
+    setChatInput('')
+    setChatMessages(prev => [...prev, { role: 'user', text: userText }])
+    setChatLoading(true)
+    
+    try {
+      const historyContext = chatMessages.slice(-8).map(m => `${m.role === 'user' ? 'Usuário' : 'Vivi'}: ${m.text}`).join('\n')
+      
+      const res = await fetch('/api/openrouter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: userText,
+          context: `Histórico da conversa:\n${historyContext}`,
+          systemInstruction: `Você é a VIVI, a Especialista de Onboarding e Treinamento do Sistema Cajado. 
+Sua missão é ajudar os funcionários da nossa empresa a usar a plataforma Cajado corretamente.
+
+REGRAS DE CONDUTA:
+1. Seja paciente, didática e responda sempre de forma profissional, moderna e acolhedora.
+2. Explique em poucas etapas e cite os módulos corretos.
+
+BASE DE CONHECIMENTO DO SISTEMA:
+- Despesas e relatórios (DRE) -> Mande para [Gestão Financeira (Empresa)].
+- Histórico comercial e acompanhamento de Leads -> Mande para [CRM Cajado].
+- Comissões de vendas ou links de afiliados -> Mande para [Comissões e Parceiros].
+- Conversar com os clientes via whatsApp -> Mande para [Inbox / Atendimento WhatsApp].
+- Escrever atas de reunião / Documentação raiz -> Mande para [Diário Estratégico e Memória].
+- Mudar regras de acesso dos estagiários -> Mande para [Organização Geral] > Funcionários.
+- Computador estragou / Alocar equipamento -> Mande para [Patrimônio].
+- Relacionamento de aniversário de vendas -> Mande para [Pós-venda e Automações].
+- Controle de alvos individuais diários (Agendas) -> Mande para [Gestão Pessoal].
+
+Responda formatando com emojis e listas curtas para ficar fácil de ler.`
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      
+      setChatMessages(prev => [...prev, { role: 'vivi', text: data.result }])
+    } catch (err: any) {
+      setChatMessages(prev => [...prev, { role: 'vivi', text: `Desculpe, deu um erro: ${err.message}` }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
 
   const { data: analises, refetch: refetchAnalises } = useSupabaseQuery<Analise>('analises_mercado', {
     orderBy: { column: 'created_at', ascending: false },
@@ -300,6 +357,7 @@ export default function InteligenciaClient() {
   const TABS = [
     { key: 'analises', label: '🔍 Análises' },
     { key: 'tendencias', label: '📈 Tendências' },
+    { key: 'assistente', label: '🤖 Assistente (Treinamento)' },
   ] as const
 
   return (
@@ -462,6 +520,64 @@ export default function InteligenciaClient() {
           {tendencias.length === 0 && (
             <div className="card"><EmptyState message="Nenhuma tendência monitorada ainda" /></div>
           )}
+        </div>
+      )}
+
+      {/* Assistente IA (Chatbot de Treinamento) */}
+      {tab === 'assistente' && (
+        <div className="flex flex-col h-[550px] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl relative">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 to-indigo-500 z-10"></div>
+          <div className="bg-zinc-950 px-5 py-4 border-b border-zinc-800 flex items-center justify-between z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-600/20 text-purple-400 rounded-full flex items-center justify-center text-xl shadow-[0_0_15px_rgba(168,85,247,0.3)]">✨</div>
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100">Vivi Assistente</h3>
+                <p className="text-[11px] text-zinc-500">I.A. treinada no Manual do Sistema Cajado</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={cn(
+                  "max-w-[85%] rounded-2xl px-5 py-3 text-[14px] leading-relaxed shadow-md",
+                  msg.role === 'user' 
+                    ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm" 
+                    : "bg-zinc-800 text-zinc-300 border border-zinc-700 rounded-bl-sm"
+                )}>
+                  {msg.role === 'vivi' && <div className="text-[10px] text-purple-400 font-bold mb-1 tracking-wider">VIVI</div>}
+                  <div className="whitespace-pre-wrap">{msg.text}</div>
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex justify-start">
+                <div className="bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-2xl rounded-bl-sm px-5 py-3 text-sm flex gap-1 items-center">
+                  <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"></span>
+                  <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
+                  <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <form onSubmit={handleSendChatMessage} className="p-4 bg-zinc-950 border-t border-zinc-800 flex gap-2">
+            <input 
+              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 shadow-inner"
+              placeholder="Pergunte como usar um módulo..."
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              disabled={chatLoading}
+            />
+            <button 
+              type="submit" 
+              disabled={chatLoading || !chatInput.trim()}
+              className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-900/50"
+            >
+              Enviar <span className="opacity-70 text-xs">🚀</span>
+            </button>
+          </form>
         </div>
       )}
 
