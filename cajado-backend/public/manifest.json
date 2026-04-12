@@ -1,0 +1,21 @@
+{
+  "name": "VisioPro Inbox",
+  "short_name": "VP Inbox",
+  "description": "Sistema unificado de atendimento da VisioPro",
+  "start_url": "/admin/",
+  "display": "standalone",
+  "background_color": "#050510",
+  "theme_color": "#F0C040",
+  "icons": [
+    {
+      "src": "https://visiopro.com.br/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://visiopro.com.br/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

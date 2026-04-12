@@ -1,0 +1,51 @@
+node_modules/
+.env
+*.log
+.DS_Store
+.vercel
+
+# trigger vercel deploy
+# deploy trigger 2
+
+
+# deploy trigger 3
+# deploy trigger 4
+# deploy trigger 5
+# deploy trigger 6
+# deploy trigger 7
+# deploy trigger 8
+# deploy trigger 9
+# deploy trigger 10
+# deploy trigger 11
+# deploy trigger 12
+# deploy trigger 13
+<<<<<<< Updated upstream
+# deploy trigger 14
+# deploy trigger 15
+# deploy trigger 16
+# deploy trigger 17
+# deploy trigger 18
+# deploy trigger 19
+# deploy trigger 20
+# deploy trigger 21
+# deploy trigger 22
+# deploy trigger 23
+# deploy trigger 24
+# deploy trigger 25
+# deploy trigger 26
+# deploy trigger 27
+=======
+>>>>>>> Stashed changes
+# deploy trigger 28
+# deploy trigger 29
+# deploy trigger 30
+# deploy trigger 31
+# deploy trigger 32
+# deploy trigger 33
+# deploy trigger 34
+# deploy trigger 35
+# deploy trigger 36
+# deploy trigger 37
+# deploy trigger 38
+# deploy trigger 39
+# railway deploy trigger 14:38:00

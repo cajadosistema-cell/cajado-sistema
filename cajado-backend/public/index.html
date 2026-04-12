@@ -1,0 +1,3205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <title>VisioPro Inbox</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#F0C040">
+  <link rel="apple-touch-icon" href="https://visiopro.com.br/favicon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: radial-gradient(ellipse at top left, #0f172a, #020617);
+      color: #f1f5f9;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    :root {
+      --gold: linear-gradient(135deg, #f59e0b, #d97706);
+      --gold-text: #fbbf24;
+      --bg0: transparent;
+      --bg1: rgba(15, 23, 42, 0.4);
+      --bg2: rgba(30, 41, 59, 0.5);
+      --bg3: rgba(51, 65, 85, 0.6);
+      --border: rgba(255, 255, 255, 0.06);
+      --border2: rgba(255, 255, 255, 0.12);
+      --text1: #f8fafc;
+      --text2: #cbd5e1;
+      --text3: #94a3b8;
+      --blue: #3b82f6;
+      --green: #10b981;
+      --red: #ef4444;
+      --orange: #f97316;
+      --purple: #8b5cf6;
+      --teal: #14b8a6;
+      --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2)
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      font-family: 'Outfit', sans-serif;
+      transition: all .2s cubic-bezier(0.4, 0, 0.2, 1)
+    }
+
+    input,
+    textarea,
+    select {
+      font-family: 'Outfit', sans-serif;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none
+    }
+
+    /* LAYOUT */
+    .app {
+      display: flex;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      backdrop-filter: blur(20px)
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 84px;
+      background: rgba(2, 6, 23, 0.8);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 0;
+      gap: 12px;
+      flex-shrink: 0;
+      z-index: 50;
+      box-shadow: var(--shadow);
+    }
+
+    .s-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: var(--gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 800;
+      color: #020617;
+      margin-bottom: 16px;
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3)
+    }
+
+    .s-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text3);
+      position: relative
+    }
+
+    .s-icon:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text1);
+      transform: translateY(-2px)
+    }
+
+    .s-icon.active {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--gold-text);
+      box-shadow: inset 0 0 0 2px rgba(245, 158, 11, 0.4)
+    }
+
+    .s-icon .badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--red);
+      border: 2px solid #020617;
+      box-shadow: 0 0 10px var(--red)
+    }
+
+    .s-divider {
+      width: 40px;
+      height: 2px;
+      background: var(--border);
+      margin: 10px 0
+    }
+
+    /* CONV PANEL */
+    .conv-panel {
+      width: 420px;
+      background: rgba(15, 23, 42, 0.6);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: transform .3s;
+      box-shadow: 12px 0 40px rgba(0, 0, 0, 0.3)
+    }
+
+    .conv-top {
+      padding: 24px 24px 16px;
+      border-bottom: 1px solid var(--border)
+    }
+
+    .conv-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text1);
+      margin-bottom: 4px;
+      letter-spacing: -0.02em
+    }
+
+    .conv-sub {
+      font-size: 13px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace
+    }
+
+    .conv-search {
+      background: rgba(2, 6, 23, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      color: var(--text1);
+      font-size: 15px;
+      width: 100%;
+      margin-top: 16px
+    }
+
+    .conv-search:focus {
+      border-color: var(--border2);
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2)
+    }
+
+    .conv-filters {
+      display: flex;
+      gap: 8px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none
+    }
+
+    .conv-filters::-webkit-scrollbar {
+      display: none
+    }
+
+    .f-btn {
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text3);
+      white-space: nowrap;
+      cursor: pointer
+    }
+
+    .f-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text1)
+    }
+
+    .f-btn.active {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--gold-text);
+      border-color: rgba(245, 158, 11, 0.4)
+    }
+
+    .conv-list {
+      flex: 1;
+      overflow-y: auto
+    }
+
+    .conv-item {
+      padding: 18px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      cursor: pointer;
+      position: relative
+    }
+
+    .conv-item:hover {
+      background: rgba(255, 255, 255, 0.03)
+    }
+
+    .conv-item.active {
+      background: rgba(30, 41, 59, 0.7);
+      border-left: 4px solid #f59e0b
+    }
+
+    .conv-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: inset 0 0 0 1px var(--border)
+    }
+
+    .conv-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 260px;
+      letter-spacing: -0.01em
+    }
+
+    .conv-preview {
+      font-size: 14px;
+      color: var(--text3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 4px;
+      font-weight: 500
+    }
+
+    .conv-time {
+      font-size: 12px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace
+    }
+
+    .conv-badge {
+      background: var(--gold);
+      color: #020617;
+      font-size: 11px;
+      border-radius: 12px;
+      padding: 3px 8px;
+      font-weight: 800;
+      min-width: 24px;
+      text-align: center;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.4)
+    }
+
+    .tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .03em;
+      text-transform: uppercase
+    }
+
+    /* CHAT AREA */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative
+    }
+
+    .chat-area::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: url('https://www.transparenttextures.com/patterns/cubes.png') repeat;
+      opacity: 0.02;
+      pointer-events: none
+    }
+
+    .chat-header {
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(10px);
+      flex-shrink: 0;
+      z-index: 10;
+      min-height: 80px
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 32px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth
+    }
+
+    .msg-wrap {
+      display: flex;
+      flex-direction: column
+    }
+
+    .msg-sender {
+      font-size: 12px;
+      color: var(--text3);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600
+    }
+
+    .msg-bubble {
+      max-width: 65%;
+      padding: 16px 20px;
+      border-radius: 20px;
+      font-size: 16px;
+      line-height: 1.6;
+      word-break: break-word;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15)
+    }
+
+    .msg-in {
+      align-self: flex-start;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--border);
+      color: var(--text1);
+      border-radius: 6px 20px 20px 20px
+    }
+
+    .msg-cliente {
+      align-self: flex-start;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: var(--text1);
+      border-radius: 6px 20px 20px 20px
+    }
+
+    .msg-out {
+      align-self: flex-end;
+      background: var(--gold);
+      color: #020617;
+      border-radius: 20px 6px 20px 20px;
+      font-weight: 600;
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.2)
+    }
+
+    .msg-bot {
+      align-self: flex-end;
+      background: rgba(2, 6, 23, 0.6);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: var(--gold-text);
+      border-radius: 20px 6px 20px 20px
+    }
+
+    .msg-time {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', monospace
+    }
+
+    /* INPUT AREA */
+    .chat-input-wrap {
+      padding: 20px 28px;
+      border-top: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(10px);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10
+    }
+
+    .chat-input {
+      background: rgba(2, 6, 23, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      color: var(--text1);
+      font-size: 16px;
+      width: 100%;
+      resize: none;
+      min-height: 56px;
+      max-height: 160px;
+      line-height: 1.5;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2)
+    }
+
+    .chat-input::placeholder {
+      color: var(--text3)
+    }
+
+    .chat-input:focus {
+      border-color: rgba(245, 158, 11, 0.5);
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15)
+    }
+
+    .send-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4)
+    }
+
+    .send-btn:hover {
+      background: #2563eb;
+      transform: scale(1.05)
+    }
+
+    /* RIGHT PANEL */
+    .right-panel {
+      width: 400px;
+      background: rgba(15, 23, 42, 0.6);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+      box-shadow: -12px 0 40px rgba(0, 0, 0, 0.3)
+    }
+
+    .rp-section {
+      padding: 24px 28px;
+      border-bottom: 1px solid var(--border)
+    }
+
+    .rp-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text3);
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      margin-bottom: 16px
+    }
+
+    /* TOGGLE */
+    .toggle {
+      width: 52px;
+      height: 28px;
+      border-radius: 14px;
+      position: relative;
+      cursor: pointer;
+      flex-shrink: 0
+    }
+
+    .toggle.on {
+      background: var(--green)
+    }
+
+    .toggle.off {
+      background: rgba(255, 255, 255, 0.1)
+    }
+
+    .toggle-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 3px;
+      transition: all .3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3)
+    }
+
+    .toggle.on .toggle-thumb {
+      left: 27px
+    }
+
+    .toggle.off .toggle-thumb {
+      left: 3px
+    }
+
+    /* MODAL */
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 900;
+      backdrop-filter: blur(12px);
+      padding: 20px
+    }
+
+    .modal {
+      background: #0f172a;
+      border: 1px solid var(--border2);
+      border-radius: 28px;
+      padding: 40px;
+      width: 100%;
+      max-width: 540px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5)
+    }
+
+    .modal-title {
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: var(--text1);
+      letter-spacing: -0.03em
+    }
+
+    .modal-sub {
+      font-size: 15px;
+      color: var(--text3);
+      margin-bottom: 32px;
+      font-weight: 500
+    }
+
+    .form-group {
+      margin-bottom: 24px
+    }
+
+    .form-label {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text2);
+      margin-bottom: 8px;
+      display: block;
+      letter-spacing: .02em
+    }
+
+    .form-input,
+    .form-select {
+      width: 100%;
+      background: rgba(2, 6, 23, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      color: var(--text1);
+      font-size: 16px;
+      transition: all 0.2s
+    }
+
+    .form-input:focus,
+    .form-select:focus {
+      border-color: rgba(245, 158, 11, 0.5);
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15)
+    }
+
+    .form-select {
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 20px
+    }
+
+    .btn-gold {
+      background: var(--gold);
+      color: #020617;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 800;
+      width: 100%;
+      letter-spacing: .03em;
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+      text-transform: uppercase
+    }
+
+    .btn-gold:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(245, 158, 11, 0.4)
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text3);
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      border: 2px solid var(--border);
+      width: 100%;
+      margin-top: 12px
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--border2);
+      color: var(--text1);
+      background: rgba(255, 255, 255, 0.05)
+    }
+
+    /* NOTIFY */
+    .notify {
+      position: fixed;
+      top: 32px;
+      right: 32px;
+      background: #0f172a;
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      padding: 18px 28px;
+      z-index: 999;
+      max-width: 380px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+      font-size: 16px;
+      font-weight: 600;
+      animation: slideIn .4s cubic-bezier(0.175, 0.885, 0.32, 1.275)
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(150%) scale(0.9);
+        opacity: 0
+      }
+
+      to {
+        transform: translateX(0) scale(1);
+        opacity: 1
+      }
+    }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      gap: 6px;
+      background: rgba(2, 6, 23, 0.6);
+      border-radius: 12px;
+      padding: 6px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border)
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text3);
+      text-align: center;
+      transition: all .2s;
+      letter-spacing: .02em;
+      cursor: pointer
+    }
+
+    .tab:hover {
+      color: var(--text2)
+    }
+
+    .tab.active {
+      background: rgba(30, 41, 59, 0.8);
+      color: var(--text1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3)
+    }
+
+    /* USERS TABLE */
+    .users-table {
+      width: 100%;
+      font-size: 15px;
+      border-collapse: separate;
+      border-spacing: 0
+    }
+
+    .users-table th {
+      text-align: left;
+      padding: 16px 20px;
+      color: var(--text3);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700
+    }
+
+    .users-table td {
+      padding: 18px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+      color: var(--text2);
+      vertical-align: middle;
+      transition: background 0.2s
+    }
+
+    .users-table tr:hover td {
+      background: rgba(255, 255, 255, 0.03)
+    }
+
+    /* EMPTY */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      gap: 12px;
+      opacity: .5
+    }
+
+    .empty-icon {
+      font-size: 52px
+    }
+
+    .empty-text {
+      font-size: 16px;
+      color: var(--text3);
+      font-weight: 500
+    }
+
+    /* VIVI */
+    .vivi-list {
+      width: 380px;
+      background: var(--bg1);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0
+    }
+
+    .vivi-detail {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0
+    }
+
+    .vivi-item {
+      padding: 18px 24px;
+      border-bottom: 1px solid rgba(30, 45, 69, .5);
+      cursor: pointer;
+      transition: all .15s
+    }
+
+    .vivi-item:hover {
+      background: rgba(26, 34, 53, .4)
+    }
+
+    .vivi-item.active {
+      background: var(--bg2)
+    }
+
+    /* MOBILE REFINEMENT */
+    @media(max-width:900px) {
+
+      .sidebar,
+      .right-panel {
+        display: none
+      }
+
+      .back-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: var(--text1) !important
+      }
+
+      .bottom-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(2, 6, 23, 0.95);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid var(--border);
+        padding: 10px 8px calc(12px + env(safe-area-inset-bottom, 0px));
+        z-index: 900;
+        justify-content: flex-start;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+        overflow-x: auto
+      }
+
+      .bottom-nav::-webkit-scrollbar {
+        display: none
+      }
+
+      .bn-item {
+        padding: 6px;
+        border-radius: 12px;
+        gap: 4px;
+        flex-shrink: 0;
+        min-width: 72px;
+        display: flex;
+        flex-direction: column;
+        align-items: center
+      }
+
+      .bn-item span {
+        font-size: 10px;
+        margin-top: 4px;
+      }
+
+      .bn-item.active {
+        background: rgba(245, 158, 11, 0.1);
+        color: var(--gold-text)
+      }
+
+      .bn-icon {
+        font-size: 22px;
+        height: 24px
+      }
+
+      .app-content {
+        padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)) !important;
+      }
+
+      .conv-panel {
+        width: 100% !important;
+        z-index: 10;
+        max-height: 100% !important;
+        flex: 1 !important;
+      }
+
+      .conv-panel.hidden {
+        display: none !important;
+      }
+
+      .chat-area {
+        position: absolute !important;
+        inset: 0 !important;
+        background: #070b14 !important;
+        z-index: 20 !important;
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+      }
+
+      .empty-state-chat {
+        display: none !important;
+      }
+
+      .bottom-nav.hidden {
+        display: none !important;
+      }
+
+      .users-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      .modal {
+        padding: 24px;
+        max-height: 85vh;
+      }
+
+      .msg-bubble {
+        max-width: 85%;
+      }
+    }
+
+    @media(min-width:901px) {
+
+      .back-btn,
+      .bottom-nav {
+        display: none !important
+      }
+    }
+
+    /* QUICK REPLIES */
+    .quick-replies-menu {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: #0c1220;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 30;
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
+      animation: slideIn .15s ease
+    }
+
+    .qr-item {
+      padding: 10px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #94a3b8;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: background .12s
+    }
+
+    .qr-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #f1f5f9
+    }
+
+    .qr-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #d4a843;
+      min-width: 80px;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      flex-shrink: 0
+    }
+
+    /* MSG IMPROVEMENTS */
+    .msg-sender {
+      font-size: 11px;
+      color: var(--text3);
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      opacity: 0.65
+    }
+
+    .msg-bubble:hover {
+      filter: brightness(1.06)
+    }
+
+    .sla-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script type="text/babel">
+    const { useState, useRef, useEffect, useCallback } = React;
+
+    const API = window.location.origin.includes("localhost") ? "http://localhost:3000" : window.location.origin;
+
+    const LABELS = [
+      { id: "novo", name: "Novo Lead", color: "#3b82f6" },
+      { id: "proposta", name: "Em Proposta", color: "#f59e0b" },
+      { id: "retomar", name: "Retomar", color: "#f97316" },
+      { id: "ativo", name: "Cliente Ativo", color: "#10b981" },
+      { id: "escopo", name: "Fora de Escopo", color: "#6b7280" },
+      { id: "parceiro", name: "Parceiro", color: "#8b5cf6" },
+      { id: "concluido", name: "Concluído", color: "#14b8a6" },
+    ];
+
+    const QUICK_REPLIES = [
+      { label: "Saudação", text: "Olá! Como posso ajudar você hoje?" },
+      { label: "Aguardar", text: "Um momento, vou verificar isso para você." },
+      { label: "Encaminhar", text: "Vou passar você para o especialista responsável agora." },
+      { label: "Confirmar", text: "Pode me confirmar seu nome completo para eu prosseguir?" },
+      { label: "Fechamento", text: "Obrigado pelo contato! Qualquer dúvida, é só chamar." },
+    ];
+    function getWaitTime(horario) {
+      if (!horario) return "";
+      try {
+        const [h, m] = horario.split(":").map(Number);
+        if (isNaN(h) || isNaN(m)) return "";
+        const now = new Date(), then = new Date();
+        then.setHours(h, m, 0, 0);
+        if (now < then) then.setDate(then.getDate() - 1);
+        const diff = Math.floor((now - then) / 60000);
+        if (diff < 1) return "";
+        if (diff < 60) return `${diff}min`;
+        return `${Math.floor(diff / 60)}h`;
+      } catch { return ""; }
+    }
+    function initials(name) { return (name || "?").split(" ").map(x => x[0]).slice(0, 2).join("").toUpperCase(); }
+    function labelColor(id) { return LABELS.find(l => l.id === id)?.color || "#4a5568"; }
+    function labelName(id) { return LABELS.find(l => l.id === id)?.name || id; }
+    function timeStr(ts) { try { return new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } }
+
+    function getSectorDisplay(id, sectors) {
+      const s = sectors?.find(x => x.id === id);
+      return s ? `${s.emoji} ${s.name}` : id || "—";
+    }
+    function getSectorColor(id, sectors) {
+      return sectors?.find(x => x.id === id)?.color || "#64748b";
+    }
+
+    // LOGIN
+    function Login({ onLogin }) {
+      const [isSignUp, setIsSignUp] = useState(false);
+      const [empresaNome, setEmpresaNome] = useState("");
+      const [nome, setNome] = useState("");
+      const [email, setEmail] = useState("");
+      const [senha, setSenha] = useState("");
+      const [loading, setLoading] = useState(false);
+      const [erro, setErro] = useState("");
+      const [show, setShow] = useState(false);
+
+      async function handleAuth() {
+        if (!email || !senha) return setErro("Preencha todos os campos");
+        if (isSignUp && (!nome || !empresaNome)) return setErro("Preencha os dados da empresa e seu nome.");
+
+        setLoading(true); setErro("");
+        const endpoint = isSignUp ? "/auth/register" : "/auth/login";
+        const body = isSignUp 
+          ? { nome, email: email.toLowerCase(), senha, empresaNome } 
+          : { email: email.toLowerCase(), senha };
+
+        try {
+          const r = await fetch(`${API}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          const d = await r.json();
+          if (r.status === 402) {
+            // Conta suspenso_pagamento — mostra botão de pagamento na tela de login
+            setErro(d.erro || (d.link_pagamento ? `⚠️ Pagamento pendente. Clique para pagar.` : `⚠️ Conta bloqueada por pagamento. Contate o suporte.`));
+            if (d.link_pagamento) window.open(d.link_pagamento, "_blank");
+            setLoading(false); return;
+          }
+          if (!r.ok) return setErro(d.erro || "Erro na autenticação.");
+          localStorage.setItem("vp_token", d.token);
+          localStorage.setItem("vp_user", JSON.stringify(d.usuario));
+          onLogin(d.token, d.usuario);
+        } catch (e) { setErro("Erro de conexão com o servidor"); }
+        finally { setLoading(false); }
+      }
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#070b14", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ width: "100%", maxWidth: 380, background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 20, padding: 40, textAlign: "center", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: -50, left: -50, width: 150, height: 150, background: "#d4a843", opacity: 0.1, filter: "blur(50px)", borderRadius: "50%" }}></div>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg,#d4a843,#b8912e)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 22, fontWeight: 700, color: "#070b14", boxShadow: "0 10px 20px rgba(212,168,67,0.2)" }}>V</div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 2, letterSpacing: "-.5px" }}>
+              <span style={{ color: "#d4a843" }}>VISIO</span><span style={{ color: "#f1f5f9" }}>PRO</span>
+            </div>
+            <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#4a5568", letterSpacing: ".2em", marginBottom: 28 }}>{isSignUp ? "CADASTRO DE CONTA" : "INBOX — ACESSO RESTRITO"}</div>
+
+            {erro && <div style={{ background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.3)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#f87171", marginBottom: 16, textAlign: "left" }}>⚠ {erro}</div>}
+
+            {isSignUp && (
+              <div style={{ marginBottom: 12, textAlign: "left", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", display: "block", marginBottom: 5, letterSpacing: ".1em" }}>EMPRESA</label>
+                  <input type="text" value={empresaNome} onChange={e => setEmpresaNome(e.target.value)} placeholder="Sua marca" className="form-input" />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", display: "block", marginBottom: 5, letterSpacing: ".1em" }}>SEU NOME</label>
+                  <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome" className="form-input" />
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 12, textAlign: "left" }}>
+              <label style={{ fontSize: 10, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", display: "block", marginBottom: 5, letterSpacing: ".1em" }}>EMAIL</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAuth()} placeholder="seu@email.com" className="form-input" />
+            </div>
+
+            <div style={{ marginBottom: 24, textAlign: "left" }}>
+              <label style={{ fontSize: 10, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", display: "block", marginBottom: 5, letterSpacing: ".1em" }}>SENHA</label>
+              <div style={{ position: "relative" }}>
+                <input type={show ? "text" : "password"} value={senha} onChange={e => setSenha(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAuth()} placeholder={isSignUp ? "Crie uma senha..." : "••••••••"} className="form-input" style={{ paddingRight: 40 }} />
+                <button onClick={() => setShow(!show)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#4a5568", cursor: "pointer", fontSize: 14 }}>{show ? "🙈" : "👁️"}</button>
+              </div>
+            </div>
+
+            <button onClick={handleAuth} disabled={loading} className="btn-gold" style={{ fontSize: 13, height: 44 }}>{loading ? (isSignUp ? "CRIANDO..." : "ENTRANDO...") : isSignUp ? "CRIAR CONTA E ACESSAR" : "ENTRAR NA MINHA CONTA →"}</button>
+
+            <div style={{ marginTop: 24, fontSize: 12, color: "#64748b" }}>
+              {isSignUp ? "Já tem uma conta?" : "Novo(a) por aqui?"} <button onClick={() => setIsSignUp(!isSignUp)} style={{ background: "transparent", border: "none", color: "#d4a843", fontWeight: 700, cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>{isSignUp ? "Faça Login" : "Criar sua Empresa"}</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // MAIN APP
+    function App() {
+      const [token, setToken] = useState(() => localStorage.getItem("vp_token") || "");
+      const [user, setUser] = useState(() => { try { return JSON.parse(localStorage.getItem("vp_user") || "null"); } catch { return null; } });
+      const [view, setView] = useState("dashboard");
+      const [convs, setConvs] = useState([]);
+      const [activeConv, setActiveConv] = useState(null);
+      const [convDetail, setConvDetail] = useState(null);
+      const [filter, setFilter] = useState("todos");
+      const [filterSetor, setFilterSetor] = useState("todos");
+      const [search, setSearch] = useState("");
+      const [input, setInput] = useState("");
+      const [loading, setLoading] = useState(true);
+      const [notify, setNotify] = useState(null);
+      const [modal, setModal] = useState(null);
+      const [usuarios, setUsuarios] = useState([]);
+      const [canais, setCanais] = useState([]);
+      const [novoCanal, setNovoCanal] = useState({ nome: "", tipo: "evolution", numero_telefone: "", instance_name: "" });
+      const [qrFlow, setQrFlow] = useState({ step: "escolha", loading: false, instanceName: "", qrcode: "", canalId: null, countdown: 60 });
+      const [novoForm, setNovoForm] = useState({ nome: "", email: "", senha: "", role: "atendente", setor: "vendas" });
+      const [editUserForm, setEditUserForm] = useState(null);
+      const [novoClienteForm, setNovoClienteForm] = useState({ empresaNome: "", responsavel: "", email: "", senha: "", documento: "", telefone: "", endereco: "", cep: "", cidade: "", estado: "" });
+      const [clienteCriado, setClienteCriado] = useState(null); // {email, senha, empresa} após criação
+      const [viviConvs, setViviConvs] = useState([]);
+      const [viviLeads, setViviLeads] = useState([]);
+      const [viviAgends, setViviAgends] = useState([]);
+      const [viviTab, setViviTab] = useState("agendamentos");
+      const [viviSessao, setViviSessao] = useState(null);
+      const [viviMsgs, setViviMsgs] = useState([]);
+      const [viviInput, setViviInput] = useState("");
+      const [hideNav, setHideNav] = useState(false);
+      const [showEmoji, setShowEmoji] = useState(false);
+      const [rightTab, setRightTab] = useState("info");
+      const [nota, setNota] = useState("");
+      const [SETORES, setSetores] = useState([{ id: "todos", name: "Todos", color: "#d4a843", emoji: "👑" }]);
+      const [timesList, setTimesList] = useState([]);
+      const [loadingTimes, setLoadingTimes] = useState(true);
+      const [novoTime, setNovoTime] = useState({ nome: "", descricao: "", palavras_chave: "", cor: "#3b82f6", emoji: "💼" });
+      const [configs, setConfigs] = useState({});
+      const [gerador, setGerador] = useState({ nomeBot: "Sol", nomeEmpresa: "", descricao: "", tom: "Amigável, leve e objetivo", loading: false });
+      const [showAdvanced, setShowAdvanced] = useState(false);
+      const [showQuickReplies, setShowQuickReplies] = useState(false);
+      const [empresas, setEmpresas] = useState([]);
+      const [adminStats, setAdminStats] = useState({});
+      const [editEmpresa, setEditEmpresa] = useState(null);
+      const [contaInfo, setContaInfo] = useState(null);
+      const [cobrancas, setCobrancas] = useState([]);
+      const [novaCobranca, setNovaCobranca] = useState({ empresa_id: "", descricao: "", valor: "", data_vencimento: "" });
+      const [filtroStatus, setFiltroStatus] = useState("todos"); // clientes filter
+      const [busca, setBusca] = useState("");                    // clientes search
+      const endRef = useRef(null);
+      const inputRef = useRef(null);
+      const fileRef = useRef(null);
+      const prevCount = useRef(0);
+      const prevConvsRef = useRef({});
+
+      function H() { return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }; }
+
+      const superAdmin = user?.email?.toLowerCase() === "admin@visiopro.com";
+
+      function logout() { localStorage.removeItem("vp_token"); localStorage.removeItem("vp_user"); setToken(""); setUser(null); }
+      function toast(msg, dur = 2500) { setNotify(msg); setTimeout(() => setNotify(null), dur); }
+
+      // LOAD CONVS
+      const loadConvs = useCallback(async () => {
+        try {
+          const r = await fetch(`${API}/inbox/conversas`, { headers: H() });
+          if (r.status === 401) { logout(); return; }
+          const d = await r.json();
+          // ✅ FIX: usar && (E) para que c.botOn:false (bot pausado) seja respeitado.
+          // Com || (OU), c.bot_on=undefined tornava sempre true e escondia o estado pausado.
+          setConvs((d || []).map(c => ({ ...c, botOn: c.bot_on !== false && c.botOn !== false, ultimaMensagem: c.ultima_mensagem || c.ultimaMensagem || "", ultimoHorario: c.ultimo_horario ? timeStr(c.ultimo_horario) : c.ultimoHorario || "" })));
+          setLoading(false);
+        } catch (e) { setLoading(false); }
+      }, [token]);
+
+      // LOAD CONV DETAIL
+      const loadConvDetail = useCallback(async (numero) => {
+        if (!numero) return;
+        try {
+          const r = await fetch(`${API}/inbox/conversas/${numero}`, { headers: H() });
+          const d = await r.json();
+          setConvDetail(d);
+        } catch (e) { }
+      }, [token]);
+
+      useEffect(() => { if (!token) return; loadConvs(); const i = setInterval(loadConvs, 3000); return () => clearInterval(i); }, [token]);
+      useEffect(() => { if (token && user?.role === "admin") loadUsuarios(); }, [token]);
+      useEffect(() => { if (token) { loadTimesGlobal(); } }, [token]);
+      useEffect(() => { if (!activeConv || !token) return; loadConvDetail(activeConv); const i = setInterval(() => loadConvDetail(activeConv), 2500); return () => clearInterval(i); }, [activeConv, token]);
+      useEffect(() => { const n = convDetail?.mensagens?.length || 0; if (n > prevCount.current) { endRef.current?.scrollIntoView({ behavior: "smooth" }); prevCount.current = n; } }, [convDetail]);
+
+      useEffect(() => { if (token && superAdmin) loadEmpresas(); }, [token]);
+
+      useEffect(() => {
+        if (view === "times") fetch(`${API}/times`, { headers: H() }).then(r => r.json()).then(d => { setTimesList(d || []); setLoadingTimes(false); }).catch(() => setLoadingTimes(false));
+        if (view === "settings" && user?.role === "admin") fetch(`${API}/configuracoes`, { headers: H() }).then(r => r.json()).then(d => setConfigs(d || {})).catch(() => { });
+        if (view === "canais" && user?.role === "admin") loadCanais();
+        if (view === "clientes" && superAdmin) loadEmpresas();
+      }, [view, token, user]);
+
+      const loadTimesGlobal = async () => {
+        try {
+          const r = await fetch(`${API}/times`, { headers: H() });
+          const d = await r.json();
+          if (d && Array.isArray(d)) {
+            const atv = d.filter(x => x.ativo).map(x => ({ id: x.nome.toLowerCase(), name: x.nome, color: x.cor, emoji: x.emoji, uuid: x.id }));
+            setSetores([...atv, { id: "todos", name: "Todos", color: "#d4a843", emoji: "👑" }]);
+          }
+        } catch (e) { }
+      };
+      const loadViviData = useCallback(async () => {
+        try { const r = await fetch(`${API}/vivi/conversas`, { headers: H() }); if (r.ok) setViviConvs(await r.json()); } catch (e) { }
+        try { const r = await fetch(`${API}/vivi/leads`, { headers: H() }); if (r.ok) setViviLeads(await r.json()); } catch (e) { }
+        try { const r = await fetch(`${API}/vivi/agendamentos`, { headers: H() }); if (r.ok) setViviAgends(await r.json()); } catch (e) { }
+      }, [token]);
+
+      const loadViviSessao = useCallback(async (sid) => {
+        if (!sid) return;
+        try {
+          const r = await fetch(`${API}/vivi/conversas/${sid}`, { headers: H() });
+          if (r.ok) {
+            const d = await r.json();
+            setViviMsgs(d || []);
+            // Marcar como visto ao abrir
+            fetch(`${API}/vivi/conversas/${sid}/visto`, { method: "PATCH", headers: H() }).then(() => loadViviData());
+          }
+        } catch (e) { }
+      }, [token, loadViviData]);
+
+      useEffect(() => {
+        if (token && (view === "vivi" || view === "leads" || view === "agendamentos")) {
+          loadViviData();
+          const i = setInterval(loadViviData, 3000);
+          return () => clearInterval(i);
+        }
+      }, [view, token, loadViviData]);
+
+      useEffect(() => {
+        if (!token || !viviSessao) return;
+        loadViviSessao(viviSessao);
+        const i = setInterval(() => loadViviSessao(viviSessao), 2500);
+        return () => clearInterval(i);
+      }, [viviSessao, token, loadViviSessao]);
+
+      // Notificações desktop + título da aba
+      useEffect(() => {
+        const total = convs.reduce((a, c) => a + (c.unread || 0), 0);
+        document.title = total > 0 ? `(${total}) VisioPro Inbox` : "VisioPro Inbox";
+        if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+        convs.forEach(c => {
+          const prev = prevConvsRef.current[c.numero];
+          if (prev && (c.unread || 0) > (prev.unread || 0) && document.hidden && Notification.permission === "granted") {
+            try { new Notification(`💬 ${c.nome}`, { body: c.ultimaMensagem || "Nova mensagem" }); } catch (e) { }
+          }
+          prevConvsRef.current[c.numero] = { ...c };
+        });
+      }, [convs]);
+
+      async function loadUsuarios() { try { const r = await fetch(`${API}/auth/usuarios`, { headers: H() }); const d = await r.json(); setUsuarios(d || []); } catch (e) { } }
+
+      async function loadEmpresas() {
+        try {
+          const r = await fetch(`${API}/admin/empresas`, { headers: H() });
+          if (r.ok) setEmpresas(await r.json() || []);
+          const s = await fetch(`${API}/admin/stats`, { headers: H() });
+          if (s.ok) setAdminStats(await s.json() || {});
+        } catch (e) { }
+      }
+
+      async function atualizarEmpresa(id, updates) {
+        try {
+          const r = await fetch(`${API}/admin/empresas/${id}`, { method: "PATCH", headers: H(), body: JSON.stringify(updates) });
+          if (r.ok) { toast("✅ Cliente atualizado!"); loadEmpresas(); setEditEmpresa(null); }
+          else { const d = await r.json(); toast("❌ " + (d.erro || "Erro")); }
+        } catch (e) { toast("❌ Erro de conexão"); }
+      }
+
+      async function loadCanais() {
+        try {
+          const r = await fetch(`${API}/canais`, { headers: H() });
+          if (r.ok) setCanais(await r.json() || []);
+        } catch (e) { }
+      }
+
+      async function deletarCanal(id) {
+        if (!window.confirm("Confirmar desvinculação deste canal?")) return;
+        try {
+          const r = await fetch(`${API}/canais/${id}`, { method: "DELETE", headers: H() });
+          if (r.ok) { toast("✅ Canal desvinculado!"); loadCanais(); }
+          else { const d = await r.json().catch(() => ({})); toast("❌ " + (d.erro || "Erro ao desvincular")); }
+        } catch (e) { toast("❌ Erro de conexão"); }
+      }
+
+      async function sendMsg() {
+        if (!input.trim() || !activeConv) return;
+        const txt = input; setInput("");
+        try {
+          await fetch(`${API}/inbox/enviar`, { method: "POST", headers: H(), body: JSON.stringify({ numero: activeConv, texto: txt }) });
+          await loadConvDetail(activeConv);
+          await loadConvs();
+        } catch (e) { toast("❌ Erro ao enviar"); }
+      }
+
+      async function sendMedia(numero, file) {
+        return new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            try {
+              const base64 = e.target.result.split(",")[1];
+              const mimetype = file.type;
+              const tipo = mimetype.startsWith("image/") ? "image" : mimetype.startsWith("video/") ? "video" : "document";
+              await fetch(`${API}/inbox/enviar-midia`, { method: "POST", headers: H(), body: JSON.stringify({ numero, base64, mimetype, filename: file.name, tipo }) });
+              await loadConvDetail(numero);
+              toast("✅ Arquivo enviado!"); res();
+            } catch (e) { toast("❌ Erro ao enviar arquivo"); rej(e); }
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function toggleBot(numero) {
+        const c = convs.find(x => x.numero === numero);
+        const pausar = c?.botOn !== false;
+        await fetch(`${API}/inbox/bot/${numero}`, { method: "POST", headers: H(), body: JSON.stringify({ pausar }) });
+        setConvs(prev => prev.map(x => x.numero === numero ? { ...x, botOn: !pausar } : x));
+        toast(pausar ? "⏸ Bot pausado" : "🤖 Bot ativado");
+      }
+
+      async function assumir(numero) {
+        await fetch(`${API}/webhook/humano-assumiu/${numero}`, { method: "POST", headers: H() });
+        toast("✅ Conversa assumida!");
+        await loadConvs(); await loadConvDetail(numero);
+      }
+
+      async function setEtiqueta(numero, etiqueta) {
+        await fetch(`${API}/inbox/conversas/${numero}/etiqueta`, { method: "PATCH", headers: H(), body: JSON.stringify({ etiqueta }) });
+        toast("🏷 Etiqueta atualizada!"); await loadConvs();
+      }
+
+      async function setSetor(numero, setor) {
+        await fetch(`${API}/inbox/conversas/${numero}/setor`, { method: "PATCH", headers: H(), body: JSON.stringify({ setor }) });
+        toast("✅ Setor atualizado!"); await loadConvs();
+      }
+
+      async function criarUsuario() {
+        const { nome, email, senha, role, setor } = novoForm;
+        if (!nome || !email || !senha) return toast("❌ Preencha todos os campos");
+        const r = await fetch(`${API}/auth/usuarios`, { method: "POST", headers: H(), body: JSON.stringify({ nome, email, senha, role, setor }) });
+        const d = await r.json();
+        if (d.ok) { toast("✅ Usuário criado!"); loadUsuarios(); setModal(null); setNovoForm({ nome: "", email: "", senha: "", role: "atendente", setor: "vendas" }); }
+        else toast(`❌ ${d.erro}`);
+      }
+
+      async function criarClienteSuperAdmin() {
+        const { empresaNome, responsavel, email, senha, documento, telefone, endereco, cep, cidade, estado } = novoClienteForm;
+        if (!empresaNome || !responsavel || !email || !senha) return toast("❌ Preencha: empresa, responsável, email e senha");
+        if (senha.length < 6) return toast("❌ Senha deve ter pelo menos 6 caracteres");
+        try {
+          const r = await fetch(`${API}/admin/criar-cliente`, { method: "POST", headers: H(), body: JSON.stringify({ empresaNome, responsavel, documento, telefone, endereco, cep, cidade, estado, email, senha }) });
+          const d = await r.json();
+          if (r.ok) {
+            setClienteCriado({ email, senha, empresa: empresaNome, responsavel });
+            loadEmpresas();
+          } else { toast(`❌ ${d.erro}`); }
+        } catch (e) { toast("❌ Erro de conexão ao cadastrar"); }
+      }
+
+      async function criarCanal() {
+        const { nome, tipo, numero_telefone, instance_name } = novoCanal;
+        if (!nome) return toast("❌ Nome do canal obrigatório");
+        if (tipo === "evolution" && !instance_name) return toast("❌ Nome da instância obrigatório");
+
+        const r = await fetch(`${API}/canais`, {
+          method: "POST", headers: H(), body: JSON.stringify({
+            nome, tipo, numero_telefone, dados_conexao: { instance_name }
+          })
+        });
+        const d = await r.json();
+        if (d.ok) { toast("✅ Canal vinculado!"); loadCanais(); setModal(null); setNovoCanal({ nome: "", tipo: "evolution", numero_telefone: "", instance_name: "" }); }
+        else toast(`❌ ${d.erro || "Erro ao vincular canal"}`);
+      }
+
+      // deletarCanal definida acima (linha ~469) — versão com tratamento de erro
+
+      async function toggleUsuario(id, ativo) {
+        await fetch(`${API}/auth/usuarios/${id}`, { method: "PATCH", headers: H(), body: JSON.stringify({ ativo: !ativo }) });
+        toast(ativo ? "🔒 Usuário desativado" : "✅ Usuário ativado!"); loadUsuarios();
+      }
+
+      async function deletarUsuario(id, nome) {
+        if (!window.confirm(`🗑️ Excluir permanentemente o usuário "${nome}"?\n\nEssa ação não pode ser desfeita.`)) return;
+        try {
+          const r = await fetch(`${API}/auth/usuarios/${id}`, { method: "DELETE", headers: H() });
+          const d = await r.json();
+          if (r.ok) { toast("✅ Usuário excluído!"); loadUsuarios(); }
+          else toast(`❌ ${d.erro || "Erro ao excluir"}`);
+        } catch (e) { toast("❌ Erro de conexão"); }
+      }
+
+      async function loadContaInfo() {
+        try {
+          const r = await fetch(`${API}/minha-conta/link-pagamento`, { headers: H() });
+          if (r.ok) setContaInfo(await r.json());
+        } catch (e) { }
+      }
+
+      async function loadCobrancas(empresaId) {
+        try {
+          const r = await fetch(`${API}/admin/empresas/${empresaId}/cobrancas`, { headers: H() });
+          if (r.ok) setCobrancas(await r.json());
+        } catch (e) { }
+      }
+
+      async function criarCobranca() {
+        const { empresa_id, descricao, valor, data_vencimento } = novaCobranca;
+        if (!empresa_id || !descricao || !valor) return toast("❌ Preencha empresa, descrição e valor");
+        try {
+          const r = await fetch(`${API}/admin/cobrancas`, { method: "POST", headers: H(), body: JSON.stringify({ empresa_id, descricao, valor: parseFloat(valor), data_vencimento }) });
+          const d = await r.json();
+          if (r.ok) {
+            if (d.link_pagamento) { navigator.clipboard.writeText(d.link_pagamento).then(() => toast("📋 Link de pagamento copiado!")); } else { toast("✅ Cobrança criada! (sem link InfinityPay)"); }
+            loadCobrancas(empresa_id); setModal(null); setNovaCobranca({ empresa_id: "", descricao: "", valor: "", data_vencimento: "" });
+          } else { toast("❌ " + (d.erro || "Erro")); }
+        } catch (e) { toast("❌ Erro de conexão"); }
+      }
+
+      // Verificar conta suspensa por pagamento (não super admin)
+      useEffect(() => {
+        if (token && user && !superAdmin) loadContaInfo();
+      }, [token]);
+
+      // Tela de conta suspensa por pagamento
+      if (token && user && !superAdmin && contaInfo?.status === "suspenso_pagamento") {
+        return (
+          <div style={{ minHeight: "100vh", background: "#070b14", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ maxWidth: 460, width: "100%", background: "#0c1220", border: "1px solid #ef444444", borderRadius: 20, padding: 40, textAlign: "center" }}>
+              <div style={{ fontSize: 56, marginBottom: 12 }}>⛔</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#ef4444", marginBottom: 8 }}>Conta Suspensa</div>
+              <div style={{ fontSize: 14, color: "#94a3b8", marginBottom: 24 }}>Há um pagamento pendente para reativar o acesso à <b style={{ color: "#f1f5f9" }}>VisioPro</b>.</div>
+
+              <div style={{ background: "#070b14", border: "1px solid #1e2d45", borderRadius: 12, padding: 20, marginBottom: 24, textAlign: "left" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>Empresa</span>
+                  <span style={{ fontSize: 12, color: "#f1f5f9", fontWeight: 600 }}>{contaInfo.nome || user?.empresa_id}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>Plano</span>
+                  <span style={{ fontSize: 12, color: "#d4a843", fontWeight: 600 }}>{contaInfo.plano || "Starter"}</span>
+                </div>
+                {contaInfo.valor_plano && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>Valor</span>
+                  <span style={{ fontSize: 14, color: "#10b981", fontWeight: 700 }}>R$ {parseFloat(contaInfo.valor_plano).toFixed(2).replace(".", ",")}/mês</span>
+                </div>}
+                {contaInfo.proximo_vencimento && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>Vencimento</span>
+                  <span style={{ fontSize: 12, color: "#ef4444", fontWeight: 600 }}>{new Date(contaInfo.proximo_vencimento + "T00:00").toLocaleDateString("pt-BR")}</span>
+                </div>}
+              </div>
+
+              {contaInfo.link_pagamento ? (
+                <a href={contaInfo.link_pagamento} target="_blank" rel="noreferrer" style={{ display: "block", background: "linear-gradient(135deg,#d4a843,#b8912e)", color: "#070b14", fontWeight: 800, fontSize: 15, padding: "14px 24px", borderRadius: 12, textDecoration: "none", marginBottom: 12 }}>💳 Pagar Agora — Reativar Conta</a>
+              ) : (
+                <div style={{ background: "#1e2d45", borderRadius: 12, padding: 16, fontSize: 13, color: "#94a3b8", marginBottom: 12 }}>Entre em contato com o suporte para regularizar seu pagamento.</div>
+              )}
+              <button onClick={() => { loadContaInfo(); toast("🔄 Verificando pagamento..."); }} style={{ background: "transparent", border: "1px solid #1e2d45", color: "#64748b", padding: "10px 20px", borderRadius: 10, fontSize: 12, cursor: "pointer", width: "100%", marginBottom: 8 }}>🔄 Já paguei — verificar</button>
+              <button onClick={logout} style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 12, cursor: "pointer" }}>Sair</button>
+            </div>
+          </div>
+        );
+      }
+
+      if (!token || !user) return <Login onLogin={(t, u) => { setToken(t); setUser(u); }} />
+
+      const conv = convs.find(c => c.numero === activeConv);
+      const filtered = convs.filter(c => {
+        if (filter !== "todos" && c.etiqueta !== filter) return false;
+        if (filterSetor !== "todos") {
+          // Compara por nome (lowercase) OU por UUID — cobre ambos os formatos armazenados
+          const fs = SETORES.find(s => s.id === filterSetor);
+          const cs = (c.setor || "").toLowerCase().trim();
+          const ok = cs === filterSetor || cs === (fs?.name || "").toLowerCase() || (fs?.uuid || "").toLowerCase() === cs;
+          if (!ok) return false;
+        }
+        if (search && !c.nome?.toLowerCase().includes(search.toLowerCase()) && !c.numero?.includes(search)) return false;
+        return true;
+      });
+      const totalUnread = convs.reduce((a, c) => a + (c.unread || 0), 0);
+
+      // SIDEBAR ICONS
+      const navItems = [
+        { id: "dashboard", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg> },
+        { id: "inbox", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>, badge: totalUnread > 0 },
+        { id: "canais", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>, adminOnly: true },
+        { id: "vivi", icon: <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>, badge: viviAgends.filter(a => a.status === "pendente").length > 0 },
+        { id: "leads", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
+        { id: "agendamentos", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /><path d="M8 14h.01" /><path d="M12 14h.01" /><path d="M16 14h.01" /><path d="M8 18h.01" /><path d="M12 18h.01" /><path d="M16 18h.01" /></svg> },
+        { id: "clientes", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>, superOnly: true },
+        { id: "usuarios", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>, adminOnly: true },
+        { id: "times", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2" /><path d="M9 22v-4h6v4" /><path d="M8 6h.01" /><path d="M16 6h.01" /><path d="M12 6h.01" /><path d="M12 10h.01" /><path d="M12 14h.01" /><path d="M16 10h.01" /><path d="M16 14h.01" /><path d="M8 10h.01" /><path d="M8 14h.01" /></svg>, adminOnly: true },
+        { id: "settings", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>, adminOnly: true },
+        { id: "perfil", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> },
+      ].filter(i => (!i.adminOnly || user?.role === "admin") && (!i.superOnly || superAdmin));
+
+      // RENDER INBOX
+      function renderInbox() {
+        return (
+          <>
+            {/* CONV LIST */}
+            <div className={`conv-panel${activeConv ? " hidden" : ""}`}>
+              <div className="conv-top">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <div>
+                    <div className="conv-title">Caixa de Entrada</div>
+                    <div className="conv-sub">{filtered.length} conversas · {totalUnread} não lidas</div>
+                  </div>
+                  <button onClick={() => setModal("newConv")} style={{ background: "#172236", color: totalUnread > 0 ? "#d4a843" : "#64748b", border: "1px solid #1e2d45", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 600 }}>+ Nova</button>
+                </div>
+                <input className="conv-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Buscar conversa..." />
+              </div>
+
+              {/* FILTERS */}
+              <div className="conv-filters">
+                {["todos", "novo", "proposta", "retomar", "ativo", "parceiro", "concluido"].map(f => (
+                  <button key={f} className={`f-btn${filter === f ? " active" : ""}`} onClick={() => setFilter(f)}>
+                    {f === "todos" ? "Todos" : labelName(f)}
+                  </button>
+                ))}
+              </div>
+
+              {/* SETOR FILTERS */}
+              <div className="conv-filters" style={{ paddingTop: 4 }}>
+                {SETORES.filter(s => user?.role === "admin" || s.id === user?.setor || s.id === "todos").map(s => (
+                  <button key={s.id} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 600, border: "1px solid " + s.color + (filterSetor === s.id ? "bb" : "33"), background: s.color + (filterSetor === s.id ? "33" : "15"), color: s.color, whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => setFilterSetor(s.id)}>
+                    {s.emoji} {s.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* LIST */}
+              <div className="conv-list">
+                {loading && <div style={{ textAlign: "center", padding: 24, color: "#4a5568", fontSize: 12 }}>Carregando...</div>}
+                {!loading && filtered.length === 0 && (
+                  <div className="empty-state">
+                    <div className="empty-icon">💬</div>
+                    <div className="empty-text">Nenhuma conversa</div>
+                  </div>
+                )}
+                {filtered.map(c => {
+                  const lbl = LABELS.find(l => l.id === c.etiqueta);
+                  const col = lbl?.color || "#4a5568";
+                  const ini = initials(c.nome);
+                  return (
+                    <div key={c.numero} className={`conv-item${activeConv === c.numero ? " active" : ""}`}
+                      onClick={() => { setActiveConv(c.numero); setConvs(prev => prev.map(x => x.numero === c.numero ? { ...x, unread: 0 } : x)); document.querySelector(".conv-panel")?.classList.add("hidden"); setHideNav(true); }}>
+                      <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                        <div className="conv-avatar" style={{ background: col + "22", color: col }}>{ini}</div>
+                        <div className="conv-meta" style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <div className="conv-name">{c.nome}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span className="conv-time">{c.ultimoHorario}</span>
+                              {c.unread > 0 && <span className="conv-badge">{c.unread}</span>}
+                            </div>
+                          </div>
+                          <div className="conv-preview">{c.botOn !== false ? "🤖 " : ""}{c.ultimaMensagem}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                            {c.setor ? <span className="tag-pill" style={{ background: getSectorColor(c.setor, SETORES) + "22", color: getSectorColor(c.setor, SETORES) }}>{getSectorDisplay(c.setor, SETORES)}</span> : <span className="tag-pill" style={{ background: col + "22", color: col }}>{lbl?.name || "—"}</span>}
+                            {c.botOn !== false ? <span className="tag-pill" style={{ background: "#16a34a22", color: "#16a34a" }}>🤖 Bot</span> : c.assumido_nome ? <span className="tag-pill" style={{ background: "#d4a84322", color: "#d4a843" }}>👤 {c.assumido_nome}</span> : <span className="tag-pill" style={{ background: "#ef444422", color: "#ef4444" }}>⏸ Aguarda</span>}
+                            {c.unread > 0 && getWaitTime(c.ultimoHorario) && <span className="sla-badge" style={{ background: parseInt(getWaitTime(c.ultimoHorario)) >= 15 ? "#ef444422" : parseInt(getWaitTime(c.ultimoHorario)) >= 5 ? "#f59e0b22" : "#10b98122", color: parseInt(getWaitTime(c.ultimoHorario)) >= 15 ? "#ef4444" : parseInt(getWaitTime(c.ultimoHorario)) >= 5 ? "#f59e0b" : "#10b981" }}>⏱ {getWaitTime(c.ultimoHorario)}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* CHAT */}
+            {conv ? (
+              <div className={`chat-area${hideNav ? " hide-nav" : ""}`}>
+                {/* HEADER */}
+                <div className="chat-header">
+                  <button className="back-btn" onClick={() => { setActiveConv(null); document.querySelector(".conv-panel")?.classList.remove("hidden"); setHideNav(false); }}>‹</button>
+                  <div className="conv-avatar" style={{ background: labelColor(conv.etiqueta) + "22", color: labelColor(conv.etiqueta), width: 34, height: 34, borderRadius: 9, flexShrink: 0, fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(conv.nome)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{conv.nome}</div>
+                    <div style={{ fontSize: 10, color: "#4a5568", fontFamily: "'JetBrains Mono',monospace" }}>{conv.numero} · {conv.canal || "whatsapp"}</div>
+                  </div>
+                  {/* DESKTOP ACTIONS */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#0c1220", padding: "5px 10px", borderRadius: 8, border: "1px solid #1e2d45" }}>
+                      <span style={{ fontSize: 11, color: conv.botOn !== false ? "#16a34a" : "#64748b" }}>{conv.botOn !== false ? "🤖 Bot" : "⏸ Pausado"}</span>
+                      <div className={`toggle ${conv.botOn !== false ? "on" : "off"}`} onClick={() => toggleBot(conv.numero)} style={{ transform: "scale(.75)" }}>
+                        <div className="toggle-thumb" />
+                      </div>
+                    </div>
+                    {["admin", "supervisor"].includes(user?.role) && !convDetail?.assumidoPor && (
+                      <button onClick={() => assumir(conv.numero)} style={{ background: "#16a34a22", color: "#16a34a", border: "1px solid #16a34a44", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 600 }}>✋ Assumir</button>
+                    )}
+                    {convDetail?.assumidoPor && <div style={{ background: "#16a34a22", color: "#16a34a", border: "1px solid #16a34a44", borderRadius: 7, padding: "5px 10px", fontSize: 11 }}>✅ {convDetail.assumidoPor.nome}</div>}
+                    <button onClick={() => setModal("transfer")} style={{ background: "#172236", color: "#60a5fa", border: "1px solid #1e3a5f", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 600 }}>Transferir →</button>
+                  </div>
+                </div>
+
+                {/* MESSAGES */}
+                <div className="chat-messages">
+                  <div style={{ textAlign: "center", margin: "4px 0 12px" }}>
+                    <span style={{ background: "#111827", border: "1px solid #1e2d45", borderRadius: 20, padding: "3px 12px", fontSize: 10, color: "#4a5568", fontFamily: "'JetBrains Mono',monospace" }}>Hoje</span>
+                  </div>
+                  {convDetail?.mensagens?.map((msg, idx) => {
+                    const tipo = (msg.tipo || "").toLowerCase().trim();
+                    const isInterna = tipo === "interna";
+                    const isOut = tipo === "enviada";
+                    const isBot = tipo === "bot";
+                    const isRecebida = tipo === "recebida";
+                    const cls = isInterna ? "msg-out" : isOut ? "msg-out" : isBot ? "msg-bot" : isRecebida ? "msg-cliente" : "msg-in";
+                    const alignDir = isInterna ? "center" : (isOut || isBot) ? "flex-end" : "flex-start";
+                    return (
+                      <div key={`${msg.id}-${idx}`} className="msg-wrap" style={{ alignItems: alignDir }}>
+                        {isBot && <div className="msg-sender" style={{ justifyContent: "flex-end" }}>🤖 <span>Sol — VisioPro</span></div>}
+                        {isRecebida && <div className="msg-sender">👤 <span>{convDetail?.nome || "Cliente"}</span></div>}
+                        {isOut && !isInterna && <div className="msg-sender" style={{ justifyContent: "flex-end" }}>✉️ <span>{msg.enviadoPor || user?.nome || "Equipe"}</span></div>}
+                        {isInterna && <div className="msg-sender" style={{ justifyContent: "center", color: "#facc15" }}>🤫 <span>Nota da Equipe</span></div>}
+                        <div className={`msg-bubble ${cls}`} style={isInterna ? { background: "#fef08a22", color: "#facc15", border: "1px solid #facc1555", fontSize: "11px", fontStyle: "italic", textAlign: "center", padding: "8px", maxWidth: "80%" } : {}}>
+                          {msg.midia_tipo === "image" && (msg.midia_url || msg.midia_base64) && (
+                            <img src={msg.midia_base64 ? `data:${msg.midia_mimetype};base64,${msg.midia_base64}` : msg.midia_url} alt="" style={{ maxWidth: "100%", borderRadius: 8, marginBottom: 4, display: "block", cursor: "pointer" }} onClick={e => window.open(e.target.src, "_blank")} />
+                          )}
+                          {msg.midia_tipo === "audio" && <audio controls style={{ maxWidth: "100%", marginBottom: 4 }}><source src={msg.midia_url || `data:${msg.midia_mimetype};base64,${msg.midia_base64}`} /></audio>}
+                          {msg.texto && <span>{msg.texto}</span>}
+                        </div>
+                        <div className="msg-time">{msg.time || timeStr(msg.timestamp)}</div>
+                      </div>
+                    );
+                  })}
+                  {(!convDetail?.mensagens || convDetail.mensagens.length === 0) && (
+                    <div className="empty-state"><div className="empty-icon">💬</div><div className="empty-text">Sem mensagens ainda</div></div>
+                  )}
+                  <div ref={endRef} />
+                </div>
+
+                {/* INPUT */}
+                <div className={`chat-input-wrap${hideNav ? " hide-nav" : ""}`}>
+                  <div style={{ position: "relative" }}>
+                    {showQuickReplies && <div className="quick-replies-menu">
+                      <div style={{ padding: "8px 16px 6px", fontSize: 10, color: "#4a5568", fontWeight: 700, letterSpacing: ".1em", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>RESPOSTAS RÁPIDAS</div>
+                      {QUICK_REPLIES.map(qr => (
+                        <div key={qr.label} className="qr-item" onClick={() => { setInput(qr.text); setShowQuickReplies(false); setTimeout(() => inputRef.current?.focus(), 50); }}>
+                          <span className="qr-label">{qr.label}</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{qr.text}</span>
+                        </div>
+                      ))}
+                    </div>}
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                      <input type="file" ref={fileRef} style={{ display: "none" }} onChange={async e => { if (e.target.files[0]) await sendMedia(conv.numero, e.target.files[0]); e.target.value = ""; }} />
+                      <button onClick={() => fileRef.current?.click()} style={{ width: 36, height: 36, borderRadius: 8, background: "#111827", border: "1px solid #1e2d45", color: "#64748b", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>📎</button>
+                      <textarea ref={inputRef} className="chat-input" value={input} onChange={e => { const v = e.target.value; setInput(v); setShowQuickReplies(v === "/"); }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMsg(); } if (e.key === "Escape") setShowQuickReplies(false); }} placeholder="Digite / para respostas rápidas..." rows={1} />
+                      <button className="send-btn" onClick={sendMsg}>➤</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="chat-area empty-state-chat" style={{ alignItems: "center", justifyContent: "center", display: "flex" }}>
+                <div style={{ textAlign: "center", opacity: .3 }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
+                  <div style={{ fontSize: 14, color: "#64748b" }}>Selecione uma conversa</div>
+                </div>
+              </div>
+            )}
+
+            {/* RIGHT PANEL */}
+            {conv && (
+              <div className="right-panel">
+                {/* CLIENT INFO */}
+                <div className="rp-section">
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <div className="conv-avatar" style={{ background: labelColor(conv.etiqueta) + "22", color: labelColor(conv.etiqueta), width: 44, height: 44, borderRadius: 12, fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{initials(conv.nome)}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{conv.nome}</div>
+                      <div style={{ fontSize: 10, color: "#4a5568", fontFamily: "'JetBrains Mono',monospace" }}>{conv.numero}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    <span className="tag-pill" style={{ background: labelColor(conv.etiqueta) + "22", color: labelColor(conv.etiqueta) }}>{labelName(conv.etiqueta)}</span>
+                    <span className="tag-pill" style={{ background: getSectorColor(conv.setor, SETORES) + "22", color: getSectorColor(conv.setor, SETORES) }}>{getSectorDisplay(conv.setor, SETORES)}</span>
+                  </div>
+                </div>
+
+                {/* TABS */}
+                <div className="rp-section">
+                  <div className="tabs" style={{ marginBottom: 10 }}>
+                    {["info", "historico"].map(t => <div key={t} className={`tab${rightTab === t ? " active" : ""}`} onClick={() => setRightTab(t)}>{t === "info" ? "Info" : "Histórico"}</div>)}
+                  </div>
+
+                  {rightTab === "info" && (
+                    <div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {[
+                          { label: "Etiqueta", val: <select className="form-select" style={{ padding: "4px 8px", fontSize: 11 }} value={conv.etiqueta || "novo"} onChange={e => setEtiqueta(conv.numero, e.target.value)}>{LABELS.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select> },
+                          { label: "Setor", val: <select className="form-select" style={{ padding: "4px 8px", fontSize: 11 }} value={conv.setor || ""} onChange={e => setSetor(conv.numero, e.target.value)}><option value="">Pendente / Sem Setor</option>{SETORES.filter(s => s.id !== "todos").map(s => <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>)}</select> },
+                          { label: "Bot", val: <div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className={`toggle ${conv.botOn !== false ? "on" : "off"}`} onClick={() => toggleBot(conv.numero)} style={{ transform: "scale(.8)" }}><div className="toggle-thumb" /></div><span style={{ fontSize: 11, color: conv.botOn !== false ? "#16a34a" : "#64748b" }}>{conv.botOn !== false ? "Ativo" : "Pausado"}</span></div> },
+                          { label: "Responsável", val: <span style={{ fontSize: 11, color: "#94a3b8" }}>{convDetail?.assumidoPor?.nome || "—"}</span> },
+                          { label: "Canal", val: <span style={{ fontSize: 11, color: "#94a3b8" }}>{conv.canal || "whatsapp"}</span> },
+                        ].map(({ label, val }) => (
+                          <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <span style={{ fontSize: 10, color: "#4a5568", letterSpacing: ".05em", flexShrink: 0 }}>{label}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>{val}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* NOTAS */}
+                      <div style={{ marginTop: 14 }}>
+                        <div className="rp-title">Notas internas</div>
+                        <textarea value={nota} onChange={e => setNota(e.target.value)} placeholder="Adicionar nota sobre este cliente..." style={{ width: "100%", background: "#111827", border: "1px solid #1e2d45", borderRadius: 8, padding: "8px 10px", color: "#94a3b8", fontSize: 11, resize: "none", height: 70, lineHeight: 1.5 }} />
+                        <button onClick={async () => { if (nota.trim()) { await fetch(`${API}/inbox/enviar`, { method: "POST", headers: H(), body: JSON.stringify({ numero: conv.numero, texto: nota, interna: true }) }); toast("📝 Nota salva!"); setNota(""); loadConversas(); loadConvDetail(conv.numero); } }} style={{ width: "100%", marginTop: 6, background: "#172236", color: "#60a5fa", border: "1px solid #1e3a5f", borderRadius: 7, padding: "6px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Salvar nota</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {rightTab === "historico" && (
+                    <div style={{ fontSize: 11, color: "#4a5568", textAlign: "center", padding: "20px 0" }}>
+                      {convDetail?.mensagens?.length || 0} mensagens no histórico
+                    </div>
+                  )}
+                </div>
+
+                {/* QUICK ACTIONS */}
+                <div className="rp-section">
+                  <div className="rp-title">Ações rápidas</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {["admin", "supervisor"].includes(user?.role) && !convDetail?.assumidoPor && (
+                      <button onClick={() => assumir(conv.numero)} style={{ background: "#16a34a22", color: "#16a34a", border: "1px solid #16a34a44", borderRadius: 7, padding: "8px", fontSize: 11, fontWeight: 600, width: "100%" }}>✋ Assumir conversa</button>
+                    )}
+                    <button onClick={() => setModal("transfer")} style={{ background: "#1e3a5f", color: "#60a5fa", border: "1px solid #2563eb44", borderRadius: 7, padding: "8px", fontSize: 11, fontWeight: 600, width: "100%" }}>→ Transferir setor</button>
+                    <button onClick={() => setModal("assign")} style={{ background: "#172236", color: "#94a3b8", border: "1px solid #1e2d45", borderRadius: 7, padding: "8px", fontSize: 11, width: "100%" }}>👤 Atribuir</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      }
+
+      // RENDER VIVI
+      function renderVivi() {
+        return (
+          <div style={{ flex: 1, display: "flex", minWidth: 0, overflow: "hidden" }}>
+            {/* TABS */}
+            <div className="vivi-list" style={{ display: viviSessao && window.innerWidth <= 900 ? "none" : "flex", flexDirection: "column" }}>
+              <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid #1e2d45" }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#f1f5f9", marginBottom: 10 }}>Vivi — Site</div>
+                <div className="tabs" style={{ marginBottom: 0 }}>
+                  {["agendamentos", "conversas", "leads"].map(t => (
+                    <div key={t} className={`tab${viviTab === t ? " active" : ""}`} onClick={() => { setViviTab(t); loadViviData(); }}>{t.charAt(0).toUpperCase() + t.slice(1)}</div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {viviTab === "conversas" && viviConvs.map(s => (
+                  <div key={s.session_id} className={`vivi-item${viviSessao === s.session_id ? " active" : ""}`}
+                    style={s.novas > 0 ? { borderLeft: "3px solid #ef4444", background: "rgba(239,68,68,0.05)" } : {}}
+                    onClick={() => { setViviSessao(s.session_id); loadViviSessao(s.session_id); if (window.innerWidth <= 900) setHideNav(true); }}>
+                    <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: "#8b5cf622", color: "#8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, position: "relative" }}>
+                        {initials(s.nome)}
+                        {s.novas > 0 && <div style={{ position: "absolute", top: -2, right: -2, width: 10, height: 10, background: "#ef4444", borderRadius: "50%", border: "2px solid #0c1220" }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: s.novas > 0 ? "#ef4444" : "#f1f5f9", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.nome}</div>
+                        <div style={{ fontSize: 10, color: s.novas > 0 ? "#ef4444bb" : "#4a5568", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1, fontWeight: s.novas > 0 ? 500 : 400 }}>{s.ultima_mensagem}</div>
+                        <div style={{ fontSize: 9, color: "#374151", fontFamily: "'JetBrains Mono',monospace", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
+                          <span>{s.canal || "site"}</span>
+                          {s.novas > 0 && <span style={{ color: "#ef4444", fontWeight: 700 }}>{s.novas} nova{s.novas > 1 ? "s" : ""}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {viviTab === "agendamentos" && (
+                  <div style={{ padding: 14 }}>
+                    {viviAgends.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#4a5568", fontSize: 12 }}>Nenhum agendamento</div>}
+                    {viviAgends.map(a => (
+                      <div key={a.id} style={{ background: "#111827", border: "1px solid #1e2d45", borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#f1f5f9" }}>{a.nome}</span>
+                          <span className="tag-pill" style={{ background: a.status === "pendente" ? "#f59e0b22" : "a.status==='confirmado'?'#10b98122':'#6b728022'", color: a.status === "pendente" ? "#f59e0b" : a.status === "confirmado" ? "#10b981" : "#6b7280" }}>{a.status}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>{a.data_agendamento} às {a.hora_agendamento}</div>
+                        <div style={{ fontSize: 10, color: "#4a5568", marginTop: 2 }}>{a.whatsapp}</div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <button onClick={async () => { await fetch(`${API}/vivi/agendamentos/${a.id}`, { method: "PATCH", headers: H(), body: JSON.stringify({ status: "confirmado" }) }); loadViviData(); toast("✅ Confirmado!"); }} style={{ flex: 1, background: "#10b98122", color: "#10b981", border: "1px solid #10b98144", borderRadius: 6, padding: "5px", fontSize: 10, fontWeight: 600 }}>Confirmar</button>
+                          <button onClick={async () => { await fetch(`${API}/vivi/agendamentos/${a.id}`, { method: "PATCH", headers: H(), body: JSON.stringify({ status: "cancelado" }) }); loadViviData(); toast("❌ Cancelado"); }} style={{ flex: 1, background: "#ef444422", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 6, padding: "5px", fontSize: 10, fontWeight: 600 }}>Cancelar</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {viviTab === "leads" && (
+                  <div style={{ padding: 14 }}>
+                    {viviLeads.length === 0 && <div style={{ textAlign: "center", padding: 20, color: "#4a5568", fontSize: 12 }}>Nenhum lead</div>}
+                    {viviLeads.map(l => (
+                      <div key={l.id} style={{ background: "#111827", border: "1px solid #1e2d45", borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#f1f5f9", marginBottom: 2 }}>{l.nome || "Visitante"}</div>
+                        <div style={{ fontSize: 10, color: "#60a5fa" }}>{l.whatsapp}</div>
+                        <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                          {l.setor && <span className="tag-pill" style={{ background: "#3b82f622", color: "#3b82f6" }}>{l.setor}</span>}
+                          {l.status && <span className="tag-pill" style={{ background: "#10b98122", color: "#10b981" }}>{l.status}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SESSÃO */}
+            {viviSessao ? (
+              <div className="vivi-detail">
+                <div style={{ padding: "10px 16px", borderBottom: "1px solid #1e2d45", display: "flex", alignItems: "center", gap: 10, background: "#0c1220", flexShrink: 0 }}>
+                  <button className="back-btn" style={{ display: "flex" }} onClick={() => { setViviSessao(null); setHideNav(false); }}>‹</button>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{viviConvs.find(c => c.session_id === viviSessao)?.nome || "Visitante"}</div>
+                  <div style={{ fontSize: 10, color: "#4a5568", fontFamily: "'JetBrains Mono',monospace", marginLeft: 4 }}>site</div>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {viviMsgs.map((m, i) => (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "assistant" ? "flex-start" : "flex-end" }}>
+                      <div style={{ fontSize: 9, color: "#4a5568", marginBottom: 2, fontFamily: "'JetBrains Mono',monospace" }}>{m.role === "assistant" ? "🤖 Vivi" : "👤 Cliente"}</div>
+                      <div style={{ maxWidth: "70%", padding: "9px 13px", borderRadius: 10, fontSize: 12, lineHeight: 1.5, background: m.role === "assistant" ? "#0f1826" : m.role === "user" ? "#1a2235" : "#d4a84333", border: m.role === "assistant" ? "1px solid rgba(212,168,67,.2)" : "1px solid #1e2d45", color: m.role === "assistant" ? "#d4a843" : "#e2e8f0" }}>{m.mensagem}</div>
+                      <div style={{ fontSize: 9, color: "#374151", fontFamily: "'JetBrains Mono',monospace", marginTop: 2 }}>{new Date(m.criado_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
+                    </div>
+                  ))}
+                  {viviMsgs.length === 0 && <div className="empty-state"><div className="empty-icon">💬</div><div className="empty-text">Sem mensagens</div></div>}
+                </div>
+                <div style={{ padding: "10px 16px", borderTop: "1px solid #1e2d45", background: "#0c1220", display: "flex", gap: 8, flexDirection: "column" }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="chat-input" style={{ flex: 1, minHeight: 38 }}
+                      value={viviInput}
+                      onChange={e => setViviInput(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (!viviInput.trim()) return;
+                          const msg = viviInput; setViviInput("");
+                          await fetch(`${API}/vivi/conversas/${viviSessao}/enviar`, { method: "POST", headers: H(), body: JSON.stringify({ mensagem: msg }) });
+                          loadViviSessao(viviSessao);
+                        }
+                      }}
+                      placeholder="Enviar mensagem para o Site..."
+                    />
+                    <button className="send-btn" onClick={async () => {
+                      if (!viviInput.trim()) return;
+                      const msg = viviInput; setViviInput("");
+                      await fetch(`${API}/vivi/conversas/${viviSessao}/enviar`, { method: "POST", headers: H(), body: JSON.stringify({ mensagem: msg }) });
+                      loadViviSessao(viviSessao);
+                    }}>➤</button>
+                  </div>
+
+                  {(() => {
+                    const s = viviConvs.find(c => c.session_id === viviSessao);
+                    const lead = viviLeads.find(l => l.whatsapp && (viviSessao.includes(l.whatsapp?.replace(/\D/g, "")) || s?.whatsapp?.includes(l.whatsapp?.replace(/\D/g, ""))));
+                    const wpp = (s?.whatsapp || lead?.whatsapp)?.replace(/\D/g, "");
+                    if (wpp) {
+                      return (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                          <button onClick={async () => {
+                            if (!viviInput.trim()) return toast("Digite algo para enviar no WhatsApp");
+                            await fetch(`${API}/inbox/enviar`, { method: "POST", headers: H(), body: JSON.stringify({ numero: wpp, texto: viviInput.trim() }) });
+                            setViviInput(""); toast("✅ Enviado para WhatsApp!");
+                          }} style={{ background: "#25d36622", color: "#25d366", fontSize: 9, fontWeight: 700, padding: "4px 8px", borderRadius: 6, border: "1px solid #25d36644" }}>
+                            RESPONDER VIA WHATSAPP ({wpp})
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+            ) : (
+              <div className="vivi-detail" style={{ alignItems: "center", justifyContent: "center", display: "flex" }}>
+                <div style={{ textAlign: "center", opacity: .3 }}><div style={{ fontSize: 36, marginBottom: 8 }}>🤖</div><div style={{ fontSize: 13, color: "#64748b" }}>Selecione uma sessão</div></div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // RENDER USUARIOS
+      function renderUsuarios() {
+        return (
+          <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9" }}>Usuários</div>
+                <div style={{ fontSize: 11, color: "#4a5568", fontFamily: "'JetBrains Mono',monospace", marginTop: 2 }}>{usuarios.length} membros</div>
+              </div>
+              <button onClick={() => setModal("novoUsuario")} className="btn-gold" style={{ width: "auto", padding: "8px 16px" }}>+ Novo usuário</button>
+            </div>
+            <div style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 12, overflow: "hidden" }}>
+              <table className="users-table">
+                <thead><tr><th>Nome</th><th>Email</th><th>Role</th><th>Setor</th><th>Status</th><th>Ação</th></tr></thead>
+                <tbody>
+                  {usuarios.map(u => (
+                    <tr key={u.id}>
+                      <td style={{ color: "#f1f5f9", fontWeight: 500 }}>{u.nome}</td>
+                      <td style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11 }}>{u.email}</td>
+                      <td><span className="tag-pill" style={{ background: u.role === "admin" ? "#d4a84322" : u.role === "supervisor" ? "#3b82f622" : "#10b98122", color: u.role === "admin" ? "#d4a843" : u.role === "supervisor" ? "#3b82f6" : "#10b981" }}>{u.role}</span></td>
+                      <td>{u.setor}</td>
+                      <td><span className="tag-pill" style={{ background: u.ativo ? "#10b98122" : "#6b728022", color: u.ativo ? "#10b981" : "#6b7280" }}>{u.ativo ? "Ativo" : "Inativo"}</span></td>
+                      <td style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => setEditUserForm({ ...u, senha: "" })} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 5, border: "1px solid #3b82f644", background: "transparent", color: "#60a5fa", cursor: "pointer" }}>Editar</button>
+                        <button onClick={() => toggleUsuario(u.id, u.ativo)} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 5, border: "1px solid #1e2d45", background: "transparent", color: "#64748b", cursor: "pointer" }}>{u.ativo ? "Desativar" : "Ativar"}</button>
+                        {u.id !== user?.id && <button onClick={() => deletarUsuario(u.id, u.nome)} style={{ fontSize: 10, padding: "3px 8px", borderRadius: 5, border: "1px solid #ef444444", background: "transparent", color: "#ef4444", cursor: "pointer" }}>🗑️</button>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+
+      // RENDER TIMES
+      function renderTimes() {
+        async function salvarTime() {
+          if (!novoTime.nome) return toast("❌ Nome obrigatório");
+          const r = await fetch(`${API}/times`, { method: "POST", headers: H(), body: JSON.stringify(novoTime) });
+          const d = await r.json();
+          if (d.ok) {
+            toast("✅ Time criado!");
+            setTimesList(p => [...p, d.time]);
+            setNovoTime({ nome: "", descricao: "", palavras_chave: "", cor: "#3b82f6", emoji: "💼" });
+            loadTimesGlobal();
+          } else { toast("❌ " + d.erro); }
+        }
+
+        async function toggleTime(id, ativo) {
+          await fetch(`${API}/times/${id}`, { method: "PATCH", headers: H(), body: JSON.stringify({ ativo: !ativo }) });
+          setTimesList(p => p.map(t => t.id === id ? { ...t, ativo: !ativo } : t));
+          toast(ativo ? "🔒 Time desativado" : "✅ Time ativado!");
+          loadTimesGlobal();
+        }
+
+        async function deletarTime(id) {
+          if (!confirm("Deletar este time?")) return;
+          await fetch(`${API}/times/${id}`, { method: "DELETE", headers: H() });
+          setTimesList(p => p.filter(t => t.id !== id));
+          toast("🗑 Time removido");
+          loadTimesGlobal();
+        }
+
+        const cores = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#14b8a6", "#f97316", "#ec4899", "#d4a843"];
+
+        return (
+          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9" }}>Times</div>
+                <div style={{ fontSize: 11, color: "#4a5568", fontFamily: "'JetBrains Mono',monospace", marginTop: 2 }}>{timesList.length} times cadastrados</div>
+              </div>
+            </div>
+
+            {/* NOVO TIME */}
+            <div style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#d4a843", marginBottom: 12, letterSpacing: ".05em" }}>+ NOVO TIME</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4 }}>Nome *</label>
+                  <input className="form-input" placeholder="Ex: Imóveis" value={novoTime.nome} onChange={e => setNovoTime(p => ({ ...p, nome: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4 }}>Emoji</label>
+                  <input className="form-input" placeholder="🏠" value={novoTime.emoji} onChange={e => setNovoTime(p => ({ ...p, emoji: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4 }}>Descrição</label>
+                <input className="form-input" placeholder="Ex: Atendimento imobiliário" value={novoTime.descricao} onChange={e => setNovoTime(p => ({ ...p, descricao: e.target.value }))} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4 }}>Palavras-chave (separe por vírgula)</label>
+                <input className="form-input" placeholder="imovel,casa,apartamento,aluguel" value={novoTime.palavras_chave} onChange={e => setNovoTime(p => ({ ...p, palavras_chave: e.target.value }))} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 6 }}>Cor</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {cores.map(c => (
+                    <div key={c} onClick={() => setNovoTime(p => ({ ...p, cor: c }))} style={{ width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer", border: novoTime.cor === c ? "3px solid #fff" : "3px solid transparent", transition: "all .15s" }} />
+                  ))}
+                </div>
+              </div>
+              <button className="btn-gold" onClick={salvarTime}>Criar time</button>
+            </div>
+
+            {/* LISTA */}
+            {loadingTimes && <div style={{ textAlign: "center", padding: 20, fontSize: 12, color: "#64748b" }}>Carregando times...</div>}
+            <div style={{ display: "grid", gap: 12 }}>
+              {timesList.map(t => (
+                <div key={t.id} style={{ background: "#0c1220", border: "1px solid " + (t.cor || "#1e2d45") + "44", borderRadius: 12, padding: 14, opacity: t.ativo ? 1 : .5 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 20 }}>{t.emoji || "💼"}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{t.nome}</div>
+                        <div style={{ fontSize: 11, color: "#64748b" }}>{t.descricao}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: t.cor || "#3b82f6" }} />
+                      <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: t.ativo ? "#10b98122" : "#6b728022", color: t.ativo ? "#10b981" : "#6b7280", fontWeight: 600 }}>{t.ativo ? "Ativo" : "Inativo"}</span>
+                    </div>
+                  </div>
+                  {t.palavras_chave && (
+                    <div style={{ fontSize: 10, color: "#4a5568", marginTop: 4 }}>
+                      <span style={{ color: "#64748b" }}>Palavras-chave: </span>
+                      {t.palavras_chave.split(",").map(p => (
+                        <span key={p} style={{ background: "#1a2235", borderRadius: 4, padding: "1px 6px", marginRight: 3, color: "#94a3b8" }}>{p.trim()}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                    <button onClick={() => toggleTime(t.id, t.ativo)} style={{ flex: 1, background: t.ativo ? "#374151" : "#10b98122", color: t.ativo ? "#94a3b8" : "#10b981", border: "1px solid " + (t.ativo ? "#374151" : "#10b98144"), borderRadius: 7, padding: "6px", fontSize: 11, fontWeight: 600 }}>
+                      {t.ativo ? "Desativar" : "Ativar"}
+                    </button>
+                    <button onClick={() => deletarTime(t.id)} style={{ background: "#ef444422", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 600 }}>🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      // RENDER SETTINGS
+      function renderSettings() {
+        async function salvarConfigs() {
+          const r = await fetch(`${API}/configuracoes`, { method: "POST", headers: H(), body: JSON.stringify({ prompt_sistema: configs.prompt_sistema, prompt_espera: configs.prompt_espera }) });
+          if (r.ok) toast("✅ Configurações da IA salvas!");
+          else toast("❌ Erro ao salvar");
+        }
+
+        async function autoGerar() {
+          if (!gerador.nomeBot || !gerador.nomeEmpresa || !gerador.descricao) return toast("Preencha nome, empresa e descrição");
+          setGerador(p => ({ ...p, loading: true }));
+          try {
+            const r = await fetch(`${API}/configuracoes/gerar-prompt`, { method: "POST", headers: H(), body: JSON.stringify(gerador) });
+            const d = await r.json();
+            if (d.ok) {
+              setConfigs(p => ({ ...p, prompt_sistema: d.prompt }));
+              toast("✨ IA configurada com sucesso!");
+            } else toast("❌ " + d.erro);
+          } catch (e) { toast("❌ Falha de conexão"); }
+          finally { setGerador(p => ({ ...p, loading: false })); }
+        }
+
+        return (
+          <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>Configurações</div>
+            <div style={{ fontSize: 11, color: "#4a5568", marginBottom: 20, fontFamily: "'JetBrains Mono',monospace" }}>VisioPro Inbox v2.0</div>
+
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 300, display: "flex", flexDirection: "column", gap: 12, maxWidth: 400 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#94a3b8", marginBottom: 4, marginTop: 6, textTransform: "uppercase", letterSpacing: ".1em" }}>Sistema info</div>
+                {[
+                  { title: "Backend API", val: "visiopro-inbox-backend-production.up.railway.app", icon: "🔗" },
+                  { title: "Instância WhatsApp", val: "botwhatsapp01", icon: "📱" },
+                  { title: "Usuário logado", val: `${user?.nome} (${user?.role})`, icon: "👤" },
+                  { title: "Setor", val: user?.setor || "—", icon: "🏢" },
+                ].map(({ title, val, icon }) => (
+                  <div key={title} style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                    <span style={{ fontSize: 20 }}>{icon}</span>
+                    <div>
+                      <div style={{ fontSize: 11, color: "#4a5568", fontFamily: "'JetBrains Mono',monospace", letterSpacing: ".05em" }}>{title}</div>
+                      <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2, fontFamily: "'JetBrains Mono',monospace" }}>{val}</div>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={logout} style={{ background: "#ef444422", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 10, padding: "12px", fontSize: 13, fontWeight: 600, marginTop: 12 }}>🚪 Sair da conta</button>
+              </div>
+
+              {user?.role === "admin" && (
+                <div style={{ flex: 2, minWidth: 400, maxWidth: 800, display: "flex", flexDirection: "column", gap: 20 }}>
+                  {/* GERADOR INTELIGENTE */}
+                  <div style={{ background: "#0c1220", border: "1px solid #d4a84355", borderRadius: 12, padding: 24, boxShadow: "0 10px 30px rgba(212,168,67,0.05)" }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: "#d4a843", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>✨ Criador de Inteligência</div>
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>Descreva seu negócio e nossa IA construirá a regra do seu robô automaticamente.</div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                      <div>
+                        <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 6 }}>Nome do Robô / Assistente</label>
+                        <input className="form-input" placeholder="Ex: Sol" value={gerador.nomeBot} onChange={e => setGerador(p => ({ ...p, nomeBot: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 6 }}>Nome da Empresa</label>
+                        <input className="form-input" placeholder="Ex: VisioPro" value={gerador.nomeEmpresa} onChange={e => setGerador(p => ({ ...p, nomeEmpresa: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 6 }}>O que vocês fazem? (Ramo e Resumo)</label>
+                      <textarea className="form-input" style={{ height: 80 }} placeholder="Ex: Vendemos carros seminovos importados no Rio de Janeiro..." value={gerador.descricao} onChange={e => setGerador(p => ({ ...p, descricao: e.target.value }))} />
+                    </div>
+                    <div style={{ marginBottom: 24 }}>
+                      <label style={{ fontSize: 11, color: "#94a3b8", display: "block", marginBottom: 6 }}>Tom de voz do Robô</label>
+                      <input className="form-input" placeholder="Amigável, leve e objetivo..." value={gerador.tom} onChange={e => setGerador(p => ({ ...p, tom: e.target.value }))} />
+                    </div>
+
+                    <button className="btn-gold" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 14 }} onClick={autoGerar} disabled={gerador.loading}>
+                      {gerador.loading ? "Gerando... Aguarde ⏳" : "🪄 Gerar Robô Automaticamente"}
+                    </button>
+                  </div>
+
+                  {/* MODO AVANÇADO (OCULTO POR PADRÃO) */}
+                  <div style={{ marginTop: 10 }}>
+                    <button
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      style={{ background: "transparent", border: "none", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                      {showAdvanced ? "▼" : "▶"} ⚙️ Código Avançado (Perigoso)
+                    </button>
+
+                    {showAdvanced && (
+                      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid #1e2d45", borderRadius: 12, padding: 24, marginTop: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#ef4444", marginBottom: 8 }}>⚠️ Atenção: Risco de quebra</div>
+                        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>Este modo exibe o código puro do robô. Edições incorretas aqui podem fazer o robô parar de transferir conversas para sua equipe. Se não tiver conhecimento em Engenharia de Prompts, deixe esta aba fechada e use apenas o **Gerador Automático** acima.</div>
+
+                        <div style={{ marginBottom: 20 }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: 6 }}>Comportamento Geral (System Prompt)</label>
+                          <textarea className="form-input" style={{ height: 240, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, background: "#070b14" }} value={configs.prompt_sistema || ""} onChange={e => setConfigs(p => ({ ...p, prompt_sistema: e.target.value }))} />
+                        </div>
+                        <div style={{ marginBottom: 20 }}>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", display: "block", marginBottom: 6 }}>Mensagem de Espera</label>
+                          <textarea className="form-input" style={{ height: 120, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, background: "#070b14" }} value={configs.prompt_espera || ""} onChange={e => setConfigs(p => ({ ...p, prompt_espera: e.target.value }))} />
+                        </div>
+                        <button className="btn-ghost" style={{ borderColor: "#ef444444", color: "#ef4444", width: "auto" }} onClick={salvarConfigs}>Salvar Alterações Manuais</button>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // RENDER DASHBOARD
+      function renderDashboard() {
+        const leadsHoje = viviLeads.length;
+        const convsAtivas = convs.filter(c => c.botOn).length;
+        const aguardandoHumano = convs.filter(c => !c.botOn && (!c.assumido_nome || c.assumido_nome === "Atendente")).length;
+
+        return (
+          <div style={{ flex: 1, overflowY: "auto", padding: 32, background: "#070b14" }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#f1f5f9", marginBottom: 4, letterSpacing: "-.5px" }}>Visão Geral</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 36 }}>Bem-vindo de volta, {user?.nome}. Aqui está o resumo de desempenho do seu robô.</div>
+
+            {/* KPI CARDS */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 24, marginBottom: 36 }}>
+
+              <div style={{ background: "linear-gradient(145deg, #0f1629, #0c1220)", border: "1px solid #1e2d45", borderRadius: 16, padding: 24, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: -15, right: -15, fontSize: 100, opacity: 0.03 }}>💬</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", marginBottom: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>Triagem Ativa (Robô)</div>
+                <div style={{ fontSize: 42, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-1px" }}>{convsAtivas}</div>
+                <div style={{ fontSize: 11, color: "#10b981", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}><span style={{ background: "#10b98133", padding: "2px 6px", borderRadius: 4 }}>Sessões em andamento</span></div>
+              </div>
+
+              <div style={{ background: "linear-gradient(145deg, #0f1629, #0c1220)", border: "1px solid #1e2d45", borderRadius: 16, padding: 24, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: -15, right: -15, fontSize: 100, opacity: 0.03 }}>🧑‍💻</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", marginBottom: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>Aguardando Equipe</div>
+                <div style={{ fontSize: 42, fontWeight: 800, color: aguardandoHumano > 0 ? "#ef4444" : "#f1f5f9", letterSpacing: "-1px" }}>{aguardandoHumano}</div>
+                <div style={{ fontSize: 11, color: aguardandoHumano > 0 ? "#ef4444" : "#64748b", marginTop: 8 }}>Clientes precisando de atenção manual</div>
+              </div>
+
+              <div style={{ background: "linear-gradient(145deg, #2a1f0a, #161105)", border: "1px solid #d4a84344", borderRadius: 16, padding: 24, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", top: -15, right: -15, fontSize: 100, opacity: 0.03 }}>🎯</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#d4a843", marginBottom: 12, textTransform: "uppercase", letterSpacing: ".05em" }}>Leads Captados</div>
+                <div style={{ fontSize: 42, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-1px" }}>{leadsHoje}</div>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>Contatos convertidos pelo funil do Robô</div>
+              </div>
+
+            </div>
+
+            {/* GRAFICO / LISTA DE SETORES */}
+            <div style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 16, padding: 28, maxWidth: 800 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#f1f5f9", marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>📊 Volume de Atendimento por Setor</div>
+              {timesList.length === 0 ? (
+                <div style={{ fontSize: 13, color: "#64748b", background: "#070b14", padding: 20, borderRadius: 12, border: "1px dashed #1e2d45", textAlign: "center" }}>Nenhum setor cadastrado. Configure seus times na aba Times para visualizar os gráficos.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {timesList.map((t, idx) => {
+                    // Lógica visual simulando dados
+                    const sizes = [42, 28, 15, 6, 9];
+                    const percent = sizes[idx % sizes.length];
+                    return (
+                      <div key={t.id}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+                          <span style={{ color: "#f1f5f9", fontWeight: 600 }}>{t.emoji} {t.nome}</span>
+                          <span style={{ color: "#94a3b8", fontFamily: "'JetBrains Mono',monospace" }}>{percent}% do fluxo total</span>
+                        </div>
+                        <div style={{ width: "100%", height: 10, background: "#1e2d45", borderRadius: 5, overflow: "hidden" }}>
+                          <div style={{ width: `${percent}%`, height: "100%", background: t.cor || "#3b82f6", borderRadius: 5 }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // RENDER CANAIS
+      function renderCanais() {
+        return (
+          <div style={{ flex: 1, overflowY: "auto", padding: 32, background: "#070b14" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 36 }}>
+              <div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-.5px" }}>Canais de Atendimento</div>
+                <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>Gerencie as conexões de WhatsApp da sua empresa.</div>
+              </div>
+              <button className="btn-gold" style={{ gap: 8, padding: "10px 20px" }} onClick={() => setModal("novoCanal")}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Nova Conexão
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(350px,1fr))", gap: 24 }}>
+              {canais.length === 0 && <div style={{ gridColumn: "1/-1", color: "#64748b", fontSize: 14 }}>Nenhum canal conectado. Adicione um número para habilitar a fila de atendimento.</div>}
+
+              {canais.map(canal => (
+                <div key={canal.id} style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 16, padding: 24, position: "relative" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: "#22c55e22", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" /></svg>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9" }}>{canal.nome}</div>
+                        <div style={{ fontSize: 12, color: "#94a3b8", fontFamily: "'JetBrains Mono',monospace" }}>{canal.numero_telefone || canal.dados_conexao?.instance_name}</div>
+                      </div>
+                    </div>
+                    <div style={{ background: canal.ativo ? "#10b98122" : "#ef444422", color: canal.ativo ? "#10b981" : "#ef4444", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 50, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: canal.ativo ? "#10b981" : "#ef4444" }}></div> {canal.ativo ? "Conectado" : "Atenção"}
+                    </div>
+                  </div>
+
+                  <div style={{ background: "#070b14", border: "1px solid #1e2d45", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Motor de Conexão</div>
+
+                    {canal.tipo === "cloud_api" ? (
+                      <>
+                        <div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 16 }}>🚀</span> Meta Cloud API</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Selo Oficial Corporativo <b>Meta</b></div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 16 }}>📱</span> Evolution API</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Instância Vinculada: <b>{canal.dados_conexao?.instance_name}</b></div>
+                      </>
+                    )}
+                  </div>
+
+                  <button onClick={() => deletarCanal(canal.id)} style={{ width: "100%", background: "transparent", border: "1px solid #ef444444", color: "#ef4444", padding: "10px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all .2s" }}>
+                    Desvincular
+                  </button>
+                </div>
+              ))}
+
+              {/* ADD NEW CHANNEL INFO */}
+              <div onClick={() => setModal("novoCanal")} style={{ background: "#0c1220", border: "1px dashed #3b82f644", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", minHeight: 220, cursor: "pointer", transition: "all .2s" }} className="s-hover">
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#3b82f622", color: "#60a5fa", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#60a5fa", marginBottom: 6 }}>Gere novos números</div>
+                <div style={{ fontSize: 12, color: "#94a3b8", maxWidth: 250 }}>Conecte a API Oficial da Meta ou Evolution QR Code para triplicar seu volume de envio.</div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // RENDER PERFIL
+      function renderPerfil() {
+        return <PerfilView />;
+      }
+
+      function PerfilView() {
+        const [nome, setNome] = useState(user?.nome || "");
+        const [senha, setSenha] = useState("");
+        const [loading, setLoading] = useState(false);
+
+        async function handleSave() {
+          setLoading(true);
+          const updates = { nome };
+          if (senha) updates.senha = senha; // Se fosse enviar senha precisa do backend suportar
+
+          try {
+            const r = await fetch(`${API}/auth/usuarios/${user.id}`, {
+              method: "PATCH",
+              headers: H(),
+              body: JSON.stringify(updates)
+            });
+            if (r.ok) {
+              toast("✅ Perfil atualizado com sucesso!");
+              const newUser = { ...user, nome };
+              setUser(newUser);
+              localStorage.setItem("vp_user", JSON.stringify(newUser));
+              setSenha("");
+            } else {
+              toast("❌ Erro ao salvar");
+            }
+          } catch (e) {
+            toast("❌ Erro de conexão");
+          }
+          setLoading(false);
+        }
+
+        return (
+          <div style={{ flex: 1, overflowY: "auto", padding: 32, background: "#070b14" }}>
+            <div style={{ maxWidth: 600, margin: "0 auto" }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-.5px", marginBottom: 8 }}>Meu Perfil</div>
+              <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 36 }}>Gerencie seus dados pessoais.</div>
+
+              <div style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 16, padding: 32 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 32 }}>
+                  <div style={{ width: 80, height: 80, borderRadius: 20, background: "linear-gradient(135deg, #3b82f6, #1d4ed8)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, boxShadow: "0 10px 25px rgba(59,130,246,0.3)" }}>
+                    {initials(user?.nome)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#f1f5f9" }}>{user?.nome}</div>
+                    <div style={{ fontSize: 13, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", marginTop: 4 }}>{user?.email}</div>
+                    <div style={{ display: "inline-block", background: user?.role === "admin" ? "#d4a84322" : "#3b82f622", color: user?.role === "admin" ? "#d4a843" : "#3b82f6", fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 50, marginTop: 8 }}>
+                      {user?.role === "admin" ? "Administrador" : "Atendente"}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: 20 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", display: "block", marginBottom: 8, letterSpacing: ".05em" }}>NOME COMPLETO</label>
+                    <input type="text" className="form-input" value={nome} onChange={e => setNome(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", display: "block", marginBottom: 8, letterSpacing: ".05em" }}>E-MAIL DE ACESSO</label>
+                    <input type="email" className="form-input" defaultValue={user?.email} disabled style={{ opacity: 0.6 }} />
+                  </div>
+                  <div style={{ borderTop: "1px solid #1e2d45", paddingTop: 20, marginTop: 10 }}>
+                    <label style={{ fontSize: 11, color: "#64748b", fontFamily: "'JetBrains Mono',monospace", display: "block", marginBottom: 8, letterSpacing: ".05em" }}>NOVA SENHA</label>
+                    <input type="password" value={senha} onChange={e => setSenha(e.target.value)} className="form-input" placeholder="Digite apenas se quiser alterar..." />
+                  </div>
+                  <button disabled={loading} className="btn-gold" style={{ marginTop: 10, height: 48 }} onClick={handleSave}>{loading ? "SALVANDO..." : "SALVAR ALTERAÇÕES"}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function renderClientes() {
+
+        const STATUS_TABS = [
+          { id: "todos", label: "Todos", color: "#d4a843" },
+          { id: "ativo", label: "✅ Ativos", color: "#10b981" },
+          { id: "trial", label: "⏳ Trial", color: "#f59e0b" },
+          { id: "suspenso", label: "🔒 Suspensos", color: "#ef4444" },
+          { id: "cancelado", label: "❌ Cancelados", color: "#6b7280" },
+        ];
+
+        const empresasFiltradas = empresas.filter(e => {
+          const matchStatus = filtroStatus === "todos" || (e.status || "ativo") === filtroStatus;
+          const matchBusca = !busca || e.nome?.toLowerCase().includes(busca.toLowerCase()) || e.admin?.email?.toLowerCase().includes(busca.toLowerCase());
+          return matchStatus && matchBusca;
+        });
+
+        async function excluirEmpresa(emp) {
+          const confirmMsg = `⚠️ EXCLUIR PERMANENTEMENTE?\n\nEmpresa: ${emp.nome}\nAdmin: ${emp.admin?.email || "—"}\n\nTODOS os dados (usuários, conversas, canais) serão apagados.\nEssa ação é IRREVERSÍVEL!\n\nDigite "EXCLUIR" para confirmar:`;
+          const resp = window.prompt(confirmMsg);
+          if (resp !== "EXCLUIR") return toast("❌ Excluído cancelado — confirmação incorreta.");
+          try {
+            const r = await fetch(`${API}/admin/empresas/${emp.id}`, { method: "DELETE", headers: H() });
+            const d = await r.json();
+            if (r.ok) { toast("🗑️ Empresa excluída com sucesso!"); loadEmpresas(); }
+            else toast(`❌ ${d.erro || "Erro ao excluir"}`);
+          } catch (e) { toast("❌ Erro de conexão"); }
+        }
+
+        const statusInfo = {
+          "ativo": { label: "Ativo", color: "#10b981", bg: "#10b98122", icon: "✅" },
+          "trial": { label: "Trial", color: "#f59e0b", bg: "#f59e0b22", icon: "⏳" },
+          "suspenso": { label: "Suspenso", color: "#ef4444", bg: "#ef444422", icon: "🔒" },
+          "cancelado": { label: "Cancelado", color: "#6b7280", bg: "#6b728022", icon: "❌" },
+        };
+
+        return (
+          <div style={{ flex: 1, overflowY: "auto", padding: 32, background: "#070b14" }}>
+            {/* HEADER */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: "#f1f5f9", letterSpacing: "-.5px" }}>Gestão de Clientes</div>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4, fontFamily: "'JetBrains Mono',monospace" }}>APENAS SUPER ADMIN · {empresas.length} empresa{empresas.length !== 1 ? "s" : ""} cadastrada{empresas.length !== 1 ? "s" : ""}</div>
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="btn-ghost" style={{ padding: "10px 16px", fontSize: 13 }} onClick={loadEmpresas}>🔄 Atualizar</button>
+                <button className="btn-gold" style={{ padding: "10px 20px", fontSize: 13 }} onClick={() => setModal("novo-cliente")}>➕ Novo Cliente</button>
+              </div>
+            </div>
+
+            {/* STATS */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 14, marginBottom: 28 }}>
+              {[
+                { label: "Total", value: adminStats?.total_empresas || empresas.length || 0, color: "#f1f5f9", icon: "🏢" },
+                { label: "Ativos", value: adminStats?.por_status?.ativo || empresas.filter(e => !e.status || e.status === "ativo").length || 0, color: "#10b981", icon: "✅" },
+                { label: "Trial", value: adminStats?.por_status?.trial || empresas.filter(e => e.status === "trial").length || 0, color: "#f59e0b", icon: "⏳" },
+                { label: "Suspensos", value: adminStats?.por_status?.suspenso || empresas.filter(e => e.status === "suspenso").length || 0, color: "#ef4444", icon: "🔒" },
+                { label: "Usuários", value: adminStats?.total_usuarios || 0, color: "#3b82f6", icon: "👥" },
+              ].map(s => (
+                <div key={s.label} style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ fontSize: 20 }}>{s.icon}</div>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, fontWeight: 600 }}>{s.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* FILTROS + BUSCA */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar empresa ou email..." style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 10, padding: "10px 16px", color: "#f1f5f9", fontSize: 13, flex: 1, minWidth: 200, outline: "none" }} />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {STATUS_TABS.map(t => (
+                  <button key={t.id} onClick={() => setFiltroStatus(t.id)} style={{ padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: `1px solid ${filtroStatus === t.id ? t.color + "88" : t.color + "33"}`, background: filtroStatus === t.id ? t.color + "22" : "transparent", color: filtroStatus === t.id ? t.color : "#64748b", cursor: "pointer", transition: "all .15s" }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* LISTA DE EMPRESAS */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {empresasFiltradas.map(emp => {
+                let metadata = {};
+                try { if (emp.observacao && emp.observacao.startsWith("{")) metadata = JSON.parse(emp.observacao); } catch (e) { }
+                const st = statusInfo[emp.status || "ativo"] || statusInfo["ativo"];
+                const isDesativada = emp.status === "suspenso" || emp.status === "cancelado";
+
+                return (
+                  <div key={emp.id} style={{ background: "#0c1220", border: `1px solid ${isDesativada ? "#ef444420" : "#1e2d45"}`, borderRadius: 14, padding: 20, opacity: isDesativada ? 0.75 : 1, transition: "all .2s" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+                      {/* AVATAR */}
+                      <div style={{ width: 48, height: 48, borderRadius: 13, background: st.bg, border: `1px solid ${st.color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: st.color, flexShrink: 0 }}>
+                        {(emp.nome || "?").charAt(0).toUpperCase()}
+                      </div>
+
+                      {/* DADOS */}
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: isDesativada ? "#94a3b8" : "#f1f5f9" }}>{emp.nome}</span>
+                          <span style={{ background: st.bg, color: st.color, fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6, textTransform: "uppercase" }}>{st.icon} {st.label}</span>
+                          {emp.plano && <span style={{ background: "#3b82f622", color: "#60a5fa", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>📦 {emp.plano}</span>}
+                        </div>
+
+                        {emp.admin ? (
+                          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 5 }}>
+                            👑 <b style={{ color: "#cbd5e1" }}>{emp.admin.nome}</b> · <span style={{ fontFamily: "monospace", color: "#60a5fa" }}>{emp.admin.email}</span>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 5 }}>⚠ Sem administrador vinculado</div>
+                        )}
+
+                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 11, color: "#64748b" }}>
+                          {(emp.telefone || metadata.telefone) && <span>📞 <b style={{ color: "#94a3b8" }}>{emp.telefone || metadata.telefone}</b></span>}
+                          {(emp.documento || metadata.documento) && <span>🪪 CNPJ: <b style={{ color: "#d4a843" }}>{emp.documento || metadata.documento}</b></span>}
+                          {(emp.cidade || metadata.cidade) && <span>📍 <b style={{ color: "#94a3b8" }}>{[emp.cidade || metadata.cidade, emp.estado || metadata.estado].filter(Boolean).join(" – ")}</b></span>}
+                          <span>👥 <b style={{ color: "#94a3b8" }}>{emp.total_usuarios || 0}</b> usuários</span>
+                          <span>📡 <b style={{ color: "#94a3b8" }}>{emp.canais?.length || 0}</b> canais</span>
+                          <span>📅 Criado: <b style={{ color: "#94a3b8" }}>{emp.created_at ? new Date(emp.created_at).toLocaleDateString("pt-BR") : "—"}</b></span>
+                          {emp.proximo_vencimento && <span style={{ color: new Date(emp.proximo_vencimento + "T00:00") < new Date() ? "#ef4444" : "#f59e0b" }}>⏰ Próximo venc.: <b>{new Date(emp.proximo_vencimento + "T00:00").toLocaleDateString("pt-BR")}</b></span>}
+                        </div>
+                      </div>
+
+                      {/* AÇÕES */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 160, flexShrink: 0 }}>
+                        {isDesativada ? (
+                          <button onClick={() => atualizarEmpresa(emp.id, { status: "ativo" })} style={{ background: "#10b98115", color: "#10b981", border: "1px solid #10b98140", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✅ Reativar</button>
+                        ) : (
+                          <button onClick={() => { if (window.confirm(`🔒 Suspender "${emp.nome}"?\n\nTodos os usuários perderão o acesso.`)) atualizarEmpresa(emp.id, { status: "suspenso" }); }} style={{ background: "#ef444415", color: "#ef4444", border: "1px solid #ef444440", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>🔒 Suspender</button>
+                        )}
+                        <select value={emp.plano || "starter"} onChange={e => atualizarEmpresa(emp.id, { plano: e.target.value })} style={{ background: "#070b14", border: "1px solid #1e2d45", borderRadius: 8, padding: "7px 10px", color: "#94a3b8", fontSize: 11, cursor: "pointer" }}>
+                          <option value="starter">📦 Starter — R$297/mês</option>
+                          <option value="pro">🚀 Pro — R$497/mês</option>
+                          <option value="enterprise">🏢 Enterprise — R$997/mês</option>
+                        </select>
+                        <button onClick={() => { setNovaCobranca({ ...novaCobranca, empresa_id: emp.id }); loadCobrancas(emp.id); setModal("cobrancas-" + emp.id); }} style={{ background: "#d4a84315", color: "#d4a843", border: "1px solid #d4a84340", padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>💳 Cobranças</button>
+                        <button onClick={() => setEditEmpresa(emp)} style={{ background: "transparent", color: "#94a3b8", border: "1px solid #1e2d45", padding: "7px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✏️ Editar</button>
+                        <button onClick={() => excluirEmpresa(emp)} style={{ background: "transparent", color: "#ef4444", border: "1px dashed #ef444433", padding: "7px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🗑️ Excluir</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {empresasFiltradas.length === 0 && (
+                <div style={{ color: "#64748b", fontSize: 14, textAlign: "center", padding: 60, background: "#0c1220", borderRadius: 12, border: "1px dashed #1e2d45" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🏢</div>
+                  <div style={{ fontWeight: 600, color: "#94a3b8", marginBottom: 4 }}>{busca || filtroStatus !== "todos" ? "Nenhuma empresa encontrada" : "Nenhuma empresa cadastrada"}</div>
+                  <div style={{ fontSize: 12 }}>{busca || filtroStatus !== "todos" ? "Tente mudar os filtros." : "Clique em \"➕ Novo Cliente\" para adicionar."}</div>
+                </div>
+              )}
+            </div>
+
+            {/* MODAL EDITAR */}
+            {editEmpresa && (
+              <div className="modal-bg" onClick={() => setEditEmpresa(null)}>
+                <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                  <div className="modal-title">✏️ Editar Cliente</div>
+                  <div className="modal-sub" style={{ marginBottom: 20 }}>{editEmpresa.nome} · <span style={{ fontFamily: "monospace", color: "#60a5fa" }}>{editEmpresa.admin?.email || "sem admin"}</span></div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Status</label>
+                      <select className="form-select" value={editEmpresa.status || "ativo"} onChange={e => setEditEmpresa(p => ({ ...p, status: e.target.value }))}>
+                        <option value="ativo">✅ Ativo</option>
+                        <option value="trial">⏳ Trial / Teste</option>
+                        <option value="suspenso">🔒 Suspenso</option>
+                        <option value="cancelado">❌ Cancelado</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Plano</label>
+                      <select className="form-select" value={editEmpresa.plano || "starter"} onChange={e => setEditEmpresa(p => ({ ...p, plano: e.target.value }))}>
+                        <option value="starter">📦 Starter — R$ 297/mês</option>
+                        <option value="pro">🚀 Pro — R$ 497/mês</option>
+                        <option value="enterprise">🏢 Enterprise — R$ 997/mês</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Data de Vencimento</label>
+                    <input type="date" className="form-input" value={editEmpresa.data_vencimento || ""} onChange={e => setEditEmpresa(p => ({ ...p, data_vencimento: e.target.value }))} />
+                  </div>
+
+                  {/* RESET SENHA */}
+                  <div style={{ borderTop: "1px solid #1e2d45", paddingTop: 14, marginTop: 4 }}>
+                    <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, marginBottom: 10, letterSpacing: ".08em" }}>🔑 RESETAR SENHA DO ADMIN</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input id={`senha-reset-${editEmpresa.id}`} type="text" className="form-input" placeholder="Nova senha..." style={{ flex: 1 }} />
+                      <button onClick={async () => {
+                        const s = document.getElementById(`senha-reset-${editEmpresa.id}`)?.value;
+                        if (!s || s.length < 6) return toast("❌ Senha deve ter mínimo 6 caracteres");
+                        const r = await fetch(`${API}/admin/empresas/${editEmpresa.id}/reset-senha`, { method: "POST", headers: H(), body: JSON.stringify({ nova_senha: s }) });
+                        if (r.ok) { toast("✅ Senha alterada! Informe ao cliente."); } else { const d = await r.json(); toast("❌ " + d.erro); }
+                      }} style={{ background: "#f59e0b22", color: "#f59e0b", border: "1px solid #f59e0b44", padding: "0 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>🔑 Resetar</button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+                    <button className="btn-gold" onClick={() => atualizarEmpresa(editEmpresa.id, { status: editEmpresa.status, plano: editEmpresa.plano, data_vencimento: editEmpresa.data_vencimento })}>✅ Salvar</button>
+                    <button className="btn-ghost" onClick={() => setEditEmpresa(null)}>Cancelar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      return (
+
+        <div className="app">
+          {/* SIDEBAR */}
+          <div className="sidebar">
+            <div className="s-logo">V</div>
+            {navItems.map(item => (
+              <div key={item.id} className={`s-icon${view === item.id ? " active" : ""}`} onClick={() => { setView(item.id); setActiveConv(null); }} title={item.id}>
+                {item.icon}
+                {item.badge && <div className="badge" />}
+              </div>
+            ))}
+            <div style={{ marginTop: "auto" }}>
+              <div className="s-divider" />
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: `${["#d4a843", "#3b82f6", "#10b981", "#8b5cf6"][user?.nome?.charCodeAt(0) % 4]}22`, color: ["#d4a843", "#3b82f6", "#10b981", "#8b5cf6"][user?.nome?.charCodeAt(0) % 4], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, cursor: "pointer", margin: "0 auto 4px" }} title={user?.nome}>{user?.nome?.charAt(0).toUpperCase()}</div>
+              <div className="s-icon" onClick={logout} style={{ color: "#ef4444" }} title="Sair">🚪</div>
+            </div>
+          </div>
+
+          {/* MAIN CONTENT */}
+          <div style={{ flex: 1, display: "flex", minWidth: 0, overflow: "hidden" }} className="app-content">
+            {view === "dashboard" && renderDashboard()}
+            {view === "inbox" && renderInbox()}
+            {view === "canais" && renderCanais()}
+            {view === "perfil" && renderPerfil()}
+            {view === "vivi" && renderVivi()}
+            {(view === "leads" || view === "agendamentos") && (
+              <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 20 }}>{view === "leads" ? "Leads" : "Agendamentos"}</div>
+                {view === "leads" && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 12 }}>
+                    {viviLeads.length === 0 && <div style={{ color: "#4a5568", fontSize: 12 }}>Nenhum lead</div>}
+                    {viviLeads.map(l => (
+                      <div key={l.id} style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 12, padding: 14 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>{l.nome || "Visitante"}</div>
+                        <div style={{ fontSize: 11, color: "#60a5fa", fontFamily: "'JetBrains Mono',monospace" }}>{l.whatsapp}</div>
+                        <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+                          {l.setor && <span className="tag-pill" style={{ background: "#3b82f622", color: "#3b82f6" }}>{l.setor}</span>}
+                          {l.status && <span className="tag-pill" style={{ background: "#10b98122", color: "#10b981" }}>{l.status}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {view === "agendamentos" && (
+                  <div style={{ maxWidth: 700 }}>
+                    {viviAgends.length === 0 && <div style={{ color: "#4a5568", fontSize: 12 }}>Nenhum agendamento</div>}
+                    {viviAgends.map(a => (
+                      <div key={a.id} style={{ background: "#0c1220", border: "1px solid #1e2d45", borderRadius: 12, padding: 14, marginBottom: 10, display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{a.nome}</div>
+                          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{a.data_agendamento} às {a.hora_agendamento}</div>
+                          <div style={{ fontSize: 10, color: "#60a5fa", fontFamily: "'JetBrains Mono',monospace" }}>{a.whatsapp}</div>
+                        </div>
+                        <span className="tag-pill" style={{ background: a.status === "pendente" ? "#f59e0b22" : a.status === "confirmado" ? "#10b98122" : "#6b728022", color: a.status === "pendente" ? "#f59e0b" : a.status === "confirmado" ? "#10b981" : "#6b7280" }}>{a.status}</span>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={async () => { await fetch(`${API}/vivi/agendamentos/${a.id}`, { method: "PATCH", headers: H(), body: JSON.stringify({ status: "confirmado" }) }); loadViviData(); }} style={{ background: "#10b98122", color: "#10b981", border: "1px solid #10b98144", borderRadius: 6, padding: "5px 10px", fontSize: 10, fontWeight: 600 }}>✓</button>
+                          <button onClick={async () => { await fetch(`${API}/vivi/agendamentos/${a.id}`, { method: "PATCH", headers: H(), body: JSON.stringify({ status: "cancelado" }) }); loadViviData(); }} style={{ background: "#ef444422", color: "#ef4444", border: "1px solid #ef444444", borderRadius: 6, padding: "5px 10px", fontSize: 10, fontWeight: 600 }}>✗</button>
+                          <button onClick={async () => { if (window.confirm("Apagar definitivamente este agendamento?")) { await fetch(`${API}/vivi/agendamentos/${a.id}`, { method: "DELETE", headers: H() }); loadViviData(); } }} style={{ background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", marginLeft: 4 }}>🗑️</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {view === "usuarios" && user?.role === "admin" && renderUsuarios()}
+            {view === "times" && user?.role === "admin" && renderTimes()}
+            {view === "settings" && renderSettings()}
+            {view === "clientes" && superAdmin && renderClientes()}
+          </div>
+
+          {/* BOTTOM NAV */}
+          <div className={`bottom-nav${hideNav ? " hidden" : ""}`}>
+            {navItems.map(item => (
+              <div key={item.id} className={`bn-item${view === item.id ? " active" : ""}`} onClick={() => { setView(item.id); setActiveConv(null); document.querySelector(".conv-panel")?.classList.remove("hidden"); setHideNav(false); }}>
+                <div className="bn-icon" style={{ position: "relative" }}>
+                  {item.icon}
+                  {item.badge && <div style={{ position: "absolute", top: -2, right: -2, width: 7, height: 7, borderRadius: "50%", background: "#ef4444", border: "2px solid #070b14" }} />}
+                </div>
+                <span>{item.id === "dashboard" ? "Resumo" : item.id === "inbox" ? "Inbox" : item.id === "canais" ? "Canais" : item.id === "vivi" ? "Vivi" : item.id === "leads" ? "Leads" : item.id === "agendamentos" ? "Agenda" : item.id === "clientes" ? "Clientes" : item.id === "usuarios" ? "Membros" : item.id === "times" ? "Times" : item.id === "perfil" ? "Perfil" : "Config"}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* MODAIS */}
+          {modal === "novoUsuario" && (
+            <div className="modal-bg" onClick={() => setModal(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">Novo Usuário</div>
+                <div className="modal-sub">Adicione um membro à equipe</div>
+                {[
+                  { label: "Nome", key: "nome", type: "text", ph: "Nome completo" },
+                  { label: "Email", key: "email", type: "email", ph: "email@visiopro.com" },
+                  { label: "Senha", key: "senha", type: "password", ph: "••••••••" },
+                ].map(({ label, key, type, ph }) => (
+                  <div className="form-group" key={key}>
+                    <label className="form-label">{label}</label>
+                    <input type={type} className="form-input" placeholder={ph} value={novoForm[key]} onChange={e => setNovoForm(p => ({ ...p, [key]: e.target.value }))} />
+                  </div>
+                ))}
+                <div className="form-group">
+                  <label className="form-label">Role</label>
+                  <select className="form-select" value={novoForm.role} onChange={e => setNovoForm(p => ({ ...p, role: e.target.value }))}>
+                    <option value="atendente">Atendente</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Setor</label>
+                  <select className="form-select" value={novoForm.setor} onChange={e => setNovoForm(p => ({ ...p, setor: e.target.value }))}>
+                    {SETORES.map(s => <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>)}
+                  </select>
+                </div>
+                <button className="btn-gold" onClick={criarUsuario}>Criar usuário</button>
+                <button className="btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {editUserForm && (
+            <div className="modal-bg" onClick={() => setEditUserForm(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">Editar Usuário</div>
+                <div className="modal-sub">Altere as informações de {editUserForm.nome}</div>
+                <div className="form-group">
+                  <label className="form-label">Nome</label>
+                  <input type="text" className="form-input" value={editUserForm.nome} onChange={e => setEditUserForm({ ...editUserForm, nome: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email (Não editável)</label>
+                  <input type="email" className="form-input" value={editUserForm.email} disabled style={{ opacity: 0.6 }} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nova Senha (opcional)</label>
+                  <input type="password" className="form-input" placeholder="Deixe em branco para não alterar" value={editUserForm.senha} onChange={e => setEditUserForm({ ...editUserForm, senha: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Role</label>
+                  <select className="form-select" value={editUserForm.role} onChange={e => setEditUserForm({ ...editUserForm, role: e.target.value })}>
+                    <option value="atendente">Atendente</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Setor</label>
+                  <select className="form-select" value={editUserForm.setor} onChange={e => setEditUserForm({ ...editUserForm, setor: e.target.value })}>
+                    {SETORES.map(s => <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>)}
+                  </select>
+                </div>
+                <button className="btn-gold" onClick={async () => {
+                  if (!editUserForm.nome) return toast("❌ Nome obrigatório");
+                  try {
+                    const payload = { nome: editUserForm.nome, role: editUserForm.role, setor: editUserForm.setor };
+                    if (editUserForm.senha) payload.senha = editUserForm.senha;
+                    const r = await fetch(`${API}/auth/usuarios/${editUserForm.id}`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
+                    if (r.ok) {
+                      toast("✅ Salvo com sucesso!");
+                      setEditUserForm(null);
+                      const r2 = await fetch(`${API}/auth/usuarios`, { headers: { "Authorization": `Bearer ${token}` } });
+                      setUsuarios(await r2.json() || []);
+                    } else toast("❌ Erro ao salvar");
+                  } catch (e) { toast("❌ Erro de conexão"); }
+                }}>✅ Salvar Alterações</button>
+                <button className="btn-ghost" onClick={() => setEditUserForm(null)}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL COBRANÇAS POR EMPRESA */}
+          {modal && modal.startsWith("cobrancas-") && (() => {
+            const empId = modal.replace("cobrancas-", "");
+            const emp = empresas.find(e => e.id === empId);
+            return (
+              <div className="modal-bg" onClick={() => { setModal(null); setCobrancas([]); }}>
+                <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <div className="modal-title" style={{ marginBottom: 0 }}>💳 Cobranças</div>
+                    <button onClick={async () => {
+                      const r = await fetch(`${API}/admin/verificar-vencimentos`, { method: "POST", headers: H() });
+                      const d = await r.json();
+                      toast(`🔍 ${d.bloqueadas} empresa(s) suspensa(s) por vencimento`);
+                      loadEmpresas();
+                    }} style={{ background: "#ef444415", color: "#ef4444", border: "1px solid #ef444440", padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>⚡ Verificar Vencimentos</button>
+                  </div>
+                  <div className="modal-sub" style={{ marginBottom: 16 }}>{emp?.nome} · {emp?.admin?.email || emp?.email_admin || "—"}</div>
+
+                  {/* NOVA COBRANÇA */}
+                  <div style={{ background: "#070b14", border: "1px solid #d4a84333", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: "#d4a843", fontWeight: 700, marginBottom: 10, letterSpacing: ".08em" }}>➕ NOVA COBRANÇA</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 140px", gap: 8, marginBottom: 8 }}>
+                      <input className="form-input" placeholder="Descrição (ex: Mensalidade Maio)" value={novaCobranca.descricao} onChange={e => setNovaCobranca({ ...novaCobranca, descricao: e.target.value })} style={{ fontSize: 12 }} />
+                      <input className="form-input" type="number" placeholder="Valor R$" value={novaCobranca.valor} onChange={e => setNovaCobranca({ ...novaCobranca, valor: e.target.value })} style={{ fontSize: 12 }} />
+                      <input className="form-input" type="date" value={novaCobranca.data_vencimento} onChange={e => setNovaCobranca({ ...novaCobranca, data_vencimento: e.target.value })} style={{ fontSize: 12 }} />
+                    </div>
+                    <button className="btn-gold" style={{ width: "100%", fontSize: 12 }} onClick={() => criarCobranca()}>🔗 Gerar Link InfinityPay + Salvar Cobrança</button>
+                  </div>
+
+                  {/* HISTÓRICO */}
+                  <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                    {cobrancas.length === 0 && <div style={{ color: "#64748b", fontSize: 13, textAlign: "center", padding: 32 }}>Nenhuma cobrança registrada</div>}
+                    {cobrancas.map(c => {
+                      const statusColor = c.status === "pago" ? "#10b981" : c.status === "vencido" ? "#ef4444" : "#f59e0b";
+                      const statusIcon = c.status === "pago" ? "✅" : c.status === "vencido" ? "🔴" : "🟡";
+                      return (
+                        <div key={c.id} style={{ background: "#0c1220", border: `1px solid ${statusColor}33`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                          <div style={{ flex: 1, minWidth: 200 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 2 }}>{c.descricao}</div>
+                            <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#64748b" }}>
+                              <span>💰 <b style={{ color: "#10b981" }}>R$ {parseFloat(c.valor).toFixed(2).replace(".", ",")}</b></span>
+                              {c.data_vencimento && <span>📅 Venc: <b style={{ color: statusColor }}>{new Date(c.data_vencimento + "T00:00").toLocaleDateString("pt-BR")}</b></span>}
+                              {c.data_pagamento && <span>✅ Pago: <b style={{ color: "#10b981" }}>{new Date(c.data_pagamento).toLocaleDateString("pt-BR")}</b></span>}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusColor + "22", padding: "3px 8px", borderRadius: 6 }}>{statusIcon} {c.status.toUpperCase()}</span>
+                            {c.link_pagamento && c.status !== "pago" && (
+                              <button onClick={() => { navigator.clipboard.writeText(c.link_pagamento); toast("📋 Link copiado!"); }} style={{ background: "#3b82f615", color: "#60a5fa", border: "1px solid #3b82f640", padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>📋 Link</button>
+                            )}
+                            {c.status !== "pago" && (
+                              <button onClick={async () => {
+                                const r = await fetch(`${API}/admin/cobrancas/${c.id}`, { method: "PATCH", headers: H(), body: JSON.stringify({ status: "pago" }) });
+                                if (r.ok) { toast("✅ Pagamento confirmado! Empresa reativada."); loadCobrancas(empId); loadEmpresas(); }
+                              }} style={{ background: "#10b98115", color: "#10b981", border: "1px solid #10b98140", padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✅ Confirmar Pago</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <button className="btn-ghost" style={{ marginTop: 16, width: "100%" }} onClick={() => { setModal(null); setCobrancas([]); }}>Fechar</button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* TELA DE CREDENCIAIS PÓS-CRIAÇÃO */}
+
+          {clienteCriado && (
+            <div className="modal-bg" onClick={() => { setClienteCriado(null); setModal(null); setNovoClienteForm({ empresaNome: "", responsavel: "", email: "", senha: "", documento: "", telefone: "", endereco: "", cep: "", cidade: "", estado: "" }); }}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 500, textAlign: "center" }}>
+                <div style={{ fontSize: 52, marginBottom: 12 }}>🎉</div>
+                <div className="modal-title" style={{ color: "#10b981" }}>Cliente Cadastrado!</div>
+                <div className="modal-sub" style={{ marginBottom: 24 }}>
+                  <b style={{ color: "#f1f5f9" }}>{clienteCriado.empresa}</b> — {clienteCriado.responsavel}
+                </div>
+
+                <div style={{ background: "#070b14", border: "1px solid #10b98144", borderRadius: 12, padding: 20, marginBottom: 20, textAlign: "left" }}>
+                  <div style={{ fontSize: 11, color: "#10b981", fontWeight: 700, marginBottom: 12, letterSpacing: ".1em" }}>🔑 CREDENCIAIS DE ACESSO DO CLIENTE</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ background: "#0c1220", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 2 }}>URL DO SISTEMA</div>
+                        <div style={{ fontSize: 12, color: "#60a5fa", fontFamily: "monospace" }}>https://visiopro-unified01.vercel.app</div>
+                      </div>
+                    </div>
+                    <div style={{ background: "#0c1220", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 2 }}>E-MAIL DE ACESSO</div>
+                        <div style={{ fontSize: 13, color: "#f1f5f9", fontFamily: "monospace", fontWeight: 600 }}>{clienteCriado.email}</div>
+                      </div>
+                    </div>
+                    <div style={{ background: "#0c1220", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#64748b", marginBottom: 2 }}>SENHA INICIAL</div>
+                        <div style={{ fontSize: 13, color: "#f1f5f9", fontFamily: "monospace", fontWeight: 600 }}>{clienteCriado.senha}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button className="btn-gold" style={{ width: "100%", marginBottom: 10 }} onClick={() => {
+                  const msg = `🚀 *Bem-vindo ao VisioPro!*\n\nOlá, ${clienteCriado.responsavel}! Seu acesso foi criado.\n\n*🔗 Sistema:* https://visiopro-unified01.vercel.app\n*📧 Email:* ${clienteCriado.email}\n*🔑 Senha:* ${clienteCriado.senha}\n\n_Recomendamos trocar a senha no primeiro acesso._`;
+                  navigator.clipboard.writeText(msg).then(() => toast("📋 Credenciais copiadas! Cole no WhatsApp do cliente."));
+                }}>📋 Copiar Credenciais para WhatsApp</button>
+                <button className="btn-ghost" style={{ width: "100%" }} onClick={() => { setClienteCriado(null); setModal(null); setNovoClienteForm({ empresaNome: "", responsavel: "", email: "", senha: "", documento: "", telefone: "", endereco: "", cep: "", cidade: "", estado: "" }); }}>✅ Concluir</button>
+              </div>
+            </div>
+          )}
+
+          {modal === "novo-cliente" && (
+            <div className="modal-bg" onClick={() => setModal(null)}>
+              <div className="modal" style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-title">➕ Novo Cliente</div>
+                <div className="modal-sub" style={{ marginBottom: 20 }}>Cadastre os dados completos. Um ambiente isolado será criado automaticamente.</div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  {/* COL 1: EMPRESA */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#d4a843", marginBottom: 10, borderBottom: "1px solid #1e2d45", paddingBottom: 6, letterSpacing: ".08em" }}>🏢 DADOS DA EMPRESA</div>
+                    <div className="form-group">
+                      <label className="form-label">Nome da Empresa *</label>
+                      <input type="text" className="form-input" value={novoClienteForm.empresaNome} onChange={e => setNovoClienteForm({ ...novoClienteForm, empresaNome: e.target.value })} placeholder="Ex: Prado Solutions SA" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">CNPJ / CPF (Identificador único)</label>
+                      <input type="text" className="form-input" value={novoClienteForm.documento} onChange={e => setNovoClienteForm({ ...novoClienteForm, documento: e.target.value })} placeholder="00.000.000/0001-00" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Telefone / WhatsApp</label>
+                      <input type="text" className="form-input" value={novoClienteForm.telefone} onChange={e => setNovoClienteForm({ ...novoClienteForm, telefone: e.target.value })} placeholder="(11) 99999-9999" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Endereço</label>
+                      <input type="text" className="form-input" value={novoClienteForm.endereco} onChange={e => setNovoClienteForm({ ...novoClienteForm, endereco: e.target.value })} placeholder="Rua das Flores, 123" />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="form-label">CEP</label>
+                        <input type="text" className="form-input" value={novoClienteForm.cep} onChange={e => setNovoClienteForm({ ...novoClienteForm, cep: e.target.value })} placeholder="00000-000" />
+                      </div>
+                      <div className="form-group" style={{ flex: 2 }}>
+                        <label className="form-label">Cidade</label>
+                        <input type="text" className="form-input" value={novoClienteForm.cidade} onChange={e => setNovoClienteForm({ ...novoClienteForm, cidade: e.target.value })} placeholder="São Paulo" />
+                      </div>
+                      <div className="form-group" style={{ flex: 1 }}>
+                        <label className="form-label">UF</label>
+                        <input type="text" className="form-input" value={novoClienteForm.estado} onChange={e => setNovoClienteForm({ ...novoClienteForm, estado: e.target.value.slice(0, 2).toUpperCase() })} placeholder="SP" maxLength={2} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* COL 2: ACESSO */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981", marginBottom: 10, borderBottom: "1px solid #1e2d45", paddingBottom: 6, letterSpacing: ".08em" }}>🔑 ACESSO DO ADMINISTRADOR</div>
+                    <div style={{ background: "#10b98111", border: "1px solid #10b98133", borderRadius: 8, padding: "10px 12px", fontSize: 11, color: "#10b981", marginBottom: 14 }}>
+                      Estas credenciais serão entregues ao cliente para o primeiro acesso ao sistema.
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Nome Completo do Responsável *</label>
+                      <input type="text" className="form-input" value={novoClienteForm.responsavel} onChange={e => setNovoClienteForm({ ...novoClienteForm, responsavel: e.target.value })} placeholder="Ex: Carlos Abade" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">E-mail de Acesso *</label>
+                      <input type="email" className="form-input" value={novoClienteForm.email} onChange={e => setNovoClienteForm({ ...novoClienteForm, email: e.target.value })} placeholder="admin@empresa.com" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Senha Inicial *</label>
+                      <input type="text" className="form-input" value={novoClienteForm.senha} onChange={e => setNovoClienteForm({ ...novoClienteForm, senha: e.target.value })} placeholder="Mín. 6 caracteres" />
+                    </div>
+                    <div style={{ background: "#f59e0b11", border: "1px solid #f59e0b33", borderRadius: 8, padding: "10px 12px", fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
+                      ⚠️ Anote ou copie a senha agora — ela não poderá ser recuperada depois.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20, borderTop: "1px solid #1e2d45", paddingTop: 16 }}>
+                  <button className="btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
+                  <button className="btn-gold" style={{ padding: "0 28px" }} onClick={criarClienteSuperAdmin}>✅ Criar Cliente</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+
+          {modal === "novoCanal" && (
+            <div className="modal-bg" onClick={() => { if (["escolha", "form", "meta_form"].includes(qrFlow.step)) setModal(null); }}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+
+                {/* STEP 0: ESCOLHA DO MÉTODO */}
+                {qrFlow.step === "escolha" && (<>
+                  <div className="modal-title">Nova Conexão WhatsApp</div>
+                  <div className="modal-sub">Escolha a tecnologia para conectar seu novo canal.</div>
+                  <div style={{ display: "grid", gap: 16, padding: "10px 0" }}>
+                    <div onClick={() => setQrFlow(p => ({ ...p, step: "form" }))} style={{ border: "1px solid #1e2d45", borderRadius: 12, padding: 16, cursor: "pointer", background: "#0c1220" }} className="s-hover">
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                        <div style={{ fontSize: 22 }}>📱</div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#f1f5f9" }}>WhatsApp Padrão (QR Code)</div>
+                          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Ecológico via Evolution API</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>Ler código QR na tela e conectar na hora. Ideal para fluxos pequenos, aquecimento ou sem burocracia.</div>
+                    </div>
+
+                    <div onClick={() => setQrFlow(p => ({ ...p, step: "meta_form" }))} style={{ border: "1px solid #10b98144", borderRadius: 12, padding: 16, cursor: "pointer", background: "#10b98111" }} className="s-hover">
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                        <div style={{ fontSize: 22 }}>🚀</div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#10b981" }}>Cloud API (Oficial da Meta)</div>
+                          <div style={{ fontSize: 11, color: "#10b98155", fontWeight: 700 }}>Servidor Oficial Corporativo</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>Confiabilidade máxima. Conecte pelo Token Permanente para envios em altíssima escala e selo verde.</div>
+                    </div>
+                  </div>
+                  <button className="btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
+                </>)}
+
+                {/* STEP META: FORMULÁRIO API OFICIAL */}
+                {qrFlow.step === "meta_form" && (<>
+                  <div className="modal-title">🚀 Meta Cloud API</div>
+                  <div className="modal-sub">Insira as credenciais geradas no painel do Facebook Developers.</div>
+                  <div className="form-group">
+                    <label className="form-label">Nome de Identificação Inicial</label>
+                    <input type="text" className="form-input" placeholder="Ex: Matriz Nível Oficial" value={novoCanal.nome} onChange={e => setNovoCanal(p => ({ ...p, nome: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Telefone ID da Meta (Phone ID)</label>
+                    <input type="text" className="form-input" placeholder="Ex: 10423..." value={novoCanal.numero_telefone} onChange={e => setNovoCanal(p => ({ ...p, numero_telefone: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Token de Acesso Permanente (Bearer)</label>
+                    <input type="password" className="form-input" placeholder="EAA..." value={novoCanal.instance_name} onChange={e => setNovoCanal(p => ({ ...p, instance_name: e.target.value }))} />
+                  </div>
+                  <button className="btn-gold" disabled={qrFlow.loading} style={{ marginTop: 8 }} onClick={async () => {
+                    if (!novoCanal.nome) return toast("❌ Informe o nome do canal");
+                    if (!novoCanal.numero_telefone || !novoCanal.instance_name) return toast("❌ Preencha as credenciais da API");
+
+                    setQrFlow(p => ({ ...p, loading: true }));
+                    try {
+                      const r = await fetch(`${API}/canais`, {
+                        method: "POST", headers: H(), body: JSON.stringify({
+                          nome: novoCanal.nome,
+                          tipo: "cloud_api",
+                          numero_telefone: novoCanal.numero_telefone,
+                          dados_conexao: { phone_number_id: novoCanal.numero_telefone, access_token: novoCanal.instance_name }
+                        })
+                      });
+
+                      if (r.ok) {
+                        toast("✅ Meta Cloud API conectada e pronta!");
+                        loadCanais();
+                        setModal(null);
+                      } else {
+                        const eD = await r.json().catch(() => ({}));
+                        toast(`❌ Erro Servidor: ${eD.erro || r.statusText || "ao conectar canal oficial."}`);
+                      }
+                    } catch (e) { toast(`❌ Erro de conexão: ${e.message}`); }
+                    finally { setQrFlow(p => ({ ...p, loading: false })); }
+                  }}>
+                    {qrFlow.loading ? "Vinculando..." : "Conectar Meta Oficial"}
+                  </button>
+                  <button className="btn-ghost" onClick={() => setQrFlow(p => ({ ...p, step: "escolha" }))}>Voltar</button>
+                </>)}
+
+                {/* STEP 1: FORMULÁRIO (EVOLUTION) */}
+                {qrFlow.step === "form" && (<>
+                  <div className="modal-title">📱 Conectar WhatsApp</div>
+                  <div className="modal-sub">Configure um novo número em segundos. Sem configurações técnicas.</div>
+                  <div className="form-group">
+                    <label className="form-label">Nome do Canal</label>
+                    <input type="text" className="form-input" placeholder="Ex: Vendas, Suporte, Filial SP" value={novoCanal.nome} onChange={e => setNovoCanal(p => ({ ...p, nome: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Número do WhatsApp (opcional)</label>
+                    <input type="text" className="form-input" placeholder="+5511999999999" value={novoCanal.numero_telefone} onChange={e => setNovoCanal(p => ({ ...p, numero_telefone: e.target.value }))} />
+                    <div style={{ fontSize: 10, color: "#64748b", marginTop: 5 }}>Para identificação apenas. O QR code será gerado automaticamente.</div>
+                  </div>
+                  <button className="btn-gold" disabled={qrFlow.loading} style={{ marginTop: 8 }} onClick={async () => {
+                    if (!novoCanal.nome) return toast("❌ Informe o nome do canal");
+                    setQrFlow(p => ({ ...p, loading: true, step: "form" }));
+                    try {
+                      const r = await fetch(`${API}/canais/criar-instancia`, { method: "POST", headers: H(), body: JSON.stringify({ nome: novoCanal.nome, numero_telefone: novoCanal.numero_telefone }) });
+                      const d = await r.json();
+                      if (!r.ok) return toast(`❌ ${d.erro || "Erro ao criar canal"}`);
+                      // Inicia polling de status
+                      let cd = 60;
+                      const timer = setInterval(() => { cd--; setQrFlow(p => ({ ...p, countdown: cd })); if (cd <= 0) clearInterval(timer); }, 1000);
+                      setQrFlow({ step: "qrcode", loading: false, instanceName: d.instanceName, qrcode: d.qrcode || "", canalId: d.canalId, countdown: 60, _timer: timer });
+                      // Poll status a cada 4s
+                      const poll = setInterval(async () => {
+                        try {
+                          const s = await fetch(`${API}/canais/${d.instanceName}/status`, { headers: H() });
+                          const sd = await s.json();
+                          if (sd.connected) {
+                            clearInterval(poll);
+                            clearInterval(timer);
+                            setQrFlow(p => ({ ...p, step: "connected" }));
+                            loadCanais();
+                            toast("✅ WhatsApp conectado com sucesso!");
+                          }
+                        } catch (e) { }
+                      }, 4000);
+                    } catch (e) { toast("❌ Erro de conexão"); }
+                    finally { setQrFlow(p => ({ ...p, loading: false })); }
+                  }}>{qrFlow.loading ? "Aguarde..." : "Gerar QR Code →"}</button>
+                  <button className="btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
+                </>)}
+
+                {/* STEP 2: QR CODE */}
+                {qrFlow.step === "qrcode" && (<>
+                  <div className="modal-title">📲 Escaneie o QR Code</div>
+                  <div className="modal-sub">Abra o WhatsApp → Dispositivos conectados → Conectar dispositivo</div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "8px 0 16px" }}>
+                    {qrFlow.qrcode ? (
+                      <img src={qrFlow.qrcode.startsWith("data:") ? qrFlow.qrcode : `data:image/png;base64,${qrFlow.qrcode}`} alt="QR Code" style={{ width: 220, height: 220, borderRadius: 12, border: "2px solid #d4a84344", background: "#fff", padding: 8 }} />
+                    ) : (
+                      <div style={{ width: 220, height: 220, borderRadius: 12, border: "1px solid #1e2d45", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+                        <div style={{ fontSize: 24 }}>⏳</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>Carregando QR Code...</div>
+                        <button className="btn-ghost" style={{ fontSize: 11, padding: "6px 14px", marginTop: 4 }} onClick={async () => {
+                          const r = await fetch(`${API}/canais/${qrFlow.instanceName}/qrcode`, { headers: H() });
+                          const d = await r.json();
+                          if (d.qrcode) setQrFlow(p => ({ ...p, qrcode: d.qrcode, countdown: 60 }));
+                        }}>🔄 Gerar QR Code</button>
+                      </div>
+                    )}
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>Aguardando leitura...</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: qrFlow.countdown <= 15 ? "#ef4444" : "#d4a843" }}>{qrFlow.countdown}s</div>
+                      {qrFlow.countdown <= 0 && <button className="btn-ghost" style={{ fontSize: 11, marginTop: 8 }} onClick={async () => {
+                        const r = await fetch(`${API}/canais/${qrFlow.instanceName}/qrcode`, { headers: H() });
+                        const d = await r.json();
+                        if (d.qrcode) setQrFlow(p => ({ ...p, qrcode: d.qrcode, countdown: 60 }));
+                      }}>🔄 Renovar QR Code</button>}
+                    </div>
+                  </div>
+                  <button className="btn-ghost" onClick={() => { setModal(null); setQrFlow({ step: "form", loading: false, instanceName: "", qrcode: "", canalId: null, countdown: 60 }); }}>Fechar</button>
+                </>)}
+
+                {/* STEP 3: CONECTADO */}
+                {qrFlow.step === "connected" && (<>
+                  <div style={{ textAlign: "center", padding: "20px 0" }}>
+                    <div style={{ fontSize: 56, marginBottom: 12 }}>✅</div>
+                    <div className="modal-title">WhatsApp Conectado!</div>
+                    <div className="modal-sub">O canal <b>{novoCanal.nome}</b> está ativo e pronto para receber mensagens.</div>
+                    <div style={{ marginTop: 12, padding: "10px 16px", background: "#10b98122", border: "1px solid #10b98133", borderRadius: 8, fontSize: 12, color: "#10b981", fontFamily: "'JetBrains Mono',monospace" }}>{qrFlow.instanceName}</div>
+                  </div>
+                  <button className="btn-gold" onClick={() => { setModal(null); setQrFlow({ step: "form", loading: false, instanceName: "", qrcode: "", canalId: null, countdown: 60 }); setNovoCanal({ nome: "", tipo: "evolution", numero_telefone: "", instance_name: "" }); }}>Concluir 🎉</button>
+                </>)}
+
+              </div>
+            </div>
+          )}
+
+          {modal === "transfer" && conv && (
+            <div className="modal-bg" onClick={() => setModal(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">Transferir Conversa</div>
+                <div className="modal-sub">Mover {conv.nome} para outro setor</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {SETORES.filter(s => s.id !== "todos").map(s => (
+                    <button key={s.id} onClick={() => { setSetor(conv.numero, s.id); setModal(null); }} style={{ background: conv.setor === s.id ? "#172236" : "transparent", border: "1px solid " + s.color + "44", borderRadius: 8, padding: "10px 14px", color: s.color, fontSize: 12, fontWeight: 600, textAlign: "left", cursor: "pointer" }}>
+                      {s.emoji} {s.name} {conv.setor === s.id && "← atual"}
+                    </button>
+                  ))}
+                </div>
+                <button className="btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {modal === "assign" && conv && (
+            <div className="modal-bg" onClick={() => setModal(null)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-title">Atribuir Conversa</div>
+                <div className="modal-sub">Selecione um atendente</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {usuarios.filter(u => u.ativo).map(u => (
+                    <button key={u.id} onClick={() => { toast(`✅ Atribuído a ${u.nome}`); setModal(null); }} style={{ background: "transparent", border: "1px solid #1e2d45", borderRadius: 8, padding: "10px 14px", color: "#94a3b8", fontSize: 12, textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, background: "#172236", color: "#60a5fa", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{initials(u.nome)}</div>
+                      <div><div style={{ color: "#f1f5f9", fontWeight: 500 }}>{u.nome}</div><div style={{ fontSize: 10, color: "#4a5568" }}>{u.role} · {u.setor}</div></div>
+                    </button>
+                  ))}
+                </div>
+                <button className="btn-ghost" onClick={() => setModal(null)}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {notify && <div className="notify">{notify}</div>}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+
+</html>
