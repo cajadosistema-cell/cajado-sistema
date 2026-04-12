@@ -67,7 +67,8 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
     if (result) {
       // Sincronizar o acesso para o módulo de Inbox do WhatsApp (Railway)
       try {
-        await fetch("https://visiopro-unified01-production.up.railway.app/auth/integrations/sync-user", {
+        const inboxUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://cajado-sistema-production.up.railway.app';
+        await fetch(`${inboxUrl}/auth/integrations/sync-user`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"

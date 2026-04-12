@@ -206,7 +206,13 @@ router.delete("/usuarios/:id", authMiddleware, async (req, res) => {
 router.post("/integrations/sync-user", async (req, res) => {
   let { nome, email, senha, role, setor, integration_key } = req.body;
   if (email) email = email.trim().toLowerCase();
-  if (integration_key !== process.env.API_KEY) return res.status(401).json({ erro: "Chave de integração inválida" });
+  
+  // Verifica se a chave corresponde a API_KEY do Railway, ou à chave hardcoded do painel
+  const apiKeyDef = process.env.API_KEY || "fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb";
+  if (integration_key !== process.env.API_KEY && integration_key !== apiKeyDef) {
+      return res.status(401).json({ erro: "Chave de integração inválida" });
+  }
+
   if (!nome || !email || !senha) return res.status(400).json({ erro: "Campos obrigatórios" });
 
   const hash = await bcrypt.hash(senha, 10);
