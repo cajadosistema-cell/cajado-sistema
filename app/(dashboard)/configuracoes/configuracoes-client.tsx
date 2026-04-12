@@ -314,8 +314,7 @@ export default function ConfiguracoesClient() {
                   </div>
                 </div>
               </div>
-              
-              <div className="pt-8 pb-16 flex justify-end relative z-10 w-full mb-10 border-t border-white/5 mt-6">
+                            <div className="sticky bottom-6 mt-8 flex justify-end z-50 w-full pr-2 pointer-events-none">
                 <button 
                   onClick={() => {
                     const btn = document.getElementById('btn-salvar-emp')
@@ -328,7 +327,7 @@ export default function ConfiguracoesClient() {
                     }, 1200)
                   }}
                   id="btn-salvar-emp"
-                  className="btn-primary flex gap-2 items-center px-8 py-3 text-[15px] shadow-[0_10px_30px_rgba(245,166,35,0.4)] hover:shadow-[0_10px_40px_rgba(245,166,35,0.6)] hover:-translate-y-1 transition-all"
+                  className="btn-primary pointer-events-auto flex gap-2 items-center px-8 py-4 text-[15px] font-bold shadow-[0_10px_40px_rgba(245,166,35,0.7)] hover:shadow-[0_10px_50px_rgba(245,166,35,0.9)] hover:-translate-y-1 transition-all rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 border-4 border-zinc-950"
                 >
                   ✓ Salvar Todas Alterações da Empresa
                 </button>
