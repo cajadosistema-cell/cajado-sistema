@@ -9,7 +9,15 @@ const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://cajado-sistema.vercel.app',
+    // Permite qualquer preview URL da Vercel para este projeto
+    /^https:\/\/cajado-sistema.*\.vercel\.app$/
+  ],
+  credentials: true
+}));
 app.use(express.json({ limit: "10mb" }));
 
 // ─── CONFIGURAÇÕES EXPORTADAS PARA src/config/ ───────────────────────────
