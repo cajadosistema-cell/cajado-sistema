@@ -199,7 +199,7 @@ export default function ConfiguracoesClient() {
       .limit(1)
       .single()
       .then(({ data }) => {
-        if (data) setEmpresa(prev => ({ ...prev, ...data }))
+        if (data) setEmpresa(prev => ({ ...prev, ...(data as any) }))
       })
   }, [])
 
