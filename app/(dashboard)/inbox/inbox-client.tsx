@@ -203,7 +203,7 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
   const registrarAtividade = async () => {
     if (!lead || !novaAtiv.trim()) return
     setSalvando(true)
-    const { data: nova } = await supabase.from('atividades').insert({
+    const { data: nova } = await (supabase.from('atividades') as any).insert({
       lead_id: lead.id,
       tipo: 'mensagem',
       descricao: novaAtiv.trim(),
@@ -217,7 +217,7 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
   const criarLead = async () => {
     if (!novoNome.trim()) return
     setSalvando(true)
-    const { data: novo } = await supabase.from('leads').insert({
+    const { data: novo } = await (supabase.from('leads') as any).insert({
       nome: novoNome.trim(),
       telefone: telefone,
       origem: 'whatsapp',
@@ -494,7 +494,7 @@ export default function InboxClient() {
               <button 
                 onClick={() => {
                   localStorage.removeItem('cajado_inbox_token')
-                  setAutenticado(false)
+                  window.location.reload()
                 }}
                 className="text-zinc-600 hover:text-red-400 text-xs transition-colors ml-1"
                 title="Sair do Inbox"
