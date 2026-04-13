@@ -1,20 +1,35 @@
+# ── Stage 1: deps ──────────────────────────────────────────────
 FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
 
+COPY package.json package-lock.json* ./
+RUN npm ci --frozen-lockfile
+
+# ── Stage 2: builder ───────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variáveis de build (Railway injeta as reais em runtime)
+# Variáveis necessárias em build time (public)
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_INBOX_API_URL
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_APP_NAME=Sistema\ Cajado
+
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+ENV NEXT_PUBLIC_INBOX_API_URL=$NEXT_PUBLIC_INBOX_API_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
 
 RUN npm run build
 
+# ── Stage 3: runner ────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 
