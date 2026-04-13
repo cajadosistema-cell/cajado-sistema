@@ -193,8 +193,7 @@ export default function ConfiguracoesClient() {
 
   // Carregar dados existentes do Supabase
   useEffect(() => {
-    supabase
-      .from('configuracoes_empresa')
+    (supabase.from('configuracoes_empresa') as any)
       .select('*')
       .limit(1)
       .single()
@@ -209,20 +208,17 @@ export default function ConfiguracoesClient() {
     setSaveMsg('')
     try {
       // Tenta buscar se já existe algum registro
-      const { data: existing } = await supabase
-        .from('configuracoes_empresa')
+      const { data: existing } = await (supabase.from('configuracoes_empresa') as any)
         .select('id')
         .limit(1)
         .single()
 
       if (existing?.id) {
-        await supabase
-          .from('configuracoes_empresa')
+        await (supabase.from('configuracoes_empresa') as any)
           .update(empresa)
           .eq('id', existing.id)
       } else {
-        await supabase
-          .from('configuracoes_empresa')
+        await (supabase.from('configuracoes_empresa') as any)
           .insert(empresa)
       }
       setSaveMsg('ok')

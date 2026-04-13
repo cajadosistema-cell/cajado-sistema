@@ -216,7 +216,7 @@ function ModalImportarExtrato({
       conta_id: contaId,
     }))
 
-    const { error } = await supabase.from('lancamentos').insert(rows)
+    const { error } = await (supabase.from('lancamentos') as any).insert(rows)
     if (error) {
       setErro(`Erro ao salvar: ${error.message}`)
       setImportando(false)
@@ -503,7 +503,7 @@ function ModalLancamento({
       for (let i = 1; i <= parcelas; i++) {
         const data = new Date(form.data_competencia)
         data.setMonth(data.getMonth() + (i - 1))
-        await supabase.from('lancamentos').insert({
+        await (supabase.from('lancamentos') as any).insert({
           conta_id: form.conta_id,
           descricao: `${form.descricao} (${i}/${parcelas})`,
           valor: valor / parcelas,
