@@ -181,10 +181,9 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
     setLead(data || null)
 
     if (data) {
-      const { data: ativs } = await supabase
-        .from('atividades')
+      const { data: ativs } = await (supabase.from('atividades') as any)
         .select('*')
-        .eq('lead_id', data.id)
+        .eq('lead_id', (data as any).id)
         .order('realizado_em', { ascending: false })
         .limit(5)
       setAtividades(ativs || [])
@@ -196,7 +195,7 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
 
   const mudarStatus = async (status: string) => {
     if (!lead) return
-    await supabase.from('leads').update({ status, ultimo_contato: new Date().toISOString() }).eq('id', lead.id)
+    await (supabase.from('leads') as any).update({ status, ultimo_contato: new Date().toISOString() }).eq('id', (lead as any).id)
     setLead((l: any) => ({ ...l, status }))
   }
 
@@ -204,7 +203,7 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
     if (!lead || !novaAtiv.trim()) return
     setSalvando(true)
     const { data: nova } = await (supabase.from('atividades') as any).insert({
-      lead_id: lead.id,
+      lead_id: (lead as any).id,
       tipo: 'mensagem',
       descricao: novaAtiv.trim(),
       realizado_em: new Date().toISOString(),
