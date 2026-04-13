@@ -1,7 +1,0 @@
-{
-  "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/(dashboard)/cajado/page": "app/(dashboard)/cajado/page.js",
-  "/(dashboard)/seguranca-wa/page": "app/(dashboard)/seguranca-wa/page.js",
-  "/(dashboard)/gestao-pessoal/page": "app/(dashboard)/gestao-pessoal/page.js",
-  "/(dashboard)/inbox/page": "app/(dashboard)/inbox/page.js"
-}

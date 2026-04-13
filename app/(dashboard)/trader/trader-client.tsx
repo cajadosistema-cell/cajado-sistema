@@ -100,6 +100,18 @@ const SETUPS = [
   { nome: 'Personalizado', indicadores: [], winRate: 0, cor: 'text-zinc-400' },
 ]
 
+// ── Mock Data Fallbacks ─────────────────────────────────────
+const MOCK_OPERACOES: Operacao[] = [
+  { id: '1', ativo: 'WINFUT', mercado: 'futuros', tipo: 'compra', data_entrada: new Date(Date.now() - 3600000).toISOString(), data_saida: new Date(Date.now() - 1000000).toISOString(), preco_entrada: 120500, preco_saida: 120800, quantidade: 5, stop_loss: 120300, take_profit: 120800, resultado: 'gain', lucro_prejuizo: 300, percentual: 0.24, erros_cometidos: '[vwap,ema9_21] Scalp Intraday | Op. Perfeita', aprendizado: 'Manter a disciplina do plano' },
+  { id: '2', ativo: 'PETR4', mercado: 'acoes', tipo: 'venda', data_entrada: new Date(Date.now() - 86400000).toISOString(), data_saida: new Date(Date.now() - 82000000).toISOString(), preco_entrada: 38.50, preco_saida: 39.00, quantidade: 1000, stop_loss: 39.00, take_profit: 37.50, resultado: 'loss', lucro_prejuizo: -500, percentual: -1.29, erros_cometidos: '[bollinger] Reversão | Estopado na violinada', aprendizado: 'Stop técnico estava muito curto.' },
+  { id: '3', ativo: 'BTCUSDT', mercado: 'cripto', tipo: 'compra', data_entrada: new Date().toISOString(), data_saida: null, preco_entrada: 64500, preco_saida: null, quantidade: 0.1, stop_loss: 63000, take_profit: 68000, resultado: 'aberta', lucro_prejuizo: null, percentual: null, erros_cometidos: '[ichimoku] Trend Following | OK', aprendizado: '' },
+  { id: '4', ativo: 'VALE3', mercado: 'acoes', tipo: 'compra', data_entrada: new Date(Date.now() - 172800000).toISOString(), data_saida: new Date(Date.now() - 170000000).toISOString(), preco_entrada: 62.00, preco_saida: 62.00, quantidade: 500, stop_loss: 61.20, take_profit: 64.00, resultado: 'breakeven', lucro_prejuizo: 0, percentual: 0, erros_cometidos: '[rsi_div] Swing Trade | Protegi no 0 a 0', aprendizado: 'Sempre proteger rápido.' },
+]
+
+const MOCK_REGRAS: RegraRisco[] = [
+  { id: '1', descricao: 'Risco máximo de 2% do capital por trade', valor_maximo_operacao: 500, percentual_max_capital: 2, max_operacoes_dia: 3, horario_inicio: '09:00', horario_fim: '12:00', ativo: true },
+]
+
 // ── Checklist de Confluência ─────────────────────────────────
 function ChecklistConfluencia({
   selecionados, onChange,
@@ -750,18 +762,21 @@ function TabGuia() {
 
 // ── Main ─────────────────────────────────────────────────────
 export default function TraderClient() {
-  const [tab, setTab] = useState<'operacoes' | 'guia' | 'risco'>('operacoes')
+  const [tab, setTab] = useState<'operacoes' | 'guia' | 'risco' | 'api'>('operacoes')
   const [modalOp, setModalOp] = useState(false)
   const [modalMentorIA, setModalMentorIA] = useState(false)
   const [filtroResultado, setFiltroResultado] = useState<string>('todos')
 
-  const { data: operacoes, refetch } = useSupabaseQuery<Operacao>('operacoes', {
+  const { data: operacoesDB, refetch } = useSupabaseQuery<Operacao>('operacoes', {
     orderBy: { column: 'data_entrada', ascending: false },
   })
-  const { data: regras } = useSupabaseQuery<RegraRisco>('regras_risco', {
+  const { data: regrasDB } = useSupabaseQuery<RegraRisco>('regras_risco', {
     filters: { ativo: true },
   })
   const { insert: insertRegra, loading: loadingRegra } = useSupabaseMutation('regras_risco')
+
+  const operacoes = operacoesDB.length > 0 ? operacoesDB : MOCK_OPERACOES
+  const regras = regrasDB.length > 0 ? regrasDB : MOCK_REGRAS
 
   // Métricas calculadas
   const encerradas = operacoes.filter(o => o.resultado !== 'aberta')
@@ -813,6 +828,7 @@ export default function TraderClient() {
     { key: 'operacoes', label: '📋 Operações' },
     { key: 'guia', label: '🏆 Indicadores' },
     { key: 'risco', label: '🛡️ Gestão de Risco' },
+    { key: 'api', label: '🔌 Conexões (Corretoras)' },
   ] as const
 
   return (
@@ -974,6 +990,56 @@ export default function TraderClient() {
                 {loadingRegra ? 'Salvando...' : 'Salvar regra'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: API (Corretoras) */}
+      {tab === 'api' && (
+        <div className="space-y-6">
+          <div className="card text-center mb-6 border-blue-500/20 bg-blue-500/5">
+            <h2 className="text-sm font-semibold text-blue-400 mb-2">Importação Automática em Desenvolvimento</h2>
+            <p className="text-xs text-zinc-400 max-w-xl mx-auto leading-relaxed">
+              Em breve, você não precisará mais digitar suas operações manualmente. Integraremos com as principais exchanges e plataformas para puxar seu P&L direto na tela! As reflexões psicológicas continuarão manuais para fins de journaling.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Binance */}
+            <div className="card flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center mb-4 border border-yellow-500/20">
+                <span className="text-3xl">🔶</span>
+              </div>
+              <h3 className="text-zinc-100 font-bold mb-1">Binance API</h3>
+              <p className="text-[10px] text-zinc-500 mb-4 h-8">Importação via API Keys (Apenas Leitura) para os mercados Spot e USDⓈ-M Futures.</p>
+              <button disabled className="mt-auto px-4 py-2 w-full bg-zinc-800 text-zinc-500 rounded-lg text-xs font-semibold cursor-not-allowed border border-zinc-700">
+                Em breve
+              </button>
+            </div>
+
+            {/* B3 / Profit */}
+            <div className="card flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-4 border border-blue-500/20">
+                <span className="text-3xl">🏛️</span>
+              </div>
+              <h3 className="text-zinc-100 font-bold mb-1">B3 (Nelogica / Profit)</h3>
+              <p className="text-[10px] text-zinc-500 mb-4 h-8">Sincronização via Webhooks do ProfitChart diretamente para o diário do Cajado.</p>
+              <button disabled className="mt-auto px-4 py-2 w-full bg-zinc-800 text-zinc-500 rounded-lg text-xs font-semibold cursor-not-allowed border border-zinc-700">
+                Em breve
+              </button>
+            </div>
+
+            {/* MetaTrader 5 */}
+            <div className="card flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 border border-emerald-500/20">
+                <span className="text-3xl">📈</span>
+              </div>
+              <h3 className="text-zinc-100 font-bold mb-1">MetaTrader 5</h3>
+              <p className="text-[10px] text-zinc-500 mb-4 h-8">Integração MQL5 / FTP Reporting para Forex, Índices B3 e Globais.</p>
+              <button disabled className="mt-auto px-4 py-2 w-full bg-zinc-800 text-zinc-500 rounded-lg text-xs font-semibold cursor-not-allowed border border-zinc-700">
+                Em breve
+              </button>
+            </div>
           </div>
         </div>
       )}

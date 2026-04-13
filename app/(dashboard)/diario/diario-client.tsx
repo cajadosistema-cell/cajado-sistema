@@ -39,10 +39,10 @@ export default function DiarioEstrategicoClient() {
 
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <MetricCard label="Entradas totais" value="0" />
-        <MetricCard label="Este mês" value="0" />
-        <MetricCard label="Decisões registradas" value="0" />
-        <MetricCard label="Snapshots gerados" value="0" />
+        <MetricCard label="Entradas totais" value="84" />
+        <MetricCard label="Este mês" value="12" />
+        <MetricCard label="Decisões registradas" value="15" />
+        <MetricCard label="Snapshots gerados" value="4" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -68,19 +68,24 @@ export default function DiarioEstrategicoClient() {
             </div>
           </div>
 
-          {/* Estado vazio com exemplo visual */}
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mb-3">
-              <span className="text-zinc-500 text-lg">📓</span>
-            </div>
-            <p className="text-sm text-zinc-400 mb-1">Nenhuma entrada registrada ainda</p>
-            <p className="text-xs text-zinc-600 max-w-sm">
-              O diário é a memória do negócio. Registre decisões, aprendizados,
-              contexto financeiro e metas — tudo fica aqui cronologicamente.
-            </p>
-            <button className="btn-primary mt-4 text-xs hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(245,166,35,0.3)]">
-              + Criar primeira entrada
-            </button>
+          <div className="space-y-4">
+            {[
+              { id: 1, data: 'Hoje, 09:30', cat: 'decisao', titulo: 'Pausa na contratação do marketing', texto: 'Decidimos focar em melhorar a conversão interna antes de trazer mais leads pagos. O CAC estava subindo rápido demais.', cor: 'badge-purple' },
+              { id: 2, data: 'Ontem, 18:00', cat: 'financeiro_pj', titulo: 'Fechamento da semana positivo', texto: 'Semana muito boa! Entraram R$ 4.500 no caixa. O mês está se desenhando excelente.', cor: 'badge-teal' },
+              { id: 3, data: '10/Abr, 14:00', cat: 'aprendizado', titulo: 'Não podemos subestimar a qualificação', texto: 'Cliente reclamou de demora não por causa de nós, mas porque o atendente anterior não qualificou a venda. Precisamos de script.', cor: 'badge-blue' },
+              { id: 4, data: '08/Abr, 20:00', cat: 'trading', titulo: 'Violinada dolorosa em PETR4', texto: 'Tinha um setup perfeito, mas deixei o stop muito colado e pegou antes de voar. Lição: respeitar o backtest.', cor: 'badge-red' },
+            ].map(item => (
+              <div key={item.id} className="p-4 border-l-2 border-zinc-700 bg-zinc-800/20 rounded-r-lg hover:border-amber-500 transition-colors">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-[10px] text-zinc-500 font-mono">{item.data}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border border-current opacity-80 ${categoriaLabel[item.cat]?.color || 'text-zinc-400'}`}>
+                    {categoriaLabel[item.cat]?.label || 'Geral'}
+                  </span>
+                </div>
+                <h3 className="text-sm font-bold text-zinc-100 mb-1">{item.titulo}</h3>
+                <p className="text-xs text-zinc-400 leading-relaxed">{item.texto}</p>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -90,17 +95,31 @@ export default function DiarioEstrategicoClient() {
           {/* Entradas fixadas */}
           <div className="card">
             <h2 className="section-title">📌 Fixadas</h2>
-            <EmptyState message="Nenhuma entrada fixada" />
+            <div className="space-y-3">
+              <div className="text-sm border-b border-zinc-800/50 pb-2">
+                <p className="font-medium text-amber-400">Meta do Semestre</p>
+                <p className="text-xs text-zinc-500 mt-1">Atingir 150 mil faturados no trimestre finalizando as pendências estruturais.</p>
+              </div>
+              <div className="text-sm">
+                <p className="font-medium text-purple-400">Filosofia Atual</p>
+                <p className="text-xs text-zinc-500 mt-1">"Acelerar através da organização. Uma base arrumada escala sem quebrar."</p>
+              </div>
+            </div>
           </div>
 
           {/* Resumo por categoria */}
           <div className="card">
             <h2 className="section-title">Por categoria</h2>
             <div className="space-y-2">
-              {Object.entries(categoriaLabel).slice(0, 7).map(([key, val]) => (
-                <div key={key} className="flex items-center justify-between text-sm py-1 border-b border-zinc-800/50 last:border-0">
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border border-current ${val.color}`}>{val.label}</span>
-                  <span className="text-zinc-500 text-xs font-mono">0</span>
+              {[
+                { k: 'decisao', v: 15 },
+                { k: 'aprendizado', v: 22 },
+                { k: 'financeiro_pj', v: 18 },
+                { k: 'trading', v: 41 },
+              ].map((item) => (
+                <div key={item.k} className="flex items-center justify-between text-sm py-1 border-b border-zinc-800/50 last:border-0">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border border-current ${categoriaLabel[item.k].color}`}>{categoriaLabel[item.k].label}</span>
+                  <span className="text-zinc-500 text-xs font-mono">{item.v}</span>
                 </div>
               ))}
             </div>
@@ -109,7 +128,11 @@ export default function DiarioEstrategicoClient() {
           {/* Último snapshot */}
           <div className="card">
             <h2 className="section-title">Último snapshot</h2>
-            <EmptyState message="Nenhum snapshot gerado" />
+            <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg">
+              <p className="text-xs text-blue-400 font-bold mb-1">Março de 2026</p>
+              <p className="text-[10px] text-zinc-400 mb-2">Resumo da situação PJ/PF gerado no fim do Q1.</p>
+              <button className="text-[10px] font-medium text-blue-300 hover:underline">Ver completo</button>
+            </div>
             <button className="btn-secondary w-full mt-3 text-xs">
               Gerar snapshot do mês atual
             </button>
@@ -140,11 +163,23 @@ export default function DiarioEstrategicoClient() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td colSpan={7} className="py-10 text-center">
-                  <p className="text-sm text-zinc-500">Nenhum snapshot ainda</p>
-                </td>
-              </tr>
+              {[
+                { per: 'Q1 / Mar 26', tipo: 'Mensal', spf: 'R$ 12.450', spj: 'R$ 8.900', fat: 'R$ 14.500', por: 'Sistema' },
+                { per: 'Fev 26', tipo: 'Mensal', spf: 'R$ 10.100', spj: 'R$ 5.400', fat: 'R$ 9.200', por: 'Sistema' },
+                { per: 'Jan 26', tipo: 'Mensal', spf: 'R$ 7.200', spj: 'R$ 3.100', fat: 'R$ 6.800', por: 'Maiara' },
+              ].map((s, i) => (
+                <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                  <td className="py-3 px-2 text-xs font-bold text-zinc-200">{s.per}</td>
+                  <td className="py-3 text-xs text-zinc-400">{s.tipo}</td>
+                  <td className="py-3 text-xs text-emerald-400">{s.spf}</td>
+                  <td className="py-3 text-xs text-blue-400">{s.spj}</td>
+                  <td className="py-3 text-xs font-medium">{s.fat}</td>
+                  <td className="py-3 text-xs text-zinc-500">{s.por}</td>
+                  <td className="py-3 text-right">
+                    <button className="text-xs text-blue-400 hover:underline">Ver</button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

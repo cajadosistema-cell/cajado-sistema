@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual do Sistema Cajado</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Syne:wght@600;800&display=swap');
+    
+    body {
+        font-family: 'Inter', sans-serif;
+        color: #333;
+        line-height: 1.6;
+        background: #f8f9fa;
+        margin: 0;
+        padding: 40px;
+    }
+    .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: #fff;
+        padding: 50px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    }
+    h1, h2, h3 {
+        font-family: 'Syne', sans-serif;
+        color: #111827;
+    }
+    h1 {
+        font-size: 32px;
+        text-align: center;
+        border-bottom: 3px solid #f5a623;
+        padding-bottom: 20px;
+        margin-bottom: 40px;
+        color: #0f172a;
+    }
+    h2 {
+        font-size: 24px;
+        margin-top: 40px;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 10px;
+    }
+    h3 {
+        font-size: 18px;
+        color: #1e293b;
+        margin-top: 30px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    p {
+        margin-bottom: 15px;
+        color: #475569;
+    }
+    ul {
+        margin-bottom: 20px;
+        padding-left: 20px;
+    }
+    li {
+        margin-bottom: 8px;
+        color: #475569;
+    }
+    .prompt-box {
+        background: #1e293b;
+        color: #f8fafc;
+        padding: 20px;
+        border-radius: 8px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+    }
+    /* Estilos para Impressão em PDF */
+    @media print {
+        body { background: #fff; padding: 0; }
+        .container { box-shadow: none; padding: 0; max-width: 100%; border-radius: 0; }
+        .prompt-box { background: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; box-shadow: none; }
+        @page { margin: 2cm; }
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📖 Manual Completo do Sistema Cajado</h1>
+    
+    <p>Bem-vindo ao <strong>Sistema Cajado</strong>! Este documento serve como <strong>Manual de Utilização de Todos os Módulos</strong> e também contém as instruções base de <strong>Treinamento de Inteligência Artificial</strong> para o seu assistente virtual.</p>
+
+    <h2>1. Visão Geral dos Módulos (Blocos)</h2>
+    <p>Abaixo estão detalhados todos os 15 módulos principais do Sistema Cajado e suas responsabilidades práticas no dia a dia da equipe:</p>
+
+    <h3>📊 Início (Dashboards)</h3>
+    <p>O painel central de visão rápida da sua empresa.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Acompanhar gráficos de faturamento, volume de atendimentos e tarefas críticas do dia. Serve para a diretoria analisar a saúde do negócio em segundos.</li>
+    </ul>
+
+    <h3>💰 Gestão Financeira (Empresa)</h3>
+    <p>Onde o dinheiro entra e sai de fato.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Registrar contas a pagar e a receber. Validar o fluxo de caixa mensal, gerar relatórios de DRE e visualizar saldo consolidado disponível nas contas.</li>
+    </ul>
+
+    <h3>🎯 CRM Cajado</h3>
+    <p>Gestão do relacionamento com o cliente e funil de vendas (Pipeline).</p>
+    <ul>
+        <li><strong>Utilização:</strong> Criar e gerenciar leads. Arrastar os cards (clientes) de "Novo Contato" até "Fechado Ganho". Agendar retornos (follow-up) e visualizar o histórico de conversas comerciais.</li>
+    </ul>
+
+    <h3>📦 Vendas e Ordens de Serviço (OS)</h3>
+    <p>A formalização e o processamento real da venda do produto/serviço.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Assim que o CRM fecha a venda, cria-se o Pedido formal aqui. Define-se prazo, responsável técnico contratado, altera status de entrega e verifica os produtos despachados aos clientes.</li>
+    </ul>
+
+    <h3>🤝 Comissões e Parceiros</h3>
+    <p>Gestão de terceiros, promotores de vendas e afiliados.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Adicionar vendedores externos ou revendedores. O sistema calcula a porcentagem de comissão devida automaticamente sempre que um Pedido associado a este parceiro é dado como "Pago" pelo Financeiro.</li>
+    </ul>
+
+    <h3>🧠 Diário Estratégico e Memória</h3>
+    <p>Ata de decisões vitais e manual de cultura ("cérebro escrito").</p>
+    <ul>
+        <li><strong>Utilização:</strong> Usado por diretores para anotar insights brutos da semana, decisões tomadas em reuniões gerenciais de segunda-feira, e criar uma base de lições aprendidas (Playbook).</li>
+    </ul>
+
+    <h3>🔄 Pós-venda e Automações</h3>
+    <p>Aumentando a vida útil do cliente (LTV) de forma fluida.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Agendar o disparo de mensagens para o aniversário da compra (renovação), enviar questionários de satisfação (NPS) rotineiros e automações em eventos do funil.</li>
+    </ul>
+
+    <h3>💬 Inbox / Atendimento WhatsApp</h3>
+    <p>O coração da comunicação multicanal via Evolution API.</p>
+    <ul>
+        <li><strong>Utilização:</strong> É onde a equipe comercial e de suporte operam o dia todo. Toda a equipe responde clientes vindos de um único número master. A robô (Vivi) entra em ação primeiro e você pode "assumir" o atendimento para si.</li>
+    </ul>
+
+    <h3>⚙️ Administração SaaS Cajado</h3>
+    <p>Controle do próprio sistema contratado.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Visualizar a licença vigente do seu Cajado, imprimir faturas da própria plataforma ou mudar o plano de armazenamento em uso.</li>
+    </ul>
+
+    <h3>🏃 Gestão Pessoal</h3>
+    <p>Ferramenta de performance do colaborador.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Criar blocos de tempo (Timeblocking), gerenciar agenda individual de metas pessoais e montar checklists das pendências de responsabilidade unicamente do próprio usuário antes do fim do dia.</li>
+    </ul>
+
+    <h3>🏢 Patrimônio</h3>
+    <p>O controle de bens duráveis (inventário oficial).</p>
+    <ul>
+        <li><strong>Utilização:</strong> Cadastrar todos os computadores, veículos, imóveis e estoque de cadeiras da empresa. Pode designar que notebook "A" está com funcionário "X" em comodato.</li>
+    </ul>
+
+    <h3>📈 Investimentos</h3>
+    <p>Visão gerencial da reserva do caixa da empresa.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Registrar de forma unificada os fundos de caixa: a conta que rende 100% CDI, o fundo de emergência, e rendimentos adicionais institucionais gerados pelo lucro retido.</li>
+    </ul>
+
+    <h3>📉 Trader / Operações</h3>
+    <p>Registro exclusivo para mesas proprietárias (Mesa de Operações de Trading).</p>
+    <ul>
+        <li><strong>Utilização:</strong> Diário para registro rápido de Day Trades / Swing Trades, índice de assertividade, gain do dia, controle de risco (Drawdown do sistema) que atingiram as travas de limite.</li>
+    </ul>
+
+    <h3>🤖 Inteligência Artificial</h3>
+    <p>Configuração do comportamento do bot do WhatsApp e sistema.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Local onde você edita as diretrizes e instruções de tom de voz da IA.</li>
+    </ul>
+
+    <h3>🛠️ Organização Geral (Configurações)</h3>
+    <p>A administração principal.</p>
+    <ul>
+        <li><strong>Utilização:</strong> Restringir o acesso dos seus times, cadastrar a logomarca que aparece nos relatórios, configurar as credenciais do banco de dados (API) e gerir funcionários.</li>
+    </ul>
+
+    <h2>2. Treinamento da Inteligência Artificial (Prompt Mestre)</h2>
+    <p>Copiando os comandos abaixo e injetando no modelo da base, a IA aprenderá exatamente como guiar a sua equipe no uso interligado de todos os blocos acima:</p>
+
+    <div class="prompt-box">Você é a VIVI, a Especialista de Onboarding e Treinamento do Sistema Cajado. 
+Sua missão é ajudar os funcionários da nossa empresa a usar a plataforma Cajado corretamente.
+
+REGRAS DE CONDUTA:
+1. Seja paciente, didática e responda sempre de forma profissional, moderna e acolhedora.
+2. Quando um usuário perguntar como fazer algo, explique em poucas etapas e cite os módulos corretos.
+
+BASE DE CONHECIMENTO DO SISTEMA PARA CONSULTA:
+- Despesas e relatórios (DRE) -> Mande para [Gestão Financeira (Empresa)].
+- Histórico comercial e acompanhamento de Leads -> Mande para [CRM Cajado].
+- Comissões de vendas ou links de afiliados -> Mande para [Comissões e Parceiros].
+- Conversar com os clientes via whatsApp -> Mande para [Inbox / Atendimento WhatsApp].
+- Escrever atas de reunião / Documentação raiz -> Mande para [Diário Estratégico e Memória].
+- Mudar regras de acesso dos estagiários -> Mande para [Organização Geral] > Funcionários.
+- Computador estragou / Alocar equipamento -> Mande para [Patrimônio].
+- Relacionamento de aniversário de vendas -> Mande para [Pós-venda e Automações].
+- Controle de alvos individuais diários (Agendas) -> Mande para [Gestão Pessoal].
+
+Nunca invente telas ou botões que não existam neste resumo. Caso exijam uma tarefa avançada sem documentação, diga: "Ainda não possuo esta resposta no meu treinamento interno. Recomendo abrir um ticket no suporte oficial do Sistema Cajado."</div>
+
+</div>
+
+</body>
+</html>

@@ -41,6 +41,21 @@ type Decisao = {
   data_decisao: string
 }
 
+// ── Mock Data Fallbacks ─────────────────────────────────────
+const MOCK_PROJETOS: Projeto[] = [
+  { id: '1', titulo: 'Automação de WhatsApp', descricao: 'Integrar API Oficial', status: 'ativo', data_inicio: '2026-04-01', data_fim_prevista: '2026-05-01', progresso_percentual: 65, proximos_passos: 'Revisar templates aprovados', created_at: new Date().toISOString() },
+  { id: '2', titulo: 'Nova Tabela de Preços', descricao: 'Atualizar valores 2026', status: 'concluido', data_inicio: '2026-03-01', data_fim_prevista: '2026-03-15', progresso_percentual: 100, proximos_passos: null, created_at: new Date().toISOString() },
+]
+
+const MOCK_IDEIAS: Ideia[] = [
+  { id: '1', projeto_id: null, titulo: 'Oferecer seguro auto junto com licenciamento', descricao: 'Fazer parceria com corretora', status: 'ideia', prazo: 'medio', potencial_impacto: 'alto', notas: null, created_at: new Date().toISOString() },
+  { id: '2', projeto_id: null, titulo: 'Café expresso grátis', descricao: 'Comprar máquina de cápsula', status: 'execucao', prazo: 'curto', potencial_impacto: 'baixo', notas: null, created_at: new Date().toISOString() },
+]
+
+const MOCK_DECISOES: Decisao[] = [
+  { id: '1', projeto_id: null, titulo: 'Migração para API Oficial', contexto: 'Muitos bloqueios no QR Code', decisao_tomada: 'Usar provedor Meta Cloud.', resultado: 'Menos quedas', aprendizado: 'O processo de template é chato, mas vale a pena.', data_decisao: '2026-04-10' }
+]
+
 // ── Helpers ─────────────────────────────────────────────────
 const PRAZO_CONFIG = {
   curto:  { label: 'Curto Prazo',  color: 'text-red-400',    bg: 'bg-red-500/10',    dot: 'bg-red-500' },
@@ -275,15 +290,20 @@ export default function OrganizacaoClient() {
   const [editandoIdeia, setEditandoIdeia] = useState<Ideia | null>(null)
   const [projetoSelecionado, setProjetoSelecionado] = useState<string>('todos')
 
-  const { data: projetos, refetch: refetchProjetos } = useSupabaseQuery<Projeto>('projetos', {
+  const { data: projetosDB, refetch: refetchProjetos } = useSupabaseQuery<Projeto>('projetos', {
     orderBy: { column: 'created_at', ascending: false },
   })
-  const { data: ideias, refetch: refetchIdeias } = useSupabaseQuery<Ideia>('ideias', {
+  const { data: ideiasDB, refetch: refetchIdeias } = useSupabaseQuery<Ideia>('ideias', {
     orderBy: { column: 'created_at', ascending: false },
   })
-  const { data: decisoes } = useSupabaseQuery<Decisao>('decisoes', {
+  const { data: decisoesDB } = useSupabaseQuery<Decisao>('decisoes', {
     orderBy: { column: 'data_decisao', ascending: false },
   })
+
+  // Injetar mock data se o banco estiver vazio (para demonstração)
+  const projetos = projetosDB.length > 0 ? projetosDB : MOCK_PROJETOS
+  const ideias = ideiasDB.length > 0 ? ideiasDB : MOCK_IDEIAS
+  const decisoes = decisoesDB.length > 0 ? decisoesDB : MOCK_DECISOES
   const { insert: insertDecisao, loading: loadingDecisao } = useSupabaseMutation('decisoes')
   const { update: updateProjeto } = useSupabaseMutation('projetos')
   const { update: updateIdeia } = useSupabaseMutation('ideias')

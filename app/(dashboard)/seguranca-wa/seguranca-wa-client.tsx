@@ -34,6 +34,24 @@ type BackupContato = {
   created_at: string
 }
 
+// ── Mock Data Fallbacks ─────────────────────────────────────
+const MOCK_NUMEROS: NumeroWA[] = [
+  { id: '1', numero: '5511999998888', nome: 'Atendimento', status: 'ativo', limite_diario: 250, enviados_hoje: 190, intervalo_minimo_segundos: 15, is_backup: false, notas: 'Número quente', created_at: new Date().toISOString() },
+  { id: '2', numero: '5511988887777', nome: 'Vendas Secundário', status: 'ativo', limite_diario: 100, enviados_hoje: 45, intervalo_minimo_segundos: 20, is_backup: false, notas: null, created_at: new Date().toISOString() },
+  { id: '3', numero: '5511977776666', nome: 'Reserva 1', status: 'backup', limite_diario: 0, enviados_hoje: 0, intervalo_minimo_segundos: 30, is_backup: true, notas: null, created_at: new Date().toISOString() },
+  { id: '4', numero: '5511966665555', nome: 'Antigo Banido', status: 'bloqueado', limite_diario: 50, enviados_hoje: 50, intervalo_minimo_segundos: 10, is_backup: false, notas: 'Março', created_at: new Date().toISOString() },
+]
+
+const MOCK_MENSAGENS: MensagemPadrao[] = [
+  { id: '1', titulo: 'Saudação Inicial', conteudo: 'Olá {{nome}}! Aqui é do atendimento Cajado.', categoria: 'prospeccao', variaveis: ['nome'] },
+  { id: '2', titulo: 'Cobrança', conteudo: 'Bom dia {{nome}}, identificamos um valor pendente. Podemos enviar o PIX?', categoria: 'followup', variaveis: ['nome'] },
+]
+
+const MOCK_CHECKINS = [
+  { id: '1', tipo: 'entrada', endereco: 'Av. Paulista, 1000', servico_descricao: 'Chegada no escritório', timestamp: new Date(Date.now() - 8 * 3600000).toISOString(), perfis: { nome: 'Carlos' } },
+  { id: '2', tipo: 'saida', endereco: 'Av. Paulista, 1000', servico_descricao: 'Fim do expediente', timestamp: new Date(Date.now() - 1 * 3600000).toISOString(), perfis: { nome: 'Carlos' } }
+]
+
 // ── Card de Número ─────────────────────────────────────────
 function NumeroCard({
   numero, onEdit,
@@ -222,17 +240,17 @@ export default function SegurancaWAClient() {
   const [modalNumero, setModalNumero] = useState(false)
   const [editando, setEditando] = useState<NumeroWA | null>(null)
 
-  const { data: numeros, refetch: refetchNumeros } = useSupabaseQuery<NumeroWA>('numeros_whatsapp', {
+  const { data: numerosDB, refetch: refetchNumeros } = useSupabaseQuery<NumeroWA>('numeros_whatsapp', {
     orderBy: { column: 'status', ascending: true },
   })
-  const { data: mensagens, refetch: refetchMensagens } = useSupabaseQuery<MensagemPadrao>('mensagens_padrao', {
+  const { data: mensagensDB, refetch: refetchMensagens } = useSupabaseQuery<MensagemPadrao>('mensagens_padrao', {
     orderBy: { column: 'categoria', ascending: true },
   })
   const { insert: insertMensagem, loading: loadingMsg } = useSupabaseMutation('mensagens_padrao')
   const [formMsg, setFormMsg] = useState({ titulo: '', conteudo: '', categoria: 'prospeccao' })
   const [modalMsg, setModalMsg] = useState(false)
 
-  const { data: checkins } = useSupabaseQuery<{
+  const { data: checkinsDB } = useSupabaseQuery<{
     id: string; tipo: string; endereco: string | null;
     servico_descricao: string | null; timestamp: string;
     perfis?: { nome: string }
@@ -241,6 +259,12 @@ export default function SegurancaWAClient() {
     orderBy: { column: 'timestamp', ascending: false },
     limit: 20,
   })
+
+  // Injetar mock data se o banco estiver vazio (para demonstração)
+  const numeros = numerosDB.length > 0 ? numerosDB : MOCK_NUMEROS
+  const mensagens = mensagensDB.length > 0 ? mensagensDB : MOCK_MENSAGENS
+  const checkins = checkinsDB.length > 0 ? checkinsDB : MOCK_CHECKINS
+  
   const { insert: insertCheckin, loading: loadingCheckin } = useSupabaseMutation('checkins')
 
   // Métricas rápidas

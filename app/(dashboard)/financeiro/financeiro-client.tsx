@@ -40,7 +40,362 @@ type CategoriaFinanceira = {
   cor: string
 }
 
+// ── Parser OFX/CSV ────────────────────────────────────────────
+
+type LancamentoImportado = {
+  _id: string
+  data: string
+  descricao: string
+  valor: number
+  tipo: 'receita' | 'despesa'
+  selecionado: boolean
+  duplicata?: boolean
+}
+
+function parsearOFX(conteudo: string): LancamentoImportado[] {
+  const regex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/g
+  const resultados: LancamentoImportado[] = []
+  let match
+
+  while ((match = regex.exec(conteudo)) !== null) {
+    const bloco = match[1]
+    const dtposted = bloco.match(/<DTPOSTED>(\d{8})/)?.[1]
+    const trnamt  = bloco.match(/<TRNAMT>([-\d.]+)/)?.[1]
+    const memo    = bloco.match(/<MEMO>([^\n<]+)/)?.[1]?.trim()
+    const fitid   = bloco.match(/<FITID>([^\n<]+)/)?.[1]?.trim()
+
+    if (!dtposted || !trnamt) continue
+    const valor = parseFloat(trnamt)
+    const data = `${dtposted.slice(0, 4)}-${dtposted.slice(4, 6)}-${dtposted.slice(6, 8)}`
+
+    resultados.push({
+      _id: fitid || `${data}-${valor}-${Math.random()}`,
+      data,
+      descricao: memo || 'Sem descrição',
+      valor: Math.abs(valor),
+      tipo: valor < 0 ? 'despesa' : 'receita',
+      selecionado: true,
+    })
+  }
+  return resultados
+}
+
+function parsearCSV(conteudo: string, banco: string): LancamentoImportado[] {
+  const linhas = conteudo.split('\n').map(l => l.trim()).filter(Boolean)
+  const resultados: LancamentoImportado[] = []
+
+  // Detecta separador
+  const sep = linhas[0]?.includes(';') ? ';' : ','
+
+  // Pula linhas de cabeçalho de acordo com o banco
+  let inicio = 0
+  for (let i = 0; i < linhas.length; i++) {
+    const l = linhas[i].toLowerCase()
+    if (l.includes('data') || l.includes('lançamento') || l.includes('historico') || l.includes('description')) {
+      inicio = i + 1
+      break
+    }
+  }
+
+  for (let i = inicio; i < linhas.length; i++) {
+    const cols = linhas[i].split(sep).map(c => c.replace(/"/g, '').trim())
+    if (cols.length < 3) continue
+
+    // Detecta padrão por banco
+    let data = '', descricao = '', valorStr = ''
+
+    if (banco === 'bradesco') {
+      // Bradesco: Data;Histórico;Docto;Débito;Crédito;Saldo
+      data       = cols[0]
+      descricao  = cols[1]
+      const deb  = parseFloat(cols[3]?.replace(',', '.') || '0') || 0
+      const cred = parseFloat(cols[4]?.replace(',', '.') || '0') || 0
+      valorStr   = deb > 0 ? `-${deb}` : `${cred}`
+    } else if (banco === 'c6') {
+      // C6: Data;Lançamento;Valor
+      data      = cols[0]
+      descricao = cols[1]
+      valorStr  = cols[2]?.replace(',', '.')
+    } else {
+      // XP / Genérico: Data,Descrição,Valor
+      data      = cols[0]
+      descricao = cols[1]
+      valorStr  = cols[2]?.replace(',', '.')
+    }
+
+    // Normaliza data
+    if (data.includes('/')) {
+      const p = data.split('/')
+      if (p.length === 3) data = p[2].length === 4 ? `${p[2]}-${p[1]}-${p[0]}` : `20${p[2]}-${p[1]}-${p[0]}`
+    }
+
+    const valor = parseFloat(valorStr?.replace(/[^\d.-]/g, '') || '0')
+    if (!valor || isNaN(valor)) continue
+
+    resultados.push({
+      _id: `${data}-${descricao}-${valor}-${i}`,
+      data,
+      descricao: descricao || 'Sem descrição',
+      valor: Math.abs(valor),
+      tipo: valor < 0 ? 'despesa' : 'receita',
+      selecionado: true,
+    })
+  }
+  return resultados
+}
+
+// ── Modal Importar Extrato ────────────────────────────────────
+
+function ModalImportarExtrato({
+  contas, onClose, onSave
+}: { contas: Conta[]; onClose: () => void; onSave: () => void }) {
+  const supabase = createClient()
+  const [banco, setBanco] = useState<'bradesco' | 'c6' | 'xp' | 'generico'>('bradesco')
+  const [contaId, setContaId] = useState(contas[0]?.id || '')
+  const [etapa, setEtapa] = useState<'upload' | 'preview' | 'sucesso'>('upload')
+  const [lancamentos, setLancamentos] = useState<LancamentoImportado[]>([])
+  const [importando, setImportando] = useState(false)
+  const [arrastando, setArrastando] = useState(false)
+  const [erro, setErro] = useState('')
+  const [importados, setImportados] = useState(0)
+
+  const BANCOS = [
+    { id: 'bradesco', label: 'Bradesco',  emoji: '🔴', ext: 'OFX ou CSV' },
+    { id: 'c6',       label: 'C6 Bank',   emoji: '⚫', ext: 'CSV' },
+    { id: 'xp',       label: 'XP Bank',   emoji: '🟡', ext: 'CSV' },
+    { id: 'generico', label: 'Outro banco', emoji: '🏦', ext: 'OFX ou CSV' },
+  ]
+
+  const processarArquivo = (file: File) => {
+    setErro('')
+    const leitor = new FileReader()
+    leitor.onload = (e) => {
+      const conteudo = e.target?.result as string
+      let itens: LancamentoImportado[] = []
+
+      if (file.name.toLowerCase().endsWith('.ofx') || conteudo.includes('<OFX>') || conteudo.includes('<STMTTRN>')) {
+        itens = parsearOFX(conteudo)
+      } else {
+        itens = parsearCSV(conteudo, banco)
+      }
+
+      if (itens.length === 0) {
+        setErro('Nenhum lançamento encontrado. Verifique se o arquivo está correto e o banco está selecionado.')
+        return
+      }
+      setLancamentos(itens)
+      setEtapa('preview')
+    }
+    leitor.readAsText(file, 'latin1')
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setArrastando(false)
+    const file = e.dataTransfer.files[0]
+    if (file) processarArquivo(file)
+  }
+
+  const selecionados = lancamentos.filter(l => l.selecionado)
+  const totalReceita = selecionados.filter(l => l.tipo === 'receita').reduce((a, l) => a + l.valor, 0)
+  const totalDespesa = selecionados.filter(l => l.tipo === 'despesa').reduce((a, l) => a + l.valor, 0)
+
+  const handleImportar = async () => {
+    if (!contaId || selecionados.length === 0) return
+    setImportando(true)
+
+    const rows = selecionados.map(l => ({
+      descricao: l.descricao,
+      valor: l.valor,
+      tipo: l.tipo,
+      regime: 'caixa',
+      status: 'automatico',
+      data_competencia: l.data,
+      data_caixa: l.data,
+      conciliado: true,
+      conta_id: contaId,
+    }))
+
+    const { error } = await supabase.from('lancamentos').insert(rows)
+    if (error) {
+      setErro(`Erro ao salvar: ${error.message}`)
+      setImportando(false)
+      return
+    }
+
+    setImportados(rows.length)
+    setEtapa('sucesso')
+    setImportando(false)
+    onSave()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+          <div>
+            <h2 className="text-sm font-semibold text-zinc-100">Importar Extrato Bancário</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {etapa === 'upload' ? 'Selecione o banco e faça o upload do arquivo' :
+               etapa === 'preview' ? `${lancamentos.length} lançamentos encontrados — revise antes de confirmar` :
+               'Importação concluída!'}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+        </div>
+
+        {/* Etapa 1: Upload */}
+        {etapa === 'upload' && (
+          <div className="p-6 space-y-5">
+            {/* Seleção de banco */}
+            <div>
+              <p className="text-xs text-zinc-400 font-medium mb-2">Qual banco?</p>
+              <div className="grid grid-cols-4 gap-2">
+                {BANCOS.map(b => (
+                  <button key={b.id} onClick={() => setBanco(b.id as any)}
+                    className={`p-3 rounded-xl border-2 text-center transition-all ${
+                      banco === b.id ? 'border-amber-500/60 bg-amber-500/5' : 'border-zinc-700 bg-zinc-800/30 hover:border-zinc-600'
+                    }`}>
+                    <div className="text-xl mb-1">{b.emoji}</div>
+                    <p className="text-xs font-semibold text-zinc-200">{b.label}</p>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">{b.ext}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Seleção de conta */}
+            <div>
+              <label className="text-xs text-zinc-400 font-medium block mb-1.5">Vincular à conta</label>
+              <select className="input text-sm w-full" value={contaId} onChange={e => setContaId(e.target.value)}>
+                {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+
+            {/* Como exportar */}
+            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-zinc-300">📋 Como exportar o extrato do {BANCOS.find(b => b.id === banco)?.label}:</p>
+              {banco === 'bradesco' && <p className="text-xs text-zinc-500">Internet Banking → Extrato → Exportar → Selecionar OFX ou CSV</p>}
+              {banco === 'c6' && <p className="text-xs text-zinc-500">App C6 → Extrato → Exportar → CSV (ícone de compartilhar)</p>}
+              {banco === 'xp' && <p className="text-xs text-zinc-500">XP Investimentos → Conta → Extrato → Exportar CSV</p>}
+              {banco === 'generico' && <p className="text-xs text-zinc-500">No seu banco: acesse o Extrato e exporte no formato OFX, OFC ou CSV.</p>}
+            </div>
+
+            {/* Drop zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setArrastando(true) }}
+              onDragLeave={() => setArrastando(false)}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer ${
+                arrastando ? 'border-amber-500 bg-amber-500/5' : 'border-zinc-700 hover:border-zinc-500'
+              }`}
+              onClick={() => document.getElementById('file-import')?.click()}
+            >
+              <p className="text-3xl mb-2">📂</p>
+              <p className="text-sm font-medium text-zinc-300">Arraste o arquivo aqui ou clique para selecionar</p>
+              <p className="text-xs text-zinc-600 mt-1">Suporte: .OFX, .OFC, .CSV</p>
+              <input id="file-import" type="file" accept=".ofx,.ofc,.csv,.txt" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) processarArquivo(f) }} />
+            </div>
+
+            {erro && <p className="text-xs text-red-400 bg-red-400/10 border border-red-500/20 px-3 py-2 rounded-lg">{erro}</p>}
+          </div>
+        )}
+
+        {/* Etapa 2: Preview */}
+        {etapa === 'preview' && (
+          <div className="flex flex-col max-h-[70vh]">
+            {/* Resumo */}
+            <div className="px-6 py-3 border-b border-zinc-800 grid grid-cols-3 gap-3">
+              <div className="text-center">
+                <p className="text-xs text-zinc-500">Selecionados</p>
+                <p className="text-base font-bold text-zinc-200">{selecionados.length}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-zinc-500">Receitas</p>
+                <p className="text-sm font-bold text-emerald-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalReceita)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-zinc-500">Despesas</p>
+                <p className="text-sm font-bold text-red-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalDespesa)}</p>
+              </div>
+            </div>
+
+            {/* Tabela de prévia */}
+            <div className="flex-1 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-zinc-900">
+                  <tr className="border-b border-zinc-800">
+                    <th className="py-2 px-4 text-left">
+                      <input type="checkbox" checked={lancamentos.every(l => l.selecionado)}
+                        onChange={e => setLancamentos(prev => prev.map(l => ({ ...l, selecionado: e.target.checked })))} />
+                    </th>
+                    <th className="py-2 px-2 text-left text-zinc-500">Data</th>
+                    <th className="py-2 px-2 text-left text-zinc-500">Descrição</th>
+                    <th className="py-2 px-2 text-right text-zinc-500">Valor</th>
+                    <th className="py-2 px-2 text-center text-zinc-500">Tipo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lancamentos.map(l => (
+                    <tr key={l._id} className={`border-b border-zinc-800/50 ${!l.selecionado ? 'opacity-40' : ''}`}>
+                      <td className="py-2 px-4">
+                        <input type="checkbox" checked={l.selecionado}
+                          onChange={() => setLancamentos(prev => prev.map(x => x._id === l._id ? { ...x, selecionado: !x.selecionado } : x))} />
+                      </td>
+                      <td className="py-2 px-2 text-zinc-400 whitespace-nowrap">{l.data}</td>
+                      <td className="py-2 px-2 text-zinc-300 max-w-[260px] truncate">{l.descricao}</td>
+                      <td className={`py-2 px-2 text-right font-semibold whitespace-nowrap ${l.tipo === 'receita' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {l.tipo === 'receita' ? '+' : '-'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(l.valor)}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        <select className="text-[10px] bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-300"
+                          value={l.tipo}
+                          onChange={e => setLancamentos(prev => prev.map(x => x._id === l._id ? { ...x, tipo: e.target.value as any } : x))}>
+                          <option value="receita">Receita</option>
+                          <option value="despesa">Despesa</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {erro && <p className="text-xs text-red-400 px-6 py-2">{erro}</p>}
+
+            {/* Ações */}
+            <div className="flex gap-3 px-6 py-4 border-t border-zinc-800 bg-zinc-900">
+              <button onClick={() => setEtapa('upload')} className="btn-secondary text-xs">← Voltar</button>
+              <button onClick={handleImportar} disabled={importando || selecionados.length === 0} className="btn-primary text-xs flex-1">
+                {importando ? '⏳ Importando...' : `✅ Importar ${selecionados.length} lançamentos`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Etapa 3: Sucesso */}
+        {etapa === 'sucesso' && (
+          <div className="p-10 flex flex-col items-center gap-4 text-center">
+            <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center">
+              <span className="text-3xl">✅</span>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-emerald-400">{importados} lançamentos importados!</p>
+              <p className="text-sm text-zinc-500 mt-1">Todos já aparecem no módulo Financeiro e no gráfico de receitas vs despesas.</p>
+            </div>
+            <button onClick={onClose} className="btn-primary text-sm px-8">Fechar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Modais ─────────────────────────────────────────────────────
+
 
 function ModalConta({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
   const { insert, loading } = useSupabaseMutation('contas')
@@ -275,6 +630,7 @@ function ModalLancamento({
 export default function FinanceiroClient() {
   const [modalLancamento, setModalLancamento] = useState(false)
   const [modalConta, setModalConta] = useState(false)
+  const [modalImport, setModalImport] = useState(false)
 
   const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true } })
   const { data: categorias } = useSupabaseQuery<CategoriaFinanceira>('categorias_financeiras', { orderBy: { column: 'nome', ascending: true } })
@@ -309,7 +665,7 @@ export default function FinanceiroClient() {
         title="Financeiro"
         subtitle="Contas PF/PJ · Caixa · Conciliação · Previsão"
       >
-        <button className="btn-secondary">Importar extrato</button>
+        <button onClick={() => setModalImport(true)} className="btn-secondary">📥 Importar extrato</button>
         <button onClick={() => setModalLancamento(true)} className="btn-primary" disabled={contas.length === 0}>+ Lançamento</button>
       </PageHeader>
 
@@ -473,20 +829,70 @@ export default function FinanceiroClient() {
           <EmptyState message="Nenhuma recorrência configurada" />
         </div>
 
-        {/* Receitas vs Despesas (Placeholder visual) */}
+        {/* Receitas vs Despesas — dados reais */}
         <div className="bg-[#111827] border border-white/5 rounded-xl p-5 lg:col-span-2">
-          <h2 className="section-title">Receitas vs Despesas — últimos 6 meses</h2>
-          <div className="h-32 flex items-end justify-between px-6 opacity-30 pointer-events-none mt-6 border-b border-zinc-800 pb-2">
-            {[40, 60, 30, 80, 50, 90].map((h, i) => (
-               <div key={i} className="w-8 flex gap-1 items-end h-full">
-                  <div className="w-1/2 bg-emerald-500 rounded-t-sm" style={{ height: `${h}%` }}></div>
-                  <div className="w-1/2 bg-red-500 rounded-t-sm" style={{ height: `${h * 0.7}%` }}></div>
-               </div>
-            ))}
+          <h2 className="section-title mb-4">Receitas vs Despesas — últimos 6 meses</h2>
+          {(() => {
+            // Gera os últimos 6 meses
+            const meses = Array.from({ length: 6 }, (_, i) => {
+              const d = new Date()
+              d.setMonth(d.getMonth() - (5 - i))
+              return {
+                prefix: d.toISOString().substring(0, 7),
+                label: d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+              }
+            })
+            const data = meses.map(m => ({
+              label: m.label,
+              receita: lancamentos.filter(l => l.tipo === 'receita' && l.data_competencia?.startsWith(m.prefix)).reduce((a, l) => a + l.valor, 0),
+              despesa: lancamentos.filter(l => l.tipo === 'despesa' && l.data_competencia?.startsWith(m.prefix)).reduce((a, l) => a + l.valor, 0),
+            }))
+            const maxVal = Math.max(...data.flatMap(d => [d.receita, d.despesa]), 1)
+            const hasData = data.some(d => d.receita > 0 || d.despesa > 0)
+            return hasData ? (
+              <div className="flex items-end justify-between gap-2 h-36 px-2 border-b border-zinc-800 pb-2">
+                {data.map((d, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full flex items-end justify-center gap-1 h-28">
+                      <div
+                        title={`Receita: R$ ${d.receita.toFixed(2)}`}
+                        className="w-1/2 bg-emerald-500/70 hover:bg-emerald-500 rounded-t transition-all"
+                        style={{ height: `${(d.receita / maxVal) * 100}%`, minHeight: d.receita > 0 ? '4px' : '0' }}
+                      />
+                      <div
+                        title={`Despesa: R$ ${d.despesa.toFixed(2)}`}
+                        className="w-1/2 bg-red-500/70 hover:bg-red-500 rounded-t transition-all"
+                        style={{ height: `${(d.despesa / maxVal) * 100}%`, minHeight: d.despesa > 0 ? '4px' : '0' }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-zinc-600 capitalize">{d.label}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-36 flex flex-col items-center justify-center gap-2">
+                <p className="text-xs text-zinc-600">Nenhum lançamento ainda. Registre receitas e despesas para ver o gráfico.</p>
+                <div className="flex gap-4 text-[10px] text-zinc-700">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500/70 inline-block"/> Receitas</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-500/70 inline-block"/> Despesas</span>
+                </div>
+              </div>
+            )
+          })()}
+          <div className="flex gap-4 text-[10px] text-zinc-600 mt-3 justify-center">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500/70 inline-block"/> Receitas</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-500/70 inline-block"/> Despesas</span>
           </div>
-          <p className="text-center text-xs text-zinc-600 mt-3 font-medium tracking-wide">Módulo de IA conectando dados...</p>
         </div>
       </div>
+
+      {modalImport && (
+        <ModalImportarExtrato
+          contas={contas}
+          onClose={() => setModalImport(false)}
+          onSave={refreshAll}
+        />
+      )}
 
       {modalLancamento && (
         <ModalLancamento

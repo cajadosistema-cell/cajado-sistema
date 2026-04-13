@@ -104,6 +104,78 @@ router.post("/", authMiddleware, async (req, res) => {
   return res.json({ ok: true });
 });
 
+// ─── CONFIGURAR API OFICIAL META (Cloud API) ────────────────────
+router.post("/configurar-oficial", authMiddleware, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ erro: "Apenas admins" });
+
+  const { phoneNumberId, accessToken, webhookVerifyToken, businessAccountId } = req.body;
+  if (!phoneNumberId || !accessToken || !webhookVerifyToken) {
+    return res.status(400).json({ erro: "phoneNumberId, accessToken e webhookVerifyToken são obrigatórios" });
+  }
+
+  // 1. Valida o token consultando a Meta Graph API
+  try {
+    const verifyRes = await axios.get(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}`,
+      { params: { access_token: accessToken } }
+    );
+    const metaDados = verifyRes.data;
+    console.log(`[Meta Cloud API] Número verificado: ${metaDados?.display_phone_number || phoneNumberId}`);
+
+    // 2. Salva no Supabase
+    const novoCanal = {
+      empresa_id: req.user.empresa_id,
+      nome: metaDados?.display_phone_number || `WhatsApp Oficial (${phoneNumberId})`,
+      tipo: "cloud_api",
+      status: "conectado",
+      dados_conexao: {
+        phone_number_id: phoneNumberId,
+        access_token: accessToken,           // Em produção: criptografar antes de salvar
+        webhook_verify_token: webhookVerifyToken,
+        business_account_id: businessAccountId || null,
+        display_phone_number: metaDados?.display_phone_number || null,
+        verified_name: metaDados?.verified_name || null,
+        ativo: true,
+      }
+    };
+
+    if (supabase) {
+      // Remove canal oficial anterior da empresa, se existir
+      await supabase.from("canais")
+        .delete()
+        .eq("empresa_id", req.user.empresa_id)
+        .eq("tipo", "cloud_api");
+
+      const { error } = await supabase.from("canais").insert([novoCanal]);
+      if (error) throw new Error(error.message);
+    }
+
+    // 3. Registra em memória para roteamento de mensagens recebidas
+    canaisMemoria.set(phoneNumberId, req.user.empresa_id);
+
+    console.log(`[Meta Cloud API] ✅ Canal configurado para empresa ${req.user.empresa_id} | ${phoneNumberId}`);
+    return res.json({
+      ok: true,
+      numero: metaDados?.display_phone_number || phoneNumberId,
+      nome_verificado: metaDados?.verified_name || null,
+      mensagem: "API Oficial Meta configurada com sucesso!"
+    });
+
+  } catch (err) {
+    const metaError = err?.response?.data?.error;
+    if (metaError) {
+      console.error("[Meta Cloud API] Erro de validação:", metaError);
+      return res.status(400).json({
+        erro: `Token inválido: ${metaError.message || "Verifique o Phone Number ID e o Token de Acesso"}`,
+        codigo: metaError.code
+      });
+    }
+    console.error("[Meta Cloud API] Erro:", err.message);
+    return res.status(500).json({ erro: "Erro ao validar credenciais com a Meta" });
+  }
+});
+
+
 // ─── DELETAR CANAL ─────────────────────────────────────────────────────────
 router.delete("/:id", authMiddleware, async (req, res) => {
   const { id } = req.params;

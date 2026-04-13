@@ -1,1 +1,0 @@
-self.__REACT_LOADABLE_MANIFEST="{\"app\\\\(dashboard)\\\\cajado\\\\cajado-client.tsx -> @/lib/supabase/client\":{\"id\":\"app\\\\(dashboard)\\\\cajado\\\\cajado-client.tsx -> @/lib/supabase/client\",\"files\":[]},\"app\\\\inicio\\\\inicio-client.tsx -> @/lib/supabase/client\":{\"id\":\"app\\\\inicio\\\\inicio-client.tsx -> @/lib/supabase/client\",\"files\":[]}}"

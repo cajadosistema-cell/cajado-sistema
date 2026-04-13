@@ -71,9 +71,11 @@ export function Sidebar() {
           setPermissoes(func.permissoes || [])
           setUserData({ nome: func.nome, cargo: func.cargo || (isUserAdmin ? 'Administrador' : 'Membro') })
         } else {
-          // É o dono / admin
+          // É o dono / admin (auth account sem registro na tabela de funcionários)
           setIsAdmin(true)
-          setUserData({ nome: 'Maiara', cargo: 'CEO · Cajado' })
+          const emailBase = user.email ? user.email.split('@')[0] : 'Admin'
+          const nomeCap = emailBase.charAt(0).toUpperCase() + emailBase.slice(1)
+          setUserData({ nome: nomeCap, cargo: 'Administrador' })
         }
       }
     }

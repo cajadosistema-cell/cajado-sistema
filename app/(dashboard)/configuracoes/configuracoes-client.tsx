@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Funcionario = {
@@ -166,10 +167,73 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
 
 // ── Client Component ────────────────────────────────────────────
 export default function ConfiguracoesClient() {
+  const supabase = createClient()
   const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+
+  // Estado controlado dos campos da empresa
+  const [empresa, setEmpresa] = useState({
+    nome_fantasia: 'Sistema Cajado',
+    razao_social: '',
+    cnpj: '',
+    inscricao_estadual: '',
+    email_suporte: '',
+    whatsapp_principal: '',
+    website: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    bairro: '',
+    cidade_estado: '',
+  })
+
+  // Carregar dados existentes do Supabase
+  useEffect(() => {
+    supabase
+      .from('configuracoes_empresa')
+      .select('*')
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data) setEmpresa(prev => ({ ...prev, ...data }))
+      })
+  }, [])
+
+  // Salvar no Supabase
+  const handleSaveEmpresa = async () => {
+    setSaving(true)
+    setSaveMsg('')
+    try {
+      // Tenta buscar se já existe algum registro
+      const { data: existing } = await supabase
+        .from('configuracoes_empresa')
+        .select('id')
+        .limit(1)
+        .single()
+
+      if (existing?.id) {
+        await supabase
+          .from('configuracoes_empresa')
+          .update(empresa)
+          .eq('id', existing.id)
+      } else {
+        await supabase
+          .from('configuracoes_empresa')
+          .insert(empresa)
+      }
+      setSaveMsg('ok')
+      setTimeout(() => setSaveMsg(''), 3000)
+    } catch (err) {
+      setSaveMsg('erro')
+      setTimeout(() => setSaveMsg(''), 4000)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -252,19 +316,26 @@ export default function ConfiguracoesClient() {
                   </div>
                   <div>
                     <label className="label">Nome Fantasia (Como aparece no sistema)</label>
-                    <input className="input mt-1" defaultValue="Sistema Cajado" />
+                    <input className="input mt-1" value={empresa.nome_fantasia}
+                      onChange={e => setEmpresa(p => ({...p, nome_fantasia: e.target.value}))} />
                   </div>
                   <div>
                     <label className="label">Razão Social Jurídica</label>
-                    <input className="input mt-1" defaultValue="VisioPro Agência de Marketing LTDA" />
+                    <input className="input mt-1" value={empresa.razao_social}
+                      placeholder="VisioPro Agência de Marketing LTDA"
+                      onChange={e => setEmpresa(p => ({...p, razao_social: e.target.value}))} />
                   </div>
                   <div>
                     <label className="label">CNPJ</label>
-                    <input className="input mt-1" defaultValue="42.123.456/0001-89" />
+                    <input className="input mt-1" value={empresa.cnpj}
+                      placeholder="00.000.000/0001-00"
+                      onChange={e => setEmpresa(p => ({...p, cnpj: e.target.value}))} />
                   </div>
                   <div>
                     <label className="label">Inscrição Estadual (IE)</label>
-                    <input className="input mt-1" placeholder="000.000.000.000" />
+                    <input className="input mt-1" value={empresa.inscricao_estadual}
+                      placeholder="000.000.000.000"
+                      onChange={e => setEmpresa(p => ({...p, inscricao_estadual: e.target.value}))} />
                   </div>
                 </div>
               </div>
@@ -275,15 +346,21 @@ export default function ConfiguracoesClient() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                   <div>
                     <label className="label">Email de Faturamento/Suporte</label>
-                    <input className="input mt-1" type="email" defaultValue="contato@visiopro.com.br" />
+                    <input className="input mt-1" type="email" value={empresa.email_suporte}
+                      placeholder="contato@empresa.com.br"
+                      onChange={e => setEmpresa(p => ({...p, email_suporte: e.target.value}))} />
                   </div>
                   <div>
                     <label className="label">WhatsApp (Nº Principal) *</label>
-                    <input className="input mt-1" type="tel" defaultValue="+55 (11) 99999-9999" />
+                    <input className="input mt-1" type="tel" value={empresa.whatsapp_principal}
+                      placeholder="+55 (11) 99999-9999"
+                      onChange={e => setEmpresa(p => ({...p, whatsapp_principal: e.target.value}))} />
                   </div>
                   <div>
                     <label className="label">Website ou Landing Page</label>
-                    <input className="input mt-1" type="url" defaultValue="https://cajado.app/" />
+                    <input className="input mt-1" type="url" value={empresa.website}
+                      placeholder="https://meusite.com.br"
+                      onChange={e => setEmpresa(p => ({...p, website: e.target.value}))} />
                   </div>
                 </div>
               </div>
@@ -294,42 +371,44 @@ export default function ConfiguracoesClient() {
                 <div className="grid grid-cols-6 gap-4 mt-4">
                   <div className="col-span-6 md:col-span-2">
                     <label className="label">CEP *</label>
-                    <input className="input mt-1" placeholder="00000-000" />
+                    <input className="input mt-1" value={empresa.cep}
+                      placeholder="00000-000"
+                      onChange={e => setEmpresa(p => ({...p, cep: e.target.value}))} />
                   </div>
                   <div className="col-span-6 md:col-span-4">
                     <label className="label">Logradouro / Avenida</label>
-                    <input className="input mt-1" placeholder="Ex: Av. Paulista, Jardim Botânico..." />
+                    <input className="input mt-1" value={empresa.logradouro}
+                      placeholder="Ex: Av. Paulista, Jardim Botânico..."
+                      onChange={e => setEmpresa(p => ({...p, logradouro: e.target.value}))} />
                   </div>
                   <div className="col-span-3 md:col-span-2">
                     <label className="label">Número</label>
-                    <input className="input mt-1" placeholder="Ex: 1000 - Sala 42" />
+                    <input className="input mt-1" value={empresa.numero}
+                      placeholder="Ex: 1000 - Sala 42"
+                      onChange={e => setEmpresa(p => ({...p, numero: e.target.value}))} />
                   </div>
                   <div className="col-span-3 md:col-span-2">
                     <label className="label">Bairro</label>
-                    <input className="input mt-1" placeholder="Bairro" />
+                    <input className="input mt-1" value={empresa.bairro}
+                      placeholder="Bairro"
+                      onChange={e => setEmpresa(p => ({...p, bairro: e.target.value}))} />
                   </div>
                   <div className="col-span-6 md:col-span-2">
                     <label className="label">Cidade / Estado (UF)</label>
-                    <input className="input mt-1" placeholder="São Paulo / SP" />
+                    <input className="input mt-1" value={empresa.cidade_estado}
+                      placeholder="São Paulo / SP"
+                      onChange={e => setEmpresa(p => ({...p, cidade_estado: e.target.value}))} />
                   </div>
                 </div>
               </div>
-                            <div className="sticky bottom-6 mt-8 flex justify-end z-50 w-full pr-2 pointer-events-none">
-                <button 
-                  onClick={() => {
-                    const btn = document.getElementById('btn-salvar-emp')
-                    if (btn) btn.innerHTML = '⏳ Salvando...'
-                    setTimeout(() => {
-                       if (btn) btn.innerHTML = '✓ Alterações Salvas com Sucesso!'
-                       setTimeout(() => {
-                           if (btn) btn.innerHTML = '✓ Salvar Todas Alterações da Empresa'
-                       }, 3000)
-                    }, 1200)
-                  }}
+              <div className="sticky bottom-6 mt-8 flex justify-end z-50 w-full pr-2 pointer-events-none">
+                <button
                   id="btn-salvar-emp"
-                  className="btn-primary pointer-events-auto flex gap-2 items-center px-8 py-4 text-[15px] font-bold shadow-[0_10px_40px_rgba(245,166,35,0.7)] hover:shadow-[0_10px_50px_rgba(245,166,35,0.9)] hover:-translate-y-1 transition-all rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 border-4 border-zinc-950"
+                  onClick={handleSaveEmpresa}
+                  disabled={saving}
+                  className="btn-primary pointer-events-auto flex gap-2 items-center px-8 py-4 text-[15px] font-bold shadow-[0_10px_40px_rgba(245,166,35,0.7)] hover:shadow-[0_10px_50px_rgba(245,166,35,0.9)] hover:-translate-y-1 transition-all rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 border-4 border-zinc-950 disabled:opacity-60"
                 >
-                  ✓ Salvar Todas Alterações da Empresa
+                  {saving ? '⏳ Salvando...' : saveMsg === 'ok' ? '✅ Salvo com Sucesso!' : saveMsg === 'erro' ? '❌ Erro ao salvar' : '✓ Salvar Todas Alterações da Empresa'}
                 </button>
               </div>
             </div>

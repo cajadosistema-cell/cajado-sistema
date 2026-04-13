@@ -445,27 +445,29 @@ function LeadDrawer({
 }
 
 // ── Card de Lead (Kanban) ────────────────────────────────────
-function LeadCard({ lead, onClick }: { lead: Lead; onClick: () => void }) {
+function LeadCard({ lead, onClick, onDragStart }: { lead: Lead; onClick: () => void; onDragStart?: (e: React.DragEvent) => void }) {
   const atrasado = lead.proximo_followup && new Date(lead.proximo_followup) < new Date()
 
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
       onClick={onClick}
-      className="card-sm cursor-pointer hover:bg-zinc-800/80 transition-all group space-y-2"
+      className="card-sm cursor-grab active:cursor-grabbing hover:bg-zinc-800/80 transition-all group space-y-2 relative border border-zinc-800/50 hover:border-zinc-700 hover:shadow-lg hover:-translate-y-0.5"
     >
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 pointer-events-none">
           <span className="text-base">{ORIGEM_ICONS[lead.origem]}</span>
           <p className="text-sm font-medium text-zinc-200 group-hover:text-amber-400 transition-colors leading-tight">
             {lead.nome}
           </p>
         </div>
-        {atrasado && <span className="text-red-400 text-xs shrink-0">⚠</span>}
+        {atrasado && <span className="text-red-400 text-xs shrink-0 pointer-events-none">⚠</span>}
       </div>
       {lead.servico_interesse && (
-        <p className="text-xs text-zinc-500 truncate">{lead.servico_interesse}</p>
+        <p className="text-xs text-zinc-500 truncate pointer-events-none">{lead.servico_interesse}</p>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pointer-events-none">
         {lead.valor_estimado ? (
           <span className="text-xs font-semibold text-amber-400">{formatCurrency(lead.valor_estimado)}</span>
         ) : <span />}
@@ -668,18 +670,37 @@ function TabRelatorio({ leads }: { leads: Lead[] }) {
   )
 }
 
-// ── Main ─────────────────────────────────────────────────────
 export default function CajadoClient() {
   const [tab, setTab] = useState<'kanban' | 'lista' | 'parceiros' | 'relatorio'>('kanban')
   const [modalLead, setModalLead] = useState(false)
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null)
   const [leadEditando, setLeadEditando] = useState<Lead | null>(null)
   const [busca, setBusca] = useState('')
+  const [toastAtivo, setToastAtivo] = useState('')
 
   const { data: leads, refetch } = useSupabaseQuery<Lead>('leads', {
     select: '*, parceiros(nome), perfis(nome)',
     orderBy: { column: 'updated_at', ascending: false },
   })
+  const { update: updateLead } = useSupabaseMutation('leads')
+
+  const handleDrop = async (e: React.DragEvent, newStatus: Lead['status']) => {
+    e.preventDefault()
+    const leadId = e.dataTransfer.getData('text/plain')
+    if (!leadId) return
+    const lead = leads.find(l => l.id === leadId)
+    if (!lead || lead.status === newStatus) return
+
+    await updateLead(lead.id, { status: newStatus, ultimo_contato: new Date().toISOString() })
+    
+    // Automação: se caiu no "Cliente Ativo"
+    if (newStatus === 'cliente_ativo') {
+      setToastAtivo(`🤖 Zap de boas-vindas / serviço concluído enviado para: ${lead.nome}!`)
+      setTimeout(() => setToastAtivo(''), 4000)
+    }
+
+    refetch()
+  }
 
   // Métricas
   const leadsAtivos = leads.filter(l => l.status !== 'perdido')
@@ -754,7 +775,11 @@ export default function CajadoClient() {
             const cfg = STATUS_CONFIG[status]
             const leadsColuna = leadsFiltrados.filter(l => l.status === status)
             return (
-              <div key={status}>
+              <div key={status}
+                   onDragOver={e => e.preventDefault()}
+                   onDrop={e => handleDrop(e, status)}
+                   className="flex-1 flex flex-col transition-colors border border-transparent hover:border-zinc-800 rounded-xl bg-zinc-900/30 p-1"
+                >
                 <div className={cn('flex items-center justify-between mb-3 px-1')}>
                   <div className="flex items-center gap-2">
                     <span className={cn('text-xs font-semibold', cfg.color)}>{cfg.label}</span>
@@ -768,14 +793,22 @@ export default function CajadoClient() {
                     </span>
                   )}
                 </div>
-                <div className="space-y-2 min-h-[120px]">
+                <div className="space-y-2 flex-1 relative min-h-[120px]">
                   {leadsColuna.length === 0 ? (
-                    <div className={cn('border-2 border-dashed rounded-xl p-4 text-center', cfg.border)}>
-                      <p className="text-xs text-zinc-600">Sem leads aqui</p>
+                    <div className={cn('absolute inset-0 flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center transition-colors hover:bg-zinc-800/30', cfg.border)}>
+                      <p className="text-xs text-zinc-600 font-medium">Solte o Card aqui</p>
                     </div>
                   ) : (
-                    leadsColuna.map(l => (
-                      <LeadCard key={l.id} lead={l} onClick={() => setLeadSelecionado(l)} />
+                    leadsColuna.map(lead => (
+                      <LeadCard 
+                        key={lead.id} 
+                        lead={lead} 
+                        onClick={() => setLeadSelecionado(lead)} 
+                        onDragStart={e => {
+                          e.dataTransfer.setData('text/plain', lead.id)
+                          e.dataTransfer.effectAllowed = 'move'
+                        }}
+                      />
                     ))
                   )}
                 </div>

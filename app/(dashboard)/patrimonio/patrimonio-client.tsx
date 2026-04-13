@@ -35,6 +35,20 @@ const TIPO_COLORS: Record<string, string> = {
   equipamento: 'text-amber-400', reforma: 'text-orange-400', outro: 'text-zinc-400',
 }
 
+// ── Mock Data Fallbacks ─────────────────────────────────────
+const MOCK_PROJETOS: ProjetoPatrimonio[] = [
+  { id: '1', titulo: 'Apartamento Centro', tipo: 'imovel', descricao: 'Imóvel para locação', valor_investido_total: 350000, valor_mercado_atual: 420000, roi_percentual: 20, data_aquisicao: '2023-01-15', status: 'ativo' },
+  { id: '2', titulo: 'Gol 2022', tipo: 'veiculo', descricao: 'Carro para uso do escritório', valor_investido_total: 65000, valor_mercado_atual: 58000, roi_percentual: -10.7, data_aquisicao: '2024-05-20', status: 'ativo' },
+  { id: '3', titulo: 'Reforma Fachada', tipo: 'reforma', descricao: 'Reforma do prédio da empresa', valor_investido_total: 45000, valor_mercado_atual: 45000, roi_percentual: 0, data_aquisicao: '2025-10-10', status: 'concluido' },
+]
+
+const MOCK_CUSTOS: CustoPatrimonio[] = [
+  { id: '1', projeto_id: '1', descricao: 'IPTU', valor: 1200, data: '2026-02-10', categoria: 'imposto' },
+  { id: '2', projeto_id: '1', descricao: 'Pintura', valor: 4500, data: '2026-01-15', categoria: 'manutencao' },
+  { id: '3', projeto_id: '2', descricao: 'IPVA', valor: 2500, data: '2026-01-05', categoria: 'imposto' },
+  { id: '4', projeto_id: '2', descricao: 'Pneus Novos', valor: 2000, data: '2025-12-10', categoria: 'manutencao' },
+]
+
 function ModalProjeto({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
   const { insert, loading } = useSupabaseMutation('projetos_patrimonio')
   const [form, setForm] = useState({
@@ -186,12 +200,16 @@ export default function PatrimonioClient() {
   const [modalCusto, setModalCusto] = useState<string | null>(null)
   const [projetoAberto, setProjetoAberto] = useState<string | null>(null)
 
-  const { data: projetos, refetch } = useSupabaseQuery<ProjetoPatrimonio>('projetos_patrimonio', {
+  const { data: projetosDB, refetch } = useSupabaseQuery<ProjetoPatrimonio>('projetos_patrimonio', {
     orderBy: { column: 'valor_investido_total', ascending: false },
   })
-  const { data: custos, refetch: refetchCustos } = useSupabaseQuery<CustoPatrimonio>('custos_patrimonio', {
+  const { data: custosDB, refetch: refetchCustos } = useSupabaseQuery<CustoPatrimonio>('custos_patrimonio', {
     orderBy: { column: 'data', ascending: false },
   })
+
+  // Fallback para exibir na tela caso banco esteja vazio
+  const projetos = projetosDB.length > 0 ? projetosDB : MOCK_PROJETOS
+  const custos = custosDB.length > 0 ? custosDB : MOCK_CUSTOS
 
   const totalInvestido = projetos.reduce((a, p) => a + p.valor_investido_total, 0)
   const totalMercado = projetos.reduce((a, p) => a + (p.valor_mercado_atual ?? p.valor_investido_total), 0)

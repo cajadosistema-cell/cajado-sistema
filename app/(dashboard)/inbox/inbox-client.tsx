@@ -106,9 +106,13 @@ function ConversaItem({
   )
 }
 
-function MensagemBubble({ msg }: { msg: { tipo: string; texto: string; timestamp: string } }) {
+function MensagemBubble({ msg }: { msg: { tipo: string; texto: string; timestamp: string; transcricao?: string } }) {
   const isEnviada = msg.tipo === 'enviada' || msg.tipo === 'bot'
   const isInterna = msg.tipo === 'interna'
+  const isAudio = msg.texto.toLowerCase().includes('[áudio]') || msg.texto.toLowerCase().includes('audio') || msg.tipo === 'audio'
+  
+  // Fake transcription for demo purposes if it's an audio message but doesn't have transcription yet
+  const transcricaoUI = msg.transcricao || (isAudio && !isEnviada ? "Transcrevendo áudio..." : null)
 
   return (
     <div className={cn('flex mb-2', isEnviada ? 'justify-end' : 'justify-start')}>
@@ -124,6 +128,17 @@ function MensagemBubble({ msg }: { msg: { tipo: string; texto: string; timestamp
       >
         {isInterna && <span className="text-amber-500 mr-1">📝</span>}
         <span style={{ whiteSpace: 'pre-wrap' }}>{msg.texto}</span>
+        
+        {/* Bloco de Transcrição de Áudio gerado por IA */}
+        {transcricaoUI && (
+          <div className="mt-2 text-xs bg-zinc-900/50 p-2 rounded border border-zinc-700/50">
+            <p className="text-[10px] text-zinc-500 font-bold mb-0.5 flex items-center gap-1">
+              ✨ Transcrição de Áudio
+            </p>
+            <p className="text-zinc-300 italic">"{transcricaoUI}"</p>
+          </div>
+        )}
+
         <p className="text-[10px] mt-1 opacity-50 text-right">
           {new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -132,225 +147,285 @@ function MensagemBubble({ msg }: { msg: { tipo: string; texto: string; timestamp
   )
 }
 
-// ── Painel de contexto do cliente (dados do Cajado) ────────────
+// ── Painel CRM integrado (Inbox → CRM Cajado) ─────────────────
 
-function PainelCliente({ numero }: { numero: string }) {
-  const [cliente, setCliente] = useState<ClienteCajado | null>(null)
-  const [vendas, setVendas] = useState<VendaCajado[]>([])
-  const [loading, setLoading] = useState(true)
+const STATUS_CONFIG_CRM: Record<string, { label: string; color: string; bg: string }> = {
+  novo:          { label: 'Novo',          color: 'text-blue-400',    bg: 'bg-blue-500/10' },
+  proposta:      { label: 'Proposta',      color: 'text-amber-400',   bg: 'bg-amber-500/10' },
+  retomar:       { label: 'Retomar',       color: 'text-purple-400',  bg: 'bg-purple-500/10' },
+  cliente_ativo: { label: 'Cliente Ativo', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+  perdido:       { label: 'Perdido',       color: 'text-zinc-500',    bg: 'bg-zinc-800' },
+}
+const STATUS_PIPELINE = ['novo', 'proposta', 'retomar', 'cliente_ativo', 'perdido'] as const
+
+function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
   const supabase = createClient()
+  const [lead, setLead] = useState<any>(null)
+  const [atividades, setAtividades] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [criando, setCriando] = useState(false)
+  const [novaAtiv, setNovaAtiv] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [novoNome, setNovoNome] = useState(nome || '')
 
-  useEffect(() => {
-    if (!numero) return
-    const telefone = normalizePhone(numero)
+  const telefone = normalizePhone(numero)
+
+  const buscarLead = async () => {
     setLoading(true)
+    const { data } = await supabase
+      .from('leads')
+      .select('*')
+      .ilike('telefone', `%${telefone}%`)
+      .limit(1)
+      .single()
+    setLead(data || null)
 
-    Promise.all([
-      supabase
-        .from('clientes')
-        .select('id, nome, telefone, total_compras, total_gasto, ultima_compra')
-        .ilike('telefone', `%${telefone}%`)
-        .limit(1)
-        .single(),
-    ]).then(([{ data }]) => {
-      const cli = data as any;
-      if (cli) {
-        setCliente(cli as ClienteCajado)
-        supabase
-          .from('vendas')
-          .select('id, numero, status, status_pagamento, total, total_a_receber, data_abertura')
-          .eq('cliente_id', cli.id)
-          .order('data_abertura', { ascending: false })
-          .limit(5)
-          .then(({ data }) => setVendas((data as VendaCajado[]) || []))
-      } else {
-        setCliente(null)
-        setVendas([])
-      }
-      setLoading(false)
-    })
-  }, [numero])
+    if (data) {
+      const { data: ativs } = await supabase
+        .from('atividades')
+        .select('*')
+        .eq('lead_id', data.id)
+        .order('realizado_em', { ascending: false })
+        .limit(5)
+      setAtividades(ativs || [])
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { if (numero) buscarLead() }, [numero])
+
+  const mudarStatus = async (status: string) => {
+    if (!lead) return
+    await supabase.from('leads').update({ status, ultimo_contato: new Date().toISOString() }).eq('id', lead.id)
+    setLead((l: any) => ({ ...l, status }))
+  }
+
+  const registrarAtividade = async () => {
+    if (!lead || !novaAtiv.trim()) return
+    setSalvando(true)
+    const { data: nova } = await supabase.from('atividades').insert({
+      lead_id: lead.id,
+      tipo: 'mensagem',
+      descricao: novaAtiv.trim(),
+      realizado_em: new Date().toISOString(),
+    }).select().single()
+    if (nova) setAtividades(prev => [nova, ...prev])
+    setNovaAtiv('')
+    setSalvando(false)
+  }
+
+  const criarLead = async () => {
+    if (!novoNome.trim()) return
+    setSalvando(true)
+    const { data: novo } = await supabase.from('leads').insert({
+      nome: novoNome.trim(),
+      telefone: telefone,
+      origem: 'whatsapp',
+      status: 'novo',
+      ultimo_contato: new Date().toISOString(),
+    }).select().single()
+    if (novo) { setLead(novo); setCriando(false) }
+    setSalvando(false)
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-32">
-      <p className="text-xs text-zinc-600">Buscando cliente...</p>
+      <p className="text-xs text-zinc-600 animate-pulse">Buscando no CRM...</p>
     </div>
   )
 
-  if (!cliente) return (
-    <div className="p-4">
-      <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-        <p className="text-sm text-zinc-400 mb-1">Cliente não encontrado</p>
-        <p className="text-xs text-zinc-600 mb-3">Número: {numero}</p>
-        <a
-          href={`/clientes/novo?telefone=${numero}`}
-          className="btn-primary text-xs block text-center"
+  if (!lead && !criando) return (
+    <div className="p-4 space-y-3">
+      <div className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl p-4 text-center space-y-2">
+        <p className="text-2xl">🔍</p>
+        <p className="text-sm font-medium text-zinc-300">Não encontrado no CRM</p>
+        <p className="text-xs text-zinc-600 font-mono">{telefone}</p>
+        <button
+          onClick={() => { setNovoNome(nome || ''); setCriando(true) }}
+          className="w-full mt-2 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/25 transition-colors"
         >
-          + Criar cliente
-        </a>
+          + Adicionar ao CRM
+        </button>
       </div>
     </div>
   )
 
-  const aReceber = vendas.reduce((a, v) => a + (v.total_a_receber || 0), 0)
+  if (criando) return (
+    <div className="p-4 space-y-3">
+      <p className="text-xs text-zinc-400 font-semibold">Novo lead via WhatsApp</p>
+      <input
+        className="input w-full text-sm"
+        placeholder="Nome do contato *"
+        value={novoNome}
+        onChange={e => setNovoNome(e.target.value)}
+      />
+      <input className="input w-full text-sm" value={telefone} disabled />
+      <div className="flex gap-2">
+        <button onClick={() => setCriando(false)} className="btn-secondary text-xs flex-1">Cancelar</button>
+        <button onClick={criarLead} disabled={salvando || !novoNome.trim()} className="btn-primary text-xs flex-1">
+          {salvando ? 'Criando...' : 'Criar Lead'}
+        </button>
+      </div>
+    </div>
+  )
+
+  const cfg = STATUS_CONFIG_CRM[lead.status] || STATUS_CONFIG_CRM['novo']
+  const followupAtrasado = lead.proximo_followup && new Date(lead.proximo_followup) < new Date()
 
   return (
     <div className="p-4 space-y-4">
-      {/* Info do cliente */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center">
-            <span className="text-amber-400 font-bold text-sm">{cliente.nome[0]}</span>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-zinc-200">{cliente.nome}</p>
-            <p className="text-xs text-zinc-500">{cliente.telefone}</p>
-          </div>
+      {/* Identidade CRM */}
+      <div className="flex items-center gap-2">
+        <div className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+          <span className="text-amber-400 font-bold text-sm">{lead.nome?.[0] || '#'}</span>
         </div>
-        <a href={`/clientes/${cliente.id}`} className="btn-secondary text-xs w-full block text-center">
-          Ver perfil completo →
-        </a>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-zinc-200 truncate">{lead.nome}</p>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.color}`}>
+            {cfg.label}
+          </span>
+        </div>
+      </div>
+
+      {/* Trocar status no funil diretamente do inbox */}
+      <div>
+        <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5">Mover no funil</p>
+        <div className="flex flex-wrap gap-1">
+          {STATUS_PIPELINE.map(s => (
+            <button key={s} onClick={() => mudarStatus(s)}
+              className={`text-[10px] px-2 py-1 rounded-full border font-medium transition-all ${
+                lead.status === s
+                  ? `${STATUS_CONFIG_CRM[s].bg} ${STATUS_CONFIG_CRM[s].color} border-current`
+                  : 'bg-zinc-800/50 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+              }`}>
+              {STATUS_CONFIG_CRM[s].label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Métricas */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-zinc-800/60 rounded-lg p-2.5 text-center">
-          <p className="text-lg font-bold text-zinc-100">{cliente.total_compras}</p>
-          <p className="text-[10px] text-zinc-500">compras</p>
+        <div className="bg-zinc-800/40 rounded-lg p-2.5 text-center">
+          <p className="text-sm font-bold text-amber-400">
+            {lead.valor_estimado ? formatCurrency(lead.valor_estimado) : '—'}
+          </p>
+          <p className="text-[10px] text-zinc-600">pipeline</p>
         </div>
-        <div className="bg-zinc-800/60 rounded-lg p-2.5 text-center">
-          <p className="text-sm font-bold text-emerald-400">{formatCurrency(cliente.total_gasto)}</p>
-          <p className="text-[10px] text-zinc-500">total gasto</p>
+        <div className="bg-zinc-800/40 rounded-lg p-2.5 text-center">
+          <p className="text-sm font-bold text-zinc-300">{lead.origem || '—'}</p>
+          <p className="text-[10px] text-zinc-600">origem</p>
         </div>
       </div>
 
-      {aReceber > 0 && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">
-          <p className="text-xs text-red-400 font-medium">Saldo em aberto</p>
-          <p className="text-sm font-bold text-red-300">{formatCurrency(aReceber)}</p>
+      {/* Follow-up */}
+      {lead.proximo_followup && (
+        <div className={`rounded-lg p-2.5 border text-xs ${followupAtrasado ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-zinc-800/40 border-zinc-700 text-zinc-400'}`}>
+          📅 {followupAtrasado ? '⚠ Atrasado! ' : 'Follow-up: '}
+          {new Date(lead.proximo_followup).toLocaleDateString('pt-BR')}
         </div>
       )}
 
-      {/* Últimas OS */}
-      {vendas.length > 0 && (
-        <div>
-          <p className="text-xs text-zinc-500 mb-2 font-medium uppercase tracking-wide">Últimas OS</p>
-          <div className="space-y-2">
-            {vendas.map(v => (
-              <a
-                key={v.id}
-                href={`/vendas/${v.id}`}
-                className="block bg-zinc-800/50 rounded-lg p-2.5 hover:bg-zinc-800 transition-colors"
-              >
-                <div className="flex justify-between items-start">
-                  <p className="text-xs font-mono text-zinc-300">{v.numero}</p>
-                  <p className="text-xs font-semibold text-zinc-200">{formatCurrency(v.total)}</p>
-                </div>
-                <div className="flex justify-between mt-1">
-                  <p className="text-[10px] text-zinc-600">{formatDate(v.data_abertura)}</p>
-                  <span className={cn('text-[10px] font-medium',
-                    v.status_pagamento === 'pago' ? 'text-emerald-400' :
-                    v.status_pagamento === 'parcial' ? 'text-blue-400' : 'text-amber-400'
-                  )}>
-                    {v.status_pagamento}
-                  </span>
-                </div>
-              </a>
-            ))}
-          </div>
+      {/* Notas do lead */}
+      {lead.notas && (
+        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
+          <p className="text-[10px] text-zinc-500 mb-1">Notas</p>
+          <p className="text-xs text-zinc-400 leading-relaxed">{lead.notas}</p>
         </div>
       )}
 
-      {/* Ações rápidas */}
+      {/* Registrar atividade rápida */}
       <div className="space-y-2">
-        <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Ações rápidas</p>
-        <a href={`/vendas/nova?cliente=${cliente.id}`} className="btn-secondary text-xs w-full block text-center">
-          + Nova OS para este cliente
-        </a>
-        <a href={`/vendas?cliente=${cliente.id}`} className="btn-ghost text-xs w-full block text-center">
-          Ver todas as OS
-        </a>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Registrar no CRM</p>
+        <textarea
+          className="input w-full text-xs resize-none bg-zinc-900"
+          rows={2}
+          placeholder="Ex: Enviou proposta, confirmou reunião..."
+          value={novaAtiv}
+          onChange={e => setNovaAtiv(e.target.value)}
+        />
+        <button onClick={registrarAtividade} disabled={salvando || !novaAtiv.trim()}
+          className="w-full py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs text-zinc-300 font-medium transition-colors disabled:opacity-40">
+          {salvando ? 'Salvando...' : '+ Registrar atividade'}
+        </button>
       </div>
+
+      {/* Histórico rápido */}
+      {atividades.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Histórico ({atividades.length})</p>
+          {atividades.map((a: any) => (
+            <div key={a.id} className="bg-zinc-800/30 rounded-lg px-3 py-2">
+              <p className="text-xs text-zinc-400">{a.descricao}</p>
+              <p className="text-[10px] text-zinc-700 mt-0.5">
+                {new Date(a.realizado_em).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Link para o CRM completo */}
+      <a href="/cajado" className="block text-center text-[10px] text-zinc-600 hover:text-amber-400 transition-colors pt-1">
+        Ver perfil completo no CRM →
+      </a>
     </div>
   )
 }
 
 // ── Login com o backend inbox ──────────────────────────────────
 
-function InboxLogin({ onLogin }: { onLogin: () => void }) {
-  const [email, setEmail] = useState('')
-  const [senha, setSenha] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    try {
-      await loginInbox(email, senha)
-      onLogin()
-    } catch {
-      setError('Credenciais inválidas para o Inbox')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-100px)]">
-      <div className="card w-full max-w-sm border border-zinc-800 shadow-2xl">
-        <div className="flex justify-center mb-6">
-          <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-2xl text-emerald-400">
-            💬
-          </div>
-        </div>
-        <h2 className="text-xl font-semibold text-zinc-100 mb-1 text-center font-display">Inbox WhatsApp</h2>
-        <p className="text-sm text-zinc-500 mb-6 text-center">Use as credenciais do backend integrado (Railway)</p>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="text-xs text-zinc-400 font-medium block mb-1">E-mail</label>
-            <input className="input w-full" placeholder="exemplo@email.com" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-          </div>
-          <div>
-            <label className="text-xs text-zinc-400 font-medium block mb-1">Senha</label>
-            <input className="input w-full" placeholder="••••••••" type="password" value={senha} onChange={e => setSenha(e.target.value)} required />
-          </div>
-          {error && <p className="text-xs text-red-400 bg-red-400/10 border border-red-500/20 px-2 py-1.5 rounded">{error}</p>}
-          <button type="submit" disabled={loading} className="btn-primary w-full mt-2 hover:scale-105 transition-transform">
-            {loading ? 'Conectando...' : 'Conectar agora'}
-          </button>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-// ── Página principal ───────────────────────────────────────────
+// ── Snippets / Respostas Rápidas ───────────────────────────
+const SNIPPETS = [
+  { atalho: '/pix', titulo: 'Chave PIX', texto: 'Nossa chave PIX (CNPJ) é: 12.345.678/0001-90. Empresa Cajado Soluções. Assim que transferir, por favor, me mande o comprovante aqui.' },
+  { atalho: '/bomdia', titulo: 'Bom dia', texto: 'Bom dia! Meu nome é Mário, como posso ajudar com a documentação do seu veículo hoje?' },
+  { atalho: '/vistoria', titulo: 'Docs Vistoria', texto: 'Para a vistoria, precisamos de: CNH do proprietário, CRLV atual e Comprovante de Residência. O documento original deve ser levado no momento.' },
+  { atalho: '/endereco', titulo: 'Nosso Endereço', texto: 'Estamos localizados na Avenida Principal, 1000 - Centro. Funcionamos de seg a sex das 8h às 18h.' }
+]
 
 export default function InboxClient() {
-  const [autenticado, setAutenticado] = useState(false)
   const [numeroAtivo, setNumeroAtivo] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
   const [nota, setNota] = useState(false)
   const [filtro, setFiltro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
+  const [showSnippets, setShowSnippets] = useState(false)
+  const [prevUnread, setPrevUnread] = useState(0) // Controla a notificação
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { conversas, loading, refetch } = useInbox()
-  const { conversa, refetch: refetchConversa } = useConversaDetalhe(autenticado && !showConfig ? numeroAtivo : null)
+  const { conversa, refetch: refetchConversa } = useConversaDetalhe(!showConfig ? numeroAtivo : null)
+
+  const totalUnread = conversas.reduce((a, c) => a + (c.unread || 0), 0)
+
+  // System Notifications
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      Notification.requestPermission()
+    }
+  }, [])
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('cajado_inbox_token') : null
-    if (token) setAutenticado(true)
-  }, [])
+    if (totalUnread > prevUnread) {
+      // Toca um som de notificação padrão do navegador/sistema
+      const audio = new Audio('https://chatwoot-assets.s3.amazonaws.com/sounds/ding.mp3')
+      audio.volume = 0.5
+      audio.play().catch(() => {})
+
+      if (Notification.permission === 'granted' && document.hidden) {
+        new Notification('Inbox Cajado', {
+          body: 'Você recebeu novas mensagens no WhatsApp!',
+          icon: '/icon-192.png'
+        })
+      }
+    }
+    setPrevUnread(totalUnread)
+  }, [totalUnread, prevUnread])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [conversa?.mensagens?.length])
-
-  if (!autenticado) return <InboxLogin onLogin={() => setAutenticado(true)} />
 
   const conversasFiltradas = conversas.filter(c =>
     c.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
@@ -358,7 +433,6 @@ export default function InboxClient() {
     c.etiqueta?.includes(filtro.toLowerCase())
   )
 
-  const totalUnread = conversas.reduce((a, c) => a + (c.unread || 0), 0)
 
   async function handleEnviar() {
     if (!texto.trim() || !numeroAtivo || enviando) return
@@ -378,10 +452,18 @@ export default function InboxClient() {
 
   async function handleToggleBot() {
     if (!conversa || !numeroAtivo) return
-    const pausar = conversa.botOn !== false
-    await toggleBot(numeroAtivo, pausar)
-    if (!pausar) await reativarBot(numeroAtivo)
-    else await humanouAssumiu(numeroAtivo, 'Atendente')
+    const botEstaAtivo = conversa.botOn !== false
+
+    if (botEstaAtivo) {
+      // PAUSAR: humano vai assumir
+      await toggleBot(numeroAtivo, true)
+      await humanouAssumiu(numeroAtivo, 'Atendente')
+    } else {
+      // REATIVAR: devolver para o bot
+      await reativarBot(numeroAtivo)
+      await toggleBot(numeroAtivo, false)
+    }
+
     await refetch()
     await refetchConversa()
   }
@@ -486,6 +568,29 @@ export default function InboxClient() {
                     {conversa.setor}
                   </span>
                 )}
+                
+                {/* Seletor Rápido de Etiqueta */}
+                <select 
+                  className={cn("text-xs px-2 py-1 rounded-lg border appearance-none outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium",
+                    conversa?.etiqueta ? (etiquetaColors[conversa.etiqueta] || 'bg-zinc-800 border-zinc-700 text-zinc-300') : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                  )}
+                  value={conversa?.etiqueta || ''}
+                  onChange={async (e) => {
+                     const nova = e.target.value
+                     await mudarEtiqueta(numeroAtivo!, nova)
+                     await refetch()
+                     await refetchConversa()
+                  }}
+                >
+                  <option value="">+ Adicionar Etiqueta</option>
+                  <option value="novo">Novo</option>
+                  <option value="proposta">Proposta</option>
+                  <option value="cliente">Cliente Ativo</option>
+                  <option value="aguardando">Aguardando Docs</option>
+                  <option value="retomar">Retomar</option>
+                  <option value="perdido">Perdido</option>
+                </select>
+
                 <button
                   onClick={handleToggleBot}
                   className={cn(
@@ -538,9 +643,14 @@ export default function InboxClient() {
                     nota ? 'border-amber-500/30 focus:border-amber-500' : 'focus:border-emerald-500/50'
                   )}
                   rows={2}
-                  placeholder={nota ? 'Escreva uma nota que apenas sua equipe verá...' : 'Digite sua mensagem para o cliente...'}
+                  placeholder={nota ? 'Escreva uma nota que apenas sua equipe verá...' : 'Digite / para respostas rápidas...'}
                   value={texto}
-                  onChange={e => setTexto(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value
+                    setTexto(val)
+                    if (val === '/') setShowSnippets(true)
+                    else if (!val.startsWith('/')) setShowSnippets(false)
+                  }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
@@ -548,6 +658,31 @@ export default function InboxClient() {
                     }
                   }}
                 />
+                
+                {/* Menu de Snippets / Respostas Rápidas */}
+                {showSnippets && !nota && (
+                  <div className="absolute bottom-16 left-4 right-20 bg-zinc-800 border border-zinc-700 shadow-xl rounded-xl p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
+                    <p className="text-[10px] font-bold text-zinc-500 px-2 py-1 uppercase tracking-wider">⚡ Respostas Rápidas</p>
+                    <div className="flex flex-col gap-1 mt-1 max-h-48 overflow-y-auto">
+                      {SNIPPETS.map(snip => (
+                        <button
+                          key={snip.atalho}
+                          onClick={() => {
+                            setTexto(snip.texto)
+                            setShowSnippets(false)
+                          }}
+                          className="text-left px-3 py-2 rounded-lg hover:bg-zinc-700/50 transition-colors flex flex-col group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded">{snip.atalho}</span>
+                            <span className="text-xs font-semibold text-zinc-200 group-hover:text-emerald-400">{snip.titulo}</span>
+                          </div>
+                          <span className="text-[10px] text-zinc-500 truncate mt-0.5">{snip.texto}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button
                   onClick={handleEnviar}
                   disabled={!texto.trim() || enviando}
@@ -563,22 +698,22 @@ export default function InboxClient() {
         )}
       </div>
 
-      {/* ── Coluna 3: Contexto do cliente (Cajado) ───────────── */}
+      {/* ── Coluna 3: Painel CRM dinâmico ────────────────────── */}
       <div className="w-72 shrink-0 border-l border-zinc-800 overflow-y-auto bg-[#05070a]">
         <div className="p-4 border-b border-zinc-800 bg-zinc-900/50">
           <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            Contexto Cajado
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            CRM Cajado
           </p>
         </div>
         {numeroAtivo ? (
-          <PainelCliente numero={numeroAtivo} />
+          <PainelCRM numero={numeroAtivo} nome={conversas.find(c => c.numero === numeroAtivo)?.nome} />
         ) : (
           <div className="p-6 text-center">
             <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center mx-auto mb-3 opacity-50">
-              🗃️
+              🎯
             </div>
-            <p className="text-xs text-zinc-600 leading-relaxed">As informações táticas do CRM Cajado aparecerão aqui automaticamente quando você selecionar um chat.</p>
+            <p className="text-xs text-zinc-600 leading-relaxed">Selecione um chat para ver o lead no CRM — altere o status do funil e registre atividades sem sair do Inbox.</p>
           </div>
         )}
       </div>

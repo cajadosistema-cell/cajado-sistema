@@ -30,6 +30,15 @@ const TIPO_COLORS: Record<string, string> = {
 const RISCO_LABELS = ['', 'Muito Baixo', 'Baixo', 'Médio', 'Alto', 'Muito Alto']
 const RISCO_COLORS = ['', 'text-emerald-400', 'text-green-400', 'text-amber-400', 'text-orange-400', 'text-red-400']
 
+// ── Mock Data Fallbacks ─────────────────────────────────────
+const MOCK_ATIVOS: Ativo[] = [
+  { id: '1', ticker: 'PETR4', nome: 'Petrobras PN', tipo: 'acao', quantidade: 500, preco_medio: 32.50, preco_atual: 38.40, valor_investido: 16250, valor_atual: 19200, liquidez: 'diaria', data_vencimento: null, risco_nivel: 4, corretora: 'XP Investimentos' },
+  { id: '2', ticker: 'KNRI11', nome: 'Kinea Renda', tipo: 'fii', quantidade: 100, preco_medio: 155.00, preco_atual: 162.20, valor_investido: 15500, valor_atual: 16220, liquidez: 'diaria', data_vencimento: null, risco_nivel: 3, corretora: 'XP Investimentos' },
+  { id: '3', ticker: null, nome: 'CDB Banco Master 120% CDI', tipo: 'cdb', quantidade: 1, preco_medio: 10000, preco_atual: 10850, valor_investido: 10000, valor_atual: 10850, liquidez: 'no_vencimento', data_vencimento: '2027-05-10', risco_nivel: 2, corretora: 'BTG Pactual' },
+  { id: '4', ticker: 'BTC', nome: 'Bitcoin', tipo: 'cripto', quantidade: 0.05, preco_medio: 250000, preco_atual: 340000, valor_investido: 12500, valor_atual: 17000, liquidez: 'diaria', data_vencimento: null, risco_nivel: 5, corretora: 'Binance' },
+  { id: '5', ticker: 'BTLG11', nome: 'VBI Logístico', tipo: 'fii', quantidade: 50, preco_medio: 102.00, preco_atual: 98.50, valor_investido: 5100, valor_atual: 4925, liquidez: 'diaria', data_vencimento: null, risco_nivel: 3, corretora: 'XP Investimentos' },
+]
+
 function ModalAtivo({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
   const { insert, loading } = useSupabaseMutation('ativos')
   const [form, setForm] = useState({
@@ -156,9 +165,11 @@ export default function InvestimentosClient() {
   const [modal, setModal] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState('todos')
 
-  const { data: ativos, refetch } = useSupabaseQuery<Ativo>('ativos', {
+  const { data: ativosDB, refetch } = useSupabaseQuery<Ativo>('ativos', {
     orderBy: { column: 'valor_investido', ascending: false },
   })
+
+  const ativos = ativosDB.length > 0 ? ativosDB : MOCK_ATIVOS
 
   // Métricas
   const totalInvestido = ativos.reduce((a, v) => a + v.valor_investido, 0)

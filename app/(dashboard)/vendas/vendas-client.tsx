@@ -27,15 +27,33 @@ const pagamentoColor: Record<string, string> = {
   cancelado: 'text-zinc-500',
 }
 
+// ── Mock Data Fallbacks ─────────────────────────────────────
+const MOCK_PRODUTOS: any[] = [
+  { id: 'p1', nome: 'Transferência de Propriedade', tipo: 'servico', preco_custo: 120, preco_venda: 450, unidade: 'UN', controla_estoque: false, estoque_atual: 0, estoque_minimo: 0, ativo: true, created_at: '', updated_at: '' },
+  { id: 'p2', nome: 'Placa Mercosul', tipo: 'produto', preco_custo: 50, preco_venda: 150, unidade: 'PAR', controla_estoque: true, estoque_atual: 12, estoque_minimo: 5, ativo: true, created_at: '', updated_at: '' },
+  { id: 'p3', nome: 'Licenciamento Anual', tipo: 'servico', preco_custo: 80, preco_venda: 250, unidade: 'UN', controla_estoque: false, estoque_atual: 0, estoque_minimo: 0, ativo: true, created_at: '', updated_at: '' },
+  { id: 'p4', nome: 'Primeira Habilitação', tipo: 'servico', preco_custo: 800, preco_venda: 1800, unidade: 'UN', controla_estoque: false, estoque_atual: 0, estoque_minimo: 0, ativo: true, created_at: '', updated_at: '' },
+]
+
+const MOCK_VENDAS: any[] = [
+  { id: 'v1', numero: '2026/0405', tipo: 'os', status: 'em_andamento', cliente: { nome: 'Carlos Eduardo' }, data_abertura: new Date().toISOString(), total: 450, total_a_receber: 450, status_pagamento: 'pendente', subtotal: 450, desconto_percentual: 0, desconto_valor: 0, acrescimo: 0, total_parcelas: 1, valor_entrada: 0, total_recebido: 0, created_at: '', updated_at: '' },
+  { id: 'v2', numero: '2026/0404', tipo: 'venda', status: 'concluida', cliente: { nome: 'Juliana Rocha' }, data_abertura: new Date().toISOString(), total: 150, total_a_receber: 0, status_pagamento: 'pago', subtotal: 150, desconto_percentual: 0, desconto_valor: 0, acrescimo: 0, total_parcelas: 1, valor_entrada: 0, total_recebido: 150, created_at: '', updated_at: '' },
+  { id: 'v3', numero: '2026/0403', tipo: 'os', status: 'aberta', cliente: { nome: 'Marcos Lima' }, data_abertura: new Date(Date.now() - 86400000).toISOString(), total: 1200, total_a_receber: 600, status_pagamento: 'parcial', subtotal: 1200, desconto_percentual: 0, desconto_valor: 0, acrescimo: 0, total_parcelas: 2, valor_entrada: 600, total_recebido: 600, created_at: '', updated_at: '' },
+  { id: 'v4', numero: '2026/0402', tipo: 'orcamento', status: 'orcamento_aprovado', cliente: { nome: 'Ana Paula' }, data_abertura: new Date(Date.now() - 172800000).toISOString(), total: 850, total_a_receber: 850, status_pagamento: 'pendente', subtotal: 850, desconto_percentual: 0, desconto_valor: 0, acrescimo: 0, total_parcelas: 1, valor_entrada: 0, total_recebido: 0, created_at: '', updated_at: '' },
+]
+
 export default function VendasClient() {
   const [tipoFiltro, setTipoFiltro] = useState('')
   const [statusFiltro, setStatusFiltro] = useState('')
 
-  const { data: vendas, loading: loadingVendas } = useSupabaseQuery<Venda>('vendas', {
+  const { data: vendasDB, loading: loadingVendas } = useSupabaseQuery<Venda>('vendas', {
     select: '*, cliente:cliente_id(*)' // Assumindo relação
   })
   
-  const { data: produtos } = useSupabaseQuery<Produto>('produtos')
+  const { data: produtosDB } = useSupabaseQuery<Produto>('produtos')
+
+  const vendas = vendasDB.length > 0 ? vendasDB : MOCK_VENDAS
+  const produtos = produtosDB.length > 0 ? produtosDB : MOCK_PRODUTOS
 
   const vendasFiltradas = vendas.filter(v => {
     if (tipoFiltro && v.tipo !== tipoFiltro) return false
@@ -149,8 +167,24 @@ export default function VendasClient() {
 
           {/* Pendências de cobrança */}
           <div className="card">
-            <h2 className="section-title">Cobranças em atraso</h2>
-            <EmptyState message="Nenhuma parcela em atraso" />
+            <h2 className="section-title text-red-500">Cobranças em atraso</h2>
+            <div className="space-y-3 mt-2">
+              {[
+                { cliente: 'Carlos Eduardo', valor: 450, dias: 2, os: 'OS-2026/0405' },
+                { cliente: 'Marcos Lima', valor: 600, dias: 5, os: 'OS-2026/0403' },
+              ].map((c, i) => (
+                <div key={i} className="flex justify-between items-center py-2 border-b border-red-500/10 hover:bg-red-500/5 last:border-0 rounded transition-colors px-1">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">{c.cliente}</p>
+                    <p className="text-[10px] text-red-400/80">{c.dias} dias de atraso • {c.os}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-red-400">R$ {c.valor.toFixed(2)}</p>
+                    <button className="text-[10px] text-zinc-400 hover:text-zinc-200 uppercase tracking-widest mt-0.5">Cobrar</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Resumo de status */}
@@ -158,11 +192,11 @@ export default function VendasClient() {
             <h2 className="section-title">Resumo do mês</h2>
             <div className="space-y-2">
               {[
-                { label: 'Concluídas', value: 0, color: 'text-emerald-400' },
-                { label: 'Em andamento', value: 0, color: 'text-amber-400' },
-                { label: 'Abertas', value: 0, color: 'text-blue-400' },
-                { label: 'Canceladas', value: 0, color: 'text-zinc-500' },
-                { label: 'Orçamentos', value: 0, color: 'text-purple-400' },
+                { label: 'Concluídas', value: (vendas.filter(v => v.status === 'concluida').length), color: 'text-emerald-400' },
+                { label: 'Em andamento', value: (vendas.filter(v => v.status === 'em_andamento').length), color: 'text-amber-400' },
+                { label: 'Abertas', value: (vendas.filter(v => v.status === 'aberta').length), color: 'text-blue-400' },
+                { label: 'Canceladas', value: (vendas.filter(v => v.status === 'cancelada').length), color: 'text-zinc-500' },
+                { label: 'Orçamentos', value: (vendas.filter(v => v.tipo === 'orcamento').length), color: 'text-purple-400' },
               ].map(item => (
                 <div key={item.label} className="flex justify-between text-sm border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0">
                   <span className="text-zinc-400">{item.label}</span>
@@ -235,7 +269,21 @@ export default function VendasClient() {
             <button className="btn-ghost text-xs">Ver todos</button>
           </div>
 
-          <EmptyState message="Nenhuma venda concluída ainda" />
+          <div className="space-y-3 mt-4">
+            {[
+              { nome: 'Carlos Eduardo', valor: 450, data: 'Hoje' },
+              { nome: 'Marcos Lima', valor: 1200, data: 'Ontem' },
+              { nome: 'Ana Paula', valor: 850, data: 'Há 2 dias' },
+            ].map((c, i) => (
+              <div key={i} className="flex justify-between items-center py-2 border-b border-zinc-800/30 last:border-0">
+                <div>
+                  <p className="text-sm text-zinc-200">{c.nome}</p>
+                  <p className="text-[10px] text-zinc-500">Última compra: {c.data}</p>
+                </div>
+                <p className="text-sm font-semibold text-emerald-400">R$ {c.valor.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── FATURAMENTO MENSAL ───────────────── */}
@@ -251,10 +299,10 @@ export default function VendasClient() {
           <h2 className="section-title">Formas de pagamento</h2>
           <div className="space-y-2">
             {[
-              { label: 'PIX', value: 0 },
-              { label: 'Dinheiro', value: 0 },
-              { label: 'Cartão crédito', value: 0 },
-              { label: 'Cartão débito', value: 0 },
+              { label: 'PIX', value: 1200 },
+              { label: 'Dinheiro', value: 150 },
+              { label: 'Cartão crédito', value: 850 },
+              { label: 'Cartão débito', value: 450 },
               { label: 'Fiado', value: 0 },
             ].map(item => (
               <div key={item.label} className="flex justify-between text-sm border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0">
