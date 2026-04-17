@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
-import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { TabPermissoes } from './_components/TabPermissoes'
@@ -18,26 +18,30 @@ type Funcionario = {
 }
 
 const MODULOS_DISPONIVEIS = [
-  { id: 'inicio', nome: 'Início (Dashboards)' },
-  { id: 'financeiro', nome: 'Gestão Financeira (Empresa)' },
-  { id: 'cajado', nome: 'CRM Cajado' },
-  { id: 'vendas', nome: 'Vendas e Ordens de Serviço' },
-  { id: 'comissoes', nome: 'Comissões e Parceiros' },
-  { id: 'diario', nome: 'Diário Estratégico e Memória' },
-  { id: 'pos-venda', nome: 'Pós-venda e Automações' },
-  { id: 'inbox', nome: 'Inbox / Atendimento WhatsApp' },
-  { id: 'saas', nome: 'Administração SaaS Cajado' },
-  { id: 'gestao-pessoal', nome: 'Gestão Pessoal' },
-  { id: 'patrimonio', nome: 'Patrimônio' },
+  { id: 'financeiro',    nome: 'Financeiro (Empresa)' },
+  { id: 'comissoes',    nome: 'Comissões e Parceiros' },
+  { id: 'inbox',        nome: 'Inbox / WhatsApp' },
+  { id: 'cajado',       nome: 'CRM Cajado (Pipeline)' },
+  { id: 'vendas',       nome: 'Vendas e Ordens de Serviço' },
+  { id: 'pos-venda',    nome: 'Pós-venda e Automações' },
+  { id: 'seguranca-wa', nome: 'Anti-Ban WhatsApp' },
+  { id: 'expansao',     nome: 'Expansão e OKRs' },
+  { id: 'inteligencia', nome: 'Inteligência e IA' },
+  { id: 'organizacao',  nome: 'Organização (Projetos)' },
+  { id: 'diario',       nome: 'Diário de Bordo' },
+  { id: 'gestao-pessoal', nome: 'Gestão Pessoal (Equipe)' },
+  { id: 'pf-pessoal',   nome: 'App do Patrão (PF)' },
+  { id: 'patrimonio',   nome: 'Patrimônio Imobiliário' },
   { id: 'investimentos', nome: 'Investimentos' },
-  { id: 'trader', nome: 'Trader / Operações' },
-  { id: 'inteligencia', nome: 'Inteligência Artificial' },
-  { id: 'organizacao', nome: 'Organização Geral' },
+  { id: 'trader',       nome: 'Day Trader' },
+  { id: 'seguranca-geral', nome: 'Segurança e Logs' },
+  { id: 'configuracoes', nome: 'Configurações do Sistema' },
 ]
 
 // ── Modal de Cadastro de Funcionário ──────────────────────────
 function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
-  const { insert, loading } = useSupabaseMutation('funcionarios')
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
   const [form, setForm] = useState({
     nome: '',
     email: '',
@@ -57,40 +61,57 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    const result = await insert({
-      nome: form.nome,
-      email: form.email,
-      cargo: form.cargo,
-      ativo: true,
-      permissoes: form.permissoes,
-    } as any)
-    
-    if (result) {
-      // Sincronizar o acesso para o módulo de Inbox do WhatsApp (Railway)
-      try {
-        const inboxUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://cajado-sistema-production.up.railway.app';
-        await fetch(`${inboxUrl}/auth/integrations/sync-user`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            nome: form.nome,
-            email: form.email,
-            senha: form.senha,
-            role: form.cargo === "manager" ? "admin" : "atendente",
-            integration_key: "fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb"
+    setErro('')
+    setLoading(true)
+
+    try {
+      // Chama a API Route que usa service_role para criar no Supabase Auth + tabela funcionarios
+      const res = await fetch('/api/admin/criar-funcionario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome: form.nome,
+          email: form.email,
+          senha: form.senha,
+          cargo: form.cargo,
+          permissoes: form.permissoes,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setErro(data.error || 'Erro ao criar funcionário.')
+        setLoading(false)
+        return
+      }
+
+      // Sincronizar acesso ao Inbox WhatsApp (Railway) se tiver permissão de inbox
+      if (form.permissoes.includes('inbox')) {
+        try {
+          const inboxUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://cajado-sistema-production.up.railway.app'
+          await fetch(`${inboxUrl}/auth/integrations/sync-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: form.nome,
+              email: form.email,
+              senha: form.senha,
+              role: form.cargo === 'manager' ? 'admin' : 'atendente',
+              integration_key: 'fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb'
+            }),
           })
-        });
-      } catch (e) {
-        console.error("Aviso: Falha ao sincronizar atendente com o Inbox", e);
+        } catch (e) {
+          console.warn('Aviso: Falha ao sincronizar atendente com o Inbox', e)
+        }
       }
 
       onSave()
       onClose()
-    } else {
-      alert(`Erro ao tentar salvar: Certifique-se de que a tabela 'funcionarios' foi criada no Supabase.\nConsulte as instruções do desenvolvedor.`)
+    } catch (err: any) {
+      setErro(err?.message || 'Erro inesperado.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -154,11 +175,18 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-white/5">
-            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-            <button type="submit" className="btn-primary flex gap-2 items-center" disabled={loading}>
-              {loading ? 'Cadastrando...' : 'Criar Acesso'}
-            </button>
+          <div className="flex flex-col gap-3 pt-4 border-t border-white/5">
+            {erro && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+                ⚠️ {erro}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+              <button type="submit" className="btn-primary flex gap-2 items-center" disabled={loading}>
+                {loading ? '⏳ Criando acesso...' : '✓ Criar Acesso'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -76,15 +76,20 @@ export function Sidebar() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data } = await supabase.from('usuarios').select('*').eq('email', user.email || '').single()
-        const func = data as any
+        // 1. Tenta buscar na tabela 'funcionarios' (usuários criados pelo admin)
+        const { data: func } = await supabase
+          .from('funcionarios')
+          .select('nome, cargo, permissoes, ativo')
+          .eq('email', user.email || '')
+          .single()
+
         if (func) {
-          const isUserAdmin = func.role === 'admin' || func.setor === 'todos'
-          setIsAdmin(isUserAdmin)
-          setPermissoes(func.permissoes || [])
-          setUserData({ nome: func.nome, cargo: func.cargo || (isUserAdmin ? 'Administrador' : 'Membro') })
+          // É um funcionário com permissões restritas
+          setIsAdmin(false)
+          setPermissoes((func as any).permissoes || [])
+          setUserData({ nome: (func as any).nome, cargo: (func as any).cargo || 'Funcionário' })
         } else {
-          // É o dono / admin (auth account sem registro na tabela de funcionários)
+          // Não encontrou na tabela de funcionários = é o dono/admin (conta principal)
           setIsAdmin(true)
           const emailBase = user.email ? user.email.split('@')[0] : 'Admin'
           const nomeCap = emailBase.charAt(0).toUpperCase() + emailBase.slice(1)
@@ -99,10 +104,14 @@ export function Sidebar() {
     ...group,
     items: group.items.filter(item => {
       if (isAdmin) return true
+      // Remove a barra inicial para comparar com o ID de permissão (ex: '/financeiro' -> 'financeiro')
       const modName = item.href.replace('/', '')
       return permissoes.includes(modName)
     })
   })).filter(group => group.items.length > 0)
+
+  // Início é sempre visível para todos (independente de permissões)
+  const inicioSempreVisivel = true
 
   return (
     <aside className="hidden md:flex w-56 shrink-0 bg-[#0d1120] border-r border-white/5 flex-col h-screen sticky top-0 z-40">
