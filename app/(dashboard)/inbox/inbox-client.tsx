@@ -468,10 +468,10 @@ export default function InboxClient() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-88px)] -mx-6 -mt-6 overflow-hidden">
+    <div className="flex h-[calc(100vh-88px)] sm:h-[calc(100vh-100px)] -mx-4 md:-mx-6 -mt-4 md:-mt-6 overflow-hidden">
 
       {/* ── Coluna 1: Lista de conversas ──────────────────────── */}
-      <div className="w-80 shrink-0 border-r border-zinc-800 flex flex-col bg-[#05070a]">
+      <div className={cn("shrink-0 border-r border-zinc-800 flex-col bg-[#05070a]", (numeroAtivo || showConfig) ? "hidden md:flex md:w-80" : "flex w-full md:w-80")}>
         <div className="p-4 border-b border-zinc-800 flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-zinc-100 font-display">
@@ -529,13 +529,17 @@ export default function InboxClient() {
       </div>
 
       {showConfig ? (
-        <div className="flex-1 overflow-y-auto bg-[#080b14] p-8">
+        <div className={cn("overflow-y-auto bg-[#080b14] p-4 md:p-8", showConfig ? "flex-1 flex flex-col w-full" : "hidden md:flex")}>
+          <button onClick={() => setShowConfig(false)} className="md:hidden flex items-center gap-1 text-zinc-400 mb-6 bg-zinc-800/50 w-fit px-3 py-1.5 rounded-lg text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Voltar
+          </button>
           <ConfiguracoesBotClient inModal={true} />
         </div>
       ) : (
         <>
           {/* ── Coluna 2: Chat ────────────────────────────────────── */}
-          <div className="flex-1 flex flex-col min-w-0 bg-[#080b14] relative">
+          <div className={cn("flex-col min-w-0 bg-[#080b14] relative", numeroAtivo ? "flex flex-1 w-full" : "hidden md:flex flex-1")}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20 pointer-events-none mix-blend-overlay"></div>
         {!numeroAtivo ? (
           <div className="flex items-center justify-center h-full relative z-10">
@@ -549,8 +553,14 @@ export default function InboxClient() {
         ) : (
           <div className="flex flex-col h-full relative z-10">
             {/* Header do chat */}
-            <div className="px-5 py-3 border-b border-zinc-800/80 flex items-center justify-between flex-shrink-0 bg-[#0a0d16]/80 backdrop-blur-md">
-              <div className="flex items-center gap-3">
+            <div className="px-3 md:px-5 py-3 border-b border-zinc-800/80 flex items-center justify-between flex-shrink-0 bg-[#0a0d16]/80 backdrop-blur-md">
+              <div className="flex items-center gap-2 md:gap-3">
+                <button 
+                  onClick={() => { setNumeroAtivo(null); setShowConfig(false); }} 
+                  className="md:hidden text-zinc-400 hover:text-zinc-100 flex items-center justify-center p-1 -ml-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
                 <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
                   <span className="text-emerald-400 text-sm font-bold">
                     {conversa?.nome?.[0]?.toUpperCase() || '#'}
@@ -561,9 +571,9 @@ export default function InboxClient() {
                   <p className="text-xs text-zinc-500 font-mono">{numeroAtivo}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
                 {conversa?.setor && (
-                  <span className="text-[10px] text-zinc-400 bg-zinc-800/80 border border-zinc-700 px-2 py-1 rounded">
+                  <span className="hidden sm:inline-block text-[10px] text-zinc-400 bg-zinc-800/80 border border-zinc-700 px-2 py-1 rounded">
                     {conversa.setor}
                   </span>
                 )}
@@ -698,7 +708,7 @@ export default function InboxClient() {
       </div>
 
       {/* ── Coluna 3: Painel CRM dinâmico ────────────────────── */}
-      <div className="w-72 shrink-0 border-l border-zinc-800 overflow-y-auto bg-[#05070a]">
+      <div className="hidden lg:block w-72 shrink-0 border-l border-zinc-800 overflow-y-auto bg-[#05070a]">
         <div className="p-4 border-b border-zinc-800 bg-zinc-900/50">
           <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>

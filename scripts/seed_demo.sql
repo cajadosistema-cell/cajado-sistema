@@ -93,18 +93,10 @@ VALUES
   ('Aviso de Vistoria', 'Atenção {{nome}}, sua vistoria foi agendada. Não esqueça de trazer os documentos.', 'pos_venda', ARRAY['nome']),
   ('Cobrança Amigável', 'Bom dia {{nome}}, identificamos um valor pendente. Podemos enviar o link do PIX?', 'followup', ARRAY['nome']);
 
-DO $$
-DECLARE
-  v_membro UUID;
-BEGIN
-  SELECT id INTO v_membro FROM perfis LIMIT 1;
-  IF v_membro IS NOT NULL THEN
-    INSERT INTO checkins (membro_id, tipo, latitude, longitude, endereco, timestamp, servico_descricao)
-    VALUES
-      (v_membro, 'entrada', -23.5505, -46.6333, 'Av. Paulista, 1000 - São Paulo', NOW() - INTERVAL '8 hours', 'Chegada no escritório'),
-      (v_membro, 'saida', -23.5505, -46.6333, 'Av. Paulista, 1000 - São Paulo', NOW() - INTERVAL '1 hour', 'Fim do expediente');
-  END IF;
-END $$;
+INSERT INTO checkins (tipo, latitude, longitude, endereco, timestamp, servico_descricao)
+VALUES
+  ('entrada', -23.5505, -46.6333, 'Av. Paulista, 1000 - São Paulo', NOW() - INTERVAL '8 hours', 'Chegada no escritório'),
+  ('saida', -23.5505, -46.6333, 'Av. Paulista, 1000 - São Paulo', NOW() - INTERVAL '1 hour', 'Fim do expediente');
 
 -- 6. ORGANIZAÇÃO (Projetos, Ideias, Decisões)
 INSERT INTO projetos (titulo, descricao, status, prioridade, data_limite, progresso)

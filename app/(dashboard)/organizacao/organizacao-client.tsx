@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatRelative, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
+import { TabPendencias } from './_components/TabPendencias'
+import { TabReunioes } from './_components/TabReunioes'
 
 // ── Types ───────────────────────────────────────────────────
 type Projeto = {
@@ -283,7 +285,7 @@ function ProgressBar({ value, className }: { value: number; className?: string }
 
 // ── Main ─────────────────────────────────────────────────────
 export default function OrganizacaoClient() {
-  const [tab, setTab] = useState<'projetos' | 'ideias' | 'decisoes'>('projetos')
+  const [tab, setTab] = useState<'projetos' | 'ideias' | 'decisoes' | 'pendencias' | 'reunioes'>('projetos')
   const [modalProjeto, setModalProjeto] = useState(false)
   const [modalIdeia, setModalIdeia] = useState(false)
   const [editandoProjeto, setEditandoProjeto] = useState<Projeto | null>(null)
@@ -334,9 +336,11 @@ export default function OrganizacaoClient() {
   }
 
   const TABS = [
-    { key: 'projetos', label: '📁 Projetos' },
-    { key: 'ideias', label: '💡 Ideias' },
-    { key: 'decisoes', label: '📖 Decisões' },
+    { key: 'projetos',  label: '📁 Projetos' },
+    { key: 'ideias',    label: '💡 Ideias' },
+    { key: 'decisoes',  label: '📖 Decisões' },
+    { key: 'pendencias', label: '📋 Pendências' },
+    { key: 'reunioes',  label: '🤝 Reuniões' },
   ] as const
 
   return (
@@ -587,6 +591,12 @@ export default function OrganizacaoClient() {
           )}
         </div>
       )}
+
+      {/* Tab: Pendências */}
+      {tab === 'pendencias' && <TabPendencias projetos={projetos} />}
+
+      {/* Tab: Reuniões */}
+      {tab === 'reunioes' && <TabReunioes projetos={projetos} />}
 
       {/* Modais */}
       {(modalProjeto || editandoProjeto) && (

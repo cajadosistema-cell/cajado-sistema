@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatRelative, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
+import { TabAutomacoes } from './_components/TabAutomacoes'
 
 type Analise = {
   id: string
@@ -278,7 +279,7 @@ function ModalTendencia({ onClose, onSave }: { onClose: () => void; onSave: () =
 }
 
 export default function InteligenciaClient() {
-  const [tab, setTab] = useState<'analises' | 'tendencias' | 'assistente'>('analises')
+  const [tab, setTab] = useState<'analises' | 'tendencias' | 'assistente' | 'automacoes'>('analises')
   const [modalAnalise, setModalAnalise] = useState(false)
   const [modalAnaliseIA, setModalAnaliseIA] = useState(false)
   const [modalTendencia, setModalTendencia] = useState(false)
@@ -358,6 +359,7 @@ Responda formatando com emojis e listas curtas para ficar fácil de ler.`
     { key: 'analises', label: '🔍 Análises' },
     { key: 'tendencias', label: '📈 Tendências' },
     { key: 'assistente', label: '🤖 Assistente (Treinamento)' },
+    { key: 'automacoes', label: '⚙️ Relatórios & Alertas' },
   ] as const
 
   return (
@@ -580,6 +582,7 @@ Responda formatando com emojis e listas curtas para ficar fácil de ler.`
           </form>
         </div>
       )}
+      {tab === 'automacoes' && <TabAutomacoes />}
 
       {modalAnalise && <ModalAnalise onClose={() => setModalAnalise(false)} onSave={refetchAnalises} />}
       {modalAnaliseIA && <ModalAnaliseIA onClose={() => setModalAnaliseIA(false)} onSave={refetchAnalises} />}

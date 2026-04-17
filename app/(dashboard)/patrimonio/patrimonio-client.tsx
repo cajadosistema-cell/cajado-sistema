@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
+import { TabImoveis } from './_components/TabImoveis'
+import { TabFinanciamentos } from './_components/TabFinanciamentos'
 
 type ProjetoPatrimonio = {
   id: string
@@ -196,6 +198,7 @@ function ModalCusto({ projetoId, onClose, onSave }: { projetoId: string; onClose
 }
 
 export default function PatrimonioClient() {
+  const [tab, setTab] = useState<'geral' | 'imoveis' | 'financiamentos'>('geral')
   const [modal, setModal] = useState(false)
   const [modalCusto, setModalCusto] = useState<string | null>(null)
   const [projetoAberto, setProjetoAberto] = useState<string | null>(null)
@@ -218,11 +221,29 @@ export default function PatrimonioClient() {
 
   return (
     <>
-      <PageHeader title="Patrimônio" subtitle="Imóveis · Veículos · Equipamentos · ROI">
-        <button onClick={() => setModal(true)} className="btn-primary">+ Patrimônio</button>
+      <PageHeader title="Patrimônio" subtitle="Imóveis · Veículos · Financiamentos · ROI">
+        {tab === 'geral' && <button onClick={() => setModal(true)} className="btn-primary">+ Patrimônio Genérico</button>}
       </PageHeader>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+        {[
+          { key: 'geral', label: '📊 Visão Geral & Projetos' },
+          { key: 'imoveis', label: '🏠 Imóveis Detalhado' },
+          { key: 'financiamentos', label: '🏦 Financiamentos' },
+        ].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key as any)}
+            className={cn(
+              'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
+              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+            )}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'geral' && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <div className="metric-card">
           <p className="metric-label">Total investido</p>
           <p className="metric-value">{formatCurrency(totalInvestido)}</p>
@@ -329,6 +350,11 @@ export default function PatrimonioClient() {
           })}
         </div>
       )}
+        </>
+      )}
+
+      {tab === 'imoveis' && <TabImoveis />}
+      {tab === 'financiamentos' && <TabFinanciamentos />}
 
       {modal && <ModalProjeto onClose={() => setModal(false)} onSave={refetch} />}
       {modalCusto && (

@@ -145,11 +145,24 @@ function ModalLead({
             </div>
           </div>
 
-          <div>
-            <label className="label">E-mail</label>
-            <input className="input mt-1" type="email" value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              placeholder="email@exemplo.com" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">E-mail</label>
+              <input className="input mt-1" type="email" value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="email@exemplo.com" />
+            </div>
+            <div>
+              <label className="label">Atendente Responsável</label>
+              <select className="input mt-1" value={lead?.atendente_id || ''} onChange={async (e) => {
+                if (lead) await update(lead.id, { atendente_id: e.target.value || null });
+                onSave();
+              }}>
+                <option value="">Sem responsável</option>
+                <option disabled>---</option>
+                <option value="current">Salvar antes de atribuir</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -368,6 +381,19 @@ function LeadDrawer({
                 {lead.servico_interesse ?? '—'}
               </p>
             </div>
+            <div className="card-sm col-span-2">
+              <p className="text-[10px] text-zinc-600 uppercase tracking-wide">Atendente Responsável</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs">👤</span>
+                <select className="input text-xs py-1" value={lead.atendente_id || ''} onChange={async (e) => {
+                  await update(lead.id, { atendente_id: e.target.value || null })
+                  onRefresh()
+                }}>
+                  <option value="">Nenhum (Livre)</option>
+                  <option disabled>Para carregar equipe, selecione via painel Kanban</option>
+                </select>
+              </div>
+            </div>
           </div>
           {lead.notas && (
             <div className="card-sm">
@@ -467,6 +493,13 @@ function LeadCard({ lead, onClick, onDragStart }: { lead: Lead; onClick: () => v
       {lead.servico_interesse && (
         <p className="text-xs text-zinc-500 truncate pointer-events-none">{lead.servico_interesse}</p>
       )}
+      <div className="flex items-center justify-between pointer-events-none mt-1">
+        {lead.perfis?.nome ? (
+          <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">👤 {lead.perfis.nome.split(' ')[0]}</span>
+        ) : (
+          <span />
+        )}
+      </div>
       <div className="flex items-center justify-between pointer-events-none">
         {lead.valor_estimado ? (
           <span className="text-xs font-semibold text-amber-400">{formatCurrency(lead.valor_estimado)}</span>
@@ -644,13 +677,16 @@ function TabRelatorio({ leads }: { leads: Lead[] }) {
               <div key={l.id} className="flex items-center justify-between py-1 border-b border-zinc-800 last:border-0">
                 <div>
                   <p className="text-sm text-zinc-300">{l.nome}</p>
-                  <p className="text-xs text-zinc-600">{l.telefone} · {l.servico_interesse ?? 'sem serviço'}</p>
+                  <p className="text-xs text-zinc-600">{l.telefone} · {l.perfis?.nome ? `Resp: ${l.perfis.nome.split(' ')[0]}` : 'Sem resp.'}</p>
                 </div>
-                <a href={`https://wa.me/${l.telefone.replace(/\D/g, '')}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors" onClick={e => e.stopPropagation()}>
-                  💬 WA
-                </a>
+                <div className="flex items-center gap-2">
+                  <button className="text-[10px] border border-zinc-700 bg-zinc-800 text-zinc-400 px-2 py-1 rounded" onClick={(e) => { e.stopPropagation(); alert('Automação de Follow-up disparada para ' + l.nome) }}>⚡ Reativar</button>
+                  <a href={`https://wa.me/${l.telefone.replace(/\D/g, '')}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors" onClick={e => e.stopPropagation()}>
+                    💬 WA
+                  </a>
+                </div>
               </div>
             ))}
           </div>
@@ -676,12 +712,14 @@ export default function CajadoClient() {
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null)
   const [leadEditando, setLeadEditando] = useState<Lead | null>(null)
   const [busca, setBusca] = useState('')
+  const [atendenteFiltro, setAtendenteFiltro] = useState('todos')
   const [toastAtivo, setToastAtivo] = useState('')
 
   const { data: leads, refetch } = useSupabaseQuery<Lead>('leads', {
     select: '*, parceiros(nome), perfis(nome)',
     orderBy: { column: 'updated_at', ascending: false },
   })
+  const { data: perfis } = useSupabaseQuery<any>('perfis', { select: 'id, nome' })
   const { update: updateLead } = useSupabaseMutation('leads')
 
   const handleDrop = async (e: React.DragEvent, newStatus: Lead['status']) => {
@@ -711,12 +749,12 @@ export default function CajadoClient() {
     l.proximo_followup && new Date(l.proximo_followup) < new Date() && l.status !== 'perdido'
   )
 
-  // Filtro de busca
-  const leadsFiltrados = leads.filter(l =>
-    !busca || l.nome.toLowerCase().includes(busca.toLowerCase()) ||
-    l.telefone.includes(busca) ||
-    l.servico_interesse?.toLowerCase().includes(busca.toLowerCase())
-  )
+  // Filtro de busca e atendente
+  const leadsFiltrados = leads.filter(l => {
+    const matchBusca = !busca || l.nome.toLowerCase().includes(busca.toLowerCase()) || l.telefone.includes(busca)
+    const matchAtendente = atendenteFiltro === 'todos' || l.atendente_id === atendenteFiltro || (atendenteFiltro === 'sem_responsavel' && !l.atendente_id)
+    return matchBusca && matchAtendente
+  })
 
   const handleRefresh = () => refetch()
 
@@ -766,6 +804,14 @@ export default function CajadoClient() {
             {t.label}
           </button>
         ))}
+        {/* Filtro de atendente inline no Kanban/Lista */}
+        {(tab === 'kanban' || tab === 'lista' || tab === 'relatorio') && (
+          <select className="ml-4 input py-1 text-xs bg-zinc-800/50 w-auto" value={atendenteFiltro} onChange={e => setAtendenteFiltro(e.target.value)}>
+             <option value="todos">Todos os atendentes</option>
+             <option value="sem_responsavel">Sem responsável</option>
+             {perfis.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
+        )}
       </div>
 
       {/* Tab: Kanban */}

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, formatRelative, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
+import { TabEquityCurve } from './_components/TabEquityCurve'
 
 // ── Types ───────────────────────────────────────────────────
 type Operacao = {
@@ -762,7 +763,7 @@ function TabGuia() {
 
 // ── Main ─────────────────────────────────────────────────────
 export default function TraderClient() {
-  const [tab, setTab] = useState<'operacoes' | 'guia' | 'risco' | 'api'>('operacoes')
+  const [tab, setTab] = useState<'operacoes' | 'guia' | 'risco' | 'equity' | 'api'>('operacoes')
   const [modalOp, setModalOp] = useState(false)
   const [modalMentorIA, setModalMentorIA] = useState(false)
   const [filtroResultado, setFiltroResultado] = useState<string>('todos')
@@ -828,6 +829,7 @@ export default function TraderClient() {
     { key: 'operacoes', label: '📋 Operações' },
     { key: 'guia', label: '🏆 Indicadores' },
     { key: 'risco', label: '🛡️ Gestão de Risco' },
+    { key: 'equity', label: '📈 Curva de Capital (Equity)' },
     { key: 'api', label: '🔌 Conexões (Corretoras)' },
   ] as const
 
@@ -993,6 +995,9 @@ export default function TraderClient() {
           </div>
         </div>
       )}
+
+      {/* Tab: Equity Curve */}
+      {tab === 'equity' && <TabEquityCurve operacoes={operacoes} />}
 
       {/* Tab: API (Corretoras) */}
       {tab === 'api' && (

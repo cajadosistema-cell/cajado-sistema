@@ -5,6 +5,7 @@ import { PageHeader, EmptyState } from '@/components/shared/ui'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { TabPermissoes } from './_components/TabPermissoes'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Funcionario = {
@@ -168,7 +169,7 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
 // ── Client Component ────────────────────────────────────────────
 export default function ConfiguracoesClient() {
   const supabase = createClient()
-  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios'>('empresa')
+  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -279,6 +280,15 @@ export default function ConfiguracoesClient() {
             >
               <span>👥 Equipe e Restrições</span>
               <span className="bg-white/10 text-xs px-2 py-0.5 rounded-full">{totalFuncionarios}</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('permissoes')} 
+              className={cn(
+                "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
+                activeTab === 'permissoes' ? "bg-[#1f2744] text-white" : "text-[#8b98b8] hover:bg-white/5 hover:text-white"
+              )}
+            >
+              🔐 Permissões (RBAC)
             </button>
           </div>
         </div>
@@ -461,6 +471,12 @@ export default function ConfiguracoesClient() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'permissoes' && (
+            <div className="card">
+              <TabPermissoes />
             </div>
           )}
         </div>

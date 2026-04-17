@@ -3,6 +3,7 @@
 import { PageHeader, MetricCard, EmptyState } from '@/components/shared/ui'
 import React, { useState } from 'react'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { SecaoRanking } from './_components/SecaoRanking'
 
 const tipoLabels: Record<string, string> = {
   venda: 'Venda',
@@ -383,6 +384,9 @@ export default function VendasClient() {
         </div>
 
       </div>
+
+      {/* ── RANKING DE VENDAS ─────────────────────────────────── */}
+      <SecaoRanking />
     </div>
   )
 }

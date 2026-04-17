@@ -5,6 +5,9 @@ import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, MetricCard, EmptyState, StatusBadge } from '@/components/shared/ui'
 import { createClient } from '@/lib/supabase/client'
+import { SecaoPagamentosParciais } from './_components/SecaoPagamentosParciais'
+import { SecaoAuditoria } from './_components/SecaoAuditoria'
+import { TabCartoes } from './_components/TabCartoes'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Conta = {
@@ -489,6 +492,7 @@ function ModalLancamento({
     categoria_id: '',
     total_parcelas: '1',
     observacoes: '',
+    taxa_cartao: '0', // 0 | 3.5 | 1.5 | boleto
   })
 
   const categoriasFiltradas = categorias.filter(c => c.tipo === form.tipo)
@@ -516,7 +520,26 @@ function ModalLancamento({
           total_parcelas: parcelas,
         } as any)
       }
-    } else {
+      const taxa = parseFloat(form.taxa_cartao)
+      if (taxa > 0) {
+        let valorTaxa = 0
+        if (form.taxa_cartao === 'boleto') valorTaxa = 2.50
+        else valorTaxa = valor * (taxa / 100)
+
+        // Lança a tarifa automática
+        await insert({
+           conta_id: form.conta_id,
+           descricao: `Taxa Auto: ${form.descricao}`,
+           valor: valorTaxa,
+           tipo: 'despesa',
+           regime: form.regime,
+           status: 'pendente',
+           data_competencia: form.data_competencia,
+           categoria_id: null,
+           total_parcelas: 1,
+        } as any)
+      }
+
       await insert({
         conta_id: form.conta_id,
         descricao: form.descricao,
@@ -564,7 +587,7 @@ function ModalLancamento({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Valor (R$) *</label>
+              <label className="label">Valor Bruto (R$) *</label>
               <input className="input mt-1" required type="number" step="0.01" min="0.01"
                 value={form.valor}
                 onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
@@ -577,6 +600,21 @@ function ModalLancamento({
                 onChange={e => setForm(f => ({ ...f, total_parcelas: e.target.value }))} />
             </div>
           </div>
+          
+          {form.tipo === 'receita' && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+              <label className="label text-amber-500 mb-1 flex items-center gap-1">⚡ Taxa Automática (Gateway/Cartão)</label>
+              <select className="input text-xs" value={form.taxa_cartao} onChange={e => setForm(f => ({ ...f, taxa_cartao: e.target.value }))}>
+                 <option value="0">Não gerar taxa automática</option>
+                 <option value="1.5">Cartão de Débito (1.5%)</option>
+                 <option value="3.5">Cartão de Crédito (3.5%)</option>
+                 <option value="4.99">Parcelado 2-12x (4.99%)</option>
+                 <option value="boleto">Boleto (R$ 2,50 fixo)</option>
+              </select>
+              <p className="text-[10px] text-amber-500/80 mt-1">Gera uma debito paralelo automaticamente para bater com o recebimento líquido na conta.</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Data Prevista/Realizada *</label>
@@ -628,6 +666,7 @@ function ModalLancamento({
 // ── Client Component ────────────────────────────────────────────
 
 export default function FinanceiroClient() {
+  const [view, setView] = useState<'geral' | 'cartoes'>('geral')
   const [modalLancamento, setModalLancamento] = useState(false)
   const [modalConta, setModalConta] = useState(false)
   const [modalImport, setModalImport] = useState(false)
@@ -665,42 +704,57 @@ export default function FinanceiroClient() {
         title="Financeiro"
         subtitle="Contas PF/PJ · Caixa · Conciliação · Previsão"
       >
-        <button onClick={() => setModalImport(true)} className="btn-secondary">📥 Importar extrato</button>
-        <button onClick={() => setModalLancamento(true)} className="btn-primary" disabled={contas.length === 0}>+ Lançamento</button>
+        <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 print:hidden" title="Exportar para PDF ou Imprimir">🖨️ PDF / Imprimir</button>
+        <button onClick={() => setModalImport(true)} className="btn-secondary print:hidden">📥 Importar extrato</button>
+        <button onClick={() => setModalLancamento(true)} className="btn-primary print:hidden" disabled={contas.length === 0}>+ Lançamento</button>
       </PageHeader>
 
-      {/* Métricas principais idênticas ao Início */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {/* Saldo Total */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(16,185,129,0.15),transparent_70%)]"></div>
-          <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Saldo total</p>
-          <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#10b981]">{formatCurrency(saldoTotal)}</p>
-        </div>
-
-        {/* Receitas */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(124,92,252,0.12),transparent_70%)]"></div>
-          <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Receitas do mês</p>
-          <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#a78bfa]">{formatCurrency(receitasMes)}</p>
-        </div>
-
-        {/* Despesas */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(244,63,94,0.1),transparent_70%)]"></div>
-          <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Despesas do mês</p>
-          <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#f43f5e]">{formatCurrency(despesasMes)}</p>
-        </div>
-
-        {/* Resultado */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(245,166,35,0.1),transparent_70%)]"></div>
-          <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Resultado</p>
-          <p className={`font-['Syne'] text-[22px] font-bold tracking-tight mb-1 ${resultado >= 0 ? 'text-[#f5a623]' : 'text-[#f43f5e]'}`}>{formatCurrency(resultado)}</p>
-        </div>
+      {/* Tabs Menu Superior */}
+      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit mb-6">
+        <button onClick={() => setView('geral')}
+          className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', view === 'geral' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300')}>
+          Painel Geral
+        </button>
+        <button onClick={() => setView('cartoes')}
+          className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', view === 'cartoes' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300')}>
+          Gestão de Cartões
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {view === 'geral' && (
+      <>
+        {/* Métricas principais idênticas ao Início */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          {/* Saldo Total */}
+          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(16,185,129,0.15),transparent_70%)]"></div>
+            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Saldo total</p>
+            <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#10b981]">{formatCurrency(saldoTotal)}</p>
+          </div>
+
+          {/* Receitas */}
+          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(124,92,252,0.12),transparent_70%)]"></div>
+            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Receitas do mês</p>
+            <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#a78bfa]">{formatCurrency(receitasMes)}</p>
+          </div>
+
+          {/* Despesas */}
+          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(244,63,94,0.1),transparent_70%)]"></div>
+            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Despesas do mês</p>
+            <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#f43f5e]">{formatCurrency(despesasMes)}</p>
+          </div>
+
+          {/* Resultado */}
+          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(245,166,35,0.1),transparent_70%)]"></div>
+            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Resultado</p>
+            <p className={`font-['Syne'] text-[22px] font-bold tracking-tight mb-1 ${resultado >= 0 ? 'text-[#f5a623]' : 'text-[#f43f5e]'}`}>{formatCurrency(resultado)}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Contas */}
         <div className="bg-[#111827] border border-white/5 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
@@ -885,6 +939,30 @@ export default function FinanceiroClient() {
           </div>
         </div>
       </div>
+
+      {/* ── ENTRADAS PARCIAIS ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 mt-4">
+        <SecaoPagamentosParciais
+          lancamentos={lancamentos as any}
+          refetch={refreshAll}
+        />
+      </div>
+
+      {/* ── AUDITORIA DE ALTERAÇÕES ───────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 mt-4">
+        <SecaoAuditoria />
+      </div>
+      </>
+      )}
+
+      {view === 'cartoes' && (
+        <TabCartoes 
+           contas={contas}
+           lancamentos={lancamentos}
+           categorias={categorias}
+           onNovoGasto={() => setModalLancamento(true)}
+        />
+      )}
 
       {modalImport && (
         <ModalImportarExtrato
