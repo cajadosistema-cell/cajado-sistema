@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { PageHeader } from '@/components/shared/ui'
+import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import type { Colaborador, RegistroPonto, Tarefa, Ocorrencia } from './_components/types'
 
 import { TabPonto }      from './_components/tabs/TabPonto'
@@ -69,6 +70,8 @@ export default function GestaoPessoalClient() {
           <button onClick={() => setModalOcorrencia(true)} className="btn-primary">+ Ocorrência</button>
         )}
       </PageHeader>
+
+      <AppPatraoTabs />
 
       {/* KPIs resumo */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

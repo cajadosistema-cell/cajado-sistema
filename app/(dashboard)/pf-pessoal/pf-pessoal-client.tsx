@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { PageHeader } from '@/components/shared/ui'
+import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import type { GastoPessoal, ReceitaPessoal, OrcamentoPessoal } from './_components/types'
 import { formatCurrency } from './_components/types'
 
@@ -70,6 +71,8 @@ export default function PfPessoalClient() {
         <button onClick={() => setModalReceita(true)} className="btn-secondary text-sm md:flex hidden">+ Receita</button>
         <button onClick={() => setModalGasto(true)} className="btn-primary text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">+ Lançar Gasto</button>
       </PageHeader>
+
+      <AppPatraoTabs />
 
       {/* App do Patrão: Hero Card (Net Worth) */}
       <div className="bg-gradient-to-br from-[#0d1522] to-[#080b14] border border-white/10 rounded-2xl p-6 md:p-8 relative overflow-hidden mb-6 shadow-2xl">

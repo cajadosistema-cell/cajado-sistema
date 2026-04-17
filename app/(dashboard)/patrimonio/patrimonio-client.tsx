@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
+import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import { TabImoveis } from './_components/TabImoveis'
 import { TabFinanciamentos } from './_components/TabFinanciamentos'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
@@ -225,6 +226,8 @@ export default function PatrimonioClient() {
       <PageHeader title="Patrimônio" subtitle="Imóveis · Veículos · Financiamentos · ROI">
         {tab === 'geral' && <button onClick={() => setModal(true)} className="btn-primary">+ Patrimônio Genérico</button>}
       </PageHeader>
+
+      <AppPatraoTabs />
 
       <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
         {[

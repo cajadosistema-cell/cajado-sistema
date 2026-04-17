@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
+import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 
 type Ativo = {
@@ -194,6 +195,8 @@ export default function InvestimentosClient() {
       <PageHeader title="Investimentos" subtitle="Carteira · Ativos · Liquidez · Rentabilidade">
         <button onClick={() => setModal(true)} className="btn-primary">+ Ativo</button>
       </PageHeader>
+
+      <AppPatraoTabs />
 
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

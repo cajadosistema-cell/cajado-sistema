@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, formatRelative, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
+import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import { TabEquityCurve } from './_components/TabEquityCurve'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 
@@ -839,6 +840,8 @@ export default function TraderClient() {
       <PageHeader title="Trader" subtitle="Operações · Indicadores · Gestão de Risco · Aprendizado">
         <button onClick={() => setModalOp(true)} className="btn-primary">+ Operação</button>
       </PageHeader>
+
+      <AppPatraoTabs />
 
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">

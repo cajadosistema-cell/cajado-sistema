@@ -78,11 +78,15 @@ export function SecretariaFlutuante() {
     }
   }, [isDragging])
 
-  const handleEnviar = async () => {
-    if (!input.trim() || loading) return
-    const userText = input
+  const transcriptRef = useRef('')
+
+  const handleEnviar = async (textToSubmit?: string) => {
+    const userText = typeof textToSubmit === 'string' ? textToSubmit : input
+    if (!userText.trim() || loading) return
+    
     setMensagens(prev => [...prev, { id: Date.now().toString(), role: 'user', texto: userText }])
     setInput('')
+    transcriptRef.current = ''
     setLoading(true)
 
     setTimeout(() => {
@@ -94,37 +98,48 @@ export function SecretariaFlutuante() {
       setMensagens(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', texto: resposta }])
       setLoading(false)
       
-      // Auto close after 5 seconds if we want, but let's keep it open
     }, 1200)
   }
 
-  const handleListen = () => {
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-      return
-    }
-
+  const handlePressMic = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognition) {
       alert('Reconhecimento de voz não suportado neste navegador.')
       return
     }
 
+    transcriptRef.current = ''
+    setInput('')
+    
     const recognition = new SpeechRecognition()
     recognitionRef.current = recognition
     recognition.lang = 'pt-BR'
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.interimResults = true
 
     recognition.onstart = () => setIsListening(true)
     recognition.onresult = (event: any) => {
       const transcript = Array.from(event.results).map((r: any) => r[0].transcript).join('')
       setInput(transcript)
+      transcriptRef.current = transcript
     }
     recognition.onerror = () => setIsListening(false)
     recognition.onend = () => setIsListening(false)
     recognition.start()
+  }
+
+  const handleReleaseMic = () => {
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+      
+      // Delay slightly to let the last words be processed by onresult
+      setTimeout(() => {
+        if (transcriptRef.current.trim()) {
+           handleEnviar(transcriptRef.current)
+        }
+      }, 500)
+    }
   }
 
   if (!isClient) return null
@@ -206,7 +221,10 @@ export function SecretariaFlutuante() {
             <div className="p-4 bg-[#0a0d16] border-t border-zinc-800">
                <div className="flex items-center gap-2 relative bg-zinc-900 rounded-2xl p-1 border border-zinc-800 focus-within:border-amber-500/50 transition-colors">
                   <button 
-                    onClick={handleListen}
+                    onPointerDown={handlePressMic}
+                    onPointerUp={handleReleaseMic}
+                    onPointerLeave={handleReleaseMic}
+                    style={{ touchAction: 'none' }}
                     className={cn(
                       "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all",
                       isListening ? "bg-red-500 text-white animate-pulse" : "text-zinc-400 hover:text-amber-400"
