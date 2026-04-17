@@ -29,7 +29,10 @@ export async function POST(req: NextRequest) {
     // 2. Remover do Supabase Auth
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id)
 
-    if (authError) {
+    // Apenas retornamos erro se não for o "User not found". 
+    // Se for "User not found", significa que ele apenas ficou preso na tabela (foi criado no painel legado sem auth), 
+    // então a remoção tem que permitir o fluxo continuar para limpar a tabela
+    if (authError && !authError.message.toLowerCase().includes('not found')) {
       return NextResponse.json({ error: `Erro ao excluir usuário no sistema de autenticação: ${authError.message}` }, { status: 500 })
     }
 
