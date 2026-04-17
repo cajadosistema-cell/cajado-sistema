@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS funcionarios (
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Garantir que as colunas de data existam (caso a tabela tenha sido criada antes por outro script)
+ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+
 -- 2. Habilitar RLS
 ALTER TABLE funcionarios ENABLE ROW LEVEL SECURITY;
 
