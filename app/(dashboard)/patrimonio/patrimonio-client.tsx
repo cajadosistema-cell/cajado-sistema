@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { TabImoveis } from './_components/TabImoveis'
 import { TabFinanciamentos } from './_components/TabFinanciamentos'
+import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 
 type ProjetoPatrimonio = {
   id: string
@@ -364,6 +365,9 @@ export default function PatrimonioClient() {
           onSave={() => { refetch(); refetchCustos() }}
         />
       )}
+
+      {/* Secretária Flutuante do Patrão */}
+      <SecretariaFlutuante />
     </>
   )
 }

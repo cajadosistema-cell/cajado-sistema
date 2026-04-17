@@ -5,6 +5,7 @@ import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, formatRelative, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { TabEquityCurve } from './_components/TabEquityCurve'
+import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 
 // ── Types ───────────────────────────────────────────────────
 type Operacao = {
@@ -1055,6 +1056,9 @@ export default function TraderClient() {
       {modalMentorIA && (
         <ModalMentorIA operacoes={operacoes} onClose={() => setModalMentorIA(false)} />
       )}
+
+      {/* Secretária Flutuante do Patrão */}
+      <SecretariaFlutuante />
     </>
   )
 }

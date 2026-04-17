@@ -10,7 +10,7 @@ import { TabResumo }      from './_components/tabs/TabResumo'
 import { TabLancamentos } from './_components/tabs/TabLancamentos'
 import { TabOrcamentos }  from './_components/tabs/TabOrcamentos'
 import { TabPrevisao }    from './_components/tabs/TabPrevisao'
-import { SecretariaFlutuante } from './_components/SecretariaFlutuante'
+import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 

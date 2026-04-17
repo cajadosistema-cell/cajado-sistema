@@ -11,6 +11,7 @@ import { TabOcorrencias } from './_components/tabs/TabOcorrencias'
 import { TabEquipe }    from './_components/tabs/TabEquipe'
 import { ModalNovaTarefa }    from './_components/modals/ModalNovaTarefa'
 import { ModalNovaOcorrencia } from './_components/modals/ModalNovaOcorrencia'
+import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 
 type TabId = 'ponto' | 'tarefas' | 'ocorrencias' | 'equipe'
 
@@ -147,6 +148,9 @@ export default function GestaoPessoalClient() {
           onClose={() => setModalOcorrencia(false)}
         />
       )}
+
+      {/* Secretária Flutuante do Patrão */}
+      <SecretariaFlutuante />
     </>
   )
 }

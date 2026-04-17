@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
+import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 
 type Ativo = {
   id: string
@@ -345,6 +346,9 @@ export default function InvestimentosClient() {
       )}
 
       {modal && <ModalAtivo onClose={() => setModal(false)} onSave={refetch} />}
+
+      {/* Secretária Flutuante do Patrão */}
+      <SecretariaFlutuante />
     </>
   )
 }
