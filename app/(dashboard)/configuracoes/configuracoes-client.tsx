@@ -260,6 +260,33 @@ export default function ConfiguracoesClient() {
     }
   }
 
+  const handleDeleteFuncionario = async (id: string, email: string, nome: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o funcionário ${nome} e remover seu acesso ao sistema?`)) {
+      return
+    }
+
+    try {
+      const res = await fetch('/api/admin/excluir-funcionario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, email }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        alert(data.error || 'Erro ao excluir o funcionário.')
+        return
+      }
+
+      // Sucesso na exclusão, recarrega a query do Supabase
+      refetch()
+      alert(`Funcionário ${nome} foi excluído com sucesso.`)
+    } catch (err: any) {
+      alert('Erro inesperado: ' + err.message)
+    }
+  }
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -493,6 +520,7 @@ export default function ConfiguracoesClient() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        <button onClick={() => handleDeleteFuncionario(func.id, func.email, func.nome)} className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors">Excluir</button>
                         <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium transition-colors">Editar Limites</button>
                       </div>
                     </div>
