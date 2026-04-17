@@ -70,9 +70,9 @@ export default function ComunicacaoClient() {
           const newState = room.presenceState()
           let onlines: string[] = []
           for (const key in newState) {
-            // @ts-ignore
-            newState[key].forEach(presence => {
-              if (presence.user_id) onlines.push(presence.user_id)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(newState[key] as any[]).forEach((presence: any) => {
+              if (presence.user_id) onlines.push(presence.user_id as string)
             })
           }
           setOnlineUsers(Array.from(new Set(onlines)))
@@ -132,7 +132,8 @@ export default function ComunicacaoClient() {
       audio_base64: null,
     }
     setTexto('')
-    await supabase.from('chat_interno').insert(msg)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.from('chat_interno') as any).insert(msg)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -167,7 +168,8 @@ export default function ComunicacaoClient() {
           
           // Enviar via Supabase
           if (currentUser) {
-            await supabase.from('chat_interno').insert({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase.from('chat_interno') as any).insert({
               remetente_id: currentUser.id,
               destinatario_id: activeChat,
               texto: null,
