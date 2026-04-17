@@ -34,9 +34,7 @@ CREATE POLICY "funcionarios_select_own"
   ON funcionarios FOR SELECT
   USING (
     auth.uid() = id           -- o próprio funcionário lê seu registro
-    OR email = (              -- ou por email (fallback para casos legacy)
-      SELECT email FROM auth.users WHERE id = auth.uid()
-    )
+    OR email = current_setting('request.jwt.claims', true)::json->>'email'
   );
 
 -- 5. Política: service_role (usado na API Route) tem acesso total
