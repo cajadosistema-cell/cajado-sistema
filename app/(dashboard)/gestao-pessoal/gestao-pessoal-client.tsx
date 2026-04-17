@@ -90,16 +90,18 @@ export default function GestaoPessoalClient() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-6 w-fit overflow-x-auto">
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-0.5 px-0.5 mb-6 pb-0.5">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              tab === t.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+            className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+              tab === t.id
+                ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-sm'
+                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700 bg-zinc-900'
             }`}
           >
-            {t.emoji} {t.label}
+            <span>{t.emoji}</span> {t.label}
           </button>
         ))}
       </div>

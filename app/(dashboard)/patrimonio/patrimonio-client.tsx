@@ -229,18 +229,21 @@ export default function PatrimonioClient() {
 
       <AppPatraoTabs />
 
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-0.5 px-0.5 mb-4 pb-0.5">
         {[
-          { key: 'geral', label: '📊 Visão Geral & Projetos' },
-          { key: 'imoveis', label: '🏠 Imóveis Detalhado' },
-          { key: 'financiamentos', label: '🏦 Financiamentos' },
+          { key: 'geral', label: '📊 Visão Geral', labelMobile: '📊 Geral' },
+          { key: 'imoveis', label: '🏠 Imóveis', labelMobile: '🏠 Imóveis' },
+          { key: 'financiamentos', label: '🏦 Financiamentos', labelMobile: '🏦 Financiam.' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
             className={cn(
-              'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              'shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all border',
+              tab === t.key
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 shadow-sm'
+                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700 bg-zinc-900'
             )}>
-            {t.label}
+            <span className="hidden sm:inline">{t.label}</span>
+            <span className="sm:hidden">{t.labelMobile}</span>
           </button>
         ))}
       </div>

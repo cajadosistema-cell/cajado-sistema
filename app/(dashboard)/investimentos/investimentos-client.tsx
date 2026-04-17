@@ -260,12 +260,14 @@ export default function InvestimentosClient() {
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex gap-2 flex-wrap mb-4">
+      {/* Filtros — scroll horizontal no mobile */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-0.5 px-0.5 mb-4 pb-0.5">
         {['todos', ...Object.keys(porTipo)].map(t => (
           <button key={t} onClick={() => setFiltroTipo(t)}
-            className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-all uppercase',
-              filtroTipo === t ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'text-zinc-500 border-zinc-800 hover:text-zinc-300'
+            className={cn('shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all uppercase',
+              filtroTipo === t
+                ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 bg-zinc-900'
             )}>
             {t}
           </button>

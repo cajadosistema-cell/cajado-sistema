@@ -68,34 +68,34 @@ export default function PfPessoalClient() {
         title="Financeiro"
         subtitle="Gestão Pessoal · Patrimônio · Investimentos"
       >
-        <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap shrink-0 md:flex hidden">+ Receita</button>
-        <button onClick={() => setModalGasto(true)} className="btn-primary text-xs h-8 px-3 whitespace-nowrap shrink-0 shadow-[0_0_10px_rgba(16,185,129,0.2)]">+ Lançar Gasto</button>
+        <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap shrink-0 hidden md:flex">+ Receita</button>
+        <button onClick={() => setModalGasto(true)} className="btn-primary text-xs h-8 px-3 whitespace-nowrap shrink-0">+ Gasto</button>
       </PageHeader>
 
       <AppPatraoTabs />
 
       {/* App do Patrão: Hero Card (Net Worth) */}
-      <div className="bg-gradient-to-br from-[#0d1522] to-[#080b14] border border-white/10 rounded-2xl p-6 md:p-8 relative overflow-hidden mb-6 shadow-2xl">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+      <div className="bg-gradient-to-br from-[#0d1522] to-[#080b14] border border-white/10 rounded-2xl p-5 md:p-8 relative overflow-hidden mb-6 shadow-2xl">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
         
-        <p className="text-xs md:text-sm font-semibold text-[#8b98b8] tracking-[0.1em] uppercase mb-1 relative z-10">Patrimônio Líquido Total</p>
-        <p className="text-4xl md:text-5xl font['Syne'] font-extrabold tracking-tight text-white mb-6 relative z-10 drop-shadow-md">
+        <p className="text-[10px] md:text-xs font-semibold text-[#8b98b8] tracking-[0.1em] uppercase mb-1 relative z-10">Patrimônio Líquido</p>
+        <p className="text-3xl md:text-5xl font-extrabold tracking-tight text-white mb-4 md:mb-6 relative z-10">
           {formatCurrency(netWorthTotal)}
         </p>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 relative z-10">
+        <div className="grid grid-cols-3 gap-2 md:gap-4 relative z-10">
           <div>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Caixa / Saldo</p>
-            <p className="text-lg font-bold text-amber-400">{formatCurrency(saldo)}</p>
+            <p className="text-[9px] md:text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Caixa</p>
+            <p className="text-sm md:text-lg font-bold text-amber-400">{formatCurrency(saldo)}</p>
           </div>
           <div>
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Investido</p>
-            <p className="text-lg font-bold text-blue-400">{formatCurrency(netWorthAtivos)}</p>
+            <p className="text-[9px] md:text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Investido</p>
+            <p className="text-sm md:text-lg font-bold text-blue-400">{formatCurrency(netWorthAtivos)}</p>
           </div>
-          <div className="col-span-2 md:col-span-1">
-            <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Bens & Imóveis</p>
-            <p className="text-lg font-bold text-indigo-400">{formatCurrency(netWorthFisico)}</p>
+          <div>
+            <p className="text-[9px] md:text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Bens</p>
+            <p className="text-sm md:text-lg font-bold text-indigo-400">{formatCurrency(netWorthFisico)}</p>
           </div>
         </div>
       </div>
@@ -121,14 +121,16 @@ export default function PfPessoalClient() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-6 w-fit overflow-x-auto">
+      {/* Tabs — scroll horizontal no mobile */}
+      <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-0.5 px-0.5 mb-6 pb-0.5">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              tab === t.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+            className={`shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+              tab === t.id
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-sm'
+                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700 bg-zinc-900'
             }`}
           >
             {t.emoji} {t.label}
