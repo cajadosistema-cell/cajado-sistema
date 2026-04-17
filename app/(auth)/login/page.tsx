@@ -76,6 +76,12 @@ export default function LoginPage() {
           >
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
+          
+          <div className="pt-4 mt-2 border-t border-zinc-800 text-center">
+            <a href="/cadastro" className="text-xs text-zinc-500 hover:text-amber-400 transition-colors">
+              + Cadastrar novo colaborador
+            </a>
+          </div>
         </form>
       </div>
     </div>
