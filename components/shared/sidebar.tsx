@@ -30,6 +30,7 @@ const navItems = [
     group: '🚀 Estratégia Corporativa',
     id: 'est',
     items: [
+      { href: '/comunicacao', label: 'Chat da Equipe & Voz', icon: '◈', color: 'text-violet-400' },
       { href: '/expansao', label: 'Expansão & OKRs', icon: '◈', color: 'text-purple-400' },
       { href: '/inteligencia', label: 'Inteligência & IA', icon: '◈', color: 'text-purple-400' },
       { href: '/organizacao', label: 'Organização (Tarefas)', icon: '◈', color: 'text-cyan-400' },

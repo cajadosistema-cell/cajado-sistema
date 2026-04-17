@@ -8,10 +8,11 @@ export function BottomNav() {
   const pathname = usePathname()
 
   const navItems = [
-    { href: '/inicio', label: 'Início', icon: '⬡' },
-    { href: '/financeiro', label: 'Cofre', icon: '💰' },
-    { href: '/inbox', label: 'WhatsApp', icon: '💬' },
-    { href: '/pf-pessoal', label: 'Pessoal', icon: '💎' },
+    { href: '/inicio',       label: 'Início',    icon: '⬡',  activeColor: 'text-amber-400'  },
+    { href: '/financeiro',   label: 'Cofre',     icon: '💰', activeColor: 'text-teal-400'   },
+    { href: '/inbox',        label: 'WhatsApp',  icon: '💬', activeColor: 'text-green-400'  },
+    { href: '/comunicacao',  label: 'Chat',      icon: '🗨️', activeColor: 'text-violet-400' },
+    { href: '/pf-pessoal',   label: 'Pessoal',   icon: '💎', activeColor: 'text-rose-400'   },
   ]
 
   return (
@@ -24,14 +25,14 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200",
-                isActive ? "text-amber-400 scale-110" : "text-zinc-500 hover:text-zinc-300"
+                "relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200",
+                isActive ? `${item.activeColor} scale-110` : "text-zinc-500 hover:text-zinc-300"
               )}
             >
               <span className="text-xl mb-0.5">{item.icon}</span>
               <span className="text-[9px] font-bold tracking-wider">{item.label}</span>
               {isActive && (
-                <div className="absolute -bottom-2 w-1 h-1 bg-amber-400 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                <div className={cn("absolute -bottom-2 w-1 h-1 rounded-full", item.activeColor.replace('text-', 'bg-'))} />
               )}
             </Link>
           )
