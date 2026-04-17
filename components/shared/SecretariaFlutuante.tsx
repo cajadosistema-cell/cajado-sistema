@@ -253,7 +253,7 @@ export function SecretariaFlutuante() {
                     onKeyDown={e => e.key === 'Enter' && handleEnviar()}
                   />
                   <button 
-                    onClick={handleEnviar}
+                    onClick={() => handleEnviar()}
                     disabled={!input.trim() || loading}
                     className="w-10 h-10 rounded-xl bg-amber-500 hover:bg-amber-400 text-amber-950 flex items-center justify-center shrink-0 disabled:opacity-50"
                   >
