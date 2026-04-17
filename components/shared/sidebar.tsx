@@ -110,8 +110,8 @@ export function Sidebar() {
     })
   })).filter(group => group.items.length > 0)
 
-  // Início é sempre visível para todos (independente de permissões)
-  const inicioSempreVisivel = true
+  // Início é restrito apenas ao Admin
+  const inicioSempreVisivel = isAdmin
 
   return (
     <aside className="hidden md:flex w-56 shrink-0 bg-[#0d1120] border-r border-white/5 flex-col h-screen sticky top-0 z-40">
@@ -126,19 +126,21 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 px-2 custom-scrollbar">
-        {/* Link de Início Fixo e Destacado */}
-        <Link
-           href="/inicio"
-           className={cn(
-             'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-bold transition-all mb-4',
-             pathname === '/inicio'
-               ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 shadow-sm border border-amber-500/20'
-               : 'text-zinc-300 hover:text-amber-400 hover:bg-white/5'
-           )}
-        >
-          <span className="text-amber-500">⬡</span>
-          Dashboard Inicial
-        </Link>
+        {/* Link de Início Fixo e Destacado APENAS ADMIN */}
+        {isAdmin && (
+          <Link
+            href="/inicio"
+            className={cn(
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-bold transition-all mb-4',
+              pathname === '/inicio'
+                ? 'bg-gradient-to-r from-amber-500/20 to-amber-500/5 text-amber-400 shadow-sm border border-amber-500/20'
+                : 'text-zinc-300 hover:text-amber-400 hover:bg-white/5'
+            )}
+          >
+            <span className="text-amber-500">⬡</span>
+            Dashboard Inicial
+          </Link>
+        )}
 
         <div className="space-y-1">
           {filteredNavItems.map(group => {
