@@ -14,8 +14,8 @@ export default async function InicioPage() {
     {
       cookies: {
         getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          try { cookiesToSet.forEach(({ name, value, options }) => { cookieStore.set(name, value, options) }) } catch (error) {}
+        setAll(cookiesToSet: any[]) {
+          try { cookiesToSet.forEach(({ name, value, options }: any) => { cookieStore.set(name, value, options) }) } catch (error) {}
         },
       },
     }
