@@ -9,18 +9,8 @@ export default function LandingPage() {
     <div className="min-h-screen bg-[#0d0f0d] text-white font-sans selection:bg-[#2d6a2d] selection:text-white">
       {/* NAV */}
       <nav className="flex items-center justify-between py-4 px-5 md:px-10 bg-[#0d0f0d]/95 border-b border-[#1e221e] sticky top-0 z-50 backdrop-blur-sm">
-        <a href="#" className="flex items-center gap-2.5 no-underline">
-          <svg width="34" height="34" viewBox="0 0 200 200">
-            <polygon points="100,18 142,82 58,82" fill="#d4e600"/>
-            <polygon points="28,135 78,78 78,135" fill="#2a7a9a"/>
-            <polygon points="172,135 122,78 122,135" fill="#2d6a2d"/>
-            <circle cx="100" cy="112" r="27" fill="#2d6a2d"/>
-            <path d="M89,124 Q100,96 111,124" fill="#0d0f0d"/>
-          </svg>
-          <div className="flex flex-col">
-            <span className="text-white font-bold text-base tracking-[2px]">CAJADO</span>
-            <span className="text-[#666] text-[10px] tracking-[3px]">SOLUÇÕES</span>
-          </div>
+        <a href="#" className="flex items-center no-underline">
+          <img src="/icon-192.png" alt="Cajado Soluções" className="h-[50px] md:h-[60px] w-auto object-contain" />
         </a>
 
         <ul className={`list-none gap-7 ${menuOpen ? 'flex flex-col absolute top-[70px] right-5 bg-[#141814] border border-[#2a2e2a] rounded-lg p-4 z-50' : 'hidden'} md:!flex md:!flex-row md:!static md:!bg-transparent md:!border-none md:!p-0 md:!items-center`}>
