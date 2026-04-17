@@ -138,7 +138,7 @@ export default function DashboardHome() {
                   </div>
                   <div className="flex items-center gap-3">
                     <StatusBadge status={l.status} />
-                    <p className={`text-sm font-semibold ${tipoColor[l.tipo] ?? 'text-zinc-300'}`}>
+                    <p className={`text-sm font-semibold truncate max-w-[80px] md:max-w-none text-right ${tipoColor[l.tipo] ?? 'text-zinc-300'}`}>
                       {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
                     </p>
                   </div>
@@ -154,10 +154,12 @@ export default function DashboardHome() {
 
         <section>
           <SectionHeader title="🏢 Cajado Empresa" href="/cajado" />
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 mb-3">
             <StatCard label="Leads ativos" value={leadsAtivos} href="/cajado" />
             <StatCard label="Clientes" value={clientesAtivos} href="/cajado" color="text-emerald-400" />
-            <StatCard label="Pipeline" value={formatCurrency(pipelineValor)} href="/cajado" color="text-amber-400" />
+            <div className="col-span-2 xl:col-span-1">
+              <StatCard label="Pipeline" value={formatCurrency(pipelineValor)} href="/cajado" color="text-amber-400" />
+            </div>
           </div>
           {leads.length > 0 && (
             <div className="card">
@@ -184,7 +186,7 @@ export default function DashboardHome() {
 
         <section>
           <SectionHeader title="📈 Trader" href="/trader" />
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 mb-3">
             <StatCard
               label="P&L Total"
               value={formatCurrency(plTotal)}
@@ -197,12 +199,14 @@ export default function DashboardHome() {
               href="/trader"
               color={winRate >= 50 ? 'text-emerald-400' : 'text-red-400'}
             />
-            <StatCard
-              label="Operações"
-              value={operacoes.length}
-              sub={`${operacoesFechadas.length} fechadas`}
-              href="/trader"
-            />
+            <div className="col-span-2 xl:col-span-1">
+              <StatCard
+                label="Operações"
+                value={operacoes.length}
+                sub={`${operacoesFechadas.length} fechadas`}
+                href="/trader"
+              />
+            </div>
           </div>
           <div className="card">
             {operacoes.length > 0 ? (
@@ -231,15 +235,17 @@ export default function DashboardHome() {
 
         <section>
           <SectionHeader title="📊 Investimentos" href="/investimentos" />
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
             <StatCard label="Investido" value={formatCurrency(totalInvestido)} href="/investimentos" />
             <StatCard label="Valor atual" value={formatCurrency(totalAtual)} href="/investimentos" />
-            <StatCard
-              label="Rentabilidade"
+            <div className="col-span-2 xl:col-span-1">
+              <StatCard
+                label="Rentabilidade"
               value={`${rentInv >= 0 ? '+' : ''}${rentInv.toFixed(2)}%`}
               href="/investimentos"
               color={rentInv >= 0 ? 'text-emerald-400' : 'text-red-400'}
             />
+            </div>
           </div>
           <div className="card mt-3">
             <p className="text-xs text-zinc-500 mb-1">Resultado líquido</p>
@@ -251,15 +257,17 @@ export default function DashboardHome() {
 
         <section>
           <SectionHeader title="🏠 Patrimônio" href="/patrimonio" />
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
             <StatCard label="Bens cadastrados" value={patrimonio.length} href="/patrimonio" />
             <StatCard label="Total investido" value={formatCurrency(patriInvestido)} href="/patrimonio" />
-            <StatCard
-              label="Valor de mercado"
+            <div className="col-span-2 xl:col-span-1">
+              <StatCard
+                label="Valor de mercado"
               value={formatCurrency(patriMercado)}
               href="/patrimonio"
               color="text-amber-400"
             />
+            </div>
           </div>
           <div className="card mt-3">
             <p className="text-xs text-zinc-500 mb-1">Valorização patrimonial</p>
@@ -275,10 +283,12 @@ export default function DashboardHome() {
 
         <section>
           <SectionHeader title="📱 Segurança WhatsApp" href="/seguranca-wa" />
-          <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 mb-3">
             <StatCard label="Números ativos" value={waAtivos} href="/seguranca-wa" color="text-emerald-400" />
             <StatCard label="Enviados hoje" value={waTotalEnv} href="/seguranca-wa" />
-            <StatCard label="Total números" value={numerosWA.length} href="/seguranca-wa" />
+            <div className="col-span-2 xl:col-span-1">
+              <StatCard label="Total números" value={numerosWA.length} href="/seguranca-wa" />
+            </div>
           </div>
           {numerosWA.length > 0 && (
             <div className="card">

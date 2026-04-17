@@ -10,18 +10,17 @@ import { TabResumo }      from './_components/tabs/TabResumo'
 import { TabLancamentos } from './_components/tabs/TabLancamentos'
 import { TabOrcamentos }  from './_components/tabs/TabOrcamentos'
 import { TabPrevisao }    from './_components/tabs/TabPrevisao'
-import { TabAssistente }  from './_components/tabs/TabAssistente'
+import { SecretariaFlutuante } from './_components/SecretariaFlutuante'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'assistente'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao'
 
 const TABS = [
   { id: 'resumo'       as TabId, label: 'Resumo',      emoji: '📊' },
   { id: 'lancamentos'  as TabId, label: 'Lançamentos', emoji: '📋' },
   { id: 'orcamentos'   as TabId, label: 'Orçamentos',  emoji: '🎯' },
   { id: 'previsao'     as TabId, label: 'Previsão',    emoji: '🔮' },
-  { id: 'assistente'   as TabId, label: 'IA Pessoal',  emoji: '🤖' },
 ]
 
 export default function PfPessoalClient() {
@@ -167,9 +166,9 @@ export default function PfPessoalClient() {
           onNovaReceita={() => setModalReceita(true)}
         />
       )}
-      {tab === 'assistente' && (
-        <TabAssistente />
-      )}
+
+      {/* Secretária Flutuante do Patrão */}
+      <SecretariaFlutuante />
 
       {/* Modais */}
       {modalGasto && userId && (
