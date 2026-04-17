@@ -89,16 +89,28 @@ export function SecretariaFlutuante() {
     transcriptRef.current = ''
     setLoading(true)
 
-    setTimeout(() => {
-      let resposta = 'Anotado, chefe. Sistema sincronizado.'
-      const l = userText.toLowerCase()
-      if (l.includes('gasto') || l.includes('comprei')) resposta = 'Operação computada no seu fluxo de Pessoal.'
-      else if (l.includes('diario') || l.includes('pensamento')) resposta = 'Insight perfeitamente guardado no seu cofre estratégico.'
+    try {
+      const contextoHistorico = mensagens.map(m => `${m.role === 'ai' ? 'Secretária' : 'Usuário'}: ${m.texto}`).join('\n')
       
-      setMensagens(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', texto: resposta }])
+      const res = await fetch('/api/openrouter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: userText,
+          context: contextoHistorico,
+          systemInstruction: 'Você é a Elena, Secretária Executiva Premium do sistema Cajado Soluções. Você ajuda o "Patrão" (usuário) a gerenciar agenda, gastos, finanças, investimentos e dar conselhos de gestão de alto nível. Seja breve, muito educada, use um tom profissional e levemente entusiasmado. Responda de forma concisa. Se ele pedir para agendar ou registrar gastos, confirme que foi anotado com sucesso.'
+        })
+      })
+      
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao consultar IA')
+      
+      setMensagens(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', texto: data.result }])
+    } catch (err) {
+      setMensagens(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', texto: 'Perdão, chefe. Tive um problema de comunicação com meus servidores. Tente novamente em instantes.' }])
+    } finally {
       setLoading(false)
-      
-    }, 1200)
+    }
   }
 
   const handlePressMic = () => {
