@@ -139,14 +139,32 @@ export default function ComunicacaoClient() {
     )
   })
 
+  // ── Web Push helper ─────────────────────────────────────────
+  const sendPush = async (destinatario: string | null, texto: string) => {
+    if (!currentUser || !destinatario) return // não envia push no canal geral (destinatario = null)
+    const nomeRemetente = equipe.find(f => f.id === currentUser.id)?.nome ?? 'Alguém'
+    fetch('/api/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        destinatarioId: destinatario,
+        remetenteNome: nomeRemetente,
+        texto,
+        url: '/comunicacao',
+      }),
+    }).catch(() => {}) // fire-and-forget, não bloqueia o envio
+  }
+
   // ── Send text ───────────────────────────────────────────────
   const handleSendText = async () => {
     if (!texto.trim() || !currentUser) return
-    const msg = { remetente_id: currentUser.id, destinatario_id: activeChat, texto: texto.trim(), audio_base64: null }
+    const textoMsg = texto.trim()
+    const msg = { remetente_id: currentUser.id, destinatario_id: activeChat, texto: textoMsg, audio_base64: null }
     setTexto('')
     if (textareaRef.current) { textareaRef.current.style.height = 'auto' }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from('chat_interno') as any).insert(msg)
+    sendPush(activeChat, textoMsg)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -174,6 +192,7 @@ export default function ComunicacaoClient() {
               texto: null,
               audio_base64: reader.result as string,
             })
+            sendPush(activeChat, '🎤 Mensagem de voz')
           }
         }
         stream.getTracks().forEach(t => t.stop())

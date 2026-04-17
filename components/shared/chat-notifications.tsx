@@ -33,7 +33,6 @@ function NotificationToast({ msg, onClose, onClick }: {
       )}
       onClick={onClick}
     >
-      {/* Avatar */}
       <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0 font-bold text-white text-xs">
         {msg.avatar}
       </div>
@@ -45,52 +44,83 @@ function NotificationToast({ msg, onClose, onClick }: {
         onClick={e => { e.stopPropagation(); onClose() }}
         className="text-zinc-600 hover:text-zinc-400 text-lg leading-none shrink-0 -mt-0.5"
         aria-label="Fechar"
-      >
-        ×
-      </button>
+      >×</button>
     </div>
   )
 }
 
+// ── Registrar Service Worker e Web Push Subscription ──────────
+async function registerPushSubscription(userId: string) {
+  if (typeof window === 'undefined') return
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+
+  try {
+    // Registra o service worker
+    const reg = await navigator.serviceWorker.register('/sw.js')
+    await navigator.serviceWorker.ready
+
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return
+
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+
+    // Converte a VAPID key para Uint8Array
+    const urlBase64ToUint8Array = (base64String: string) => {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+      const rawData = window.atob(base64)
+      const outputArray = new Uint8Array(rawData.length)
+      for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i)
+      return outputArray
+    }
+
+    // Tenta pegar subscription existente ou criar nova
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      })
+    }
+
+    // Salva no banco
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON(), userId }),
+    })
+  } catch (err) {
+    console.warn('[WebPush] Falha ao registrar:', err)
+  }
+}
+
 // ── Provider principal ────────────────────────────────────────
 export function ChatNotifications() {
-  const supabase = createClient()
   const pathname = usePathname()
   const [toasts, setToasts] = useState<ToastMsg[]>([])
   const currentUserRef = useRef<string | null>(null)
-  const equipeRef = useRef<Record<string, string>>({}) // id → nome
-  const permissionRef = useRef<NotificationPermission>('default')
+  const equipeRef = useRef<Record<string, string>>({})
 
-  // Solicitar permissão de notificação do browser
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return
-    permissionRef.current = Notification.permission
-    if (Notification.permission === 'default') {
-      // Aguarda um gesto do usuário para pedir — dispara após 3s
-      const t = setTimeout(() => {
-        Notification.requestPermission().then(p => {
-          permissionRef.current = p
-        })
-      }, 3000)
-      return () => clearTimeout(t)
-    }
-  }, [])
-
-  // Carregar usuário atual e equipe
+  // Carregar usuário e registrar push subscription
   useEffect(() => {
     async function init() {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
+
       currentUserRef.current = session.user.id
 
-      const { data: funcs } = await supabase.from('funcionarios').select('id, nome').order('nome')
+      // Carregar nomes da equipe
+      const { data: funcs } = await supabase.from('funcionarios').select('id, nome')
       if (funcs) {
         const map: Record<string, string> = {}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(funcs as any[]).forEach((f: any) => { map[f.id] = f.nome })
         equipeRef.current = map
       }
+
+      // Registrar Web Push (após 2s para não bloquear carregamento)
+      setTimeout(() => registerPushSubscription(session.user.id), 2000)
     }
     init()
   }, [])
@@ -100,12 +130,8 @@ export function ChatNotifications() {
   }, [])
 
   const navigateToChat = useCallback((chatId: string | null) => {
-    // Armazena o destino no sessionStorage para o chat abrir na conversa certa
-    if (chatId) {
-      sessionStorage.setItem('cajado_open_chat', chatId)
-    } else {
-      sessionStorage.setItem('cajado_open_chat', 'geral')
-    }
+    if (chatId) sessionStorage.setItem('cajado_open_chat', chatId)
+    else sessionStorage.setItem('cajado_open_chat', 'geral')
     window.location.href = '/comunicacao'
   }, [])
 
@@ -122,54 +148,27 @@ export function ChatNotifications() {
           const msg = payload.new
           const myId = currentUserRef.current
 
-          // Ignorar mensagens do próprio usuário
           if (!myId || msg.remetente_id === myId) return
-
-          // Ignorar DMs que não são para mim
           if (msg.destinatario_id !== null && msg.destinatario_id !== myId) return
 
           const nomeRemetente = equipeRef.current[msg.remetente_id] ?? 'Alguém'
           const iniciais = nomeRemetente.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
-          const textoPreview = msg.texto
-            ? msg.texto.slice(0, 80)
-            : '🎤 Mensagem de voz'
+          const textoPreview = msg.texto ? msg.texto.slice(0, 80) : '🎤 Mensagem de voz'
 
           const isOnChatPage = pathname === '/comunicacao'
 
-          // ── Browser Notification (funciona fora do app quando PWA instalado) ──
-          if (permissionRef.current === 'granted') {
-            const notification = new Notification(
-              msg.destinatario_id === null
-                ? `💬 ${nomeRemetente} — Geral`
-                : `💬 ${nomeRemetente}`,
+          // Toast in-app (só fora do chat)
+          if (!isOnChatPage) {
+            setToasts(prev => [
+              ...prev.slice(-2),
               {
-                body: textoPreview,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
-                tag: `chat-${msg.remetente_id}`,
-                silent: false,
-              }
-            )
-            notification.onclick = () => {
-              window.focus()
-              navigateToChat(msg.destinatario_id)
-              notification.close()
-            }
-          }
-
-          // ── Toast in-app (sempre visível dentro do sistema) ──
-          // Não mostra toast se estiver na página de chat E a conversa já está aberta
-          // (o chat já tem scroll automático nesse caso)
-          const alreadyOnThisChat = isOnChatPage // simplificado — o chat cuida do próprio scroll
-          if (!alreadyOnThisChat) {
-            const toast: ToastMsg = {
-              id: `${msg.id}-${Date.now()}`,
-              nome: nomeRemetente,
-              texto: textoPreview,
-              avatar: iniciais,
-              chatId: msg.destinatario_id ?? null,
-            }
-            setToasts(prev => [...prev.slice(-2), toast]) // máx 3 toasts ao mesmo tempo
+                id: `${msg.id}-${Date.now()}`,
+                nome: nomeRemetente,
+                texto: textoPreview,
+                avatar: iniciais,
+                chatId: msg.destinatario_id ?? null,
+              },
+            ])
           }
         }
       )
@@ -184,7 +183,6 @@ export function ChatNotifications() {
     <div
       className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
-      aria-label="Notificações de chat"
     >
       {toasts.map(t => (
         <div key={t.id} className="pointer-events-auto">
