@@ -224,7 +224,7 @@ export default function PatrimonioClient() {
   return (
     <>
       <PageHeader title="Patrimônio" subtitle="Imóveis · Veículos · Financiamentos · ROI">
-        {tab === 'geral' && <button onClick={() => setModal(true)} className="btn-primary">+ Patrimônio Genérico</button>}
+        {tab === 'geral' && <button onClick={() => setModal(true)} className="btn-primary text-xs h-8 px-3">+ Patrimônio Genérico</button>}
       </PageHeader>
 
       <AppPatraoTabs />

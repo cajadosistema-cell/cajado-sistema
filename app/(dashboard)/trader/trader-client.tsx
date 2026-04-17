@@ -838,7 +838,7 @@ export default function TraderClient() {
   return (
     <>
       <PageHeader title="Trader" subtitle="Operações · Indicadores · Gestão de Risco · Aprendizado">
-        <button onClick={() => setModalOp(true)} className="btn-primary">+ Operação</button>
+        <button onClick={() => setModalOp(true)} className="btn-primary text-xs h-8 px-3">+ Operação</button>
       </PageHeader>
 
       <AppPatraoTabs />

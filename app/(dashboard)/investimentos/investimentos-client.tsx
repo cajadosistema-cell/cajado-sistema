@@ -193,7 +193,7 @@ export default function InvestimentosClient() {
   return (
     <>
       <PageHeader title="Investimentos" subtitle="Carteira · Ativos · Liquidez · Rentabilidade">
-        <button onClick={() => setModal(true)} className="btn-primary">+ Ativo</button>
+        <button onClick={() => setModal(true)} className="btn-primary text-xs h-8 px-3">+ Ativo</button>
       </PageHeader>
 
       <AppPatraoTabs />

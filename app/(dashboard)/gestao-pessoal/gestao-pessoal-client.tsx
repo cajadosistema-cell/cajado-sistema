@@ -64,10 +64,10 @@ export default function GestaoPessoalClient() {
         subtitle="Ponto · Tarefas · Ocorrências · Desempenho"
       >
         {tab === 'tarefas' && (
-          <button onClick={() => setModalTarefa(true)} className="btn-primary">+ Tarefa</button>
+          <button onClick={() => setModalTarefa(true)} className="btn-primary text-xs h-8 px-3">+ Tarefa</button>
         )}
         {tab === 'ocorrencias' && (
-          <button onClick={() => setModalOcorrencia(true)} className="btn-primary">+ Ocorrência</button>
+          <button onClick={() => setModalOcorrencia(true)} className="btn-primary text-xs h-8 px-3">+ Ocorrência</button>
         )}
       </PageHeader>
 

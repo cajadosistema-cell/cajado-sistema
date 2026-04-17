@@ -68,8 +68,8 @@ export default function PfPessoalClient() {
         title="App do Patrão"
         subtitle="Gestão Pessoal · Patrimônio · Investimentos"
       >
-        <button onClick={() => setModalReceita(true)} className="btn-secondary text-sm md:flex hidden">+ Receita</button>
-        <button onClick={() => setModalGasto(true)} className="btn-primary text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">+ Lançar Gasto</button>
+        <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 md:flex hidden">+ Receita</button>
+        <button onClick={() => setModalGasto(true)} className="btn-primary text-xs h-8 px-3 shadow-[0_0_10px_rgba(16,185,129,0.2)]">+ Lançar Gasto</button>
       </PageHeader>
 
       <AppPatraoTabs />

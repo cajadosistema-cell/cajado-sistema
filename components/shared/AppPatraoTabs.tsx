@@ -27,7 +27,7 @@ export function AppPatraoTabs() {
             key={m.href}
             href={m.href}
             className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2',
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap flex items-center gap-1.5',
               isActive 
                 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 border border-transparent'
