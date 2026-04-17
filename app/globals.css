@@ -126,7 +126,7 @@
   }
 
   .page-header {
-    @apply flex items-center justify-between mb-6;
+    @apply flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6;
   }
 
   .page-title {
