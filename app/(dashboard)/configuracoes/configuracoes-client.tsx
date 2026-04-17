@@ -194,11 +194,122 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
   )
 }
 
+// ── Modal de Edição de Limites ─────────────────────────────────
+function ModalEditarLimites({
+  funcionario,
+  onClose,
+  onSave
+}: {
+  funcionario: { id: string, nome: string, permissoes: string[] };
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+  const [permissoesAtuais, setPermissoesAtuais] = useState<string[]>(funcionario.permissoes || [])
+
+  const togglePermissao = (id: string) => {
+    setPermissoesAtuais(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    )
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/admin/editar-limites', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: funcionario.id,
+          permissoes: permissoesAtuais,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setErro(data.error || 'Erro ao editar limites.')
+        setLoading(false)
+        return
+      }
+
+      onSave()
+      onClose()
+    } catch (err: any) {
+      setErro(err?.message || 'Erro inesperado.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+        <div className="flex items-center justify-between mb-5 relative z-10">
+          <div>
+            <h2 className="text-xl font-['Syne'] font-bold text-zinc-100">Editar Limites</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Controlando as áreas para: <span className="font-semibold text-emerald-400">{funcionario.nome}</span></p>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-2xl leading-none">×</button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+          <div>
+            <label className="label mb-2 block">Áreas Permitidas (Restrição de Módulos)</label>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              {MODULOS_DISPONIVEIS.map(mod => (
+                <button
+                  key={mod.id}
+                  type="button"
+                  onClick={() => togglePermissao(mod.id)}
+                  className={cn(
+                    "flex flex-col items-start px-3 py-2 border rounded-lg transition-all text-left",
+                    permissoesAtuais.includes(mod.id)
+                      ? "bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-[0_0_15px_rgba(245,166,35,0.05)]"
+                      : "bg-[#080b14]/50 border-white/5 text-zinc-400 hover:border-white/10"
+                  )}
+                >
+                  <span className="text-xs font-semibold">{mod.nome}</span>
+                  <span className="text-[9px] mt-0.5 opacity-70">
+                    {permissoesAtuais.includes(mod.id) ? '✓ Permitido' : 'Bloqueado'}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-2">
+              Lembre-se que as atualizações de limite entrarão em vigor no próximo acesso do usuário ou ao atualizar a página.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 pt-4 border-t border-white/5">
+            {erro && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-400">
+                ⚠️ {erro}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+              <button type="submit" className="btn-primary flex gap-2 items-center !bg-emerald-600 hover:!bg-emerald-500" disabled={loading}>
+                {loading ? '⏳ Salvando...' : '💾 Salvar Novos Limites'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Client Component ────────────────────────────────────────────
 export default function ConfiguracoesClient() {
   const supabase = createClient()
   const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
+  const [editarLimitesFunc, setEditarLimitesFunc] = useState<{ id: string, nome: string, permissoes: string[] } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [saving, setSaving] = useState(false)
@@ -521,7 +632,7 @@ export default function ConfiguracoesClient() {
 
                       <div className="flex items-center gap-2">
                         <button onClick={() => handleDeleteFuncionario(func.id, func.email, func.nome)} className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium transition-colors">Excluir</button>
-                        <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium transition-colors">Editar Limites</button>
+                        <button onClick={() => setEditarLimitesFunc({ id: func.id, nome: func.nome, permissoes: func.permissoes || [] })} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium transition-colors">Editar Limites</button>
                       </div>
                     </div>
                   ))}
@@ -544,6 +655,16 @@ export default function ConfiguracoesClient() {
           onSave={() => {
             refetch()
             setModalOpen(false)
+          }} 
+        />
+      )}
+      {editarLimitesFunc && (
+        <ModalEditarLimites 
+          funcionario={editarLimitesFunc}
+          onClose={() => setEditarLimitesFunc(null)} 
+          onSave={() => {
+            refetch()
+            setEditarLimitesFunc(null)
           }} 
         />
       )}
