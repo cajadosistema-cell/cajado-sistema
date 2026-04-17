@@ -23,12 +23,12 @@ export default function LandingPage() {
           </div>
         </a>
 
-        <ul className={`md:flex gap-7 list-none \${menuOpen ? 'flex flex-col absolute top-[70px] right-5 bg-[#141814] border border-[#2a2e2a] rounded-lg p-4' : 'hidden md:flex'}`}>
+        <ul className={`list-none gap-7 ${menuOpen ? 'flex flex-col absolute top-[70px] right-5 bg-[#141814] border border-[#2a2e2a] rounded-lg p-4 z-50' : 'hidden'} md:!flex md:!flex-row md:!static md:!bg-transparent md:!border-none md:!p-0 md:!items-center`}>
           <li><a href="#cursos" className="text-[#aaa] text-sm hover:text-white transition-colors" onClick={() => setMenuOpen(false)}>Serviços</a></li>
           <li><a href="#diferenciais" className="text-[#aaa] text-sm hover:text-white transition-colors" onClick={() => setMenuOpen(false)}>Nosso Diferencial</a></li>
           <li><a href="#contato" className="text-[#aaa] text-sm hover:text-white transition-colors" onClick={() => setMenuOpen(false)}>Fale Conosco</a></li>
           {/* Link para o sistema também integrado para clientes antigos */}
-          <li><a href="https://sistema.cajadosolucoes.com.br/login" className="text-[#8bc34a] text-sm hover:text-white transition-colors border-l border-[#2a2e2a] pl-4 md:ml-2" onClick={() => setMenuOpen(false)}>Área Restrita</a></li>
+          <li><a href="https://sistema.cajadosolucoes.com.br/login" className="text-[#8bc34a] text-sm hover:text-white transition-colors md:border-l border-[#2a2e2a] md:pl-4" onClick={() => setMenuOpen(false)}>Área Restrita</a></li>
         </ul>
 
         <a href="https://wa.me/5577991150728" className="hidden md:inline-flex items-center gap-2 bg-[#2d6a2d] hover:bg-[#3a7a3a] text-white px-5 py-2.5 rounded-lg text-[13px] font-medium transition-colors">
