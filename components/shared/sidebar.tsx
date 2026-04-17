@@ -117,11 +117,8 @@ export function Sidebar() {
     <aside className="hidden md:flex w-56 shrink-0 bg-[#0d1120] border-r border-white/5 flex-col h-screen sticky top-0 z-40">
       <div className="px-4 py-5 border-b border-white/5 relative z-10">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f5a623] to-transparent"></div>
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center shrink-0 shadow-[0_4px_12px_rgba(245,166,35,0.3)]">
-            <span className="text-zinc-950 font-bold text-sm">C</span>
-          </div>
-          <span className="font-semibold text-sm text-zinc-100 font-['Syne']">Sistema Cajado</span>
+        <div className="flex items-center gap-2 px-1">
+          <img src="/logo.png" alt="Cajado Soluções" className="h-8 w-auto object-contain drop-shadow-sm" />
         </div>
       </div>
 

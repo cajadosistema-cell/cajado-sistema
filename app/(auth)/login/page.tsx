@@ -33,9 +33,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-zinc-950 font-bold text-xl">C</span>
-          </div>
+          <img src="/logo.png" alt="Cajado Soluções" className="h-16 w-auto mx-auto mb-4 object-contain drop-shadow-sm" />
           <h1 className="text-xl font-semibold text-zinc-100">Sistema Cajado</h1>
           <p className="text-sm text-zinc-500 mt-1">Acesse sua conta</p>
         </div>

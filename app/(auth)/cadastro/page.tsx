@@ -50,9 +50,7 @@ export default function CadastroPage() {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mx-auto mb-4 scale-95 hover:scale-100 transition-transform">
-            <span className="text-zinc-950 font-bold text-xl">+</span>
-          </div>
+          <img src="/logo.png" alt="Cajado Soluções" className="h-16 w-auto mx-auto mb-4 object-contain drop-shadow-sm" />
           <h1 className="text-xl font-semibold text-zinc-100">Criar Acesso (Equipe)</h1>
           <p className="text-sm text-zinc-500 mt-1">Crie senhas para a sua Equipe</p>
         </div>

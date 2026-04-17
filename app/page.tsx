@@ -10,7 +10,7 @@ export default function LandingPage() {
       {/* NAV */}
       <nav className="flex items-center justify-between py-4 px-5 md:px-10 bg-[#0d0f0d]/95 border-b border-[#1e221e] sticky top-0 z-50 backdrop-blur-sm">
         <a href="#" className="flex items-center no-underline">
-          <img src="/icon-192.png" alt="Cajado Soluções" className="h-[50px] md:h-[60px] w-auto object-contain" />
+          <img src="/logo.png" alt="Cajado Soluções" className="h-[40px] md:h-[48px] w-auto object-contain bg-white px-2 py-1 rounded-md flex-shrink-0" />
         </a>
 
         <ul className={`list-none gap-7 ${menuOpen ? 'flex flex-col absolute top-[70px] right-5 bg-[#141814] border border-[#2a2e2a] rounded-lg p-4 z-50' : 'hidden'} md:!flex md:!flex-row md:!static md:!bg-transparent md:!border-none md:!p-0 md:!items-center`}>
