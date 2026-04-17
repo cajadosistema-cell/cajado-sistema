@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/shared/sidebar'
 import { BottomNav } from '@/components/shared/bottom-nav'
+import { ChatNotifications } from '@/components/shared/chat-notifications'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,6 +12,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </main>
       <BottomNav />
+      {/* Notificações de chat — ativo em TODO o dashboard */}
+      <ChatNotifications />
     </div>
   )
 }
