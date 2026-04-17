@@ -604,6 +604,21 @@ export default function InicioClient() {
           display: flex; align-items: center; justify-content: center;
           font-size: 11px; color: #000; flex-shrink: 0;
         }
+
+        @media (max-width: 768px) {
+          .custom-dashboard { height: auto; overflow: visible; }
+          .custom-dashboard .shell { grid-template-columns: 1fr; height: auto; }
+          .custom-dashboard aside { border-right: none; border-bottom: 1px solid var(--border); }
+          .custom-dashboard .years { max-height: 200px; }
+          .custom-dashboard .cards-row { grid-template-columns: 1fr 1fr; }
+          .custom-dashboard .mid-row { grid-template-columns: 1fr; }
+          .custom-dashboard .bot-row { grid-template-columns: 1fr; }
+          .custom-dashboard .content { padding: 16px; overflow-y: visible; }
+          .custom-dashboard .topbar { flex-direction: column; align-items: flex-start; gap: 12px; }
+          .custom-dashboard .topbar-right { flex-wrap: wrap; }
+          .custom-dashboard .donut-pair { grid-template-columns: 1fr; gap: 16px; }
+          .custom-dashboard .user-row { margin-top: 10px; }
+        }
       ` }} />
 
       <div className="custom-dashboard">
