@@ -26,10 +26,11 @@ export interface Conversa {
 
 export interface Mensagem {
   id: string
-  tipo: 'recebida' | 'enviada' | 'bot' | 'interna'
+  tipo: 'recebida' | 'enviada' | 'bot' | 'interna' | 'audio'
   texto: string
   numero: string
   timestamp: string
+  transcricao?: string
 }
 
 export interface ConversaDetalhada extends Conversa {
