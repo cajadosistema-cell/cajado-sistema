@@ -134,7 +134,7 @@ function ModalLead({
         if (p) {
           await supabase
             .from('parceiros')
-            .update({ total_indicacoes: (p.total_indicacoes ?? 0) + 1 })
+            .update({ total_indicacoes: (p.total_indicacoes ?? 0) + 1 } as any)
             .eq('id', form.parceiro_id)
         }
       }
