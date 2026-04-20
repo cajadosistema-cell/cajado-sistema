@@ -134,7 +134,8 @@ function ModalLead({
         if (p) {
           await supabase
             .from('parceiros')
-            .update({ total_indicacoes: (p.total_indicacoes ?? 0) + 1 } as any)
+            // @ts-ignore: ignora erro temporário de tipagem do supabase no vercel
+            .update({ total_indicacoes: (p.total_indicacoes ?? 0) + 1 })
             .eq('id', form.parceiro_id)
         }
       }
