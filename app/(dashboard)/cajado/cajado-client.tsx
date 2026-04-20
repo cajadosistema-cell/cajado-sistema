@@ -783,15 +783,17 @@ export default function CajadoClient() {
     if (!lead.parceiro_id || !lead.valor_estimado) return
     const { createClient } = await import('@/lib/supabase/client')
     const supabase = createClient()
-    const { data: parceiro } = await supabase
+    const { data: parceiroRaw } = await supabase
       .from('parceiros')
       .select('comissao_percentual, total_convertidas, total_comissao')
       .eq('id', lead.parceiro_id)
       .single()
+    const parceiro = parceiroRaw as any
     if (!parceiro) return
     const comissaoValor = (lead.valor_estimado * parceiro.comissao_percentual) / 100
     await supabase
       .from('parceiros')
+      // @ts-ignore
       .update({
         total_convertidas: (parceiro.total_convertidas ?? 0) + 1,
         total_comissao: (parceiro.total_comissao ?? 0) + comissaoValor,
