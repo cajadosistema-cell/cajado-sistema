@@ -365,11 +365,12 @@ function LeadDrawer({
     if (!leadData.parceiro_id || !leadData.valor_estimado) return
     const { createClient } = await import('@/lib/supabase/client')
     const supabase = createClient()
-    const { data: parceiro } = await supabase
+    const { data: parceiroRaw } = await supabase
       .from('parceiros')
       .select('comissao_percentual, total_convertidas, total_comissao')
       .eq('id', leadData.parceiro_id)
       .single()
+    const parceiro = parceiroRaw as any
     if (!parceiro) return
     const comissaoValor = (leadData.valor_estimado * parceiro.comissao_percentual) / 100
     await updateParceiro(leadData.parceiro_id, {
