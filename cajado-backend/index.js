@@ -90,6 +90,9 @@ app.use("/", require("./src/routes/inbox.routes"));
 // ─── WEBHOOKS ───────────────────
 app.use("/webhook", require("./src/routes/webhook.routes"));
 
+// ─── WHATSAPP (Envio automático CRM) ───────────────────
+app.use("/api/whatsapp", require("./src/routes/whatsapp.routes"));
+
 
 
 // O index.js agora atua apenas como orquestrador e ponto de entrada.

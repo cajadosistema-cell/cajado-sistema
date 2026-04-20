@@ -85,6 +85,10 @@ function ModalLead({
   lead?: Lead | null
 }) {
   const { insert, update, loading } = useSupabaseMutation('leads')
+  const { data: parceiros } = useSupabaseQuery<Parceiro>('parceiros', {
+    filters: { status: 'ativo' },
+    orderBy: { column: 'nome', ascending: true },
+  })
   const [form, setForm] = useState({
     nome: lead?.nome ?? '',
     telefone: lead?.telefone ?? '',
@@ -95,6 +99,7 @@ function ModalLead({
     valor_estimado: lead?.valor_estimado?.toString() ?? '',
     notas: lead?.notas ?? '',
     proximo_followup: lead?.proximo_followup?.split('T')[0] ?? '',
+    parceiro_id: lead?.parceiro_id ?? '',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,12 +115,29 @@ function ModalLead({
       notas: form.notas || null,
       proximo_followup: form.proximo_followup ? new Date(form.proximo_followup).toISOString() : null,
       ultimo_contato: new Date().toISOString(),
+      parceiro_id: form.parceiro_id || null,
     }
 
     if (lead) {
       await update(lead.id, payload)
     } else {
       await insert(payload)
+      // Incrementar total_indicacoes do parceiro ao criar novo lead
+      if (form.parceiro_id) {
+        const { createClient } = await import('@/lib/supabase/client')
+        const supabase = createClient()
+        const { data: p } = await supabase
+          .from('parceiros')
+          .select('total_indicacoes')
+          .eq('id', form.parceiro_id)
+          .single()
+        if (p) {
+          await supabase
+            .from('parceiros')
+            .update({ total_indicacoes: (p.total_indicacoes ?? 0) + 1 })
+            .eq('id', form.parceiro_id)
+        }
+      }
     }
     onSave(); onClose()
   }
@@ -203,6 +225,17 @@ function ModalLead({
                 onChange={e => setForm(f => ({ ...f, valor_estimado: e.target.value }))}
                 placeholder="0,00" />
             </div>
+          </div>
+
+          <div>
+            <label className="label">Parceiro Indicador</label>
+            <select className="input mt-1" value={form.parceiro_id}
+              onChange={e => setForm(f => ({ ...f, parceiro_id: e.target.value }))}>
+              <option value="">Sem parceiro</option>
+              {parceiros.map(p => (
+                <option key={p.id} value={p.id}>{p.nome}</option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -325,9 +358,31 @@ function LeadDrawer({
     orderBy: { column: 'realizado_em', ascending: false },
   })
   const { update } = useSupabaseMutation('leads')
+  const { update: updateParceiro } = useSupabaseMutation('parceiros')
+
+  const registrarComissaoParceiro = async (leadData: Lead) => {
+    if (!leadData.parceiro_id || !leadData.valor_estimado) return
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const { data: parceiro } = await supabase
+      .from('parceiros')
+      .select('comissao_percentual, total_convertidas, total_comissao')
+      .eq('id', leadData.parceiro_id)
+      .single()
+    if (!parceiro) return
+    const comissaoValor = (leadData.valor_estimado * parceiro.comissao_percentual) / 100
+    await updateParceiro(leadData.parceiro_id, {
+      total_convertidas: (parceiro.total_convertidas ?? 0) + 1,
+      total_comissao: (parceiro.total_comissao ?? 0) + comissaoValor,
+    })
+  }
 
   const changeStatus = async (status: Lead['status']) => {
+    const wasClienteAtivo = lead.status === 'cliente_ativo'
     await update(lead.id, { status, ultimo_contato: new Date().toISOString() })
+    if (status === 'cliente_ativo' && !wasClienteAtivo) {
+      await registrarComissaoParceiro(lead)
+    }
     onRefresh()
   }
 
@@ -722,6 +777,26 @@ export default function CajadoClient() {
   const { data: perfis } = useSupabaseQuery<any>('perfis', { select: 'id, nome' })
   const { update: updateLead } = useSupabaseMutation('leads')
 
+  const registrarComissaoParceiroDrop = async (lead: Lead) => {
+    if (!lead.parceiro_id || !lead.valor_estimado) return
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const { data: parceiro } = await supabase
+      .from('parceiros')
+      .select('comissao_percentual, total_convertidas, total_comissao')
+      .eq('id', lead.parceiro_id)
+      .single()
+    if (!parceiro) return
+    const comissaoValor = (lead.valor_estimado * parceiro.comissao_percentual) / 100
+    await supabase
+      .from('parceiros')
+      .update({
+        total_convertidas: (parceiro.total_convertidas ?? 0) + 1,
+        total_comissao: (parceiro.total_comissao ?? 0) + comissaoValor,
+      })
+      .eq('id', lead.parceiro_id)
+  }
+
   const handleDrop = async (e: React.DragEvent, newStatus: Lead['status']) => {
     e.preventDefault()
     const leadId = e.dataTransfer.getData('text/plain')
@@ -729,12 +804,14 @@ export default function CajadoClient() {
     const lead = leads.find(l => l.id === leadId)
     if (!lead || lead.status === newStatus) return
 
+    const wasClienteAtivo = lead.status === 'cliente_ativo'
     await updateLead(lead.id, { status: newStatus, ultimo_contato: new Date().toISOString() })
     
-    // Automação: se caiu no "Cliente Ativo"
-    if (newStatus === 'cliente_ativo') {
+    // Automação: se entrou no "Cliente Ativo" (não já estava)
+    if (newStatus === 'cliente_ativo' && !wasClienteAtivo) {
       setToastAtivo(`🤖 Zap de boas-vindas / serviço concluído enviado para: ${lead.nome}!`)
       setTimeout(() => setToastAtivo(''), 4000)
+      await registrarComissaoParceiroDrop(lead)
     }
 
     refetch()
