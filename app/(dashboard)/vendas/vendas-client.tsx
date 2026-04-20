@@ -46,6 +46,7 @@ const MOCK_VENDAS: any[] = [
 export default function VendasClient() {
   const [tipoFiltro, setTipoFiltro] = useState('')
   const [statusFiltro, setStatusFiltro] = useState('')
+  const [modalOS, setModalOS] = useState(false)
 
   const { data: vendasDB, loading: loadingVendas } = useSupabaseQuery<Venda>('vendas', {
     select: '*, cliente:cliente_id(*)' // Assumindo relação
@@ -78,7 +79,7 @@ export default function VendasClient() {
         <button className="btn-ghost text-xs">Produtos</button>
         <button className="btn-ghost text-xs">Clientes</button>
         <button className="btn-secondary text-xs">+ Produto</button>
-        <button className="btn-primary">+ Nova OS / Venda</button>
+        <button onClick={() => setModalOS(true)} className="btn-primary">+ Nova OS / Venda</button>
       </PageHeader>
 
       {/* ── MÉTRICAS ─────────────────────────── */}
@@ -134,7 +135,7 @@ export default function VendasClient() {
                 <tr>
                   <td colSpan={8} className="py-16 text-center">
                     <p className="text-sm text-zinc-500">Nenhuma venda / OS registrada</p>
-                    <button className="btn-primary mt-3 text-xs mx-auto block hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(245,166,35,0.3)]">
+                    <button onClick={() => setModalOS(true)} className="btn-primary mt-3 text-xs mx-auto block hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(245,166,35,0.3)]">
                       + Criar primeira OS
                     </button>
                   </td>
@@ -143,7 +144,7 @@ export default function VendasClient() {
                 <tr key={v.id} className="border-b border-zinc-800/50 hover:bg-white/5 transition-colors">
                   <td className="table-cell font-mono text-zinc-300">#{v.numero}</td>
                   <td className="table-cell">{tipoLabels[v.tipo] || v.tipo}</td>
-                  <td className="table-cell">{(v as any).cliente?.nome || 'Não informado'}</td>
+                  <td className="table-cell">{(v as unknown as any).cliente?.nome || 'Não informado'}</td>
                   <td className="table-cell">{new Date(v.data_abertura).toLocaleDateString('pt-BR')}</td>
                   <td className="table-cell text-zinc-300 font-medium">R$ {(v.total || 0).toFixed(2)}</td>
                   <td className="table-cell text-xs uppercase font-semibold">
@@ -387,6 +388,57 @@ export default function VendasClient() {
 
       {/* ── RANKING DE VENDAS ─────────────────────────────────── */}
       <SecaoRanking />
+      
+      {modalOS && <ModalNovaOS onClose={() => setModalOS(false)} />}
+    </div>
+  )
+}
+
+// ── Modais Locais ────────────────────────────────────────────────────────────
+
+function ModalNovaOS({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState({ tipo: 'os', valor: '', cliente_nome: '' })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    // Simula a criação de um documento (Na versão com actions/Supabase Mutation, isto salva direto no banco)
+    setTimeout(() => {
+      setLoading(false)
+      onClose()
+    }, 600)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <h2 className="text-lg font-semibold text-zinc-100 mb-4">Nova Venda / Ordem de Serviço</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Tipo de Documento</label>
+            <select className="input mt-1" value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}>
+              <option value="venda">Venda Direta</option>
+              <option value="os">Ordem de Serviço (OS)</option>
+              <option value="orcamento">Orçamento</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Nome do Cliente</label>
+            <input required autoFocus className="input mt-1" value={form.cliente_nome} onChange={e => setForm({...form, cliente_nome: e.target.value})} placeholder="Ex: João da Silva" />
+          </div>
+          <div>
+            <label className="label">Valor Previsto / Total (R$)</label>
+            <input required type="number" min="0" step="0.01" className="input mt-1" value={form.valor} onChange={e => setForm({...form, valor: e.target.value})} placeholder="Ex: 450.00" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-primary" style={{ backgroundColor: '#f5a623', color: '#18181b', borderColor: '#f5a623' }}>
+              {loading ? 'Processando...' : 'Criar Venda / OS'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
