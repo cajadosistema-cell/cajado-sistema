@@ -47,6 +47,7 @@ export default function VendasClient() {
   const [tipoFiltro, setTipoFiltro] = useState('')
   const [statusFiltro, setStatusFiltro] = useState('')
   const [modalOS, setModalOS] = useState(false)
+  const [modalProduto, setModalProduto] = useState(false)
 
   const { data: vendasDB, loading: loadingVendas } = useSupabaseQuery<Venda>('vendas', {
     select: '*, cliente:cliente_id(*)' // Assumindo relação
@@ -76,9 +77,9 @@ export default function VendasClient() {
         title="Vendas / OS"
         subtitle="Ordens de serviço · Vendas · Orçamentos · Produtos · Clientes"
       >
-        <button className="btn-ghost text-xs">Produtos</button>
-        <button className="btn-ghost text-xs">Clientes</button>
-        <button className="btn-secondary text-xs">+ Produto</button>
+        <button onClick={() => document.getElementById('catalogo-produtos')?.scrollIntoView({behavior:'smooth'})} className="btn-ghost text-xs">Produtos</button>
+        <button onClick={() => alert('O gerenciador unificado de Clientes chegará em breve!')} className="btn-ghost text-xs">Clientes</button>
+        <button onClick={() => setModalProduto(true)} className="btn-secondary text-xs">+ Produto</button>
         <button onClick={() => setModalOS(true)} className="btn-primary">+ Nova OS / Venda</button>
       </PageHeader>
 
@@ -316,7 +317,7 @@ export default function VendasClient() {
         </div>
 
         {/* ── CATÁLOGO DE PRODUTOS ─────────────── */}
-        <div className="card lg:col-span-3">
+        <div id="catalogo-produtos" className="card lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Catálogo de produtos e serviços</h2>
             <div className="flex gap-2 text-zinc-100 flex-wrap">
@@ -327,7 +328,7 @@ export default function VendasClient() {
                 <option>Kit</option>
               </select>
               <input className="input text-xs py-1 md:w-48" placeholder="Buscar..." />
-              <button className="btn-primary text-xs py-1 text-zinc-950">+ Produto</button>
+              <button onClick={() => setModalProduto(true)} className="btn-primary text-xs py-1 text-zinc-950">+ Produto</button>
             </div>
           </div>
 
@@ -351,7 +352,7 @@ export default function VendasClient() {
                   <tr>
                     <td colSpan={10} className="py-12 text-center">
                       <p className="text-sm text-zinc-500">Nenhum produto / serviço cadastrado</p>
-                      <button className="btn-primary mt-3 text-xs mx-auto block">
+                      <button onClick={() => setModalProduto(true)} className="btn-primary mt-3 text-xs mx-auto block hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(245,166,35,0.3)]">
                         + Cadastrar primeiro produto
                       </button>
                     </td>
@@ -390,11 +391,81 @@ export default function VendasClient() {
       <SecaoRanking />
       
       {modalOS && <ModalNovaOS onClose={() => setModalOS(false)} />}
+      {modalProduto && <ModalNovoProduto onClose={() => setModalProduto(false)} />}
     </div>
   )
 }
 
 // ── Modais Locais ────────────────────────────────────────────────────────────
+
+function ModalNovoProduto({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState({ 
+    nome: '', 
+    tipo: 'servico', 
+    preco_venda: '', 
+    preco_custo: '', 
+    codigo: '', 
+    estoque: '0' 
+  })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    // Placeholder para uso via mutations na base de dados
+    setTimeout(() => {
+      setLoading(false)
+      onClose()
+    }, 600)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <h2 className="text-lg font-semibold text-zinc-100 mb-4">Novo Produto / Serviço</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="label">Nome</label>
+              <input required autoFocus className="input mt-1" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} placeholder="Ex: Transferência" />
+            </div>
+            <div>
+              <label className="label">Tipo</label>
+              <select className="input mt-1" value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}>
+                <option value="servico">Serviço</option>
+                <option value="produto">Produto Físico</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Código (SKU)</label>
+              <input className="input mt-1" value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value})} placeholder="Ex: TRF-001" />
+            </div>
+            <div>
+              <label className="label">Preço de Venda (R$)</label>
+              <input required type="number" min="0" step="0.01" className="input mt-1 border-emerald-500/30" value={form.preco_venda} onChange={e => setForm({...form, preco_venda: e.target.value})} />
+            </div>
+            <div>
+              <label className="label">Preço de Custo (R$)</label>
+              <input type="number" min="0" step="0.01" className="input mt-1 border-amber-500/30" value={form.preco_custo} onChange={e => setForm({...form, preco_custo: e.target.value})} />
+            </div>
+            {form.tipo === 'produto' && (
+              <div className="col-span-2">
+                <label className="label">Estoque Inicial</label>
+                <input required type="number" min="0" className="input mt-1" value={form.estoque} onChange={e => setForm({...form, estoque: e.target.value})} />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-primary" style={{ backgroundColor: '#22c55e', color: '#fff', borderColor: '#22c55e' }}>
+              {loading ? 'Salvando...' : 'Cadastrar Item'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 function ModalNovaOS({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({ tipo: 'os', valor: '', cliente_nome: '' })
