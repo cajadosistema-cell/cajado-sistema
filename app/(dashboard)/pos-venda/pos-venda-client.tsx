@@ -10,8 +10,8 @@ export default function PosVendaClient() {
         title="Pós-venda"
         subtitle="Mensagens automáticas · Cards de divulgação · Follow-up"
       >
-        <button className="btn-secondary text-xs">+ Template</button>
-        <button className="btn-primary flex items-center gap-2 hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(20,184,166,0.3)] bg-teal-500 text-zinc-950">Disparar manual</button>
+        <button onClick={() => alert('Nova automação de template será liberada na próxima atualização!')} className="btn-secondary text-xs">+ Template</button>
+        <button onClick={() => alert('Puxando fila de mensagens retidas... (Modo Demo)')} className="btn-primary flex items-center gap-2 hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(20,184,166,0.3)] bg-teal-500 text-zinc-950">Disparar manual</button>
       </PageHeader>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -27,7 +27,7 @@ export default function PosVendaClient() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Templates configurados</h2>
-            <button className="btn-ghost text-xs">+ Novo template</button>
+            <button onClick={() => alert('Nova automação de template será liberada na próxima atualização!')} className="btn-ghost text-xs">+ Novo template</button>
           </div>
           <div className="space-y-3">
             {[
@@ -44,7 +44,7 @@ export default function PosVendaClient() {
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border border-current ${t.ativo ? 'text-emerald-400' : 'text-zinc-500'}`}>
                     {t.ativo ? 'Ativo' : 'Inativo'}
                   </span>
-                  <button className="btn-ghost text-xs py-1">Editar</button>
+                  <button onClick={() => alert(`Editando: ${t.nome}`)} className="btn-ghost text-xs py-1">Editar</button>
                 </div>
               </div>
             ))}
@@ -81,7 +81,7 @@ export default function PosVendaClient() {
         <div className="card min-h-[300px]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Cards de divulgação</h2>
-            <button className="btn-ghost text-xs">+ Card</button>
+            <button onClick={() => alert('O estúdio de criativos de cards chegará na PRÓXIMA versão!')} className="btn-ghost text-xs">+ Card</button>
           </div>
           <p className="text-xs text-zinc-600 mb-6 max-w-sm">
             Cards são gerados automaticamente quando uma "Ordem de Serviço" é concluída e podem ser enviados ao cliente no WhatsApp.
@@ -103,7 +103,7 @@ export default function PosVendaClient() {
                       <p className="text-xs font-medium text-zinc-300">{c.cliente}</p>
                       <p className="text-[10px] text-zinc-500">{c.data}</p>
                     </div>
-                    <button className="text-emerald-400 text-sm hover:scale-110 transition-transform">↗️</button>
+                    <button onClick={() => alert(`Enviando card para ${c.cliente} via WhatsApp...`)} className="text-emerald-400 text-sm hover:scale-110 transition-transform">↗️</button>
                   </div>
                </div>
              ))}
