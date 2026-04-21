@@ -1,33 +1,44 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { PageHeader } from '@/components/shared/ui'
 import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import type { GastoPessoal, ReceitaPessoal, OrcamentoPessoal } from './_components/types'
 import { formatCurrency } from './_components/types'
+import { createClient } from '@/lib/supabase/client'
 
 import { TabResumo }      from './_components/tabs/TabResumo'
 import { TabLancamentos } from './_components/tabs/TabLancamentos'
 import { TabOrcamentos }  from './_components/tabs/TabOrcamentos'
 import { TabPrevisao }    from './_components/tabs/TabPrevisao'
+import { TabAgenda }      from './_components/tabs/TabAgenda'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda'
 
 const TABS = [
   { id: 'resumo'       as TabId, label: 'Resumo',      emoji: '📊' },
   { id: 'lancamentos'  as TabId, label: 'Lançamentos', emoji: '📋' },
   { id: 'orcamentos'   as TabId, label: 'Orçamentos',  emoji: '🎯' },
   { id: 'previsao'     as TabId, label: 'Previsão',    emoji: '🔮' },
+  { id: 'agenda'       as TabId, label: 'Agenda',       emoji: '📅' },
 ]
 
 export default function PfPessoalClient() {
+  const supabase = createClient()
   const [tab, setTab] = useState<TabId>('resumo')
   const [modalGasto, setModalGasto] = useState(false)
   const [modalReceita, setModalReceita] = useState(false)
+  const [authUserId, setAuthUserId] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setAuthUserId(data.user.id)
+    })
+  }, [supabase])
 
   const { data: gastos, refetch: refetchGastos } = useSupabaseQuery<GastoPessoal>('gastos_pessoais', {
     orderBy: { column: 'data', ascending: false },
@@ -170,6 +181,10 @@ export default function PfPessoalClient() {
           onUpdate={refetchReceitas}
           onNovaReceita={() => setModalReceita(true)}
         />
+      )}
+
+      {tab === 'agenda' && (
+        <TabAgenda userId={authUserId} />
       )}
 
       {/* Secretária Flutuante do Patrão */}
