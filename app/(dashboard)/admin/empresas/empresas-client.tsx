@@ -193,10 +193,10 @@ export default function SuperAdminClient() {
         supabase.from('canais').select('id, empresa_id, nome, ativo')
       ])
 
-      const empresasMapeadas = (empresasData || []).map(emp => {
-        const users = (usuariosData || []).filter(u => u.empresa_id === emp.id)
+      const empresasMapeadas = ((empresasData as any[]) || []).map(emp => {
+        const users = ((usuariosData as any[]) || []).filter(u => u.empresa_id === emp.id)
         const admin = users.find(u => u.role === 'admin' || u.role === 'dono') || users[0] || null
-        const cns = (canaisData || []).filter(c => c.empresa_id === emp.id)
+        const cns = ((canaisData as any[]) || []).filter(c => c.empresa_id === emp.id)
         return {
           ...emp,
           admin,
