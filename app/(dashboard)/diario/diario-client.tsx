@@ -33,8 +33,8 @@ export default function DiarioEstrategicoClient() {
         title="Diário Estratégico"
         subtitle="Memória acumulada · Decisões · Snapshots · Linha do tempo"
       >
-        <button className="btn-secondary text-xs">Gerar snapshot</button>
-        <button className="btn-primary">+ Nova entrada</button>
+        <button onClick={() => alert('Coletando indicadores do módulo Inteligência para gerar Snapshot... (Emulação)')} className="btn-secondary text-xs">Gerar snapshot</button>
+        <button onClick={() => alert('O modal de nova Entrada de Diário está sendo ativado na V3.')} className="btn-primary">+ Nova entrada</button>
       </PageHeader>
 
       {/* Métricas */}
@@ -131,9 +131,9 @@ export default function DiarioEstrategicoClient() {
             <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg">
               <p className="text-xs text-blue-400 font-bold mb-1">Março de 2026</p>
               <p className="text-[10px] text-zinc-400 mb-2">Resumo da situação PJ/PF gerado no fim do Q1.</p>
-              <button className="text-[10px] font-medium text-blue-300 hover:underline">Ver completo</button>
+              <button onClick={() => alert('Abrindo painel do Snapshot de Contexto (Modo Offline)')} className="text-[10px] font-medium text-blue-300 hover:underline">Ver completo</button>
             </div>
-            <button className="btn-secondary w-full mt-3 text-xs">
+            <button onClick={() => alert('IA extraindo logs financeiros e dados da semana para montar Snapshot...')} className="btn-secondary w-full mt-3 text-xs">
               Gerar snapshot do mês atual
             </button>
           </div>
@@ -143,7 +143,7 @@ export default function DiarioEstrategicoClient() {
         <div className="card lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Snapshots de contexto</h2>
-            <button className="btn-ghost text-xs">+ Snapshot manual</button>
+            <button onClick={() => alert('O construtor manual de Snapshot abrirá em pop-up na próxima update!')} className="btn-ghost text-xs">+ Snapshot manual</button>
           </div>
           <p className="text-xs text-zinc-600 mb-4 max-w-2xl">
             Snapshots consolidam o estado do negócio num ponto no tempo —
@@ -176,7 +176,7 @@ export default function DiarioEstrategicoClient() {
                   <td className="py-3 text-xs font-medium">{s.fat}</td>
                   <td className="py-3 text-xs text-zinc-500">{s.por}</td>
                   <td className="py-3 text-right">
-                    <button className="text-xs text-blue-400 hover:underline">Ver</button>
+                    <button onClick={() => alert(`Visualizando Snapshot: ${s.per}`)} className="text-xs text-blue-400 hover:underline">Ver</button>
                   </td>
                 </tr>
               ))}
