@@ -43,6 +43,7 @@ const MODULOS_DISPONIVEIS = [
 function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
+  const { success, error: toastError } = useToast()
   const [form, setForm] = useState({
     nome: '',
     email: '',
@@ -107,9 +108,11 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
         }
       }
 
+      success(`Acesso criado para ${form.nome}! Ele já pode fazer login.`)
       onSave()
       onClose()
     } catch (err: any) {
+      toastError(err?.message || 'Erro inesperado.')
       setErro(err?.message || 'Erro inesperado.')
     } finally {
       setLoading(false)
@@ -118,7 +121,7 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden">
+      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto p-6">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="flex items-center justify-between mb-5 relative z-10">
           <h2 className="text-xl font-['Syne'] font-bold text-zinc-100">Novo Acesso (Funcionário)</h2>
@@ -207,6 +210,7 @@ function ModalEditarLimites({
 }) {
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
+  const { success, error: toastError } = useToast()
   const [permissoesAtuais, setPermissoesAtuais] = useState<string[]>(funcionario.permissoes || [])
 
   const togglePermissao = (id: string) => {
@@ -237,9 +241,11 @@ function ModalEditarLimites({
         return
       }
 
+      success(`Permissões de ${funcionario.nome} atualizadas!`)
       onSave()
       onClose()
     } catch (err: any) {
+      toastError(err?.message || 'Erro inesperado.')
       setErro(err?.message || 'Erro inesperado.')
     } finally {
       setLoading(false)
@@ -248,7 +254,7 @@ function ModalEditarLimites({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden">
+      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto p-6">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="flex items-center justify-between mb-5 relative z-10">
           <div>

@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const { error: dbError } = await supabaseAdmin
       .from('funcionarios')
       .insert({
-        id: userId, // Usar o mesmo ID do auth.users para facilitar joins
+        user_id: userId,      // FK para auth.users
         nome,
         email,
         cargo: cargo || '',

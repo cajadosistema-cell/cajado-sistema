@@ -15,35 +15,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ID e email do usuário são obrigatórios.' }, { status: 400 })
     }
 
-    // 1. Remover da tabela funcionarios (isso pode falhar se não existir ou por restrições, 
-    // mas na migration que usamos ele deletaria sem erros pela service_role)
+    // 1. Buscar o user_id (FK auth.users) antes de deletar
+    const { data: func } = await supabaseAdmin
+      .from('funcionarios')
+      .select('id, user_id')
+      .eq('id', id)
+      .single()
+
+    // O auth user ID pode ser func.user_id (novo padrão) ou func.id (padrão antigo)
+    const authUserId = (func as any)?.user_id ?? id
+
+    // 2. Remover da tabela funcionarios
     const { error: dbError } = await supabaseAdmin
       .from('funcionarios')
       .delete()
       .eq('id', id)
 
     if (dbError) {
-      console.warn("Aviso ao remover da tabela funcionarios:", dbError.message)
+      console.warn('Aviso ao remover da tabela funcionarios:', dbError.message)
     }
 
-    // 2. Remover do Supabase Auth
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id)
+    // 3. Remover do Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(authUserId)
 
-    // Apenas retornamos erro se não for o "User not found". 
-    // Se for "User not found", significa que ele apenas ficou preso na tabela (foi criado no painel legado sem auth), 
-    // então a remoção tem que permitir o fluxo continuar para limpar a tabela
     if (authError && !authError.message.toLowerCase().includes('not found')) {
-      return NextResponse.json({ error: `Erro ao excluir usuário no sistema de autenticação: ${authError.message}` }, { status: 500 })
+      return NextResponse.json(
+        { error: `Erro ao excluir usuário no sistema de autenticação: ${authError.message}` },
+        { status: 500 }
+      )
     }
 
-    // 3. Remover do bot inbox (Railway) se aplicável (opcional, faremos tentativa)
+    // 4. Remover do bot inbox (Railway) — opcional
     try {
       const inboxUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://cajado-sistema-production.up.railway.app'
       await fetch(`${inboxUrl}/auth/integrations/sync-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email, 
+          email,
           action: 'delete',
           integration_key: 'fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb'
         }),
