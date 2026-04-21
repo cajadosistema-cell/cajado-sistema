@@ -55,6 +55,7 @@ function EmpresaRow({ empresa, onUpdate }: { empresa: Empresa; onUpdate: () => v
   async function handleSalvar() {
     setSalvando(true)
     const supabase = createClient()
+    // @ts-ignore
     await supabase.from('empresas').update({
       status: form.status,
       plano: form.plano,
