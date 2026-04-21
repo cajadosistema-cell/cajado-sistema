@@ -172,9 +172,9 @@ function ModalEvento({
         origem: form.origem,
       }
       if (inicial?.id) {
-        await supabase.from('agenda_eventos').update(payload).eq('id', inicial.id)
+        await (supabase.from('agenda_eventos') as any).update(payload).eq('id', inicial.id)
       } else {
-        await supabase.from('agenda_eventos').insert(payload)
+        await (supabase.from('agenda_eventos') as any).insert(payload)
       }
       success(inicial?.id ? 'Evento atualizado!' : `"${form.titulo}" agendado!`)
       onSave()
@@ -323,8 +323,8 @@ export function TabAgenda({ userId }: { userId: string }) {
     const fim = new Date(inicio)
     fim.setMonth(fim.getMonth() + 2)
 
-    const { data, error } = await supabase
-      .from('agenda_eventos')
+    const { data, error } = await (supabase
+      .from('agenda_eventos') as any)
       .select('*')
       .eq('user_id', userId)
       .gte('data_inicio', inicio.toISOString())
@@ -339,13 +339,13 @@ export function TabAgenda({ userId }: { userId: string }) {
 
   // ── Concluir/Cancelar evento ────────────────────────────
   const handleStatus = async (id: string, status: StatusEvento) => {
-    await supabase.from('agenda_eventos').update({ status }).eq('id', id)
+    await (supabase.from('agenda_eventos') as any).update({ status }).eq('id', id)
     carregar()
     success(status === 'concluido' ? '✅ Marcado como concluído!' : 'Evento cancelado.')
   }
 
   const handleDelete = async (id: string, titulo: string) => {
-    await supabase.from('agenda_eventos').delete().eq('id', id)
+    await (supabase.from('agenda_eventos') as any).delete().eq('id', id)
     carregar()
     success(`"${titulo}" excluído.`)
   }

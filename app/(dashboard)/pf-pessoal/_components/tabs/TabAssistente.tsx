@@ -153,7 +153,7 @@ export function TabAssistente() {
 
     try {
       if (acao.tipo === 'gasto') {
-        const { error } = await supabase.from('gastos_pessoais').insert({
+        const { error } = await (supabase.from('gastos_pessoais') as any).insert({
           user_id: userId,
           descricao: acao.dados.descricao || 'Gasto via IA',
           valor: Number(acao.dados.valor) || 0,
@@ -165,7 +165,7 @@ export function TabAssistente() {
         if (error) throw error
         success(`✅ Gasto de R$ ${Number(acao.dados.valor).toFixed(2)} registrado!`)
       } else if (acao.tipo === 'receita') {
-        const { error } = await supabase.from('receitas_pessoais').insert({
+        const { error } = await (supabase.from('receitas_pessoais') as any).insert({
           user_id: userId,
           descricao: acao.dados.descricao || 'Receita via IA',
           valor: Number(acao.dados.valor) || 0,
@@ -179,7 +179,7 @@ export function TabAssistente() {
         const dataInicio = acao.dados.data_inicio
           ? new Date(acao.dados.data_inicio).toISOString()
           : new Date(Date.now() + 86400000).toISOString()
-        const { error } = await supabase.from('agenda_eventos').insert({
+        const { error } = await (supabase.from('agenda_eventos') as any).insert({
           user_id: userId,
           titulo: acao.dados.titulo || 'Evento via IA',
           tipo: acao.dados.tipo || 'compromisso',
