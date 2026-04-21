@@ -112,8 +112,12 @@ export function useSupabaseMutation(table: string) {
       .select()
       .single()
     setLoading(false)
-    if (err) { setError(err.message as string); return null }
-    return result
+    if (err) {
+      console.error(`[Supabase Insert Error] tabela=${table}`, err)
+      setError(err.message as string)
+      return { data: null, error: err.message as string }
+    }
+    return { data: result, error: null }
   }
 
   const update = async (id: string, data: Record<string, unknown>) => {
@@ -127,8 +131,12 @@ export function useSupabaseMutation(table: string) {
       .select()
       .single()
     setLoading(false)
-    if (err) { setError(err.message as string); return null }
-    return result
+    if (err) {
+      console.error(`[Supabase Update Error] tabela=${table}`, err)
+      setError(err.message as string)
+      return { data: null, error: err.message as string }
+    }
+    return { data: result, error: null }
   }
 
   const remove = async (id: string) => {
@@ -136,8 +144,12 @@ export function useSupabaseMutation(table: string) {
     setError(null)
     const { error: err } = await supabase.from(table).delete().eq('id', id)
     setLoading(false)
-    if (err) { setError(err.message); return false }
-    return true
+    if (err) {
+      console.error(`[Supabase Delete Error] tabela=${table}`, err)
+      setError(err.message)
+      return { success: false, error: err.message }
+    }
+    return { success: true, error: null }
   }
 
   return { insert, update, remove, loading, error }

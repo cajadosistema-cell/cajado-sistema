@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { SecaoPagamentosParciais } from './_components/SecaoPagamentosParciais'
 import { SecaoAuditoria } from './_components/SecaoAuditoria'
 import { TabCartoes } from './_components/TabCartoes'
+import { useToast } from '@/components/shared/toast'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Conta = {
@@ -670,13 +671,31 @@ export default function FinanceiroClient() {
   const [modalLancamento, setModalLancamento] = useState(false)
   const [modalConta, setModalConta] = useState(false)
   const [modalImport, setModalImport] = useState(false)
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [busca, setBusca] = useState('')
+  const { success, error: toastError } = useToast()
+  const { update: updateLancamento } = useSupabaseMutation('lancamentos')
 
   const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true } })
   const { data: categorias } = useSupabaseQuery<CategoriaFinanceira>('categorias_financeiras', { orderBy: { column: 'nome', ascending: true } })
   const { data: lancamentos, refetch: refetchLancamentos } = useSupabaseQuery<Lancamento>('lancamentos', {
     orderBy: { column: 'data_competencia', ascending: false },
-    limit: 50 // Limitado para melhor exibição inicial
+    limit: 100
   })
+
+  const validarLancamento = async (id: string, descricao: string) => {
+    const resultado = await updateLancamento(id, {
+      status: 'validado',
+      conciliado: true,
+      data_caixa: new Date().toISOString().split('T')[0],
+    })
+    if (resultado.error) {
+      toastError('Erro ao confirmar: ' + resultado.error)
+    } else {
+      refetchLancamentos()
+      success(`"${descricao}" confirmado como pago/recebido!`)
+    }
+  }
 
   const refreshAll = () => {
     refetchContas();
@@ -783,18 +802,41 @@ export default function FinanceiroClient() {
 
         {/* Últimos lançamentos */}
         <div className="bg-[#111827] border border-white/5 rounded-xl p-5 flex flex-col min-h-[300px] lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="section-title mb-0">Últimos lançamentos (Este Mês)</h2>
-            <button className="btn-ghost text-xs">Ver todos</button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h2 className="section-title mb-0">Lançamentos do mês</h2>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                className="input text-xs py-1 w-36"
+                placeholder="Buscar..."
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+              />
+              <select
+                className="input text-xs py-1 w-auto"
+                value={filtroTipo}
+                onChange={e => setFiltroTipo(e.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="receita">⬇ Receitas</option>
+                <option value="despesa">⬆ Despesas</option>
+                <option value="investimento">💰 Investimentos</option>
+              </select>
+            </div>
           </div>
           {lancamentosMes.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <EmptyState message="Nenhum lançamento registrado neste mês" />
             </div>
-          ) : (
+          ) : (() => {
+            const filtrados = lancamentosMes
+              .filter(l => !filtroTipo || l.tipo === filtroTipo)
+              .filter(l => !busca || l.descricao?.toLowerCase().includes(busca.toLowerCase()))
+            return filtrados.length === 0 ? (
+              <EmptyState message="Nenhum resultado para o filtro selecionado" />
+            ) : (
              <div className="space-y-2 flex-1">
-               {lancamentosMes.slice(0, 10).map((l: Lancamento) => (
-                  <div key={l.id} className="flex justify-between items-center p-3 rounded-lg border border-white/5 bg-black/20">
+               {filtrados.slice(0, 15).map((l: Lancamento) => (
+                  <div key={l.id} className="flex justify-between items-center p-3 rounded-lg border border-white/5 bg-black/20 group">
                     <div className="flex gap-3 items-center">
                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs ${l.tipo === 'receita' ? 'bg-emerald-500/10 text-emerald-400' : l.tipo === 'despesa' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'}`}>
                          {l.tipo === 'receita' ? '↓' : l.tipo === 'despesa' ? '↑' : '⇄'}
@@ -808,8 +850,13 @@ export default function FinanceiroClient() {
                        <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-zinc-200'}`}>
                          {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
                        </p>
-                       {l.status === 'pendente' ? (
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-amber-500/30 text-amber-500 bg-amber-500/10">Pendente</span>
+                       {l.status !== 'validado' ? (
+                          <button
+                            onClick={() => validarLancamento(l.id, l.descricao)}
+                            className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                          >
+                            ⏳ Pendente ✔
+                          </button>
                        ) : (
                           <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-emerald-500/30 text-emerald-500 bg-emerald-500/10">Validado</span>
                        )}
@@ -817,7 +864,8 @@ export default function FinanceiroClient() {
                   </div>
                ))}
              </div>
-          )}
+            )
+          })()}
         </div>
 
         {/* Previsão de caixa */}
@@ -865,8 +913,11 @@ export default function FinanceiroClient() {
                     </p>
                   </div>
                   <p className="text-xs text-amber-500 mb-3">Venceu: {formatDate(l.data_competencia)}</p>
-                  <button className="w-full text-xs font-semibold px-3 py-1.5 rounded-md border border-zinc-700 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all">
-                    ✓ Confirmar Pgto
+                  <button
+                    onClick={() => validarLancamento(l.id, l.descricao)}
+                    className="w-full text-xs font-semibold px-3 py-1.5 rounded-md border border-zinc-700 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
+                  >
+                    ✓ Confirmar Pgto. / Recebimento
                   </button>
                 </div>
               ))}

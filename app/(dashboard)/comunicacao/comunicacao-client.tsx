@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/components/shared/toast'
 
 interface Funcionario {
   id: string
@@ -65,6 +66,7 @@ export default function ComunicacaoClient() {
   const [recordingTime, setRecordingTime] = useState(0)
   // Mobile: null = mostra lista, qualquer valor = mostra chat
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
+  const { warning } = useToast()
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<BlobPart[]>([])
@@ -202,7 +204,7 @@ export default function ComunicacaoClient() {
       setRecordingTime(0)
       timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000)
     } catch {
-      alert('Precisamos de permissão para usar seu microfone.')
+      warning('Precisamos de permissão para usar seu microfone. Verifique as configurações do navegador.')
     }
   }
 

@@ -35,23 +35,27 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, showBack = true, children }: PageHeaderProps) {
   return (
-    <div className="page-header">
-      <div className="flex items-start gap-4">
+    <div className="page-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3 min-w-0">
         {showBack && (
-          <Link 
-            href="/inicio" 
+          <Link
+            href="/inicio"
             className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-amber-500 hover:border-amber-500/50 transition-all shrink-0 mt-0.5"
             title="Voltar ao Menu"
           >
             <span className="text-lg leading-none">←</span>
           </Link>
         )}
-        <div>
-          <h1 className="page-title">{title}</h1>
-          {subtitle && <p className="text-sm text-zinc-500 mt-0.5">{subtitle}</p>}
+        <div className="min-w-0">
+          <h1 className="page-title truncate">{title}</h1>
+          {subtitle && <p className="text-sm text-zinc-500 mt-0.5 line-clamp-2">{subtitle}</p>}
         </div>
       </div>
-      {children && <div className="flex items-center gap-2">{children}</div>}
+      {children && (
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

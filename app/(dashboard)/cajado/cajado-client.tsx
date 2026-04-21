@@ -694,7 +694,52 @@ function TabParceiros() {
 }
 
 // ── Relatório Diário ─────────────────────────────────────────
-function TabRelatorio({ leads }: { leads: Lead[] }) {
+function TabRelatorio({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => void }) {
+  const [reativando, setReativando] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<{ id: string; msg: string; ok: boolean }[]>([])
+  const { update: updateLead } = useSupabaseMutation('leads')
+  const { insert: insertAtividade } = useSupabaseMutation('atividades')
+
+  const addToast = (msg: string, ok: boolean) => {
+    const id = Math.random().toString(36).slice(2)
+    setToasts(t => [...t, { id, msg, ok }])
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4000)
+  }
+
+  const reativarLead = async (e: React.MouseEvent, l: Lead) => {
+    e.stopPropagation()
+    setReativando(l.id)
+    try {
+      const servico = l.servico_interesse || 'nossos serviços'
+      const mensagem = `Olá ${l.nome}! 👋 Passando para retomar nosso contato sobre ${servico}. Podemos conversar? 😊`
+      const numero = l.telefone.replace(/\D/g, '')
+      const resp = await fetch('/api/whatsapp/enviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero, mensagem }),
+      })
+      const result = await resp.json()
+      await updateLead(l.id, {
+        status: 'retomar',
+        ultimo_contato: new Date().toISOString(),
+        notas: (l.notas ? l.notas + '\n' : '') +
+          `[${new Date().toLocaleDateString('pt-BR')}] Follow-up automático disparado.`,
+      })
+      const { createClient } = await import('@/lib/supabase/client')
+      const { data: { user } } = await createClient().auth.getUser()
+      await insertAtividade({
+        lead_id: l.id, tipo: 'mensagem',
+        descricao: `⚡ Follow-up: "${mensagem.slice(0, 80)}..."`,
+        resultado: result.ok ? 'Entregue' : `Falha: ${result.erro || 'API indisponível'}`,
+        realizado_por: user?.id ?? '', realizado_em: new Date().toISOString(),
+      })
+      addToast(result.ok ? `✅ Follow-up enviado para ${l.nome}!` : `⚠️ WA falhou mas lead movido para Retomar`, result.ok)
+      onRefresh()
+    } catch (err: any) {
+      addToast(`❌ Erro: ${err?.message || 'Falha'}`, false)
+    } finally { setReativando(null) }
+  }
+
   const semResposta = leads.filter(l =>
     l.status === 'novo' && l.ultimo_contato &&
     (new Date().getTime() - new Date(l.ultimo_contato).getTime()) > 24 * 60 * 60 * 1000
@@ -712,8 +757,17 @@ function TabRelatorio({ leads }: { leads: Lead[] }) {
     { icon: '📋', label: 'Propostas sem resposta', items: propostas, color: 'text-blue-400' },
   ]
 
+
   return (
     <div className="space-y-4">
+      <div className="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className={cn(
+            'px-4 py-3 rounded-xl text-sm font-medium shadow-2xl border backdrop-blur-md',
+            t.ok ? 'bg-emerald-900/90 border-emerald-500/30 text-emerald-200' : 'bg-amber-900/90 border-amber-500/30 text-amber-200'
+          )}>{t.msg}</div>
+        ))}
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {items.map(item => (
           <div key={item.label} className="card-sm text-center">
@@ -737,7 +791,18 @@ function TabRelatorio({ leads }: { leads: Lead[] }) {
                   <p className="text-xs text-zinc-600">{l.telefone} · {l.perfis?.nome ? `Resp: ${l.perfis.nome.split(' ')[0]}` : 'Sem resp.'}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="text-[10px] border border-zinc-700 bg-zinc-800 text-zinc-400 px-2 py-1 rounded" onClick={(e) => { e.stopPropagation(); alert('Automação de Follow-up disparada para ' + l.nome) }}>⚡ Reativar</button>
+                  <button
+                    onClick={(e) => reativarLead(e, l)}
+                    disabled={reativando === l.id}
+                    className={cn(
+                      'text-[10px] border px-2 py-1 rounded font-medium transition-all',
+                      reativando === l.id
+                        ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 cursor-wait'
+                        : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-400'
+                    )}
+                  >
+                    {reativando === l.id ? '⏳ Enviando...' : '⚡ Reativar'}
+                  </button>
                   <a href={`https://wa.me/${l.telefone.replace(/\D/g, '')}`}
                     target="_blank" rel="noopener noreferrer"
                     className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors" onClick={e => e.stopPropagation()}>
@@ -1013,7 +1078,7 @@ export default function CajadoClient() {
       {tab === 'parceiros' && <TabParceiros />}
 
       {/* Tab: Relatório */}
-      {tab === 'relatorio' && <TabRelatorio leads={leads} />}
+      {tab === 'relatorio' && <TabRelatorio leads={leads} onRefresh={handleRefresh} />}
 
       {/* Modais */}
       {modalLead && (

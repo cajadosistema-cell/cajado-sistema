@@ -1,189 +1,353 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
+import { useToast } from '@/components/shared/toast'
 
-// Simulação de IA Local Executiva
+// ── Types ────────────────────────────────────────────────────
+interface Mensagem {
+  id: string
+  role: 'user' | 'ai'
+  texto: string
+  loading?: boolean
+  erro?: boolean
+}
+
+// ── System Prompt ────────────────────────────────────────────
+const SYSTEM_PROMPT = `Você é a Assistente Executiva IA do Sistema Cajado — plataforma de gestão integrada para negócios.
+
+Suas responsabilidades:
+- Ajudar o gestor com análises, estratégias e decisões de negócio
+- Orientar sobre gestão de leads, CRM, vendas e pós-venda
+- Auxiliar com organização pessoal, agenda e diário estratégico
+- Interpretar dados financeiros e dar insights práticos
+- Ser direta, profissional e objetiva — sem enrolação
+
+Regras:
+- Responda SEMPRE em português brasileiro
+- Use formatação Markdown quando útil (listas, negrito)
+- Para valores monetários, use formato R$ 1.000,00
+- Se não souber algo, diga claramente em vez de inventar
+- Mantenha respostas concisas (máx 3 parágrafos) a menos que pedido mais detalhe`
+
+// ── Sugestões rápidas ────────────────────────────────────────
+const SUGESTOES = [
+  '📊 Como melhorar meu funil de vendas?',
+  '💡 Estratégias para reativar clientes inativos',
+  '📅 Me ajude a planejar minha semana',
+  '💰 Como calcular o ticket médio ideal?',
+]
+
+// ── Formata markdown simples → HTML básico ───────────────────
+function formatarTexto(texto: string) {
+  return texto
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/^- (.+)/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul class="list-disc pl-4 space-y-1">$1</ul>')
+    .replace(/\n/g, '<br/>')
+}
+
+// ── Componente principal ─────────────────────────────────────
 export function TabAssistente() {
-  const [mensagens, setMensagens] = useState([
-    { id: '1', role: 'ai', texto: 'Olá, chefe. Sou a sua Assistente Executiva. Como posso ajudar com sua agenda, registros no diário ou lançamentos de gastos hoje?' }
+  const { warning } = useToast()
+  const [mensagens, setMensagens] = useState<Mensagem[]>([
+    {
+      id: '0',
+      role: 'ai',
+      texto: 'Olá, chefe! 👋 Sou sua **Assistente Executiva IA**, integrada ao Sistema Cajado via OpenRouter.\n\nComo posso ajudar hoje? Pode me perguntar sobre leads, vendas, planejamento ou qualquer estratégia de negócio.',
+    },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
+  const [modelo, setModelo] = useState('openai/gpt-4o-mini')
+
   const chatEndRef = useRef<HTMLDivElement>(null)
-  
-  // Referência para podermos parar a gravação manualmente se necessário
   const recognitionRef = useRef<any>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensagens])
 
-  const handleEnviar = async () => {
-    if (!input.trim() || loading) return
+  // ── Enviar mensagem ────────────────────────────────────────
+  const handleEnviar = useCallback(async (textoOverride?: string) => {
+    const textoEnvio = (textoOverride ?? input).trim()
+    if (!textoEnvio || loading) return
 
-    const userText = input
-    setMensagens(prev => [...prev, { id: Date.now().toString(), role: 'user', texto: userText }])
+    const userMsgId = Date.now().toString()
+    const aiMsgId = (Date.now() + 1).toString()
+
+    // Adiciona msg do usuário
+    setMensagens(prev => [
+      ...prev,
+      { id: userMsgId, role: 'user', texto: textoEnvio },
+      { id: aiMsgId, role: 'ai', texto: '', loading: true },
+    ])
     setInput('')
     setLoading(true)
 
-    // Simulador de Lógica NLP (Agendar, Inserir Gasto, Diário)
-    setTimeout(() => {
-      let resposta = ''
-      const l = userText.toLowerCase()
+    // Monta histórico para contexto (últimas 8 msgs)
+    const historico = mensagens.slice(-8).map(m => ({
+      role: m.role === 'ai' ? 'assistant' : 'user',
+      content: m.texto,
+    }))
 
-      if (l.includes('gasto') || l.includes('comprei') || l.includes('paguei') || l.includes('lançar')) {
-        resposta = 'Ouvido! Identifiquei a intenção de registrar um Gasto Pessoal. Os dados foram computados na sua aba de Lançamentos.'
-      } else if (l.includes('diario') || l.includes('diário') || l.includes('anotar') || l.includes('pensamento')) {
-        resposta = 'Perfeito. Registrei essa nota no seu Diário de Bordo para futura análise estratégica.'
-      } else if (l.includes('reunião') || l.includes('reuniao') || l.includes('agenda') || l.includes('lembrar')) {
-        resposta = 'Agendamento mapeado. Adicionei à sua lista de pendências do Gestão Pessoal / CRM.'
-      } else {
-        resposta = 'Entendido, chefe. O sistema está sendo alimentado e estruturado com base nas suas ordens.'
+    try {
+      const res = await fetch('/api/openrouter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: textoEnvio,
+          model: modelo,
+          systemInstruction: SYSTEM_PROMPT,
+          context: historico.length > 0
+            ? historico.map(h => `${h.role === 'assistant' ? 'IA' : 'Usuário'}: ${h.content}`).join('\n')
+            : undefined,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Erro na resposta da IA')
       }
 
-      setMensagens(prev => [...prev, { id: (Date.now() + 1).toString(), role: 'ai', texto: resposta }])
-      setLoading(false)
-    }, 1500)
-  }
+      const resposta: string = data.result ?? '(sem resposta)'
 
+      // Efeito de digitação
+      setMensagens(prev =>
+        prev.map(m => m.id === aiMsgId ? { ...m, loading: false, texto: '' } : m)
+      )
+
+      let idx = 0
+      const interval = setInterval(() => {
+        idx++
+        setMensagens(prev =>
+          prev.map(m =>
+            m.id === aiMsgId
+              ? { ...m, texto: resposta.slice(0, idx) }
+              : m
+          )
+        )
+        if (idx >= resposta.length) clearInterval(interval)
+      }, 12)
+
+    } catch (err: any) {
+      setMensagens(prev =>
+        prev.map(m =>
+          m.id === aiMsgId
+            ? { ...m, loading: false, erro: true, texto: `❌ ${err.message || 'Falha ao conectar com a IA. Verifique a chave OPENROUTER_API_KEY.'}` }
+            : m
+        )
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [input, loading, mensagens, modelo])
+
+  // ── Voz ───────────────────────────────────────────────────
   const handleListen = () => {
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop()
       setIsListening(false)
       return
     }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      alert('Reconhecimento de voz não é suportado no seu navegador atual. Use o Safari (iOS) ou Chrome.')
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) {
+      warning('Reconhecimento de voz não é suportado neste navegador. Use o Chrome ou Safari.')
       return
     }
-
-    const recognition = new SpeechRecognition()
-    recognitionRef.current = recognition
-    recognition.lang = 'pt-BR'
-    recognition.continuous = false
-    recognition.interimResults = true
-
-    recognition.onstart = () => setIsListening(true)
-
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results)
-        .map((r: any) => r[0].transcript)
-        .join('')
-      setInput(transcript)
+    const r = new SR()
+    recognitionRef.current = r
+    r.lang = 'pt-BR'
+    r.continuous = false
+    r.interimResults = true
+    r.onstart = () => setIsListening(true)
+    r.onresult = (e: any) => {
+      setInput(Array.from(e.results).map((x: any) => x[0].transcript).join(''))
     }
+    r.onerror = () => setIsListening(false)
+    r.onend = () => setIsListening(false)
+    r.start()
+  }
 
-    recognition.onerror = (event: any) => {
-      console.error('Erro no reconhecimento de voz:', event.error)
-      setIsListening(false)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleEnviar()
     }
+  }
 
-    recognition.onend = () => {
-      setIsListening(false)
-    }
-
-    recognition.start()
+  const limparChat = () => {
+    setMensagens([{
+      id: Date.now().toString(),
+      role: 'ai',
+      texto: 'Chat reiniciado. Como posso ajudar?',
+    }])
   }
 
   return (
-    <div className="bg-[#111827] border border-white/5 rounded-2xl flex flex-col h-[500px] overflow-hidden shadow-2xl relative">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-fuchsia-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+    <div className="bg-[#111827] border border-white/5 rounded-2xl flex flex-col h-[580px] overflow-hidden shadow-2xl relative">
 
-      {/* Header Assitente */}
-      <div className="px-6 py-4 border-b border-zinc-800/80 bg-[#0a0d16]/80 flex items-center gap-4 relative z-10">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(217,70,239,0.3)]">
-          <span className="text-xl">🤖</span>
+      {/* Glow decorativo */}
+      <div className="absolute top-0 right-0 w-72 h-72 bg-fuchsia-500/8 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-500/8 rounded-full blur-[80px] pointer-events-none" />
+
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div className="px-5 py-3.5 border-b border-zinc-800/80 bg-[#0a0d16]/80 flex items-center gap-3 relative z-10 shrink-0">
+        <div className="relative">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+            <span className="text-lg">🤖</span>
+          </div>
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-[#0a0d16]" />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-sm font-bold text-zinc-100">Assistente IA Executiva</h2>
-          <p className="text-xs text-fuchsia-400 font-medium">Online e pronta para ordens</p>
+          <p className="text-[10px] text-fuchsia-400 font-medium">Powered by OpenRouter · {modelo.split('/')[1]}</p>
         </div>
+        {/* Seletor de modelo */}
+        <select
+          value={modelo}
+          onChange={e => setModelo(e.target.value)}
+          className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 rounded-lg px-2 py-1 focus:outline-none focus:border-fuchsia-500/40 cursor-pointer"
+        >
+          <option value="openai/gpt-4o-mini">GPT-4o mini 🚀</option>
+          <option value="openai/gpt-4o">GPT-4o 🧠</option>
+          <option value="anthropic/claude-3-haiku">Claude Haiku ⚡</option>
+          <option value="anthropic/claude-3.5-sonnet">Claude Sonnet 💎</option>
+          <option value="google/gemini-flash-1.5">Gemini Flash 🔥</option>
+          <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 (Free)</option>
+        </select>
+        <button
+          onClick={limparChat}
+          title="Limpar conversa"
+          className="text-zinc-600 hover:text-zinc-400 transition-colors text-xs px-2 py-1 rounded-lg hover:bg-zinc-800"
+        >
+          🗑
+        </button>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 relative z-10 scroll-smooth">
+      {/* ── Mensagens ──────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-4 relative z-10 scroll-smooth custom-scrollbar">
+
+        {/* Sugestões (só quando 1 msg) */}
+        {mensagens.length === 1 && (
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {SUGESTOES.map(s => (
+              <button
+                key={s}
+                onClick={() => handleEnviar(s)}
+                className="text-left text-[11px] text-zinc-400 border border-zinc-800 bg-zinc-900/50 hover:border-fuchsia-500/30 hover:bg-fuchsia-500/5 hover:text-fuchsia-300 rounded-xl px-3 py-2 transition-all leading-snug"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+
         {mensagens.map(msg => {
           const isAi = msg.role === 'ai'
           return (
-            <div key={msg.id} className={cn("flex", isAi ? "justify-start" : "justify-end")}>
+            <div key={msg.id} className={cn('flex', isAi ? 'justify-start' : 'justify-end')}>
+              {isAi && (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 flex items-center justify-center text-xs shrink-0 mr-2 mt-0.5 shadow-[0_0_10px_rgba(217,70,239,0.3)]">
+                  🤖
+                </div>
+              )}
               <div
                 className={cn(
-                  "max-w-[85%] md:max-w-[70%] p-3 px-4 rounded-2xl text-sm leading-relaxed",
+                  'max-w-[82%] md:max-w-[72%] px-4 py-3 rounded-2xl text-sm leading-relaxed',
                   isAi
-                    ? "bg-zinc-800 text-zinc-200 rounded-tl-sm border border-zinc-700/50"
-                    : "bg-fuchsia-600 text-white rounded-tr-sm shadow-[0_4px_15px_rgba(192,38,211,0.3)]"
+                    ? msg.erro
+                      ? 'bg-red-900/30 text-red-300 border border-red-500/20 rounded-tl-sm'
+                      : 'bg-zinc-800 text-zinc-200 border border-zinc-700/50 rounded-tl-sm'
+                    : 'bg-fuchsia-600 text-white rounded-tr-sm shadow-[0_4px_15px_rgba(192,38,211,0.25)]'
                 )}
               >
-                {msg.texto}
+                {msg.loading ? (
+                  <span className="flex gap-1 items-center h-4">
+                    <span className="w-1.5 h-1.5 bg-fuchsia-400 rounded-full animate-bounce" />
+                    <span className="w-1.5 h-1.5 bg-fuchsia-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                    <span className="w-1.5 h-1.5 bg-fuchsia-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                  </span>
+                ) : isAi ? (
+                  <div
+                    dangerouslySetInnerHTML={{ __html: formatarTexto(msg.texto) }}
+                    className="prose prose-sm prose-invert max-w-none [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1 [&_strong]:text-white"
+                  />
+                ) : (
+                  <p style={{ whiteSpace: 'pre-wrap' }}>{msg.texto}</p>
+                )}
               </div>
             </div>
           )
         })}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-zinc-800 px-4 py-3 rounded-2xl rounded-tl-sm border border-zinc-700/50">
-              <span className="flex gap-1 items-center h-5">
-                <span className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full animate-bounce"></span>
-                <span className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
-                <span className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
-              </span>
-            </div>
-          </div>
-        )}
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 border-t border-zinc-800/80 bg-[#0a0d16] relative z-10">
-        <div className="flex items-end gap-2 relative">
+      {/* ── Input ──────────────────────────────────────────── */}
+      <div className="p-4 border-t border-zinc-800/80 bg-[#0a0d16] relative z-10 shrink-0">
+        <div className="flex items-end gap-2 bg-[#111625] border border-zinc-800/80 rounded-2xl px-3 py-2 focus-within:border-fuchsia-500/40 transition-colors">
           <textarea
-            className="input w-full bg-zinc-900 border-zinc-700 resize-none rounded-xl pr-14 custom-scrollbar text-sm"
+            ref={textareaRef}
+            className="flex-1 bg-transparent text-sm text-zinc-100 placeholder-zinc-600 resize-none max-h-28 min-h-[40px] py-2 px-1 focus:outline-none focus:ring-0"
             rows={1}
-            style={{ minHeight: '48px', maxHeight: '120px' }}
-            placeholder="Mande sua ordem... (Ex: Lance R$150 de uber no meu cartão)"
+            placeholder="Mande uma ordem... (Enter para enviar)"
             value={input}
-            onChange={(e) => {
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-              setInput(e.target.value);
+            disabled={loading}
+            onChange={e => {
+              setInput(e.target.value)
+              e.target.style.height = 'auto'
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 112)}px`
             }}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleEnviar()
-              }
-            }}
+            onKeyDown={handleKeyDown}
           />
-          <div className="absolute right-2 bottom-1.5 flex items-center gap-1.5">
+          <div className="flex gap-1 pb-1 shrink-0">
+            {/* Mic */}
             <button
               onClick={handleListen}
               className={cn(
-                "w-9 h-9 rounded-lg flex items-center justify-center transition-all",
-                isListening 
-                  ? "bg-red-500/20 text-red-500 animate-pulse border border-red-500/50" 
-                  : "bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                'p-2.5 rounded-xl transition-all',
+                isListening
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse'
+                  : 'text-zinc-500 hover:text-fuchsia-400 hover:bg-zinc-800'
               )}
-              title={isListening ? "Gravando... Clique para parar" : "Falar com a Assistente"}
+              title={isListening ? 'Gravando...' : 'Falar'}
             >
               {isListening ? (
-                 <span className="w-3 h-3 bg-red-500 rounded-full animate-bounce"></span>
+                <span className="w-3 h-3 bg-red-500 rounded-full block animate-ping" />
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                </svg>
               )}
             </button>
+            {/* Enviar */}
             <button
-              onClick={handleEnviar}
+              onClick={() => handleEnviar()}
               disabled={!input.trim() || loading}
-              className="w-9 h-9 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white flex items-center justify-center disabled:opacity-50 transition-colors"
+              className="bg-fuchsia-600 hover:bg-fuchsia-500 active:bg-fuchsia-700 active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-600 text-white p-2.5 rounded-xl transition-all shadow-lg disabled:shadow-none"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+              {loading ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
+        <p className="text-[10px] text-zinc-700 text-center mt-2">
+          IA pode cometer erros. Sempre valide decisões importantes.
+        </p>
       </div>
     </div>
   )

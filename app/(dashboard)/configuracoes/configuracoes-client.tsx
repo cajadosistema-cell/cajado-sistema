@@ -6,6 +6,7 @@ import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { TabPermissoes } from './_components/TabPermissoes'
+import { useToast } from '@/components/shared/toast'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Funcionario = {
@@ -307,13 +308,14 @@ function ModalEditarLimites({
 // ── Client Component ────────────────────────────────────────────
 export default function ConfiguracoesClient() {
   const supabase = createClient()
+  const { success, error: toastError, confirm: toastConfirm } = useToast()
   const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [editarLimitesFunc, setEditarLimitesFunc] = useState<{ id: string, nome: string, permissoes: string[] } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [saving, setSaving] = useState(false)
-  const [saveMsg, setSaveMsg] = useState('')
+  const [cepLoading, setCepLoading] = useState(false)
 
   // Estado controlado dos campos da empresa
   const [empresa, setEmpresa] = useState({
@@ -344,58 +346,81 @@ export default function ConfiguracoesClient() {
 
   // Salvar no Supabase
   const handleSaveEmpresa = async () => {
+    if (!empresa.nome_fantasia.trim()) {
+      toastError('O Nome Fantasia é obrigatório.')
+      return
+    }
     setSaving(true)
-    setSaveMsg('')
     try {
-      // Tenta buscar se já existe algum registro
       const { data: existing } = await (supabase.from('configuracoes_empresa') as any)
         .select('id')
         .limit(1)
         .single()
 
+      const payload = { ...empresa, updated_at: new Date().toISOString() }
+
       if (existing?.id) {
-        await (supabase.from('configuracoes_empresa') as any)
-          .update(empresa)
+        const { error } = await (supabase.from('configuracoes_empresa') as any)
+          .update(payload)
           .eq('id', existing.id)
+        if (error) throw new Error(error.message)
       } else {
-        await (supabase.from('configuracoes_empresa') as any)
-          .insert(empresa)
+        const { error } = await (supabase.from('configuracoes_empresa') as any)
+          .insert(payload)
+        if (error) throw new Error(error.message)
       }
-      setSaveMsg('ok')
-      setTimeout(() => setSaveMsg(''), 3000)
-    } catch (err) {
-      setSaveMsg('erro')
-      setTimeout(() => setSaveMsg(''), 4000)
+      success('Dados da empresa salvos com sucesso!')
+    } catch (err: any) {
+      toastError('Falha ao salvar: ' + (err.message || 'Erro desconhecido'))
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDeleteFuncionario = async (id: string, email: string, nome: string) => {
-    if (!confirm(`Tem certeza que deseja excluir o funcionário ${nome} e remover seu acesso ao sistema?`)) {
-      return
-    }
-
+  // Busca CEP via ViaCEP
+  const handleBuscarCEP = async (cep: string) => {
+    const raw = cep.replace(/\D/g, '')
+    if (raw.length !== 8) return
+    setCepLoading(true)
     try {
-      const res = await fetch('/api/admin/excluir-funcionario', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, email }),
-      })
-
+      const res = await fetch(`https://viacep.com.br/ws/${raw}/json/`)
       const data = await res.json()
-
-      if (!res.ok) {
-        alert(data.error || 'Erro ao excluir o funcionário.')
-        return
-      }
-
-      // Sucesso na exclusão, recarrega a query do Supabase
-      refetch()
-      alert(`Funcionário ${nome} foi excluído com sucesso.`)
-    } catch (err: any) {
-      alert('Erro inesperado: ' + err.message)
+      if (data.erro) { toastError('CEP não encontrado.'); return }
+      setEmpresa(p => ({
+        ...p,
+        logradouro: data.logradouro || p.logradouro,
+        bairro: data.bairro || p.bairro,
+        cidade_estado: `${data.localidade} / ${data.uf}`,
+      }))
+    } catch {
+      toastError('Não foi possível buscar o CEP.')
+    } finally {
+      setCepLoading(false)
     }
+  }
+
+  const handleDeleteFuncionario = async (id: string, email: string, nome: string) => {
+    toastConfirm(
+      `Tem certeza que deseja excluir o funcionário ${nome} e remover seu acesso ao sistema?`,
+      async () => {
+        try {
+          const res = await fetch('/api/admin/excluir-funcionario', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, email }),
+          })
+          const data = await res.json()
+          if (!res.ok) {
+            toastError(data.error || 'Erro ao excluir o funcionário.')
+            return
+          }
+          refetch()
+          success(`Funcionário ${nome} foi excluído com sucesso.`)
+        } catch (err: any) {
+          toastError('Erro inesperado: ' + err.message)
+        }
+      }
+    )
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -543,9 +568,18 @@ export default function ConfiguracoesClient() {
                 <div className="grid grid-cols-6 gap-4 mt-4">
                   <div className="col-span-6 md:col-span-2">
                     <label className="label">CEP *</label>
-                    <input className="input mt-1" value={empresa.cep}
-                      placeholder="00000-000"
-                      onChange={e => setEmpresa(p => ({...p, cep: e.target.value}))} />
+                    <div className="relative mt-1">
+                      <input
+                        className="input w-full pr-9"
+                        value={empresa.cep}
+                        placeholder="00000-000"
+                        onChange={e => setEmpresa(p => ({...p, cep: e.target.value}))}
+                        onBlur={e => handleBuscarCEP(e.target.value)}
+                      />
+                      {cepLoading && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 animate-pulse">🔍</span>
+                      )}
+                    </div>
                   </div>
                   <div className="col-span-6 md:col-span-4">
                     <label className="label">Logradouro / Avenida</label>
@@ -580,7 +614,7 @@ export default function ConfiguracoesClient() {
                   disabled={saving}
                   className="btn-primary pointer-events-auto flex gap-2 items-center px-8 py-4 text-[15px] font-bold shadow-[0_10px_40px_rgba(245,166,35,0.7)] hover:shadow-[0_10px_50px_rgba(245,166,35,0.9)] hover:-translate-y-1 transition-all rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 border-4 border-zinc-950 disabled:opacity-60"
                 >
-                  {saving ? '⏳ Salvando...' : saveMsg === 'ok' ? '✅ Salvo com Sucesso!' : saveMsg === 'erro' ? '❌ Erro ao salvar' : '✓ Salvar Todas Alterações da Empresa'}
+                  {saving ? '⏳ Salvando...' : '✓ Salvar Todas Alterações da Empresa'}
                 </button>
               </div>
             </div>
