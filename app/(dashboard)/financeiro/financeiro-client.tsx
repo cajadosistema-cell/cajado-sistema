@@ -971,7 +971,6 @@ export default function FinanceiroClient() {
         subtitle="Contas PF/PJ · Caixa · Conciliação · Previsão"
       >
         <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 print:hidden" title="Exportar para PDF ou Imprimir">🖨️ PDF / Imprimir</button>
-        <button onClick={() => setModalImport(true)} className="btn-secondary print:hidden">📥 Importar extrato</button>
         <button onClick={() => setModalLancamento(true)} className="btn-primary print:hidden" disabled={contas.length === 0}>+ Lançamento</button>
       </PageHeader>
 

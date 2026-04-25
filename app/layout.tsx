@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { ThemeProvider } from '@/lib/theme-provider'
 import { RegisterServiceWorker } from './register-sw'
+import { PWAInstallBanner } from '@/components/shared/PWAInstallBanner'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -84,6 +85,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-sans antialiased overscroll-none">
         <ThemeProvider>
           <RegisterServiceWorker />
+          <PWAInstallBanner />
           {children}
         </ThemeProvider>
       </body>
