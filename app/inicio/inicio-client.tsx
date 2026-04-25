@@ -159,6 +159,7 @@ export default function InicioClient() {
   const [activeTab, setActiveTab] = useState<'visao' | 'competencia' | 'caixa'>('visao')
   const [modalLancamento, setModalLancamento] = useState(false)
   const [dashView, setDashView] = useState<'empresa' | 'pessoal'>('empresa')
+  const [modalDetalhe, setModalDetalhe] = useState<null | 'patrimonio' | 'receitas' | 'despesas' | 'leads'>(null)
   const chartRefs = useRef<{ [key: string]: Chart }>({})
 
   const handleLogout = async () => {
@@ -566,7 +567,7 @@ export default function InicioClient() {
         .custom-dashboard .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
         .custom-dashboard .metric-card {
           background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r);
-          padding: 16px; position: relative; overflow: hidden; transition: .2s; cursor: default; border-style: solid;
+          padding: 16px; position: relative; overflow: hidden; transition: .2s; cursor: pointer; border-style: solid;
         }
         .custom-dashboard .metric-card:hover { border-color: rgba(255,255,255,.12); transform: translateY(-1px); }
         .custom-dashboard .metric-card::after {
@@ -760,25 +761,25 @@ export default function InicioClient() {
 
             <div className="content">
               <div className="cards-row">
-                <div className="metric-card" style={{ '--accent-glow': 'rgba(16,185,129,.15)' } as React.CSSProperties}>
+                <div className="metric-card" style={{ '--accent-glow': 'rgba(16,185,129,.15)' } as React.CSSProperties} onClick={() => setModalDetalhe('patrimonio')}>
                   <div className="mc-label">Patrimônio Líquido</div>
                   <div className="mc-value" style={{ color: 'var(--green)' }}>{formatCurrency(saldoTotal)}</div>
                   <div className="mc-change up">▲ Contas + Imóveis</div>
                   <div className="sparkline-wrap"><canvas id="sp1"></canvas></div>
                 </div>
-                <div className="metric-card" style={{ '--accent-glow': 'rgba(124,92,252,.12)' } as React.CSSProperties}>
+                <div className="metric-card" style={{ '--accent-glow': 'rgba(124,92,252,.12)' } as React.CSSProperties} onClick={() => setModalDetalhe('receitas')}>
                   <div className="mc-label">Receitas Recebidas</div>
                   <div className="mc-value" style={{ color: 'var(--purple2)' }}>{formatCurrency(receitas)}</div>
                   <div className="mc-change up">▲ {lancamentos.filter((l: any) => l.tipo === 'receita').length} entrada(s)</div>
                   <div className="sparkline-wrap"><canvas id="sp2"></canvas></div>
                 </div>
-                <div className="metric-card" style={{ '--accent-glow': 'rgba(244,63,94,.1)' } as React.CSSProperties}>
+                <div className="metric-card" style={{ '--accent-glow': 'rgba(244,63,94,.1)' } as React.CSSProperties} onClick={() => setModalDetalhe('despesas')}>
                   <div className="mc-label">Despesas Efetivadas</div>
                   <div className="mc-value" style={{ color: 'var(--red)' }}>{formatCurrency(despesas)}</div>
                   <div className="mc-change down">▼ {lancamentos.filter((l: any) => l.tipo === 'despesa').length} saída(s)</div>
                   <div className="sparkline-wrap"><canvas id="sp3"></canvas></div>
                 </div>
-                <div className="metric-card" style={{ '--accent-glow': 'rgba(245,166,35,.1)' } as React.CSSProperties}>
+                <div className="metric-card" style={{ '--accent-glow': 'rgba(245,166,35,.1)' } as React.CSSProperties} onClick={() => setModalDetalhe('leads')}>
                   <div className="mc-label">Leads e Win Rate</div>
                   <div className="mc-value" style={{ color: 'var(--gold)' }}>{leadsAtivos} Leads</div>
                   <div className="mc-change up">▲ {winRateTrader}% acerto (Trader)</div>
@@ -926,6 +927,75 @@ export default function InicioClient() {
       </div>
 
       </div>{/* fim empresa wrapper */}
+
+      {/* ── Drawer detalhe dos cards ─────────────────────── */}
+      {modalDetalhe && (() => {
+        const receitasList = lancamentosDoMes.filter((l: any) => l.tipo === 'receita').sort((a: any, b: any) => b.valor - a.valor)
+        const despesasList = lancamentosDoMes.filter((l: any) => l.tipo === 'despesa').sort((a: any, b: any) => b.valor - a.valor)
+        const config: Record<string, { title: string; total: string; subtitle: string; items: { label: string; value: string; color: string; badge: string }[] }> = {
+          patrimonio: {
+            title: '💰 Patrimônio Líquido', total: formatCurrency(saldoTotal),
+            subtitle: `${contas.length} conta(s) ativa(s)`,
+            items: [
+              ...contas.map((c: any) => ({ label: c.nome, value: formatCurrency(c.saldo_atual ?? 0), color: (c.saldo_atual ?? 0) >= 0 ? '#10b981' : '#f43f5e', badge: c.tipo })),
+              ...ativos.map((a: any) => ({ label: a.nome || 'Ativo', value: formatCurrency(a.valor_atual ?? a.valor_investido), color: '#a78bfa', badge: 'investimento' })),
+            ]
+          },
+          receitas: {
+            title: '📈 Receitas Recebidas', total: formatCurrency(receitas),
+            subtitle: `${receitasList.length} entrada(s) em ${mesNome}`,
+            items: receitasList.map((l: any) => ({ label: l.descricao, value: '+' + formatCurrency(l.valor), color: '#10b981', badge: l.data_competencia?.slice(0, 10) ?? '' }))
+          },
+          despesas: {
+            title: '📉 Despesas Efetivadas', total: formatCurrency(despesas),
+            subtitle: `${despesasList.length} saída(s) em ${mesNome}`,
+            items: despesasList.map((l: any) => ({ label: l.descricao, value: '-' + formatCurrency(l.valor), color: '#f43f5e', badge: l.data_competencia?.slice(0, 10) ?? '' }))
+          },
+          leads: {
+            title: '🤝 Leads & CRM', total: `${leadsAtivos} leads ativos`,
+            subtitle: `Win rate trader: ${winRateTrader}%`,
+            items: leads.map((l: any) => ({ label: l.nome, value: l.valor_estimado ? formatCurrency(l.valor_estimado) : '—', color: l.status === 'cliente_ativo' ? '#10b981' : l.status === 'perdido' ? '#f43f5e' : '#f5a623', badge: (l.status ?? '').replace('_', ' ') }))
+          }
+        }
+        const cfg = config[modalDetalhe]
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'flex-end' }} onClick={() => setModalDetalhe(null)}>
+            <style>{`@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+            <div style={{ width: '380px', maxWidth: '92vw', height: '100vh', background: 'linear-gradient(180deg,#0d1120,#111827)', borderLeft: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', boxShadow: '-20px 0 60px rgba(0,0,0,0.5)', animation: 'slideInRight 0.28s ease-out' }} onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'relative', flexShrink: 0 }}>
+                <div style={{ height: '1px', background: 'linear-gradient(90deg,transparent,#f5a623,transparent)', position: 'absolute', top: 0, left: 0, right: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div>
+                    <p style={{ fontFamily: 'Syne,sans-serif', fontSize: '15px', fontWeight: 700, color: '#f0f4ff', margin: 0 }}>{cfg.title}</p>
+                    <p style={{ fontSize: '11px', color: '#4a5578', marginTop: '2px' }}>{cfg.subtitle}</p>
+                  </div>
+                  <button onClick={() => setModalDetalhe(null)} style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#8b98b8', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                </div>
+                <div style={{ padding: '12px 14px', borderRadius: '12px', background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.15)' }}>
+                  <p style={{ fontSize: '10px', color: '#8b98b8', margin: '0 0 2px' }}>TOTAL</p>
+                  <p style={{ fontFamily: 'Syne,sans-serif', fontSize: '22px', fontWeight: 700, color: '#f5a623', margin: 0 }}>{cfg.total}</p>
+                </div>
+              </div>
+              {/* Lista */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '10px 20px' }}>
+                {cfg.items.length === 0
+                  ? <p style={{ color: '#4a5578', fontSize: '13px', textAlign: 'center', marginTop: '40px' }}>Nenhum dado para este período.</p>
+                  : cfg.items.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '13px', color: '#c8d2ea', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>{item.label}</p>
+                        <span style={{ fontSize: '9px', fontWeight: 600, padding: '1px 6px', borderRadius: '20px', background: 'rgba(255,255,255,0.06)', color: '#4a5578', marginTop: '3px', display: 'inline-block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{item.badge}</span>
+                      </div>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: item.color, marginLeft: '8px', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.value}</p>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {modalLancamento && contas.length > 0 && (
         <ModalLancamento
