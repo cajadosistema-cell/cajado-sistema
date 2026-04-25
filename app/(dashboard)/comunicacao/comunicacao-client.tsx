@@ -54,6 +54,44 @@ function Avatar({ nome, size = 'md' }: { nome: string; size?: 'sm' | 'md' }) {
 }
 
 // ── Main ────────────────────────────────────────────────────────
+
+// ── Contact list item ────────────────────────────────────────
+const ContactItem = ({ id, name, subtitle, isActive, online, isGeral, onClick }: {
+  id: string | null; name: string; subtitle: string; isActive: boolean; online?: boolean; isGeral?: boolean; onClick: () => void
+}) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      'w-full text-left px-4 py-3 flex items-center gap-3 transition-all',
+      isActive
+        ? 'bg-brand-gold-soft border-l-2 border-brand-gold'
+        : 'border-l-2 border-transparent hover:bg-surface active:bg-surface-hover'
+    )}
+  >
+    {isGeral ? (
+      <div className="w-10 h-10 rounded-full bg-brand-gold-soft flex items-center justify-center shrink-0 text-lg">🌍</div>
+    ) : (
+      <div className="relative">
+        <Avatar nome={name} size="md" />
+        {online && (
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-surface" />
+        )}
+      </div>
+    )}
+    <div className="flex-1 min-w-0">
+      <p className={cn('text-sm font-semibold truncate', isActive ? 'text-brand-gold' : 'text-fg')}>{name}</p>
+      <p className="text-[11px] text-fg-tertiary truncate">{subtitle}</p>
+    </div>
+    {online !== undefined && !isGeral && (
+      <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+        online ? 'text-success bg-success-soft' : 'text-fg-disabled bg-muted'
+      )}>
+        {online ? 'online' : 'off'}
+      </span>
+    )}
+  </button>
+)
+
 export default function ComunicacaoClient() {
   const supabase = createClient()
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -238,7 +276,7 @@ export default function ComunicacaoClient() {
   const formatTime = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
 
-  const getRemetente = (id: string) => equipe.find(f => f.id === id) || { nome: 'Desconhecido', id }
+  const getRemetente = (id: string) => id === currentUser?.id ? { nome: currentUser?.user_metadata?.nome || currentUser?.email?.split('@')[0] || 'Você', id } : (equipe.find(f => f.id === id) || { nome: 'Desconhecido', id })
 
   // ── Chat name helper ────────────────────────────────────────
   const activeChatName = activeChat === null
@@ -265,45 +303,10 @@ export default function ComunicacaoClient() {
     }).length
   }
 
-  // ── Contact list item ────────────────────────────────────────
-  const ContactItem = ({ id, name, subtitle, isActive, online, isGeral }: {
-    id: string | null; name: string; subtitle: string; isActive: boolean; online?: boolean; isGeral?: boolean
-  }) => (
-    <button
-      onClick={() => selectChat(id)}
-      className={cn(
-        'w-full text-left px-4 py-3 flex items-center gap-3 transition-all',
-        isActive
-          ? 'bg-brand-gold-soft border-l-2 border-brand-gold'
-          : 'border-l-2 border-transparent hover:bg-surface active:bg-surface-hover'
-      )}
-    >
-      {isGeral ? (
-        <div className="w-10 h-10 rounded-full bg-brand-gold-soft flex items-center justify-center shrink-0 text-lg">🌍</div>
-      ) : (
-        <div className="relative">
-          <Avatar nome={name} size="md" />
-          {online && (
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-surface" />
-          )}
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className={cn('text-sm font-semibold truncate', isActive ? 'text-brand-gold' : 'text-fg')}>{name}</p>
-        <p className="text-[11px] text-fg-tertiary truncate">{subtitle}</p>
-      </div>
-      {online !== undefined && !isGeral && (
-        <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-full',
-          online ? 'text-success bg-success-soft' : 'text-fg-disabled bg-muted'
-        )}>
-          {online ? 'online' : 'off'}
-        </span>
-      )}
-    </button>
-  )
+  // ContactItem extraído
 
   // ── Contact list panel ───────────────────────────────────────
-  const ContactPanel = () => (
+  const renderContactPanel = () => (
     <div className={cn(
       'flex flex-col bg-sidebar border-r border-border-subtle',
       // Mobile: full width, shown only when mobileView=list
@@ -317,6 +320,11 @@ export default function ComunicacaoClient() {
           <h1 className="text-base font-bold text-fg">Chat Interno</h1>
         </div>
         <p className="text-[11px] text-fg-tertiary">{onlineUsers.length} online agora</p>
+        {currentUser && (
+          <p className="text-[10px] font-semibold text-brand-gold mt-1 uppercase tracking-wider">
+            Logado como: {currentUser.user_metadata?.nome || currentUser.email?.split('@')[0]}
+          </p>
+        )}
       </div>
 
       {/* Contacts */}
@@ -328,6 +336,7 @@ export default function ComunicacaoClient() {
           subtitle={`${onlineUsers.length} membros online`}
           isActive={activeChat === null && mobileView === 'chat'}
           isGeral
+          onClick={() => selectChat(null)}
         />
         
         <p className="px-4 pt-4 pb-2 text-[10px] uppercase tracking-widest font-bold text-fg-disabled">
@@ -341,6 +350,7 @@ export default function ComunicacaoClient() {
             subtitle={user.cargo || 'Membro'}
             isActive={activeChat === user.id && mobileView === 'chat'}
             online={onlineUsers.includes(user.id)}
+            onClick={() => selectChat(user.id)}
           />
         ))}
         {equipe.filter(f => f.id !== currentUser?.id).length === 0 && (
@@ -351,7 +361,7 @@ export default function ComunicacaoClient() {
   )
 
   // ── Chat panel ───────────────────────────────────────────────
-  const ChatPanel = () => (
+  const renderChatPanel = () => (
     <div className={cn(
       'flex-1 flex flex-col min-w-0 bg-page',
       mobileView === 'list' ? 'hidden md:flex' : 'flex'
@@ -506,8 +516,8 @@ export default function ComunicacaoClient() {
       // Overflow-x: tirar os paddings do layout pai para ocupar largura total no mobile
       '-mx-4 -my-6 sm:-mx-6'
     )}>
-      <ContactPanel />
-      <ChatPanel />
+      {renderContactPanel()}
+      {renderChatPanel()}
     </div>
   )
 }
