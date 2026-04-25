@@ -426,8 +426,8 @@ export default function ComunicacaoClient() {
               {!isMe && !showHeader && <div className="w-8 shrink-0" />}
 
               <div className={cn('flex flex-col', isMe ? 'items-end' : 'items-start', 'max-w-[78%] md:max-w-[65%]')}>
-                {showHeader && !isMe && (
-                  <span className="text-[11px] font-semibold text-fg-tertiary mb-1 ml-1">{remetente.nome}</span>
+                {showHeader && (
+                  <span className={cn('text-[11px] font-semibold text-fg-tertiary mb-1', isMe ? 'mr-1' : 'ml-1')}>{remetente.nome}</span>
                 )}
                 <div className={cn(
                   'px-3.5 py-2.5 text-sm break-words leading-relaxed shadow-sm',
