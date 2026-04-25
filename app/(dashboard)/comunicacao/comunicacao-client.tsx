@@ -96,6 +96,7 @@ export default function ComunicacaoClient() {
   const supabase = createClient()
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [equipe, setEquipe] = useState<Funcionario[]>([])
+  const [allUsers, setAllUsers] = useState<any[]>([])
   const [onlineUsers, setOnlineUsers] = useState<string[]>([])
   const [mensagens, setMensagens] = useState<MensagemChat[]>([])
   const [activeChat, setActiveChat] = useState<string | null>(null)
@@ -125,6 +126,9 @@ export default function ComunicacaoClient() {
 
       const { data: funcs } = await supabase.from('funcionarios').select('*').order('nome')
       if (funcs && mounted) setEquipe(funcs)
+
+      const { data: vwUsers } = await supabase.from('vw_usuarios_chat').select('*')
+      if (vwUsers && mounted) setAllUsers(vwUsers)
 
       const { data: msgs } = await supabase
         .from('chat_interno')
@@ -276,7 +280,7 @@ export default function ComunicacaoClient() {
   const formatTime = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
 
-  const getRemetente = (id: string) => id === currentUser?.id ? { nome: currentUser?.user_metadata?.nome || currentUser?.email?.split('@')[0] || 'Você', id } : (equipe.find(f => f.id === id) || { nome: 'Desconhecido', id })
+  const getRemetente = (id: string) => id === currentUser?.id ? { nome: currentUser?.user_metadata?.nome || currentUser?.email?.split('@')[0] || 'Você', id } : (equipe.find(f => f.id === id) || allUsers.find(u => u.id === id) || { nome: 'Desconhecido', id })
 
   // ── Chat name helper ────────────────────────────────────────
   const activeChatName = activeChat === null
