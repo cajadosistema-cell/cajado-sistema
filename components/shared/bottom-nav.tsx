@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/lib/theme-provider'
 
 const mainItems = [
   { href: '/inicio',      label: 'Início',    icon: '⬡',  activeColor: 'text-amber-400'  },
@@ -24,6 +25,40 @@ const moreItems = [
   { href: '/pos-venda',    label: 'Pós-venda',        icon: '⭐' },
   { href: '/configuracoes',label: 'Configurações',    icon: '⚙️' },
 ]
+
+function ThemeToggleMobile() {
+  const { theme, toggleTheme } = useTheme()
+  const isDark = theme === 'dark'
+  return (
+    <div className="mt-3 pt-3 border-t border-white/10">
+      <button
+        onClick={toggleTheme}
+        className="w-full flex items-center justify-between px-3 py-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">{isDark ? '☀️' : '🌙'}</span>
+          <div className="text-left">
+            <p className="text-xs font-semibold text-white">
+              {isDark ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
+            </p>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              Atualmente: {isDark ? 'Escuro' : 'Claro'}
+            </p>
+          </div>
+        </div>
+        <div className={cn(
+          'w-10 h-6 rounded-full relative transition-colors',
+          isDark ? 'bg-amber-500/30' : 'bg-amber-400'
+        )}>
+          <div className={cn(
+            'absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all',
+            isDark ? 'left-1' : 'left-5'
+          )} />
+        </div>
+      </button>
+    </div>
+  )
+}
 
 export function BottomNav() {
   const pathname = usePathname()
@@ -64,6 +99,9 @@ export function BottomNav() {
                 )
               })}
             </div>
+
+            {/* Separador + Trocar tema */}
+            <ThemeToggleMobile />
           </div>
         </div>
       )}
