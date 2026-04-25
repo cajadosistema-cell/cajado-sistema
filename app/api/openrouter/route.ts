@@ -6,8 +6,10 @@ export async function POST(req: Request) {
       prompt,
       context,
       systemInstruction,
-      model = 'openai/gpt-4o-mini',
+      model: reqModel,
       messages: rawMessages,
+      imageBase64,
+      imageMime,
     } = await req.json()
 
     if (!process.env.OPENROUTER_API_KEY) {
@@ -20,25 +22,40 @@ export async function POST(req: Request) {
     const system = systemInstruction
       || 'Você é um assistente IA especialista em negócios, finanças e tecnologia da Cajado Soluções. Responda sempre em português brasileiro.'
 
-    // Suporte a array de mensagens (histórico) ou formato simples prompt+context
-    let messages: { role: string; content: string }[]
+    // Escolhe modelo: se tiver imagem usa GPT-4o (vision), senão usa o modelo solicitado ou mini
+    const model = imageBase64
+      ? 'openai/gpt-4o'
+      : (reqModel || 'openai/gpt-4o-mini')
+
+    let messages: { role: string; content: any }[]
 
     if (Array.isArray(rawMessages) && rawMessages.length > 0) {
-      // Modo conversa com histórico completo
       messages = [
         { role: 'system', content: system },
         ...rawMessages,
       ]
     } else {
-      // Modo simples (prompt + contexto opcional)
+      const textContent = context
+        ? `Contexto da conversa anterior:\n${context}\n\nMensagem atual: ${prompt}`
+        : (prompt || '')
+
+      // Se tiver imagem, usa formato multimodal (vision)
+      const userContent = imageBase64
+        ? [
+            { type: 'text', text: textContent },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${imageMime || 'image/jpeg'};base64,${imageBase64}`,
+                detail: 'high',
+              },
+            },
+          ]
+        : textContent
+
       messages = [
         { role: 'system', content: system },
-        {
-          role: 'user',
-          content: context
-            ? `Contexto da conversa anterior:\n${context}\n\nMensagem atual: ${prompt}`
-            : prompt,
-        },
+        { role: 'user', content: userContent },
       ]
     }
 
@@ -53,7 +70,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: 1024,
+        max_tokens: 2048,
         temperature: 0.7,
       }),
     })
@@ -67,7 +84,7 @@ export async function POST(req: Request) {
     const result = data.choices?.[0]?.message?.content ?? ''
     const usage = data.usage ?? null
 
-    return NextResponse.json({ result, usage })
+    return NextResponse.json({ result, usage, model })
 
   } catch (error: any) {
     console.error('[OpenRouter API]', error.message)

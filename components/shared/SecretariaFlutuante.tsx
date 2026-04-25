@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 // ── Types ────────────────────────────────────────────────────
-interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[] }
+interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
+interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string }
 interface AcaoIA {
   tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia'
   dados: Record<string, any>
@@ -79,6 +80,17 @@ IDEIA / PROJETO (pedido para guardar uma ideia):
 
 CATEGORIAS para ideias: negocio, produto, pessoal, financeiro, saude, criativo, geral
 
+ANÁLISE DE IMAGENS E PDFs:
+Quando o chefe enviar uma imagem ou PDF, analise o conteúdo e:
+- FATURA DE CARTÃO DE CRÉDITO: extraia CADA compra com valor, descrição, data e forma_pagamento="cartao_credito". Gere um bloco JSON para CADA item.
+- NOTA FISCAL / CUPOM: extraia valor total, fornecedor e gere um gasto.
+- LISTA DE CARTÕES: identifique cada cartão, bandeira, limite, vencimento da fatura. Para CADA cartão, crie um evento na agenda no próximo vencimento:
+  ```json
+  {"acao":"agenda","titulo":"🔴 Vencimento [Banco] - [final do cartão]","data_inicio":"${anoAtual}-MM-DDT10:00:00","tipo":"lembrete","descricao":"Valor estimado: R$ XXX,XX"}
+  ```
+- COMPROVANTE DE PAGAMENTO: registre como gasto ou receita conforme o documento.
+- CRONOGRAMA: quando pedir cronograma de cartões, Monte uma tabela organizada com: Cartão | Vencimento | Valor estimado | Parcelas ativas — e gere um evento de agenda por cartão.
+
 REGRAS:
 - PERGUNTE se o gasto é PESSOAL ou DA EMPRESA antes de registrar
 - Se faltarem dados essenciais, PERGUNTE antes de gerar o JSON
@@ -141,10 +153,13 @@ export function SecretariaFlutuante() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
+  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null)
+  const [processingFile, setProcessingFile] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
   const historyLoadedRef = useRef(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   // sessão = dia atual, agrupa mensagens por dia
   const sessaoId = new Date().toISOString().split('T')[0]
 
@@ -404,14 +419,60 @@ export function SecretariaFlutuante() {
     })
   }, [supabase, sessaoId])
 
+  // ── Carregar arquivo (imagem ou PDF) ────────────────────────
+  const handleFile = useCallback(async (file: File) => {
+    if (!file) return
+    setProcessingFile(true)
+    try {
+      const isImage = file.type.startsWith('image/')
+      const isPDF = file.type === 'application/pdf'
+      if (!isImage && !isPDF) {
+        alert('Formato não suportado. Envie uma imagem (JPG, PNG, etc.) ou PDF.')
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const dataUrl = e.target?.result as string
+        const base64 = dataUrl.split(',')[1]
+        if (isImage) {
+          setAttachedFile({ base64, mime: file.type, name: file.name, isImage: true, preview: dataUrl })
+          setProcessingFile(false)
+        } else {
+          // PDF: extrai texto no servidor
+          try {
+            const res = await fetch('/api/elena/extrair-pdf', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ base64 }),
+            })
+            const data = await res.json()
+            if (data.texto) {
+              // PDF com texto: armazena como base64 + texto extraído
+              setAttachedFile({ base64: data.texto, mime: 'text/plain', name: file.name, isImage: false })
+            } else {
+              alert(data.aviso || data.error || 'Não foi possível ler o PDF.')
+            }
+          } catch {
+            alert('Erro ao processar o PDF. Tente novamente.')
+          }
+          setProcessingFile(false)
+        }
+      }
+      reader.readAsDataURL(file)
+    } catch {
+      setProcessingFile(false)
+    }
+  }, [])
+
   // ── Enviar ────────────────────────────────────────────────
   const handleEnviar = useCallback(async (textToSubmit?: string) => {
     const userText = (textToSubmit ?? input).trim()
-    if (!userText || loading) return
+    if ((!userText && !attachedFile) || loading) return
     const aiMsgId = (Date.now() + 1).toString()
+    const userMsgTexto = userText || (attachedFile?.isImage ? `📎 ${attachedFile.name}` : `📄 ${attachedFile?.name}`)
     setMensagens(prev => [
       ...prev,
-      { id: Date.now().toString(), role: 'user', texto: userText },
+      { id: Date.now().toString(), role: 'user', texto: userMsgTexto, anexo: attachedFile?.isImage ? attachedFile.preview : undefined },
       { id: aiMsgId, role: 'ai', texto: '...' }
     ])
     setInput('')
@@ -426,6 +487,9 @@ export function SecretariaFlutuante() {
       if (uid) setUserId(uid)
     }
 
+    const fileSnap = attachedFile
+    setAttachedFile(null)
+
     try {
       // Contexto: usa todas as mensagens em memória (inclui histórico carregado do DB)
       const contexto = mensagens
@@ -433,10 +497,28 @@ export function SecretariaFlutuante() {
         .slice(-20)
         .map(m => `${m.role === 'ai' ? 'Elena' : 'Chefe'}: ${m.texto.substring(0, 300)}`)
         .join('\n')
+
+      // Monta o prompt incluindo texto do PDF se for arquivo de texto
+      let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
+      if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
+        promptFinal = `${promptFinal}\n\n[CONTEÚDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
+      }
+
+      const body: Record<string, any> = {
+        prompt: promptFinal,
+        context: contexto,
+        systemInstruction: buildSystemPrompt(),
+      }
+      // Se é imagem, manda para visão (GPT-4o)
+      if (fileSnap?.isImage) {
+        body.imageBase64 = fileSnap.base64
+        body.imageMime = fileSnap.mime
+      }
+
       const res = await fetch('/api/openrouter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userText, context: contexto, systemInstruction: buildSystemPrompt() })
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error)
@@ -569,7 +651,12 @@ export function SecretariaFlutuante() {
                     )}>
                       {msg.texto === '...' ? (
                         <span className="flex gap-1"><span className="animate-bounce">●</span><span className="animate-bounce" style={{animationDelay:'0.1s'}}>●</span><span className="animate-bounce" style={{animationDelay:'0.2s'}}>●</span></span>
-                      ) : msg.texto}
+                      ) : (
+                        <>
+                          {msg.anexo && <img src={msg.anexo} alt="anexo" className="max-w-full rounded-lg mb-1 max-h-32 object-contain" />}
+                          {msg.texto}
+                        </>
+                      )}
                     </div>
                     {/* Status badges */}
                     {isAi && msg.acoes && msg.acoes.length > 0 && (
@@ -597,9 +684,36 @@ export function SecretariaFlutuante() {
               <div ref={chatEndRef} />
             </div>
 
+            {/* Preview do Anexo */}
+            {attachedFile && (
+              <div className="px-3 pb-1 shrink-0">
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  {attachedFile.isImage && attachedFile.preview ? (
+                    <img src={attachedFile.preview} alt="preview" className="w-10 h-10 rounded object-cover shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded bg-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">📄</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-semibold text-amber-400 truncate">{attachedFile.name}</p>
+                    <p className="text-[9px] text-fg-tertiary">{attachedFile.isImage ? 'Imagem pronta para análise' : 'PDF extraído — pronto para análise'}</p>
+                  </div>
+                  <button onClick={() => setAttachedFile(null)} className="text-fg-tertiary hover:text-fg text-sm shrink-0">✕</button>
+                </div>
+              </div>
+            )}
+
             {/* Input */}
             <div className="p-3 border-t border-border-subtle shrink-0">
+              {/* Input oculto para arquivo */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
+              />
               <div className="flex items-center gap-2 bg-page rounded-xl p-1 border border-border-subtle focus-within:border-amber-500/40 transition-colors">
+                {/* Botão microfone */}
                 <button
                   onPointerDown={handlePressMic} onPointerUp={handleReleaseMic} onPointerLeave={handleReleaseMic}
                   style={{ touchAction: 'none' }}
@@ -608,17 +722,32 @@ export function SecretariaFlutuante() {
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
                 </button>
+                {/* Botão Anexar */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={processingFile}
+                  title="Enviar imagem ou PDF"
+                  className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
+                    processingFile ? 'animate-pulse text-amber-400' :
+                    attachedFile ? 'bg-amber-500/20 text-amber-400' :
+                    'text-fg-tertiary hover:text-amber-400')}
+                >
+                  {processingFile
+                    ? <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                  }
+                </button>
                 <input
                   type="text"
                   className="flex-1 bg-transparent border-0 focus:ring-0 text-xs text-fg placeholder-zinc-600 h-8"
-                  placeholder="Diga um comando para a Elena..."
+                  placeholder={attachedFile ? 'Descreva o que quer saber...' : 'Diga um comando para a Elena...'}
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleEnviar()}
                 />
                 <button
                   onClick={() => handleEnviar()}
-                  disabled={!input.trim() || loading}
+                  disabled={(!input.trim() && !attachedFile) || loading}
                   className="w-8 h-8 rounded-lg bg-amber-500 hover:bg-amber-400 text-amber-950 flex items-center justify-center shrink-0 disabled:opacity-40 transition-colors"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>

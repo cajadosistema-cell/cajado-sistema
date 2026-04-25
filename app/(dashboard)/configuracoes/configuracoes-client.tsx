@@ -358,24 +358,54 @@ function TabBackup() {
   useEffect(() => {
     const hash = window.location.hash
     if (hash.includes('access_token')) {
-      const params = new URLSearchParams(hash.substring(1))
-      const token = params.get('access_token')
-      if (token) {
+      const processarToken = async () => {
+        const params = new URLSearchParams(hash.substring(1))
+        const token = params.get('access_token')
+        if (!token) return
+
         setGoogleToken(token)
-        // Busca e-mail do usuário Google
-        fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${token}` }
-        }).then(r => r.json()).then(info => {
+        
+        // Garante que temos o usuário antes de salvar
+        let currentUserId = userId
+        if (!currentUserId) {
+          const { data } = await supabase.auth.getUser()
+          currentUserId = data.user?.id || ''
+          if (currentUserId) setUserId(currentUserId)
+        }
+
+        try {
+          const info = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(r => r.json())
+          
           setGoogleEmail(info.email || '')
-          // Salva no banco
-          if (userId) salvarConfig({ google_email: info.email })
-        })
-        window.history.replaceState({}, '', window.location.pathname)
-        success('Google Drive conectado com sucesso! ✅')
+          
+          if (currentUserId) {
+            const uid = currentUserId
+            const proximo = calcularProximoBackup(frequencia)
+            const payload = { user_id: uid, frequencia, proximo_backup: proximo, google_email: info.email, updated_at: new Date().toISOString() }
+            
+            const { data: exists } = await (supabase.from('configuracoes_backup') as any)
+              .select('id').eq('user_id', uid).maybeSingle()
+              
+            if (exists?.id) {
+              await (supabase.from('configuracoes_backup') as any).update(payload).eq('id', exists.id)
+            } else {
+              await (supabase.from('configuracoes_backup') as any).insert(payload)
+            }
+          }
+          
+          window.history.replaceState({}, '', window.location.pathname)
+          success('Google Drive conectado com sucesso! ✅')
+        } catch (err) {
+          console.error("Erro ao conectar Google:", err)
+        }
       }
+      
+      processarToken()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId])
+  }, [])
 
   const salvarConfig = async (extra: Record<string, any> = {}) => {
     if (!userId) return
@@ -932,6 +962,13 @@ export default function ConfiguracoesClient() {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [saving, setSaving] = useState(false)
   const [cepLoading, setCepLoading] = useState(false)
+
+  // Se voltou do Google OAuth, abre a aba de backup automaticamente
+  useEffect(() => {
+    if (window.location.hash.includes('access_token')) {
+      setActiveTab('backup')
+    }
+  }, [])
 
   // Estado controlado dos campos da empresa
   const [empresa, setEmpresa] = useState({
