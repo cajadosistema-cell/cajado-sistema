@@ -85,7 +85,13 @@ REGRAS:
 - Para ocorrência: pergunte colaborador, tipo (erro/acerto/alerta/elogio), impacto (baixo/medio/alto), descrição
 - Responda SEMPRE em português brasileiro, tom profissional e conciso
 - Quando tiver todos os dados, inclua o bloco JSON e diga que vai registrar agora
-- Nas datas, SEMPRE use o ano ${anoAtual}`
+- Nas datas, SEMPRE use o ano ${anoAtual}
+- Se o chefe informar MÚLTIPLOS gastos de uma vez, gere UM bloco JSON separado para CADA gasto
+- FORMA DE PAGAMENTO: mapeie sempre para os valores válidos:
+  * "cartão hiper", "hipercard", "cartão crédito", "crédito" → cartao_credito
+  * "débito", "cartão débito" → cartao_debito
+  * "pix", "transferência", "ted", "doc" → pix
+  * "dinheiro", "espécie", "cash" → dinheiro`
 }
 
 // ── Extrai JSONs da resposta da IA ──────────────────────────
