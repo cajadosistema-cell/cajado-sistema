@@ -63,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Anti-flash: aplica o tema ANTES do paint inicial */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('cajado-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;var x=t||(d?'dark':'light');document.documentElement.setAttribute('data-theme',x);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('cajado-theme');var x=t||'dark';document.documentElement.setAttribute('data-theme',x);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`,
           }}
         />
         {/* iOS PWA — safe area e splash */}

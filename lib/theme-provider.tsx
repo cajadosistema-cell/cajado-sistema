@@ -15,8 +15,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = localStorage.getItem('cajado-theme') as Theme | null
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const initial = stored ?? (prefersDark ? 'dark' : 'light')
+    const initial = stored ?? 'dark'
     setThemeState(initial)
     document.documentElement.setAttribute('data-theme', initial)
   }, [])
