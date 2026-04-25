@@ -76,30 +76,33 @@ export default function ComunicacaoClient() {
 
   // ── Load data & realtime ────────────────────────────────────
   useEffect(() => {
+    let mounted = true
     let room: ReturnType<typeof supabase.channel> | null = null
     let chatSub: ReturnType<typeof supabase.channel> | null = null
 
     async function loadInitialData() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session || !mounted) return
       setCurrentUser(session.user)
 
       const { data: funcs } = await supabase.from('funcionarios').select('*').order('nome')
-      if (funcs) setEquipe(funcs)
+      if (funcs && mounted) setEquipe(funcs)
 
       const { data: msgs } = await supabase
         .from('chat_interno')
         .select('*')
         .order('created_at', { ascending: true })
         .limit(150)
-      if (msgs) setMensagens(msgs as MensagemChat[])
+      if (msgs && mounted) setMensagens(msgs as MensagemChat[])
 
-      // Presence — canal único com nome único por sessão
-      const channelName = `room:equipe:${session.user.id}`
-      room = supabase.channel(channelName)
+      if (!mounted) return
+
+      // Canal de presença compartilhado (mesmo nome para todos)
+      room = supabase.channel('equipe:sala-principal')
       room
         .on('presence', { event: 'sync' }, () => {
-          const newState = room!.presenceState()
+          if (!room || !mounted) return
+          const newState = room.presenceState()
           const onlines: string[] = []
           for (const key in newState) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,28 +113,29 @@ export default function ComunicacaoClient() {
           setOnlineUsers(Array.from(new Set(onlines)))
         })
         .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
+          if (status === 'SUBSCRIBED' && mounted) {
             await room!.track({ user_id: session.user.id, online_at: new Date().toISOString() })
           }
         })
 
-      // Realtime messages
-      chatSub = supabase.channel('chat_db_changes')
+      // Realtime messages — nome único por mount
+      chatSub = supabase.channel(`chat_db_changes_${Date.now()}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_interno' }, (payload) => {
-          setMensagens(prev => [...prev, payload.new as MensagemChat])
+          if (mounted) setMensagens(prev => [...prev, payload.new as MensagemChat])
         })
         .subscribe()
     }
 
     loadInitialData()
 
-    // Cleanup — fora do async, o React consegue chamar corretamente
     return () => {
+      mounted = false
       if (room) supabase.removeChannel(room)
       if (chatSub) supabase.removeChannel(chatSub)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
 
   // Auto-scroll
   useEffect(() => {
