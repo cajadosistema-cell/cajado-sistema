@@ -464,24 +464,48 @@ export function SecretariaFlutuante() {
   // ── Microfone ─────────────────────────────────────────────
   const handlePressMic = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) return
+    if (!SR) { alert('Use o Google Chrome para usar o microfone.'); return }
+    // Para qualquer reconhecimento anterior
+    if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
     transcriptRef.current = ''
     setInput('')
     const r = new SR()
     recognitionRef.current = r
-    r.lang = 'pt-BR'; r.continuous = true; r.interimResults = true
+    r.lang = 'pt-BR'
+    r.continuous = true
+    r.interimResults = true
     r.onstart = () => setIsListening(true)
-    r.onresult = (e: any) => { const t = Array.from(e.results).map((x: any) => x[0].transcript).join(''); setInput(t); transcriptRef.current = t }
-    r.onerror = r.onend = () => setIsListening(false)
+    r.onresult = (e: any) => {
+      // Acumula só os resultados finais + o interim atual para evitar duplicações
+      let finalText = ''
+      let interimText = ''
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript
+        else interimText += e.results[i][0].transcript
+      }
+      const combined = (finalText + interimText).trim()
+      setInput(combined)
+      transcriptRef.current = finalText + interimText
+    }
+    r.onerror = () => setIsListening(false)
+    r.onend = () => setIsListening(false)
     r.start()
   }
+
   const handleReleaseMic = () => {
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop()
-      setIsListening(false)
-      setTimeout(() => { if (transcriptRef.current.trim()) handleEnviar(transcriptRef.current) }, 500)
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch {}
+      recognitionRef.current = null
     }
+    setIsListening(false)
+    // Aguarda o último onresult disparar antes de enviar
+    setTimeout(() => {
+      const text = transcriptRef.current.trim()
+      if (text) handleEnviar(text)
+      transcriptRef.current = ''
+    }, 400)
   }
+
 
   if (!isClient) return null
 
