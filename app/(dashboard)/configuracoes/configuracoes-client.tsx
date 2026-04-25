@@ -323,6 +323,165 @@ function ModalEditarLimites({
   )
 }
 
+// ── Tab Limpeza de Dados Demo ─────────────────────────────────
+function TabLimpeza() {
+  const supabase = createClient()
+  const { success, error: toastError } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [dataCorte, setDataCorte] = useState(() => new Date().toISOString().split('T')[0])
+  const [confirmText, setConfirmText] = useState('')
+  const [resultado, setResultado] = useState<any>(null)
+
+  const handleLimpar = async () => {
+    if (confirmText !== 'LIMPAR') return
+    setLoading(true)
+    setResultado(null)
+    try {
+      const dataCorteISO = new Date(dataCorte + 'T23:59:59').toISOString()
+      const { data, error } = await supabase.rpc('limpar_dados_ficticios', { data_corte: dataCorteISO })
+      if (error) throw new Error(error.message)
+      setResultado(data)
+      success(`✅ ${(data as any)?.total ?? 0} registros fictícios removidos!`)
+      setConfirmText('')
+    } catch (err: any) {
+      toastError('Erro ao limpar: ' + (err.message || 'Erro desconhecido'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const tabelas = [
+    { key: 'lancamentos',       label: 'Lançamentos financeiros (empresa)' },
+    { key: 'leads',             label: 'Leads e negociações (CRM)' },
+    { key: 'ocorrencias',       label: 'Ocorrências da equipe' },
+    { key: 'chat_interno',      label: 'Mensagens do Chat Interno' },
+    { key: 'gastos_pessoais',   label: 'Gastos pessoais (Finanças PF)' },
+    { key: 'receitas_pessoais', label: 'Receitas pessoais (Finanças PF)' },
+    { key: 'agenda_eventos',    label: 'Eventos da Agenda' },
+    { key: 'elena',             label: 'Conversas e ideias da Elena (IA)' },
+    { key: 'operacoes_trader',  label: 'Operações Day Trader' },
+  ]
+
+  const naoDeleta = [
+    'Contas bancárias', 'Carteira de clientes', 'Catálogo de produtos',
+    'Categorias financeiras', 'Equipe e acessos', 'Configurações da empresa',
+  ]
+
+  return (
+    <div className="space-y-6">
+      {/* Aviso */}
+      <div className="card border-red-500/20 bg-red-500/5">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl mt-0.5">⚠️</span>
+          <div>
+            <h2 className="section-title text-red-400 mb-1">Zona de Perigo — Limpeza de Dados Demo</h2>
+            <p className="text-sm text-fg-secondary leading-relaxed">
+              Remove <strong>permanentemente</strong> dados fictícios inseridos durante a demonstração,
+              com base em uma <strong>data de corte</strong>. Tudo criado <em>antes</em> desta data
+              é removido. Tudo criado <em>depois</em> permanece intacto.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* O que SERÁ deletado */}
+        <div className="card">
+          <h3 className="text-sm font-bold text-fg mb-3">🗑️ O que será removido:</h3>
+          <ul className="space-y-2">
+            {tabelas.map(t => (
+              <li key={t.key} className="flex items-center gap-2 text-xs text-fg-secondary">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                {t.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* O que NÃO será deletado */}
+        <div className="card border-emerald-500/20">
+          <h3 className="text-sm font-bold text-fg mb-3">✅ O que será preservado:</h3>
+          <ul className="space-y-2">
+            {naoDeleta.map(item => (
+              <li key={item} className="flex items-center gap-2 text-xs text-fg-secondary">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+            <p className="text-[10px] text-emerald-400">
+              Dados adicionados <strong>após a data de corte</strong> também são preservados.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Formulário */}
+      <div className="card border-amber-500/20">
+        <h3 className="text-sm font-bold text-fg mb-4">🗓️ Configurar Limpeza</h3>
+        <div className="max-w-sm space-y-4">
+          <div>
+            <label className="label">Data de Corte</label>
+            <p className="text-[10px] text-fg-tertiary mb-1">Registros criados ATÉ esta data serão apagados.</p>
+            <input
+              type="date"
+              className="input mt-1"
+              value={dataCorte}
+              onChange={e => setDataCorte(e.target.value)}
+            />
+          </div>
+
+          <div className="p-3 rounded-xl bg-page/60 border border-white/5 text-xs text-fg-tertiary">
+            Serão removidos registros criados antes de{' '}
+            <span className="font-bold text-amber-400">
+              {new Date(dataCorte + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </span>
+          </div>
+
+          <div>
+            <label className="label">Confirmação de Segurança</label>
+            <p className="text-[10px] text-fg-tertiary mb-1">
+              Digite <strong className="text-white">LIMPAR</strong> para habilitar o botão:
+            </p>
+            <input
+              className="input mt-1"
+              placeholder="LIMPAR"
+              value={confirmText}
+              onChange={e => setConfirmText(e.target.value.toUpperCase())}
+            />
+          </div>
+
+          <button
+            onClick={handleLimpar}
+            disabled={loading || confirmText !== 'LIMPAR'}
+            className="w-full py-3 rounded-xl font-bold text-sm transition-all bg-red-600 hover:bg-red-500 text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+          >
+            {loading ? '⏳ Limpando...' : '🧹 Executar Limpeza de Dados'}
+          </button>
+        </div>
+
+        {/* Resultado */}
+        {resultado && (
+          <div className="mt-6 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+            <p className="text-sm font-bold text-emerald-400 mb-3">
+              ✅ Limpeza concluída — {resultado.total} registros removidos
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {tabelas.map(t => (
+                <div key={t.key} className="flex justify-between items-center text-xs py-1 border-b border-white/5">
+                  <span className="text-fg-tertiary truncate">{t.label.split(' ')[0]}</span>
+                  <span className="font-mono font-bold text-fg ml-2">{resultado[t.key] ?? 0}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Tab Minha Conta / Alterar Senha ───────────────────────────
 function TabMinhaConta() {
   const supabase = createClient()
@@ -483,7 +642,7 @@ function TabMinhaConta() {
 export default function ConfiguracoesClient() {
   const supabase = createClient()
   const { success, error: toastError, confirm: toastConfirm } = useToast()
-  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta'>('empresa')
+  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta' | 'limpeza'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [editarLimitesFunc, setEditarLimitesFunc] = useState<{ id: string, nome: string, permissoes: string[] } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -664,6 +823,16 @@ export default function ConfiguracoesClient() {
               )}
             >
               🔑 Minha Conta
+            </button>
+            <div className="my-1 border-t border-white/5" />
+            <button 
+              onClick={() => setActiveTab('limpeza')} 
+              className={cn(
+                "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
+                activeTab === 'limpeza' ? "bg-red-900/60 text-red-300" : "text-red-400/70 hover:bg-red-500/10 hover:text-red-400"
+              )}
+            >
+              🧹 Limpeza de Dados
             </button>
           </div>
         </div>
@@ -866,6 +1035,8 @@ export default function ConfiguracoesClient() {
           )}
 
           {activeTab === 'minha-conta' && <TabMinhaConta />}
+
+          {activeTab === 'limpeza' && <TabLimpeza />}
         </div>
       </div>
 
