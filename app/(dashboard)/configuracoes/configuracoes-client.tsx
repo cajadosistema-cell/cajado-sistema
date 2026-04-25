@@ -323,11 +323,167 @@ function ModalEditarLimites({
   )
 }
 
+// ── Tab Minha Conta / Alterar Senha ───────────────────────────
+function TabMinhaConta() {
+  const supabase = createClient()
+  const { success, error: toastError } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [form, setForm] = useState({ novaSenha: '', confirmar: '' })
+  const [showNova, setShowNova] = useState(false)
+  const [showConfirmar, setShowConfirmar] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleAlterarSenha = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (form.novaSenha.length < 6) {
+      toastError('A senha deve ter pelo menos 6 caracteres.')
+      return
+    }
+    if (form.novaSenha !== form.confirmar) {
+      toastError('As senhas não coincidem. Verifique e tente novamente.')
+      return
+    }
+    setLoading(true)
+    const { error } = await supabase.auth.updateUser({ password: form.novaSenha })
+    if (error) {
+      toastError('Erro ao alterar senha: ' + error.message)
+    } else {
+      success('Senha alterada com sucesso! ✅')
+      setForm({ novaSenha: '', confirmar: '' })
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Card de identificação */}
+      <div className="card">
+        <h2 className="section-title">Minha Conta</h2>
+        <div className="mt-4 flex items-center gap-4 p-4 rounded-xl bg-page/60 border border-white/5">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500/30 to-amber-700/30 border border-amber-500/20 flex items-center justify-center text-2xl font-bold text-amber-400 font-['Syne'] shrink-0">
+            {user?.email?.charAt(0).toUpperCase() ?? '?'}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-fg">{user?.user_metadata?.nome || 'Usuário'}</p>
+            <p className="text-xs text-fg-tertiary mt-0.5">{user?.email}</p>
+            <span className="inline-block mt-1.5 text-[9px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              Sessão ativa
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Card de alterar senha */}
+      <div className="card">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-base">🔒</div>
+          <div>
+            <h2 className="section-title mb-0">Alterar Senha de Acesso</h2>
+            <p className="text-xs text-fg-tertiary">Defina uma senha forte para proteger sua conta.</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleAlterarSenha} className="mt-6 space-y-4 max-w-md">
+          {/* Nova senha */}
+          <div>
+            <label className="label">Nova Senha *</label>
+            <div className="relative mt-1">
+              <input
+                type={showNova ? 'text' : 'password'}
+                className="input w-full pr-10"
+                placeholder="Mínimo 6 caracteres"
+                value={form.novaSenha}
+                onChange={e => setForm(f => ({ ...f, novaSenha: e.target.value }))}
+                required
+                minLength={6}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNova(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-tertiary hover:text-fg text-xs"
+              >
+                {showNova ? '🙈' : '👁️'}
+              </button>
+            </div>
+            {/* Indicador de força */}
+            {form.novaSenha.length > 0 && (
+              <div className="mt-2 flex items-center gap-2">
+                {[1,2,3,4].map(n => (
+                  <div key={n} className={cn('h-1 flex-1 rounded-full transition-colors', 
+                    form.novaSenha.length >= n * 3
+                      ? n <= 1 ? 'bg-red-500' : n <= 2 ? 'bg-amber-500' : n <= 3 ? 'bg-yellow-400' : 'bg-emerald-500'
+                      : 'bg-white/5'
+                  )} />
+                ))}
+                <span className="text-[10px] text-fg-tertiary w-12">
+                  {form.novaSenha.length < 4 ? 'Fraca' : form.novaSenha.length < 8 ? 'Média' : form.novaSenha.length < 12 ? 'Boa' : 'Forte'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Confirmar senha */}
+          <div>
+            <label className="label">Confirmar Nova Senha *</label>
+            <div className="relative mt-1">
+              <input
+                type={showConfirmar ? 'text' : 'password'}
+                className={cn('input w-full pr-10 transition-colors', 
+                  form.confirmar && form.novaSenha !== form.confirmar ? 'border-red-500/50' : 
+                  form.confirmar && form.novaSenha === form.confirmar ? 'border-emerald-500/50' : ''
+                )}
+                placeholder="Repita a nova senha"
+                value={form.confirmar}
+                onChange={e => setForm(f => ({ ...f, confirmar: e.target.value }))}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmar(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-fg-tertiary hover:text-fg text-xs"
+              >
+                {showConfirmar ? '🙈' : '👁️'}
+              </button>
+            </div>
+            {form.confirmar && (
+              <p className={cn('text-[10px] mt-1', form.novaSenha === form.confirmar ? 'text-emerald-400' : 'text-red-400')}>
+                {form.novaSenha === form.confirmar ? '✓ Senhas coincidem' : '✗ Senhas não coincidem'}
+              </p>
+            )}
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading || form.novaSenha !== form.confirmar || form.novaSenha.length < 6}
+              className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            >
+              {loading ? '⏳ Salvando...' : '🔒 Alterar Senha'}
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 p-4 rounded-xl bg-blue-500/5 border border-blue-500/10">
+          <p className="text-[11px] text-fg-tertiary leading-relaxed">
+            💡 <strong className="text-fg-secondary">Dica de segurança:</strong> Use uma senha com letras maiúsculas, minúsculas, números e símbolos. 
+            Não compartilhe sua senha com ninguém. Após a alteração, você permanece logado.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Client Component ────────────────────────────────────────────
 export default function ConfiguracoesClient() {
   const supabase = createClient()
   const { success, error: toastError, confirm: toastConfirm } = useToast()
-  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes'>('empresa')
+  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [editarLimitesFunc, setEditarLimitesFunc] = useState<{ id: string, nome: string, permissoes: string[] } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -498,6 +654,16 @@ export default function ConfiguracoesClient() {
               )}
             >
               🔐 Permissões (RBAC)
+            </button>
+            <div className="my-1 border-t border-white/5" />
+            <button 
+              onClick={() => setActiveTab('minha-conta')} 
+              className={cn(
+                "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
+                activeTab === 'minha-conta' ? "bg-surface text-white" : "text-fg-secondary hover:bg-white/5 hover:text-fg"
+              )}
+            >
+              🔑 Minha Conta
             </button>
           </div>
         </div>
@@ -698,6 +864,8 @@ export default function ConfiguracoesClient() {
               <TabPermissoes />
             </div>
           )}
+
+          {activeTab === 'minha-conta' && <TabMinhaConta />}
         </div>
       </div>
 
