@@ -68,6 +68,7 @@ const navItems = [
     items: [
       { href: '/configuracoes',   label: '🏢 Empresa & Equipe'  },
       { href: '/seguranca-geral', label: '🔒 Segurança & Logs'  },
+      { href: '/manual',          label: '📖 Manual do Sistema' },
     ],
   },
 ]

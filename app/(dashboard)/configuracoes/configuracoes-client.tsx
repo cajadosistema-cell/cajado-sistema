@@ -1126,6 +1126,13 @@ export default function ConfiguracoesClient() {
             >
               🧹 Limpeza de Dados
             </button>
+            <div className="my-1 border-t border-white/5" />
+            <a
+              href="/manual"
+              className="px-4 py-3 rounded-lg text-sm font-medium text-left transition-all text-fg-secondary hover:bg-white/5 hover:text-fg flex items-center gap-2"
+            >
+              📖 Manual do Sistema
+            </a>
           </div>
         </div>
 
