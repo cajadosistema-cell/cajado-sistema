@@ -323,6 +323,289 @@ function ModalEditarLimites({
   )
 }
 
+// ── Tab Backup Google Drive ───────────────────────────────────
+function TabBackup() {
+  const supabase = createClient()
+  const { success, error: toastError } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [googleToken, setGoogleToken] = useState<string | null>(null)
+  const [googleEmail, setGoogleEmail] = useState('')
+  const [frequencia, setFrequencia] = useState<'diario' | 'semanal' | 'mensal' | 'manual'>('semanal')
+  const [ultimoBackup, setUltimoBackup] = useState<string | null>(null)
+  const [proximoBackup, setProximoBackup] = useState<string | null>(null)
+  const [userId, setUserId] = useState('')
+  const [progress, setProgress] = useState<string | null>(null)
+
+  // Carrega configuração do banco
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      setUserId(data.user.id)
+      const { data: cfg } = await (supabase.from('configuracoes_backup') as any)
+        .select('*').eq('user_id', data.user.id).maybeSingle()
+      if (cfg) {
+        setGoogleEmail(cfg.google_email || '')
+        setFrequencia(cfg.frequencia || 'semanal')
+        setUltimoBackup(cfg.ultimo_backup)
+        setProximoBackup(cfg.proximo_backup)
+        if (cfg.google_email) setGoogleEmail(cfg.google_email)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Detecta retorno do OAuth (access_token no hash da URL)
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash.includes('access_token')) {
+      const params = new URLSearchParams(hash.substring(1))
+      const token = params.get('access_token')
+      if (token) {
+        setGoogleToken(token)
+        // Busca e-mail do usuário Google
+        fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { Authorization: `Bearer ${token}` }
+        }).then(r => r.json()).then(info => {
+          setGoogleEmail(info.email || '')
+          // Salva no banco
+          if (userId) salvarConfig({ google_email: info.email })
+        })
+        window.history.replaceState({}, '', window.location.pathname)
+        success('Google Drive conectado com sucesso! ✅')
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  const salvarConfig = async (extra: Record<string, any> = {}) => {
+    if (!userId) return
+    const uid = userId
+    const proximo = calcularProximoBackup(frequencia)
+    const payload = { user_id: uid, frequencia, proximo_backup: proximo, updated_at: new Date().toISOString(), ...extra }
+    const { data: exists } = await (supabase.from('configuracoes_backup') as any)
+      .select('id').eq('user_id', uid).maybeSingle()
+    if (exists?.id) {
+      await (supabase.from('configuracoes_backup') as any).update(payload).eq('id', exists.id)
+    } else {
+      await (supabase.from('configuracoes_backup') as any).insert(payload)
+    }
+    setProximoBackup(proximo)
+  }
+
+  const calcularProximoBackup = (freq: string) => {
+    const d = new Date()
+    if (freq === 'diario') d.setDate(d.getDate() + 1)
+    else if (freq === 'semanal') d.setDate(d.getDate() + 7)
+    else if (freq === 'mensal') d.setMonth(d.getMonth() + 1)
+    else return null
+    return d.toISOString()
+  }
+
+  const handleConnectGoogle = () => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      toastError('Configure NEXT_PUBLIC_GOOGLE_CLIENT_ID no arquivo .env.local')
+      return
+    }
+    const scope = encodeURIComponent('https://www.googleapis.com/auth/drive.file email profile')
+    const redirectUri = encodeURIComponent(window.location.href.split('#')[0])
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`
+    window.location.href = url
+  }
+
+  const handleDesconectar = async () => {
+    setGoogleToken(null)
+    setGoogleEmail('')
+    await (supabase.from('configuracoes_backup') as any)
+      .update({ google_email: null }).eq('user_id', userId)
+    success('Conta Google desconectada.')
+  }
+
+  const uploadParaDrive = async (conteudo: string, filename: string, token: string) => {
+    const blob = new Blob([conteudo], { type: 'application/json' })
+    const metadata = { name: filename, mimeType: 'application/json' }
+    const form = new FormData()
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
+    form.append('file', blob)
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    })
+    if (!res.ok) throw new Error('Falha no upload para o Drive: ' + (await res.text()))
+    return res.json()
+  }
+
+  const handleFazerBackup = async (modoDownload = false) => {
+    setLoading(true)
+    setProgress('Exportando dados do sistema...')
+    try {
+      const res = await fetch('/api/backup/exportar')
+      if (!res.ok) throw new Error('Falha ao exportar dados')
+      const conteudo = await res.text()
+      const data = new Date().toISOString().split('T')[0]
+      const filename = `cajado-backup-${data}.json`
+
+      if (modoDownload || !googleToken) {
+        // Download local
+        const url = URL.createObjectURL(new Blob([conteudo], { type: 'application/json' }))
+        const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+        URL.revokeObjectURL(url)
+        setProgress(null)
+        success(`📥 Backup baixado: ${filename}`)
+      } else {
+        // Upload Google Drive
+        setProgress('Enviando para o Google Drive...')
+        await uploadParaDrive(conteudo, filename, googleToken)
+        const agora = new Date().toISOString()
+        setUltimoBackup(agora)
+        await salvarConfig({ ultimo_backup: agora })
+        setProgress(null)
+        success(`☁️ Backup enviado ao Google Drive: ${filename}`)
+      }
+    } catch (err: any) {
+      setProgress(null)
+      toastError('Erro no backup: ' + (err.message || 'Erro desconhecido'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const frequencias = [
+    { value: 'diario',   label: 'Diário',   desc: 'Todo dia' },
+    { value: 'semanal',  label: 'Semanal',  desc: 'A cada 7 dias' },
+    { value: 'mensal',   label: 'Mensal',   desc: 'A cada 30 dias' },
+    { value: 'manual',   label: 'Manual',   desc: 'Somente quando clicar' },
+  ]
+
+  return (
+    <div className="space-y-6">
+      {/* Status do Google Drive */}
+      <div className="card">
+        <h2 className="section-title mb-4">☁️ Conexão com Google Drive</h2>
+        {googleEmail ? (
+          <div className="flex items-center gap-4 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/20 to-red-500/20 flex items-center justify-center text-2xl shrink-0">G</div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-fg">Conta conectada</p>
+              <p className="text-xs text-emerald-400 mt-0.5">{googleEmail}</p>
+            </div>
+            <button onClick={handleDesconectar} className="btn-secondary text-xs text-red-400 border-red-500/20 hover:bg-red-500/10">Desconectar</button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-page/60 border border-white/5">
+              <p className="text-sm text-fg-secondary leading-relaxed">
+                Conecte sua conta Google para enviar os backups automaticamente para o seu Google Drive.
+                Os arquivos ficam salvos na pasta raiz do Drive com o nome <span className="font-mono text-amber-400 text-xs">cajado-backup-[data].json</span>.
+              </p>
+            </div>
+            <button
+              onClick={handleConnectGoogle}
+              className="flex items-center gap-3 px-5 py-3 bg-white text-zinc-900 font-semibold rounded-xl border border-white/10 hover:bg-white/90 transition-all shadow-lg text-sm"
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Conectar com Google
+            </button>
+
+            <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 text-[11px] text-fg-tertiary leading-relaxed">
+              💡 <strong className="text-fg-secondary">Pré-requisito:</strong> Adicione{' '}
+              <span className="font-mono text-amber-400">NEXT_PUBLIC_GOOGLE_CLIENT_ID</span> ao{' '}
+              <span className="font-mono">.env.local</span> com o Client ID do seu projeto no Google Cloud Console
+              (APIs &amp; Services → Credentials → OAuth 2.0 Client IDs).
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Frequência */}
+      <div className="card">
+        <h2 className="section-title mb-1">🔁 Frequência de Backup Automático</h2>
+        <p className="text-xs text-fg-tertiary mb-4">O sistema irá lembrar e acionar o backup conforme o período configurado.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {frequencias.map(f => (
+            <button
+              key={f.value}
+              onClick={() => { setFrequencia(f.value as any); salvarConfig({ frequencia: f.value }) }}
+              className={cn(
+                'p-4 rounded-xl border text-left transition-all',
+                frequencia === f.value
+                  ? 'bg-brand-gold-soft border-brand-gold text-brand-gold'
+                  : 'bg-page/50 border-white/5 text-fg-secondary hover:border-white/10'
+              )}
+            >
+              <p className="text-sm font-bold">{f.label}</p>
+              <p className="text-[10px] mt-1 opacity-70">{f.desc}</p>
+            </button>
+          ))}
+        </div>
+
+        {proximoBackup && frequencia !== 'manual' && (
+          <div className="mt-4 p-3 rounded-lg bg-page/50 border border-white/5 text-xs text-fg-tertiary">
+            📅 Próximo backup automático:{' '}
+            <span className="font-semibold text-fg">
+              {new Date(proximoBackup).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Fazer Backup */}
+      <div className="card">
+        <h2 className="section-title mb-4">💾 Fazer Backup Agora</h2>
+
+        {ultimoBackup && (
+          <div className="mb-4 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-xs text-emerald-400">
+            ✅ Último backup: {new Date(ultimoBackup).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </div>
+        )}
+
+        {progress && (
+          <div className="mb-4 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 text-xs text-blue-400 flex items-center gap-2">
+            <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            {progress}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          {googleEmail && googleToken && (
+            <button
+              onClick={() => handleFazerBackup(false)}
+              disabled={loading}
+              className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            >
+              ☁️ {loading ? 'Enviando...' : 'Enviar para o Google Drive'}
+            </button>
+          )}
+          <button
+            onClick={() => handleFazerBackup(true)}
+            disabled={loading}
+            className="btn-secondary flex items-center gap-2 disabled:opacity-50"
+          >
+            📥 {loading ? 'Gerando...' : 'Baixar Backup (JSON)'}
+          </button>
+        </div>
+
+        <div className="mt-5 p-4 rounded-xl bg-page/50 border border-white/5">
+          <p className="text-[11px] font-semibold text-fg-secondary mb-2">📦 O backup inclui:</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
+            {['Lançamentos', 'Leads/CRM', 'Clientes', 'Produtos', 'Funcionários', 'Gastos PF', 'Receitas PF', 'Agenda', 'Elena (IA)', 'Ocorrências', 'Contas', 'Categorias'].map(t => (
+              <span key={t} className="text-[10px] text-fg-tertiary flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-amber-400" /> {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Tab Limpeza de Dados Demo ─────────────────────────────────
 function TabLimpeza() {
   const supabase = createClient()
@@ -642,7 +925,7 @@ function TabMinhaConta() {
 export default function ConfiguracoesClient() {
   const supabase = createClient()
   const { success, error: toastError, confirm: toastConfirm } = useToast()
-  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta' | 'limpeza'>('empresa')
+  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta' | 'limpeza' | 'backup'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [editarLimitesFunc, setEditarLimitesFunc] = useState<{ id: string, nome: string, permissoes: string[] } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -823,6 +1106,15 @@ export default function ConfiguracoesClient() {
               )}
             >
               🔑 Minha Conta
+            </button>
+            <button 
+              onClick={() => setActiveTab('backup')} 
+              className={cn(
+                "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
+                activeTab === 'backup' ? "bg-surface text-white" : "text-fg-secondary hover:bg-white/5 hover:text-fg"
+              )}
+            >
+              ☁️ Backup / Google Drive
             </button>
             <div className="my-1 border-t border-white/5" />
             <button 
@@ -1035,6 +1327,8 @@ export default function ConfiguracoesClient() {
           )}
 
           {activeTab === 'minha-conta' && <TabMinhaConta />}
+
+          {activeTab === 'backup' && <TabBackup />}
 
           {activeTab === 'limpeza' && <TabLimpeza />}
         </div>
