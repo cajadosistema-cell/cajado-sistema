@@ -8,57 +8,70 @@ import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/cajado/ThemeToggle'
 
 const navItems = [
+  // ── 💰 Financeiro da Empresa ─────────────────────────────────
   {
-    group: '💰 Financeiro Corporativo',
+    group: '💰 Financeiro PJ',
     id: 'fin',
     items: [
-      { href: '/financeiro', label: 'Painel Geral & Cartões' },
-      { href: '/comissoes', label: 'Comissões & Parceiros' },
+      { href: '/financeiro', label: '💳 Contas & Cartões'       },
+      { href: '/comissoes',  label: '🤝 Comissões & Parceiros'  },
     ],
   },
+  // ── 📦 Vendas & Comercial ────────────────────────────────────
   {
-    group: '🤝 Comercial & WhatsApp',
+    group: '📦 Vendas & CRM',
     id: 'crm',
     items: [
-      { href: '/inbox',       label: 'Central Inbox (WhatsApp)' },
-      { href: '/cajado',      label: 'Funil de Negociações (CRM)' },
-      { href: '/vendas',      label: 'Fechamentos & OS' },
-      { href: '/pos-venda',   label: 'Automação Pós-venda' },
-      { href: '/seguranca-wa', label: 'Anti-Ban WhatsApp' },
+      { href: '/inbox',        label: '💬 Inbox WhatsApp'       },
+      { href: '/cajado',       label: '🔀 Funil CRM'            },
+      { href: '/vendas',       label: '📋 Fechamentos & OS'     },
+      { href: '/pos-venda',    label: '🔁 Pós-venda'            },
+      { href: '/seguranca-wa', label: '🛡️ Anti-Ban WA'         },
     ],
   },
+  // ── 🏢 Equipe & Operações ────────────────────────────────────
   {
-    group: '🚀 Estratégia Corporativa',
-    id: 'est',
+    group: '🏢 Equipe & Operações',
+    id: 'eqp',
     items: [
-      { href: '/comunicacao', label: 'Chat da Equipe & Voz' },
-      { href: '/inteligencia', label: 'Inteligência & IA' },
-      { href: '/organizacao', label: 'Organização (Tarefas)' },
-      { href: '/diario',      label: 'Diário de Bordo' },
+      { href: '/comunicacao',  label: '🗨️ Chat da Equipe'      },
+      { href: '/inteligencia', label: '🧠 IA & Automações'      },
+      { href: '/organizacao',  label: '✅ Tarefas & Projetos'   },
     ],
   },
+  // ── 🎯 Metas & Rotina Pessoal (admin) ────────────────────────
   {
-    group: '👤 Vida & Gestão Pessoal',
-    id: 'pes',
+    group: '🎯 Metas & Rotina',
+    id: 'meta',
     items: [
-      { href: '/dashboard-pessoal', label: '🏠 Dashboard Pessoal' },
-      { href: '/expansao',       label: 'Objetivos & Metas' },
-      { href: '/gestao-pessoal', label: 'Hábitos & Ponto' },
-      { href: '/pf-pessoal',     label: 'Financeiro Pessoal' },
-      { href: '/patrimonio',     label: 'Patrimônio Imobiliário' },
-      { href: '/investimentos',  label: 'Investimentos' },
-      { href: '/trader',         label: 'Day Trader' },
+      { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal' },
+      { href: '/expansao',          label: '🚀 Objetivos & OKRs'},
+      { href: '/gestao-pessoal',    label: '⏱️ Hábitos & Ponto' },
+      { href: '/diario',            label: '📓 Diário de Bordo' },
     ],
   },
+  // ── 💎 Finanças Pessoais (admin) ─────────────────────────────
+  {
+    group: '💎 Finanças Pessoais',
+    id: 'pfin',
+    items: [
+      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'      },
+      { href: '/patrimonio',    label: '🏠 Patrimônio'          },
+      { href: '/investimentos', label: '📈 Investimentos'       },
+      { href: '/trader',        label: '📊 Day Trader'          },
+    ],
+  },
+  // ── ⚙️ Configurações ─────────────────────────────────────────
   {
     group: '⚙️ Configurações',
     id: 'cfg',
     items: [
-      { href: '/configuracoes',  label: 'Empresa & Permissões' },
-      { href: '/seguranca-geral', label: 'Segurança & Logs' },
+      { href: '/configuracoes',   label: '🏢 Empresa & Equipe'  },
+      { href: '/seguranca-geral', label: '🔒 Segurança & Logs'  },
     ],
   },
 ]
+
 
 export function Sidebar() {
   const pathname = usePathname()
