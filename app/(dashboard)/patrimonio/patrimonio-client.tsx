@@ -36,7 +36,7 @@ const TIPO_ICONS: Record<string, string> = {
 
 const TIPO_COLORS: Record<string, string> = {
   imovel: 'text-blue-400', veiculo: 'text-emerald-400',
-  equipamento: 'text-amber-400', reforma: 'text-orange-400', outro: 'text-zinc-400',
+  equipamento: 'text-amber-400', reforma: 'text-orange-400', outro: 'text-fg-secondary',
 }
 
 // ── Mock Data Fallbacks ─────────────────────────────────────
@@ -79,10 +79,10 @@ function ModalProjeto({ onClose, onSave }: { onClose: () => void; onSave: () => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Novo Patrimônio</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-base font-semibold text-fg">Novo Patrimônio</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -152,10 +152,10 @@ function ModalCusto({ projetoId, onClose, onSave }: { projetoId: string; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-sm p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Registrar Custo</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-base font-semibold text-fg">Registrar Custo</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
@@ -240,7 +240,7 @@ export default function PatrimonioClient() {
               'shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all border',
               tab === t.key
                 ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 shadow-sm'
-                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700 bg-zinc-900'
+                : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary hover:border-border-subtle bg-page'
             )}>
             <span className="hidden sm:inline">{t.label}</span>
             <span className="sm:hidden">{t.labelMobile}</span>
@@ -254,7 +254,7 @@ export default function PatrimonioClient() {
         <div className="metric-card">
           <p className="metric-label">Total investido</p>
           <p className="metric-value">{formatCurrency(totalInvestido)}</p>
-          <p className="text-[11px] text-zinc-600 mt-1">{projetos.length} bem(ns)</p>
+          <p className="text-[11px] text-fg-disabled mt-1">{projetos.length} bem(ns)</p>
         </div>
         <div className="metric-card">
           <p className="metric-label">Valor de mercado</p>
@@ -290,61 +290,61 @@ export default function PatrimonioClient() {
                     <span className="text-2xl">{TIPO_ICONS[p.tipo]}</span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-zinc-100">{p.titulo}</h3>
+                        <h3 className="text-sm font-semibold text-fg">{p.titulo}</h3>
                         <StatusBadge status={p.status} />
                       </div>
                       <p className={cn('text-[10px] font-medium uppercase', TIPO_COLORS[p.tipo])}>{p.tipo}</p>
                       {p.data_aquisicao && (
-                        <p className="text-[10px] text-zinc-600">Adquirido em {formatDate(p.data_aquisicao)}</p>
+                        <p className="text-[10px] text-fg-disabled">Adquirido em {formatDate(p.data_aquisicao)}</p>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-xs text-zinc-600">ROI</p>
+                      <p className="text-xs text-fg-disabled">ROI</p>
                       <p className={cn('text-lg font-bold', roi >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                         {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
                       </p>
                     </div>
                     <button
                       onClick={() => setProjetoAberto(isOpen ? null : p.id)}
-                      className="text-zinc-600 hover:text-zinc-300 transition-colors px-2 py-1"
+                      className="text-fg-disabled hover:text-fg-secondary transition-colors px-2 py-1"
                     >
                       {isOpen ? '▲' : '▼'}
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-zinc-800">
+                <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-border-subtle">
                   <div>
-                    <p className="text-[10px] text-zinc-600">Investido</p>
-                    <p className="text-sm font-semibold text-zinc-300">{formatCurrency(p.valor_investido_total)}</p>
+                    <p className="text-[10px] text-fg-disabled">Investido</p>
+                    <p className="text-sm font-semibold text-fg-secondary">{formatCurrency(p.valor_investido_total)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-zinc-600">Mercado</p>
+                    <p className="text-[10px] text-fg-disabled">Mercado</p>
                     <p className="text-sm font-semibold text-blue-400">{formatCurrency(vm)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-zinc-600">Custos acum.</p>
+                    <p className="text-[10px] text-fg-disabled">Custos acum.</p>
                     <p className="text-sm font-semibold text-red-400">{formatCurrency(totalCustosProjeto)}</p>
                   </div>
                 </div>
 
                 {/* Custos expandidos */}
                 {isOpen && (
-                  <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
+                  <div className="mt-3 pt-3 border-t border-border-subtle space-y-2">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-zinc-500 uppercase tracking-wide">Custos</p>
+                      <p className="text-xs text-fg-tertiary uppercase tracking-wide">Custos</p>
                       <button onClick={() => setModalCusto(p.id)} className="btn-ghost text-xs">+ Custo</button>
                     </div>
                     {custosProjeto.length === 0 ? (
-                      <p className="text-xs text-zinc-600 text-center py-4">Nenhum custo registrado</p>
+                      <p className="text-xs text-fg-disabled text-center py-4">Nenhum custo registrado</p>
                     ) : (
                       custosProjeto.slice(0, 5).map(c => (
-                        <div key={c.id} className="flex items-center justify-between py-1.5 border-b border-zinc-800 last:border-0">
+                        <div key={c.id} className="flex items-center justify-between py-1.5 border-b border-border-subtle last:border-0">
                           <div>
-                            <p className="text-xs text-zinc-300">{c.descricao}</p>
-                            <p className="text-[10px] text-zinc-600">{c.categoria} · {formatDate(c.data)}</p>
+                            <p className="text-xs text-fg-secondary">{c.descricao}</p>
+                            <p className="text-[10px] text-fg-disabled">{c.categoria} · {formatDate(c.data)}</p>
                           </div>
                           <p className="text-xs text-red-400 font-semibold">{formatCurrency(c.valor)}</p>
                         </div>

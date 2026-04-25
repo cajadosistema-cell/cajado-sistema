@@ -100,7 +100,7 @@ const SETUPS = [
   { nome: 'Swing Trade', indicadores: ['ema9_21', 'rsi_div'], winRate: 64, cor: 'text-blue-400' },
   { nome: 'Reversão', indicadores: ['bollinger', 'macd'], winRate: 61, cor: 'text-cyan-400' },
   { nome: 'Trend Following', indicadores: ['ichimoku'], winRate: 70, cor: 'text-pink-400' },
-  { nome: 'Personalizado', indicadores: [], winRate: 0, cor: 'text-zinc-400' },
+  { nome: 'Personalizado', indicadores: [], winRate: 0, cor: 'text-fg-secondary' },
 ]
 
 // ── Mock Data Fallbacks ─────────────────────────────────────
@@ -145,7 +145,7 @@ function ChecklistConfluencia({
               'flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all',
               selecionados.includes(ind.id)
                 ? `${ind.bg} ${ind.border}`
-                : 'bg-zinc-800/30 border-zinc-800 hover:border-zinc-700'
+                : 'bg-muted/30 border-border-subtle hover:border-border-subtle'
             )}>
             <input
               type="checkbox"
@@ -168,12 +168,12 @@ function ChecklistConfluencia({
             <span className="text-base shrink-0">{ind.emoji}</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className={cn('text-xs font-semibold', selecionados.includes(ind.id) ? ind.cor : 'text-zinc-400')}>
+                <span className={cn('text-xs font-semibold', selecionados.includes(ind.id) ? ind.cor : 'text-fg-secondary')}>
                   {ind.nome}
                 </span>
-                <span className="text-[10px] text-zinc-600">~{ind.winRate}</span>
+                <span className="text-[10px] text-fg-disabled">~{ind.winRate}</span>
               </div>
-              <p className="text-[10px] text-zinc-600 truncate">{ind.descricao}</p>
+              <p className="text-[10px] text-fg-disabled truncate">{ind.descricao}</p>
             </div>
           </label>
         ))}
@@ -248,11 +248,11 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-800">
+        <div className="flex items-center justify-between p-6 border-b border-border-subtle">
           <div>
-            <h2 className="text-base font-semibold text-zinc-100">Registrar Operação</h2>
+            <h2 className="text-base font-semibold text-fg">Registrar Operação</h2>
             <div className="flex items-center gap-2 mt-2">
               {(['setup', 'entrada', 'saida'] as const).map((s, i) => (
                 <div key={s} className="flex items-center gap-1">
@@ -263,7 +263,7 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                       'text-xs px-3 py-1 rounded-full transition-all border',
                       step === s
                         ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                        : 'text-zinc-600 border-zinc-800 hover:text-zinc-400'
+                        : 'text-fg-disabled border-border-subtle hover:text-fg-secondary'
                     )}>
                     {i + 1}. {s === 'setup' ? 'Setup' : s === 'entrada' ? 'Entrada' : 'Resultado'}
                   </button>
@@ -272,7 +272,7 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
               ))}
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -295,13 +295,13 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                           'p-3 rounded-xl border text-left transition-all',
                           setupSelecionado.nome === s.nome
                             ? 'bg-amber-500/15 border-amber-500/40'
-                            : 'bg-zinc-800/30 border-zinc-800 hover:border-zinc-700'
+                            : 'bg-muted/30 border-border-subtle hover:border-border-subtle'
                         )}>
-                        <p className={cn('text-xs font-semibold', setupSelecionado.nome === s.nome ? 'text-amber-400' : 'text-zinc-400')}>
+                        <p className={cn('text-xs font-semibold', setupSelecionado.nome === s.nome ? 'text-amber-400' : 'text-fg-secondary')}>
                           {s.nome}
                         </p>
                         {s.winRate > 0 && (
-                          <p className="text-[10px] text-zinc-600 mt-0.5">~{s.winRate}% win rate</p>
+                          <p className="text-[10px] text-fg-disabled mt-0.5">~{s.winRate}% win rate</p>
                         )}
                       </button>
                     ))}
@@ -361,7 +361,7 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                         className={cn('py-2 rounded-lg text-xs font-semibold border transition-all',
                           form.tipo === 'compra'
                             ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                            : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                            : 'bg-muted text-fg-tertiary border-border-subtle'
                         )}>
                         ▲ Long
                       </button>
@@ -370,7 +370,7 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                         className={cn('py-2 rounded-lg text-xs font-semibold border transition-all',
                           form.tipo === 'venda'
                             ? 'bg-red-500/20 text-red-400 border-red-500/40'
-                            : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                            : 'bg-muted text-fg-tertiary border-border-subtle'
                         )}>
                         ▼ Short
                       </button>
@@ -419,16 +419,16 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                     parseFloat(rrRatio) >= 1.5 ? 'bg-amber-500/10 border-amber-500/30' :
                     'bg-red-500/10 border-red-500/30'
                   )}>
-                    <p className="text-xs font-semibold text-zinc-400 mb-2">⚡ Risk Manager</p>
+                    <p className="text-xs font-semibold text-fg-secondary mb-2">⚡ Risk Manager</p>
                     <div className="grid grid-cols-3 gap-3 text-center">
                       <div>
-                        <p className="text-[10px] text-zinc-600">Risco por op.</p>
+                        <p className="text-[10px] text-fg-disabled">Risco por op.</p>
                         <p className="text-sm font-bold text-red-400">
                           {qtd > 0 ? formatCurrency(risco * qtd) : `${risco.toFixed(2)} pts`}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-zinc-600">R/R Ratio</p>
+                        <p className="text-[10px] text-fg-disabled">R/R Ratio</p>
                         <p className={cn('text-lg font-bold',
                           parseFloat(rrRatio) >= 2 ? 'text-emerald-400' :
                           parseFloat(rrRatio) >= 1.5 ? 'text-amber-400' : 'text-red-400'
@@ -437,7 +437,7 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-zinc-600">Alvo estimado</p>
+                        <p className="text-[10px] text-fg-disabled">Alvo estimado</p>
                         <p className="text-sm font-bold text-emerald-400">
                           {qtd > 0 ? formatCurrency(retorno * qtd) : `${retorno.toFixed(2)} pts`}
                         </p>
@@ -474,8 +474,8 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                             ? r === 'gain' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
                               : r === 'loss' ? 'bg-red-500/20 text-red-400 border-red-500/40'
                               : r === 'aberta' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
-                              : 'bg-zinc-700 text-zinc-300 border-zinc-600'
-                            : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                              : 'bg-surface-hover text-fg-secondary border-zinc-600'
+                            : 'bg-muted text-fg-tertiary border-border-subtle'
                         )}>
                         {r === 'gain' ? '✅ Gain' : r === 'loss' ? '❌ Loss' : r === 'aberta' ? '⏳ Aberta' : '⚖️ BE'}
                       </button>
@@ -506,7 +506,7 @@ function ModalOperacao({ onClose, onSave }: { onClose: () => void; onSave: () =>
                 </div>
                 <div>
                   <label className="label">💡 Aprendizado desta operação</label>
-                  <textarea className="input mt-1 resize-none border-amber-500/20 focus:border-amber-500/40" rows={3}
+                  <textarea className="input mt-1 resize-none border-amber-500/20 focus:border-brand-gold/40" rows={3}
                     value={form.aprendizado}
                     onChange={e => setForm(f => ({ ...f, aprendizado: e.target.value }))}
                     placeholder="O que você leva desta operação para melhorar?" />
@@ -536,7 +536,7 @@ function OperacaoCard({ op }: { op: Operacao }) {
 
   return (
     <div className={cn(
-      'card-sm border-l-2 transition-all hover:bg-zinc-800/60',
+      'card-sm border-l-2 transition-all hover:bg-muted/60',
       op.resultado === 'gain' ? 'border-emerald-500' :
       op.resultado === 'loss' ? 'border-red-500' :
       op.resultado === 'aberta' ? 'border-blue-500' : 'border-zinc-600'
@@ -544,15 +544,15 @@ function OperacaoCard({ op }: { op: Operacao }) {
       <div className="flex items-start justify-between mb-2">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-zinc-100">{op.ativo}</span>
-            <span className="text-[10px] text-zinc-600 uppercase">{op.mercado}</span>
+            <span className="text-sm font-bold text-fg">{op.ativo}</span>
+            <span className="text-[10px] text-fg-disabled uppercase">{op.mercado}</span>
             <span className={cn('text-[10px] font-semibold px-1.5 rounded',
               op.tipo === 'compra' ? 'text-emerald-400 bg-emerald-500/15' : 'text-red-400 bg-red-500/15'
             )}>
               {op.tipo === 'compra' ? '▲ Long' : '▼ Short'}
             </span>
           </div>
-          {setupNome && <p className="text-[10px] text-zinc-600 mt-0.5">{setupNome}</p>}
+          {setupNome && <p className="text-[10px] text-fg-disabled mt-0.5">{setupNome}</p>}
         </div>
         <div className="text-right">
           <StatusBadge status={op.resultado} />
@@ -564,9 +564,9 @@ function OperacaoCard({ op }: { op: Operacao }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-zinc-600">
-        <span>Entrada: <span className="text-zinc-400">{op.preco_entrada}</span></span>
-        {op.preco_saida && <span>Saída: <span className="text-zinc-400">{op.preco_saida}</span></span>}
+      <div className="flex items-center gap-3 text-xs text-fg-disabled">
+        <span>Entrada: <span className="text-fg-secondary">{op.preco_entrada}</span></span>
+        {op.preco_saida && <span>Saída: <span className="text-fg-secondary">{op.preco_saida}</span></span>}
         {op.percentual !== null && (
           <span className={cn(op.percentual >= 0 ? 'text-emerald-400' : 'text-red-400')}>
             {op.percentual >= 0 ? '+' : ''}{op.percentual.toFixed(2)}%
@@ -591,7 +591,7 @@ function OperacaoCard({ op }: { op: Operacao }) {
       )}
 
       {op.aprendizado && (
-        <p className="text-[10px] text-amber-400/70 mt-2 italic border-t border-zinc-800 pt-2">
+        <p className="text-[10px] text-amber-400/70 mt-2 italic border-t border-border-subtle pt-2">
           💡 {op.aprendizado}
         </p>
       )}
@@ -641,21 +641,21 @@ Por favor, forneça um diagnóstico técnico e psicológico curto (máx 2 parág
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl w-full max-w-lg p-6 shadow-[0_0_40px_rgba(245,166,35,0.15)] relative overflow-hidden">
+      <div className="bg-page border border-amber-500/30 rounded-2xl w-full max-w-lg p-6 shadow-[0_0_40px_rgba(245,166,35,0.15)] relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-600 to-red-500"></div>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <span className="text-xl">🧠</span>
-            <h2 className="text-base font-semibold text-zinc-100">Mentor IA de Trading</h2>
+            <h2 className="text-base font-semibold text-fg">Mentor IA de Trading</h2>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         
         {error && <div className="mb-4 text-xs text-red-400 bg-red-400/10 p-2 rounded border border-red-400/20">{error}</div>}
 
         {!insight ? (
           <div className="text-center py-6">
-            <p className="text-sm text-zinc-400 mb-6">O Mentor analisará suas últimas 15 operações (Loss vs Gains e seus registros de erros) para lhe dar um choque de realidade e direcionamento.</p>
+            <p className="text-sm text-fg-secondary mb-6">O Mentor analisará suas últimas 15 operações (Loss vs Gains e seus registros de erros) para lhe dar um choque de realidade e direcionamento.</p>
             <button onClick={gerarDiagnostico} disabled={loading} className="px-5 py-2.5 rounded-xl text-xs font-bold text-black bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/25">
               {loading ? '⏳ Analisando Diário de Trading...' : '⚡ Requisitar Diagnóstico do Mentor'}
             </button>
@@ -688,16 +688,16 @@ function TabGuia() {
                 <span className="text-2xl">{ind.emoji}</span>
                 <div>
                   <p className={cn('text-sm font-bold', ind.cor)}>{ind.nome}</p>
-                  <p className="text-[10px] text-zinc-600">{ind.fullName}</p>
+                  <p className="text-[10px] text-fg-disabled">{ind.fullName}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-[10px] text-zinc-600">Win Rate</p>
+                <p className="text-[10px] text-fg-disabled">Win Rate</p>
                 <p className={cn('text-sm font-bold', ind.cor)}>{ind.winRate}</p>
               </div>
             </div>
-            <p className="text-xs text-zinc-400 leading-relaxed">{ind.descricao}</p>
-            <div className="mt-2 pt-2 border-t border-zinc-800">
+            <p className="text-xs text-fg-secondary leading-relaxed">{ind.descricao}</p>
+            <div className="mt-2 pt-2 border-t border-border-subtle">
               <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', ind.bg, ind.cor)}>
                 {ind.usos}
               </span>
@@ -708,11 +708,11 @@ function TabGuia() {
 
       {/* Setups vencedores */}
       <div>
-        <h2 className="text-sm font-semibold text-zinc-300 mb-3">🔥 Combinações que mais convertem</h2>
+        <h2 className="text-sm font-semibold text-fg-secondary mb-3">🔥 Combinações que mais convertem</h2>
         <div className="card p-0 overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border-subtle">
                 <th className="table-header">Setup</th>
                 <th className="table-header">Indicadores</th>
                 <th className="table-header text-right">Win Rate médio</th>
@@ -726,11 +726,11 @@ function TabGuia() {
                 { setup: 'Trend Following', inds: ['Ichimoku', 'EMA 200'], wr: '70%+ em tendência', cor: 'text-pink-400' },
               ].map(row => (
                 <tr key={row.setup} className="table-row">
-                  <td className="table-cell font-medium text-zinc-200">{row.setup}</td>
+                  <td className="table-cell font-medium text-fg">{row.setup}</td>
                   <td className="table-cell">
                     <div className="flex flex-wrap gap-1">
                       {row.inds.map(i => (
-                        <span key={i} className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
+                        <span key={i} className="text-[10px] bg-muted text-fg-secondary px-1.5 py-0.5 rounded">
                           {i}
                         </span>
                       ))}
@@ -752,10 +752,10 @@ function TabGuia() {
           { icon: '🛡️', titulo: 'Stop técnico', desc: 'Stop-loss obrigatório antes de entrar na operação.' },
           { icon: '🌐', titulo: 'Contexto macro', desc: 'Entenda o que o mercado está fazendo no geral antes de operar.' },
         ].map(r => (
-          <div key={r.titulo} className="card-sm bg-zinc-800/40 text-center">
+          <div key={r.titulo} className="card-sm bg-muted/40 text-center">
             <p className="text-2xl mb-2">{r.icon}</p>
-            <p className="text-xs font-bold text-zinc-200 mb-1">{r.titulo}</p>
-            <p className="text-[11px] text-zinc-500 leading-relaxed">{r.desc}</p>
+            <p className="text-xs font-bold text-fg mb-1">{r.titulo}</p>
+            <p className="text-[11px] text-fg-tertiary leading-relaxed">{r.desc}</p>
           </div>
         ))}
       </div>
@@ -850,7 +850,7 @@ export default function TraderClient() {
           <p className={cn('metric-value', winRate >= 60 ? 'text-emerald-400' : winRate >= 50 ? 'text-amber-400' : 'text-red-400')}>
             {winRate}%
           </p>
-          <p className="text-[11px] text-zinc-600 mt-1">{gains}G · {losses}L · {abiertas} abertas</p>
+          <p className="text-[11px] text-fg-disabled mt-1">{gains}G · {losses}L · {abiertas} abertas</p>
         </div>
         <div className="metric-card">
           <p className="metric-label">P&L Total</p>
@@ -871,17 +871,17 @@ export default function TraderClient() {
           <p className={cn('metric-value', expectancia >= 0 ? 'text-emerald-400' : 'text-red-400')}>
             {formatCurrency(expectancia)}
           </p>
-          <p className="text-[11px] text-zinc-600 mt-1">por operação</p>
+          <p className="text-[11px] text-fg-disabled mt-1">por operação</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 mb-4 w-fit">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              tab === t.key ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
             )}>
             {t.label}
           </button>
@@ -896,8 +896,8 @@ export default function TraderClient() {
               <button key={f} onClick={() => setFiltroResultado(f)}
                 className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
                   filtroResultado === f
-                    ? 'bg-zinc-800 text-zinc-100 border-zinc-700'
-                    : 'text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                    ? 'bg-muted text-fg border-border-subtle'
+                    : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary'
                 )}>
                 {f === 'todos' ? 'Todos' : f === 'gain' ? '✅ Gains' : f === 'loss' ? '❌ Losses' : f === 'aberta' ? '⏳ Abertas' : '⚖️ Breakeven'}
               </button>
@@ -928,26 +928,26 @@ export default function TraderClient() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Regras ativas */}
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-zinc-300">Regras de risco ativas</h2>
+            <h2 className="text-sm font-semibold text-fg-secondary">Regras de risco ativas</h2>
             {regras.length === 0 ? (
               <div className="card"><EmptyState message="Nenhuma regra configurada" /></div>
             ) : (
               regras.map(r => (
                 <div key={r.id} className="card space-y-2">
-                  <p className="text-sm font-semibold text-zinc-200">{r.descricao}</p>
+                  <p className="text-sm font-semibold text-fg">{r.descricao}</p>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className="text-zinc-600">Máx por operação</p>
+                      <p className="text-fg-disabled">Máx por operação</p>
                       <p className="text-red-400 font-semibold">{r.percentual_max_capital}% do capital</p>
                     </div>
                     <div>
-                      <p className="text-zinc-600">Máx operações/dia</p>
+                      <p className="text-fg-disabled">Máx operações/dia</p>
                       <p className="text-amber-400 font-semibold">{r.max_operacoes_dia} ops</p>
                     </div>
                     {(r.horario_inicio || r.horario_fim) && (
                       <div className="col-span-2">
-                        <p className="text-zinc-600">Janela de operação</p>
-                        <p className="text-zinc-300">{r.horario_inicio} → {r.horario_fim}</p>
+                        <p className="text-fg-disabled">Janela de operação</p>
+                        <p className="text-fg-secondary">{r.horario_inicio} → {r.horario_fim}</p>
                       </div>
                     )}
                   </div>
@@ -958,7 +958,7 @@ export default function TraderClient() {
 
           {/* Form nova regra */}
           <div className="card">
-            <h2 className="text-sm font-semibold text-zinc-300 mb-4">+ Nova regra de risco</h2>
+            <h2 className="text-sm font-semibold text-fg-secondary mb-4">+ Nova regra de risco</h2>
             <form onSubmit={handleSaveRegra} className="space-y-3">
               <div>
                 <label className="label">Descrição *</label>
@@ -1008,7 +1008,7 @@ export default function TraderClient() {
         <div className="space-y-6">
           <div className="card text-center mb-6 border-blue-500/20 bg-blue-500/5">
             <h2 className="text-sm font-semibold text-blue-400 mb-2">Importação Automática em Desenvolvimento</h2>
-            <p className="text-xs text-zinc-400 max-w-xl mx-auto leading-relaxed">
+            <p className="text-xs text-fg-secondary max-w-xl mx-auto leading-relaxed">
               Em breve, você não precisará mais digitar suas operações manualmente. Integraremos com as principais exchanges e plataformas para puxar seu P&L direto na tela! As reflexões psicológicas continuarão manuais para fins de journaling.
             </p>
           </div>
@@ -1019,9 +1019,9 @@ export default function TraderClient() {
               <div className="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center mb-4 border border-yellow-500/20">
                 <span className="text-3xl">🔶</span>
               </div>
-              <h3 className="text-zinc-100 font-bold mb-1">Binance API</h3>
-              <p className="text-[10px] text-zinc-500 mb-4 h-8">Importação via API Keys (Apenas Leitura) para os mercados Spot e USDⓈ-M Futures.</p>
-              <button disabled className="mt-auto px-4 py-2 w-full bg-zinc-800 text-zinc-500 rounded-lg text-xs font-semibold cursor-not-allowed border border-zinc-700">
+              <h3 className="text-fg font-bold mb-1">Binance API</h3>
+              <p className="text-[10px] text-fg-tertiary mb-4 h-8">Importação via API Keys (Apenas Leitura) para os mercados Spot e USDⓈ-M Futures.</p>
+              <button disabled className="mt-auto px-4 py-2 w-full bg-muted text-fg-tertiary rounded-lg text-xs font-semibold cursor-not-allowed border border-border-subtle">
                 Em breve
               </button>
             </div>
@@ -1031,9 +1031,9 @@ export default function TraderClient() {
               <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-4 border border-blue-500/20">
                 <span className="text-3xl">🏛️</span>
               </div>
-              <h3 className="text-zinc-100 font-bold mb-1">B3 (Nelogica / Profit)</h3>
-              <p className="text-[10px] text-zinc-500 mb-4 h-8">Sincronização via Webhooks do ProfitChart diretamente para o diário do Cajado.</p>
-              <button disabled className="mt-auto px-4 py-2 w-full bg-zinc-800 text-zinc-500 rounded-lg text-xs font-semibold cursor-not-allowed border border-zinc-700">
+              <h3 className="text-fg font-bold mb-1">B3 (Nelogica / Profit)</h3>
+              <p className="text-[10px] text-fg-tertiary mb-4 h-8">Sincronização via Webhooks do ProfitChart diretamente para o diário do Cajado.</p>
+              <button disabled className="mt-auto px-4 py-2 w-full bg-muted text-fg-tertiary rounded-lg text-xs font-semibold cursor-not-allowed border border-border-subtle">
                 Em breve
               </button>
             </div>
@@ -1043,9 +1043,9 @@ export default function TraderClient() {
               <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-4 border border-emerald-500/20">
                 <span className="text-3xl">📈</span>
               </div>
-              <h3 className="text-zinc-100 font-bold mb-1">MetaTrader 5</h3>
-              <p className="text-[10px] text-zinc-500 mb-4 h-8">Integração MQL5 / FTP Reporting para Forex, Índices B3 e Globais.</p>
-              <button disabled className="mt-auto px-4 py-2 w-full bg-zinc-800 text-zinc-500 rounded-lg text-xs font-semibold cursor-not-allowed border border-zinc-700">
+              <h3 className="text-fg font-bold mb-1">MetaTrader 5</h3>
+              <p className="text-[10px] text-fg-tertiary mb-4 h-8">Integração MQL5 / FTP Reporting para Forex, Índices B3 e Globais.</p>
+              <button disabled className="mt-auto px-4 py-2 w-full bg-muted text-fg-tertiary rounded-lg text-xs font-semibold cursor-not-allowed border border-border-subtle">
                 Em breve
               </button>
             </div>

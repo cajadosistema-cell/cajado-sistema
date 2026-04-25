@@ -54,8 +54,8 @@ export function TabOcorrencias({ ocorrencias, colaboradores, onUpdate, onNova }:
           { label: 'Alertas', value: ocorrencias.filter(o => o.tipo === 'alerta').length, color: 'text-amber-400' },
           { label: 'Taxa acerto', value: `${taxaAcerto}%`, color: taxaAcerto >= 70 ? 'text-emerald-400' : 'text-amber-400' },
         ].map(k => (
-          <div key={k.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <p className="text-xs text-zinc-500 mb-1">{k.label}</p>
+          <div key={k.label} className="bg-page border border-border-subtle rounded-xl p-4">
+            <p className="text-xs text-fg-tertiary mb-1">{k.label}</p>
             <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
@@ -80,35 +80,35 @@ export function TabOcorrencias({ ocorrencias, colaboradores, onUpdate, onNova }:
       {/* Lista */}
       <div className="space-y-3">
         {filtradas.length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-10 text-center">
-            <p className="text-zinc-600 text-sm">Nenhuma ocorrência encontrada.</p>
+          <div className="bg-page border border-border-subtle rounded-2xl p-10 text-center">
+            <p className="text-fg-disabled text-sm">Nenhuma ocorrência encontrada.</p>
           </div>
         ) : (
           filtradas.map(o => (
-            <div key={o.id} className={`bg-zinc-900 border rounded-xl p-4 ${TIPO_OCORRENCIA_COLOR[o.tipo]} ${o.resolvida ? 'opacity-50' : ''}`}>
+            <div key={o.id} className={`bg-page border rounded-xl p-4 ${TIPO_OCORRENCIA_COLOR[o.tipo]} ${o.resolvida ? 'opacity-50' : ''}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <span className="text-xl mt-0.5">{TIPO_OCORRENCIA_ICON[o.tipo]}</span>
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">{o.descricao}</p>
+                    <p className="text-sm font-medium text-fg">{o.descricao}</p>
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-zinc-500">{nomeColaborador(o.colaborador_id, colaboradores)}</span>
-                      {o.modulo && <span className="text-xs text-zinc-600 capitalize">{o.modulo}</span>}
+                      <span className="text-xs text-fg-tertiary">{nomeColaborador(o.colaborador_id, colaboradores)}</span>
+                      {o.modulo && <span className="text-xs text-fg-disabled capitalize">{o.modulo}</span>}
                       {o.impacto && (
                         <span className={`text-[10px] font-semibold uppercase ${
-                          o.impacto === 'alto' ? 'text-red-400' : o.impacto === 'medio' ? 'text-amber-400' : 'text-zinc-400'
+                          o.impacto === 'alto' ? 'text-red-400' : o.impacto === 'medio' ? 'text-amber-400' : 'text-fg-secondary'
                         }`}>
                           ● {o.impacto}
                         </span>
                       )}
-                      <span className="text-xs text-zinc-600">{formatData(o.created_at)}</span>
+                      <span className="text-xs text-fg-disabled">{formatData(o.created_at)}</span>
                     </div>
                   </div>
                 </div>
                 {!o.resolvida && o.tipo === 'erro' && (
                   <button
                     onClick={() => resolver(o.id)}
-                    className="text-xs text-zinc-400 hover:text-emerald-400 border border-zinc-700 hover:border-emerald-500/40 px-2 py-1 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                    className="text-xs text-fg-secondary hover:text-emerald-400 border border-border-subtle hover:border-emerald-500/40 px-2 py-1 rounded-lg transition-colors whitespace-nowrap shrink-0"
                   >
                     Resolver ✓
                   </button>

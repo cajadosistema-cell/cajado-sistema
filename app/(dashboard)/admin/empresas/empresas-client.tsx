@@ -71,16 +71,16 @@ function EmpresaRow({ empresa, onUpdate }: { empresa: Empresa; onUpdate: () => v
     new Date(empresa.data_vencimento) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
   return (
-    <div className="border border-zinc-800 rounded-lg overflow-hidden mb-3">
+    <div className="border border-border-subtle rounded-lg overflow-hidden mb-3">
       {/* Header da empresa */}
-      <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/30">
+      <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center">
             <span className="text-amber-400 font-bold text-sm">{empresa.nome?.[0]?.toUpperCase()}</span>
           </div>
           <div>
-            <p className="text-sm font-semibold text-zinc-200">{empresa.nome}</p>
-            <p className="text-xs text-zinc-500">{empresa.admin?.email || 'Sem admin'}</p>
+            <p className="text-sm font-semibold text-fg">{empresa.nome}</p>
+            <p className="text-xs text-fg-tertiary">{empresa.admin?.email || 'Sem admin'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -103,22 +103,22 @@ function EmpresaRow({ empresa, onUpdate }: { empresa: Empresa; onUpdate: () => v
       </div>
 
       {/* Detalhes */}
-      <div className="px-4 py-3 grid grid-cols-4 gap-4 text-center border-t border-zinc-800">
+      <div className="px-4 py-3 grid grid-cols-4 gap-4 text-center border-t border-border-subtle">
         <div>
-          <p className="text-xs text-zinc-500">Canais WA</p>
-          <p className="text-sm font-semibold text-zinc-200">{empresa.canais?.length || 0}</p>
+          <p className="text-xs text-fg-tertiary">Canais WA</p>
+          <p className="text-sm font-semibold text-fg">{empresa.canais?.length || 0}</p>
         </div>
         <div>
-          <p className="text-xs text-zinc-500">Usuários</p>
-          <p className="text-sm font-semibold text-zinc-200">{empresa.total_usuarios || 0}</p>
+          <p className="text-xs text-fg-tertiary">Usuários</p>
+          <p className="text-sm font-semibold text-fg">{empresa.total_usuarios || 0}</p>
         </div>
         <div>
-          <p className="text-xs text-zinc-500">Admin</p>
-          <p className="text-sm font-semibold text-zinc-200">{empresa.admin?.nome || '—'}</p>
+          <p className="text-xs text-fg-tertiary">Admin</p>
+          <p className="text-sm font-semibold text-fg">{empresa.admin?.nome || '—'}</p>
         </div>
         <div>
-          <p className="text-xs text-zinc-500">Vencimento</p>
-          <p className={`text-sm font-semibold ${vencendo ? 'text-red-400' : 'text-zinc-200'}`}>
+          <p className="text-xs text-fg-tertiary">Vencimento</p>
+          <p className={`text-sm font-semibold ${vencendo ? 'text-red-400' : 'text-fg'}`}>
             {empresa.data_vencimento ? formatDate(empresa.data_vencimento) : '—'}
           </p>
         </div>
@@ -126,9 +126,9 @@ function EmpresaRow({ empresa, onUpdate }: { empresa: Empresa; onUpdate: () => v
 
       {/* Canais */}
       {empresa.canais?.length > 0 && (
-        <div className="px-4 pb-3 flex gap-2 flex-wrap border-t border-zinc-800 pt-3">
+        <div className="px-4 pb-3 flex gap-2 flex-wrap border-t border-border-subtle pt-3">
           {empresa.canais.map(c => (
-            <span key={c.id} className={`text-xs px-2 py-0.5 rounded-full border ${c.ativo ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-zinc-700 text-zinc-500'}`}>
+            <span key={c.id} className={`text-xs px-2 py-0.5 rounded-full border ${c.ativo ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-border-subtle text-fg-tertiary'}`}>
               📱 {c.nome}
             </span>
           ))}
@@ -137,7 +137,7 @@ function EmpresaRow({ empresa, onUpdate }: { empresa: Empresa; onUpdate: () => v
 
       {/* Form de edição */}
       {editando && (
-        <div className="px-4 pb-4 pt-3 bg-zinc-800/20 border-t border-zinc-800 grid grid-cols-3 gap-3">
+        <div className="px-4 pb-4 pt-3 bg-muted/20 border-t border-border-subtle grid grid-cols-3 gap-3">
           <div>
             <label className="label block mb-1">Status</label>
             <select className="input text-xs" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
@@ -237,8 +237,8 @@ export default function SuperAdminClient() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-100">Gestão de Clientes</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Painel super admin — todas as empresas</p>
+          <h1 className="text-xl font-semibold text-fg">Gestão de Clientes</h1>
+          <p className="text-sm text-fg-tertiary mt-0.5">Painel super admin — todas as empresas</p>
         </div>
         <a href="/onboarding" className="btn-primary text-sm">
           + Nova empresa
@@ -249,20 +249,20 @@ export default function SuperAdminClient() {
       {stats && (
         <div className="grid grid-cols-4 gap-3 mb-6">
           <div className="card">
-            <p className="text-xs text-zinc-500">Total de empresas</p>
-            <p className="text-lg font-bold text-zinc-100">{stats.total_empresas}</p>
+            <p className="text-xs text-fg-tertiary">Total de empresas</p>
+            <p className="text-lg font-bold text-fg">{stats.total_empresas}</p>
           </div>
           <div className="card">
-            <p className="text-xs text-zinc-500">Ativas</p>
+            <p className="text-xs text-fg-tertiary">Ativas</p>
             <p className="text-lg font-bold text-emerald-400">{stats.por_status?.ativo || 0}</p>
           </div>
           <div className="card">
-            <p className="text-xs text-zinc-500">Trial</p>
+            <p className="text-xs text-fg-tertiary">Trial</p>
             <p className="text-lg font-bold text-amber-400">{stats.por_status?.trial || 0}</p>
           </div>
           <div className="card">
-            <p className="text-xs text-zinc-500">Total usuários</p>
-            <p className="text-lg font-bold text-zinc-100">{stats.total_usuarios}</p>
+            <p className="text-xs text-fg-tertiary">Total usuários</p>
+            <p className="text-lg font-bold text-fg">{stats.total_usuarios}</p>
           </div>
         </div>
       )}
@@ -293,11 +293,11 @@ export default function SuperAdminClient() {
 
       {/* Lista */}
       {loading && (
-        <p className="text-sm text-zinc-500 text-center py-12">Carregando empresas...</p>
+        <p className="text-sm text-fg-tertiary text-center py-12">Carregando empresas...</p>
       )}
       {!loading && empresasFiltradas.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-sm text-zinc-500">Nenhuma empresa encontrada</p>
+          <p className="text-sm text-fg-tertiary">Nenhuma empresa encontrada</p>
           <a href="/onboarding" className="btn-primary mt-3 inline-block text-sm">
             + Adicionar primeira empresa
           </a>

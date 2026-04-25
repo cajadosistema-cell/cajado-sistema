@@ -91,23 +91,23 @@ function ModalPagamentoParcial({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-base font-semibold text-zinc-100">Registrar Entrada Parcial</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">{lancamento.descricao}</p>
+            <h2 className="text-base font-semibold text-fg">Registrar Entrada Parcial</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">{lancamento.descricao}</p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
 
         {/* Resumo do lançamento */}
         <div className="grid grid-cols-2 gap-2 mb-5">
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <p className="text-[10px] text-zinc-500">Valor total</p>
-            <p className="text-base font-bold text-zinc-200">{formatCurrency(lancamento.valor)}</p>
+          <div className="bg-muted/50 rounded-lg p-3">
+            <p className="text-[10px] text-fg-tertiary">Valor total</p>
+            <p className="text-base font-bold text-fg">{formatCurrency(lancamento.valor)}</p>
           </div>
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-            <p className="text-[10px] text-zinc-500">Saldo pendente</p>
+            <p className="text-[10px] text-fg-tertiary">Saldo pendente</p>
             <p className="text-base font-bold text-amber-400">{formatCurrency(pendente)}</p>
           </div>
         </div>
@@ -215,21 +215,21 @@ export function SecaoPagamentosParciais({ lancamentos, refetch }: Props) {
 
   return (
     <>
-      <div className="bg-[#111827] border border-white/5 rounded-xl p-5 lg:col-span-3">
+      <div className="bg-surface border border-white/5 rounded-xl p-5 lg:col-span-3">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="section-title mb-0">💰 Contas a Receber — Entradas Parciais</h2>
-            <p className="text-xs text-zinc-600 mt-0.5">Acompanhe pagamentos parciais e saldo pendente por cliente</p>
+            <p className="text-xs text-fg-disabled mt-0.5">Acompanhe pagamentos parciais e saldo pendente por cliente</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-zinc-500">Total pendente</p>
+            <p className="text-[10px] text-fg-tertiary">Total pendente</p>
             <p className="text-lg font-bold text-amber-400">{formatCurrency(totalPendente)}</p>
           </div>
         </div>
 
         {comPendente.length === 0 ? (
           <div className="text-center py-10">
-            <p className="text-sm text-zinc-600">✅ Nenhuma receita pendente de recebimento.</p>
+            <p className="text-sm text-fg-disabled">✅ Nenhuma receita pendente de recebimento.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -242,8 +242,8 @@ export function SecaoPagamentosParciais({ lancamentos, refetch }: Props) {
                 <div key={lancamento.id} className="border border-white/5 bg-black/20 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
-                      <p className="text-sm font-medium text-zinc-200">{lancamento.descricao}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
+                      <p className="text-sm font-medium text-fg">{lancamento.descricao}</p>
+                      <p className="text-xs text-fg-tertiary mt-0.5">
                         Total: {formatCurrency(lancamento.valor)} · Recebido: {formatCurrency(lancamento.valor - pendente)}
                       </p>
                     </div>
@@ -255,7 +255,7 @@ export function SecaoPagamentosParciais({ lancamentos, refetch }: Props) {
                   </div>
 
                   {/* Barra de progresso */}
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-3">
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3">
                     <div
                       className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : pct > 50 ? 'bg-amber-500' : 'bg-red-500'}`}
                       style={{ width: `${pct}%` }}
@@ -266,7 +266,7 @@ export function SecaoPagamentosParciais({ lancamentos, refetch }: Props) {
                   {ps.length > 0 && (
                     <div className="space-y-1 mb-3">
                       {ps.map(p => (
-                        <div key={p.id} className="flex items-center justify-between text-xs text-zinc-500">
+                        <div key={p.id} className="flex items-center justify-between text-xs text-fg-tertiary">
                           <span>📥 {new Date(p.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')} · {p.forma_pagamento}</span>
                           <span className="text-emerald-400 font-medium">+{formatCurrency(p.valor_pago)}</span>
                         </div>

@@ -5,6 +5,7 @@ import { Chart, DoughnutController, LineController, BarController, CategoryScale
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import DashboardPessoalClient from '@/app/(dashboard)/dashboard-pessoal/dashboard-pessoal-client'
 
 Chart.register(DoughnutController, LineController, BarController, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Filler)
 
@@ -64,13 +65,13 @@ function ModalLancamento({ onClose, onSave, contas, categorias }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Novo Lançamento</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <h2 className="text-base font-semibold text-fg">Novo Lançamento</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-4 gap-1 bg-zinc-800/50 p-1 rounded-lg">
+          <div className="grid grid-cols-4 gap-1 bg-muted/50 p-1 rounded-lg">
             {(['despesa', 'receita', 'investimento', 'transferencia'] as const).map(t => (
               <button key={t} type="button"
                 onClick={() => setForm(f => ({ ...f, tipo: t, categoria_id: '' }))}
@@ -79,8 +80,8 @@ function ModalLancamento({ onClose, onSave, contas, categorias }: {
                     ? t === 'receita' ? 'bg-emerald-500/20 text-emerald-400'
                       : t === 'despesa' ? 'bg-red-500/20 text-red-400'
                         : t === 'investimento' ? 'bg-blue-500/20 text-blue-400'
-                          : 'bg-zinc-700 text-zinc-300'
-                    : 'text-zinc-500 hover:text-zinc-300'
+                          : 'bg-surface-hover text-fg-secondary'
+                    : 'text-fg-tertiary hover:text-fg-secondary'
                 )}>{t === 'transferencia' ? 'Transf.' : t.charAt(0).toUpperCase() + t.slice(1)}</button>
             ))}
           </div>
@@ -157,6 +158,7 @@ export default function InicioClient() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [activeTab, setActiveTab] = useState<'visao' | 'competencia' | 'caixa'>('visao')
   const [modalLancamento, setModalLancamento] = useState(false)
+  const [dashView, setDashView] = useState<'empresa' | 'pessoal'>('empresa')
   const chartRefs = useRef<{ [key: string]: Chart }>({})
 
   const handleLogout = async () => {
@@ -433,6 +435,45 @@ export default function InicioClient() {
 
   return (
     <>
+      {/* ── Toggle Empresa / Pessoal ────────────────────────── */}
+      <div style={{
+        position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)',
+        zIndex: 9999, display: 'flex', gap: 4,
+        background: 'rgba(13,17,32,0.92)', backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, padding: 4,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+      }}>
+        {(['empresa', 'pessoal'] as const).map(v => (
+          <button
+            key={v}
+            onClick={() => setDashView(v)}
+            style={{
+              padding: '6px 20px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+              fontFamily: 'Syne, sans-serif', border: 'none', cursor: 'pointer',
+              transition: 'all 0.2s',
+              background: dashView === v
+                ? v === 'empresa'
+                  ? 'linear-gradient(135deg, #f5a623, #e07b00)'
+                  : 'linear-gradient(135deg, #22c55e, #15803d)'
+                : 'transparent',
+              color: dashView === v ? '#000' : '#8b98b8',
+              boxShadow: dashView === v ? '0 4px 12px rgba(0,0,0,0.3)' : 'none',
+            }}
+          >
+            {v === 'empresa' ? '🏢 Empresa' : '👤 Pessoal'}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Dashboard Pessoal ───────────────────────────────── */}
+      {dashView === 'pessoal' && (
+        <div style={{ paddingTop: 56, minHeight: '100vh', background: '#080b14' }}>
+          <DashboardPessoalClient />
+        </div>
+      )}
+
+      {/* ── Dashboard Empresa (original) ────────────────────── */}
+      <div style={{ display: dashView === 'empresa' ? 'block' : 'none' }}>
       <style dangerouslySetInnerHTML={{
         __html: `
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
@@ -841,7 +882,7 @@ export default function InicioClient() {
                         </div>
                       )
                     })}
-                    {totalDespMes === 0 && <div className="text-xs text-zinc-500 mt-4">Nenhuma despesa para este mês.</div>}
+                    {totalDespMes === 0 && <div className="text-xs text-fg-tertiary mt-4">Nenhuma despesa para este mês.</div>}
                   </div>
 
                   <div className="card-title" style={{ marginTop: '16px', marginBottom: '6px' }}>Participação anual</div>
@@ -883,6 +924,8 @@ export default function InicioClient() {
           </main>
         </div>
       </div>
+
+      </div>{/* fim empresa wrapper */}
 
       {modalLancamento && contas.length > 0 && (
         <ModalLancamento

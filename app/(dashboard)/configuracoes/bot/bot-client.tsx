@@ -96,14 +96,14 @@ function SecaoPrompt() {
   return (
     <div className="card space-y-5">
       <div>
-        <h2 className="text-sm font-semibold text-zinc-200 mb-1">Personalidade do bot</h2>
-        <p className="text-xs text-zinc-500">
+        <h2 className="text-sm font-semibold text-fg mb-1">Personalidade do bot</h2>
+        <p className="text-xs text-fg-tertiary">
           Preencha os campos abaixo para gerar um novo prompt com IA, ou edite diretamente o prompt atual.
         </p>
       </div>
 
-      <div className="bg-zinc-800/50 rounded-lg p-4 space-y-3">
-        <p className="text-xs font-medium text-zinc-400">Gerar novo prompt com IA</p>
+      <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+        <p className="text-xs font-medium text-fg-secondary">Gerar novo prompt com IA</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label block mb-1">Nome do assistente</label>
@@ -146,7 +146,7 @@ function SecaoPrompt() {
           onChange={e => setPrompt(e.target.value)}
           placeholder="O prompt do bot aparecerá aqui após gerar ou carregar da configuração..."
         />
-        <p className="text-xs text-zinc-600 mt-1">
+        <p className="text-xs text-fg-disabled mt-1">
           Use [TIMES_DISPONIVEIS] e [NOMES_TIMES] para inserir os setores automaticamente.
           Use #TRANSFERIR para indicar quando o bot deve transferir.
         </p>
@@ -197,8 +197,8 @@ function SecaoTimes() {
     <div className="card space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-200">Times / Setores</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">O bot usa os setores para direcionar os atendimentos</p>
+          <h2 className="text-sm font-semibold text-fg">Times / Setores</h2>
+          <p className="text-xs text-fg-tertiary mt-0.5">O bot usa os setores para direcionar os atendimentos</p>
         </div>
         <button onClick={() => setAdicionando(!adicionando)} className="btn-secondary text-xs">
           {adicionando ? 'Cancelar' : '+ Novo setor'}
@@ -206,7 +206,7 @@ function SecaoTimes() {
       </div>
 
       {adicionando && (
-        <div className="bg-zinc-800/50 rounded-lg p-4 space-y-3">
+        <div className="bg-muted/50 rounded-lg p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label block mb-1">Nome do setor *</label>
@@ -226,7 +226,7 @@ function SecaoTimes() {
               <label className="label block mb-1">Emoji</label>
               <div className="flex gap-1 flex-wrap">
                 {emojis.map(em => (
-                  <button key={em} onClick={() => setNovo(n => ({ ...n, emoji: em }))} className={`w-7 h-7 rounded text-sm ${novo.emoji === em ? 'bg-zinc-600' : 'hover:bg-zinc-800'}`}>{em}</button>
+                  <button key={em} onClick={() => setNovo(n => ({ ...n, emoji: em }))} className={`w-7 h-7 rounded text-sm ${novo.emoji === em ? 'bg-zinc-600' : 'hover:bg-muted'}`}>{em}</button>
                 ))}
               </div>
             </div>
@@ -247,20 +247,20 @@ function SecaoTimes() {
 
       <div className="space-y-2">
         {times.length === 0 && (
-          <p className="text-xs text-zinc-600 text-center py-4">Nenhum setor configurado</p>
+          <p className="text-xs text-fg-disabled text-center py-4">Nenhum setor configurado</p>
         )}
         {times.map(t => (
-          <div key={t.id} className="flex items-center gap-3 py-2.5 px-3 bg-zinc-800/40 rounded-lg">
+          <div key={t.id} className="flex items-center gap-3 py-2.5 px-3 bg-muted/40 rounded-lg">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ background: t.cor + '25', border: `1px solid ${t.cor}40` }}>
               {t.emoji}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-zinc-200">{t.nome}</p>
-              {t.descricao && <p className="text-xs text-zinc-500 truncate">{t.descricao}</p>}
-              {t.palavras_chave && <p className="text-[10px] text-zinc-600 mt-0.5 truncate">🔑 {t.palavras_chave}</p>}
+              <p className="text-sm font-medium text-fg">{t.nome}</p>
+              {t.descricao && <p className="text-xs text-fg-tertiary truncate">{t.descricao}</p>}
+              {t.palavras_chave && <p className="text-[10px] text-fg-disabled mt-0.5 truncate">🔑 {t.palavras_chave}</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className={`text-xs ${t.ativo ? 'text-emerald-400' : 'text-zinc-600'}`}>
+              <span className={`text-xs ${t.ativo ? 'text-emerald-400' : 'text-fg-disabled'}`}>
                 {t.ativo ? 'Ativo' : 'Inativo'}
               </span>
               <button onClick={() => handleToggle(t.id, t.ativo)} className="btn-ghost text-xs py-1">
@@ -382,8 +382,8 @@ function SecaoUsuarios() {
     <div className="card space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-200">Atendentes e Permissões</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Controle quais módulos cada usuário pode acessar</p>
+          <h2 className="text-sm font-semibold text-fg">Atendentes e Permissões</h2>
+          <p className="text-xs text-fg-tertiary mt-0.5">Controle quais módulos cada usuário pode acessar</p>
         </div>
         <div className="flex items-center gap-2">
           {msg && <span className="text-xs text-emerald-400">{msg}</span>}
@@ -395,8 +395,8 @@ function SecaoUsuarios() {
 
       {/* Formulário adicionar */}
       {adicionando && (
-        <div className="bg-zinc-800/50 rounded-xl p-4 space-y-4 border border-zinc-700/50">
-          <p className="text-xs font-semibold text-zinc-300">Novo atendente</p>
+        <div className="bg-muted/50 rounded-xl p-4 space-y-4 border border-border-subtle/50">
+          <p className="text-xs font-semibold text-fg-secondary">Novo atendente</p>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -430,7 +430,7 @@ function SecaoUsuarios() {
 
           {/* Permissões por módulo */}
           <div>
-            <p className="text-xs text-zinc-400 font-medium mb-2">Permissões de acesso</p>
+            <p className="text-xs text-fg-secondary font-medium mb-2">Permissões de acesso</p>
             <div className="flex flex-wrap gap-2">
               {MODULOS.map(m => (
                 <button key={m.id}
@@ -438,7 +438,7 @@ function SecaoUsuarios() {
                   className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
                     novo.permissoes[m.id]
                       ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-600'
+                      : 'bg-muted border-border-subtle text-fg-disabled'
                   }`}>
                   {m.emoji} {m.label}
                   {novo.permissoes[m.id] ? ' ✓' : ' ✗'}
@@ -456,53 +456,53 @@ function SecaoUsuarios() {
       {/* Lista de usuários */}
       <div className="space-y-3">
         {usuarios.length === 0 && (
-          <p className="text-xs text-zinc-600 text-center py-4">Nenhum atendente cadastrado</p>
+          <p className="text-xs text-fg-disabled text-center py-4">Nenhum atendente cadastrado</p>
         )}
         {usuarios.map(u => {
           const perms = u.permissoes || permissoesDefault(u.role)
           const editando = editandoId === u.id
           return (
             <div key={u.id} className={`rounded-xl border transition-all ${
-              editando ? 'border-amber-500/30 bg-amber-500/3' : 'border-zinc-800 bg-zinc-800/30'
+              editando ? 'border-amber-500/30 bg-amber-500/3' : 'border-border-subtle bg-muted/30'
             }`}>
               {/* Cabeçalho do card */}
               <div className="flex items-center gap-3 p-3">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
                   u.role === 'admin' ? 'bg-amber-500/20 text-amber-400' :
                   u.role === 'supervisor' ? 'bg-purple-500/20 text-purple-400' :
-                  'bg-zinc-700 text-zinc-300'
+                  'bg-surface-hover text-fg-secondary'
                 }`}>
                   {u.nome?.[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-zinc-200">{u.nome}</p>
+                    <p className="text-sm font-medium text-fg">{u.nome}</p>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
                       u.role === 'admin' ? 'bg-amber-500/15 text-amber-400' :
                       u.role === 'supervisor' ? 'bg-purple-500/15 text-purple-400' :
-                      'bg-zinc-700 text-zinc-400'
+                      'bg-surface-hover text-fg-secondary'
                     }`}>{u.role}</span>
                     {!u.ativo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">inativo</span>}
                   </div>
-                  <p className="text-xs text-zinc-500 truncate">{u.email}{u.setor ? ` · ${u.setor}` : ''}</p>
+                  <p className="text-xs text-fg-tertiary truncate">{u.email}{u.setor ? ` · ${u.setor}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => handleExcluir(u)}
                     disabled={salvando}
-                    className="text-xs px-2.5 py-1 rounded-lg border border-zinc-700 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-all transition-colors">
+                    className="text-xs px-2.5 py-1 rounded-lg border border-border-subtle text-fg-tertiary hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-all transition-colors">
                     🗑️ Excluir
                   </button>
                   <button
                     onClick={() => setEditandoId(editando ? null : u.id)}
                     className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
-                      editando ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                      editando ? 'border-amber-500/40 text-amber-400 bg-amber-500/10' : 'border-border-subtle text-fg-tertiary hover:text-fg-secondary'
                     }`}>
                     {editando ? '✕ Fechar' : '⚙️ Permissões'}
                   </button>
                   <button onClick={() => handleToggleAtivo(u)}
                     className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
-                      u.ativo ? 'border-zinc-700 text-zinc-500 hover:text-red-400 hover:border-red-500/30' : 'border-emerald-500/30 text-emerald-400'
+                      u.ativo ? 'border-border-subtle text-fg-tertiary hover:text-red-400 hover:border-red-500/30' : 'border-emerald-500/30 text-emerald-400'
                     }`}>
                     {u.ativo ? 'Desativar' : 'Ativar'}
                   </button>
@@ -511,8 +511,8 @@ function SecaoUsuarios() {
 
               {/* Permissões (quando editando) */}
               {editando && (
-                <div className="px-4 pb-4 space-y-3 border-t border-zinc-800 pt-3">
-                  <p className="text-xs text-zinc-400 font-medium">Módulos permitidos</p>
+                <div className="px-4 pb-4 space-y-3 border-t border-border-subtle pt-3">
+                  <p className="text-xs text-fg-secondary font-medium">Módulos permitidos</p>
                   <div className="flex flex-wrap gap-2">
                     {MODULOS.map(m => (
                       <button key={m.id}
@@ -521,7 +521,7 @@ function SecaoUsuarios() {
                         className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                           perms[m.id]
                             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                            : 'bg-zinc-800 border-zinc-700 text-zinc-600'
+                            : 'bg-muted border-border-subtle text-fg-disabled'
                         }`}>
                         {m.emoji} {m.label}
                         <span className="font-bold">{perms[m.id] ? ' ✓' : ' ✗'}</span>
@@ -542,7 +542,7 @@ function SecaoUsuarios() {
                 <div className="flex flex-wrap gap-1 px-3 pb-3">
                   {MODULOS.map(m => (
                     <span key={m.id} className={`text-[10px] px-1.5 py-0.5 rounded ${
-                      perms[m.id] ? 'bg-zinc-700 text-zinc-400' : 'bg-zinc-900 text-zinc-700 line-through'
+                      perms[m.id] ? 'bg-surface-hover text-fg-secondary' : 'bg-page text-zinc-700 line-through'
                     }`}>{m.emoji} {m.label}</span>
                   ))}
                 </div>
@@ -629,7 +629,7 @@ const COR_MAP: Record<string, { bg: string; border: string; text: string; badge:
   emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300' },
   amber:   { bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   text: 'text-amber-400',   badge: 'bg-amber-500/20 text-amber-300' },
   red:     { bg: 'bg-red-500/10',     border: 'border-red-500/30',     text: 'text-red-400',     badge: 'bg-red-500/20 text-red-300' },
-  zinc:    { bg: 'bg-zinc-800/60',    border: 'border-zinc-700',       text: 'text-zinc-400',    badge: 'bg-zinc-700 text-zinc-300' },
+  zinc:    { bg: 'bg-muted/60',    border: 'border-border-subtle',       text: 'text-fg-secondary',    badge: 'bg-surface-hover text-fg-secondary' },
 }
 
 function GuiaMeta({ webhookUrl, onClose }: { webhookUrl: string; onClose: () => void }) {
@@ -639,20 +639,20 @@ function GuiaMeta({ webhookUrl, onClose }: { webhookUrl: string; onClose: () => 
   const cores = COR_MAP[atual.cor]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
-      <div className="bg-[#0d1117] border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-sidebar/80 backdrop-blur-sm">
+      <div className="bg-[#0d1117] border border-border-subtle rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-page/60">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-100">Guia: API Oficial WhatsApp Meta</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Passo {passo + 1} de {total}</p>
+            <h2 className="text-sm font-semibold text-fg">Guia: API Oficial WhatsApp Meta</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">Passo {passo + 1} de {total}</p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 text-lg transition-colors">✕</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-lg transition-colors">✕</button>
         </div>
 
         {/* Barra de progresso */}
-        <div className="h-1 bg-zinc-800">
+        <div className="h-1 bg-muted">
           <div
             className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500"
             style={{ width: `${((passo + 1) / total) * 100}%` }}
@@ -665,12 +665,12 @@ function GuiaMeta({ webhookUrl, onClose }: { webhookUrl: string; onClose: () => 
             Passo {atual.num}
           </div>
 
-          <h3 className="text-base font-bold text-zinc-100 leading-snug">{atual.titulo}</h3>
-          <p className="text-sm text-zinc-400 leading-relaxed">{atual.descricao}</p>
+          <h3 className="text-base font-bold text-fg leading-snug">{atual.titulo}</h3>
+          <p className="text-sm text-fg-secondary leading-relaxed">{atual.descricao}</p>
 
           {/* Dica de ouro */}
           <div className={`rounded-lg p-3 border ${cores.bg} ${cores.border}`}>
-            <p className="text-xs text-zinc-300 flex gap-2">
+            <p className="text-xs text-fg-secondary flex gap-2">
               <span className="shrink-0">💡</span>
               <span>{atual.dica}</span>
             </p>
@@ -678,8 +678,8 @@ function GuiaMeta({ webhookUrl, onClose }: { webhookUrl: string; onClose: () => 
 
           {/* URL do webhook no passo 6 */}
           {atual.num === 6 && (
-            <div className="bg-zinc-800/60 border border-zinc-700 rounded-lg p-3 space-y-1">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">URL do Callback (copie e cole na Meta)</p>
+            <div className="bg-muted/60 border border-border-subtle rounded-lg p-3 space-y-1">
+              <p className="text-[10px] text-fg-tertiary uppercase tracking-wide">URL do Callback (copie e cole na Meta)</p>
               <p className="text-xs font-mono text-amber-400 break-all select-all">{webhookUrl}/webhook/oficial</p>
             </div>
           )}
@@ -698,7 +698,7 @@ function GuiaMeta({ webhookUrl, onClose }: { webhookUrl: string; onClose: () => 
         </div>
 
         {/* Navegação */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-800 bg-zinc-900/40">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border-subtle bg-page/40">
           <button
             onClick={() => setPasso(p => Math.max(0, p - 1))}
             disabled={passo === 0}
@@ -714,7 +714,7 @@ function GuiaMeta({ webhookUrl, onClose }: { webhookUrl: string; onClose: () => 
                 key={i}
                 onClick={() => setPasso(i)}
                 className={`w-2 h-2 rounded-full transition-all ${
-                  i === passo ? 'bg-amber-400 w-4' : i < passo ? 'bg-amber-500/40' : 'bg-zinc-700'
+                  i === passo ? 'bg-amber-400 w-4' : i < passo ? 'bg-amber-500/40' : 'bg-surface-hover'
                 }`}
               />
             ))}
@@ -819,8 +819,8 @@ function SecaoWhatsApp() {
       {/* Seletor de método */}
       <div className="card space-y-4">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-200">Conexão do WhatsApp</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Escolha como conectar seu número ao sistema</p>
+          <h2 className="text-sm font-semibold text-fg">Conexão do WhatsApp</h2>
+          <p className="text-xs text-fg-tertiary mt-0.5">Escolha como conectar seu número ao sistema</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -829,12 +829,12 @@ function SecaoWhatsApp() {
             className={`p-4 rounded-xl border-2 text-left transition-all ${
               metodo === 'qrcode'
                 ? 'border-amber-500/60 bg-amber-500/5'
-                : 'border-zinc-700 bg-zinc-800/30 hover:border-zinc-600'
+                : 'border-border-subtle bg-muted/30 hover:border-zinc-600'
             }`}
           >
             <div className="text-2xl mb-2">📱</div>
-            <p className="text-sm font-semibold text-zinc-200">QR Code</p>
-            <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+            <p className="text-sm font-semibold text-fg">QR Code</p>
+            <p className="text-xs text-fg-tertiary mt-1 leading-relaxed">
               Conecte qualquer número via Evolution API escaneando o QR Code. Mais simples, ideal para testes e uso imediato.
             </p>
             <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -847,12 +847,12 @@ function SecaoWhatsApp() {
             className={`p-4 rounded-xl border-2 text-left transition-all ${
               metodo === 'oficial'
                 ? 'border-blue-500/60 bg-blue-500/5'
-                : 'border-zinc-700 bg-zinc-800/30 hover:border-zinc-600'
+                : 'border-border-subtle bg-muted/30 hover:border-zinc-600'
             }`}
           >
             <div className="text-2xl mb-2">🏢</div>
-            <p className="text-sm font-semibold text-zinc-200">API Oficial Meta</p>
-            <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+            <p className="text-sm font-semibold text-fg">API Oficial Meta</p>
+            <p className="text-xs text-fg-tertiary mt-1 leading-relaxed">
               WhatsApp Business API oficial da Meta. Não precisa de celular conectado. Ideal para empresas com volume alto.
             </p>
             <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -866,8 +866,8 @@ function SecaoWhatsApp() {
       {metodo === 'qrcode' && (
         <div className="card space-y-5">
           <div>
-            <h3 className="text-sm font-semibold text-zinc-200">Conectar via QR Code</h3>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <h3 className="text-sm font-semibold text-fg">Conectar via QR Code</h3>
+            <p className="text-xs text-fg-tertiary mt-0.5">
               Funciona com qualquer número WhatsApp — pessoal ou Business. Sem aprovação da Meta.
             </p>
           </div>
@@ -878,10 +878,10 @@ function SecaoWhatsApp() {
                 <span className="text-3xl">✓</span>
               </div>
               <p className="text-emerald-400 font-semibold">WhatsApp conectado!</p>
-              <p className="text-xs text-zinc-500">Instância: <strong className="text-zinc-300">{canal.instanceName}</strong></p>
+              <p className="text-xs text-fg-tertiary">Instância: <strong className="text-fg-secondary">{canal.instanceName}</strong></p>
             </div>
           ) : !canal ? (
-            <div className="bg-zinc-800/50 rounded-lg p-4 space-y-3 max-w-sm">
+            <div className="bg-muted/50 rounded-lg p-4 space-y-3 max-w-sm">
               <div>
                 <label className="label block mb-1">Nome do canal</label>
                 <input
@@ -892,22 +892,22 @@ function SecaoWhatsApp() {
                 />
               </div>
               {error && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded">{error}</p>}
-              <div className="bg-zinc-800 rounded-lg p-3 space-y-1">
-                <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wide">Como funciona</p>
-                <p className="text-xs text-zinc-400">1. Clique em "Gerar QR Code"</p>
-                <p className="text-xs text-zinc-400">2. Abra o WhatsApp no celular</p>
-                <p className="text-xs text-zinc-400">3. Vá em ⋮ → Aparelhos conectados → Conectar aparelho</p>
-                <p className="text-xs text-zinc-400">4. Escaneie o código com a câmera</p>
+              <div className="bg-muted rounded-lg p-3 space-y-1">
+                <p className="text-[10px] text-fg-tertiary font-medium uppercase tracking-wide">Como funciona</p>
+                <p className="text-xs text-fg-secondary">1. Clique em "Gerar QR Code"</p>
+                <p className="text-xs text-fg-secondary">2. Abra o WhatsApp no celular</p>
+                <p className="text-xs text-fg-secondary">3. Vá em ⋮ → Aparelhos conectados → Conectar aparelho</p>
+                <p className="text-xs text-fg-secondary">4. Escaneie o código com a câmera</p>
               </div>
               <button onClick={handleCriarInstancia} disabled={loading} className="btn-primary text-xs w-full">
                 {loading ? '⏳ Gerando...' : '📱 Gerar QR Code'}
               </button>
             </div>
           ) : (
-            <div className="bg-zinc-800/50 rounded-lg p-6 flex flex-col items-center max-w-md mx-auto space-y-4">
+            <div className="bg-muted/50 rounded-lg p-6 flex flex-col items-center max-w-md mx-auto space-y-4">
               <div>
-                <p className="text-sm font-semibold text-zinc-200 text-center">Escaneie com o WhatsApp</p>
-                <p className="text-xs text-zinc-500 text-center mt-1">O código é válido por 2 minutos</p>
+                <p className="text-sm font-semibold text-fg text-center">Escaneie com o WhatsApp</p>
+                <p className="text-xs text-fg-tertiary text-center mt-1">O código é válido por 2 minutos</p>
               </div>
               {canal.qrcode ? (
                 <div className="bg-white p-3 rounded-xl shadow-xl">
@@ -918,12 +918,12 @@ function SecaoWhatsApp() {
                   />
                 </div>
               ) : (
-                <div className="w-56 h-56 bg-zinc-800 rounded-xl flex items-center justify-center border border-zinc-700">
-                  <p className="text-xs text-zinc-500">QR Code indisponível</p>
+                <div className="w-56 h-56 bg-muted rounded-xl flex items-center justify-center border border-border-subtle">
+                  <p className="text-xs text-fg-tertiary">QR Code indisponível</p>
                 </div>
               )}
               {verificando && (
-                <p className="text-xs text-zinc-400 animate-pulse flex items-center gap-2">
+                <p className="text-xs text-fg-secondary animate-pulse flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
                   Aguardando conexão...
                 </p>
@@ -943,8 +943,8 @@ function SecaoWhatsApp() {
         <div className="card space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-zinc-200">API Oficial WhatsApp Business (Meta)</h3>
-              <p className="text-xs text-zinc-500 mt-0.5">
+              <h3 className="text-sm font-semibold text-fg">API Oficial WhatsApp Business (Meta)</h3>
+              <p className="text-xs text-fg-tertiary mt-0.5">
                 Requer conta Meta Business verificada com número aprovado.
               </p>
             </div>
@@ -959,18 +959,18 @@ function SecaoWhatsApp() {
           {/* Passo a passo */}
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 space-y-2">
             <p className="text-xs font-semibold text-blue-400">📋 Pré-requisitos</p>
-            <div className="space-y-1 text-xs text-zinc-400">
-              <p>1. Acesse <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">developers.facebook.com</a> e crie um app do tipo <strong className="text-zinc-200">Business</strong></p>
-              <p>2. Adicione o produto <strong className="text-zinc-200">WhatsApp</strong> ao seu app</p>
-              <p>3. Gere um <strong className="text-zinc-200">Token de Acesso Permanente</strong> no Painel de API</p>
-              <p>4. Copie o <strong className="text-zinc-200">Phone Number ID</strong> do número verificado</p>
+            <div className="space-y-1 text-xs text-fg-secondary">
+              <p>1. Acesse <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">developers.facebook.com</a> e crie um app do tipo <strong className="text-fg">Business</strong></p>
+              <p>2. Adicione o produto <strong className="text-fg">WhatsApp</strong> ao seu app</p>
+              <p>3. Gere um <strong className="text-fg">Token de Acesso Permanente</strong> no Painel de API</p>
+              <p>4. Copie o <strong className="text-fg">Phone Number ID</strong> do número verificado</p>
               <p>5. Configure o Webhook com a URL abaixo e o token de verificação escolhido</p>
             </div>
           </div>
 
           {/* URL do webhook */}
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <p className="text-[10px] text-zinc-500 mb-1 uppercase tracking-wide">URL do Webhook para configurar na Meta</p>
+          <div className="bg-muted/50 rounded-lg p-3">
+            <p className="text-[10px] text-fg-tertiary mb-1 uppercase tracking-wide">URL do Webhook para configurar na Meta</p>
             <p className="text-xs font-mono text-amber-400 break-all select-all">
               {process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://seu-backend.railway.app'}/webhook/oficial
             </p>
@@ -1027,11 +1027,11 @@ function SecaoWhatsApp() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-emerald-400">API Oficial Meta conectada!</p>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    Número: <strong className="text-zinc-200">{apiConectada.numero}</strong>
-                    {apiConectada.nome && <span className="text-zinc-500"> · {apiConectada.nome}</span>}
+                  <p className="text-xs text-fg-secondary mt-0.5">
+                    Número: <strong className="text-fg">{apiConectada.numero}</strong>
+                    {apiConectada.nome && <span className="text-fg-tertiary"> · {apiConectada.nome}</span>}
                   </p>
-                  <p className="text-xs text-zinc-600 mt-1">Sem risco de banimento — conexão 100% oficial Meta ✅</p>
+                  <p className="text-xs text-fg-disabled mt-1">Sem risco de banimento — conexão 100% oficial Meta ✅</p>
                 </div>
               </div>
             ) : (
@@ -1049,7 +1049,7 @@ function SecaoWhatsApp() {
                   >
                     {salvandoApi ? '⏳ Validando com a Meta...' : '🔗 Ativar API Oficial'}
                   </button>
-                  <p className="text-xs text-zinc-600">O sistema vai validar o token com a Meta antes de salvar</p>
+                  <p className="text-xs text-fg-disabled">O sistema vai validar o token com a Meta antes de salvar</p>
                 </div>
               </div>
             )}
@@ -1070,12 +1070,12 @@ export default function ConfiguracoesBotClient({ inModal }: { inModal?: boolean 
     <div className={inModal ? 'max-w-4xl mx-auto' : ''}>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-100">Configurações do Inbox</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Conecte o WhatsApp, configure o bot e adicione atendentes.</p>
+          <h1 className="text-xl font-semibold text-fg">Configurações do Inbox</h1>
+          <p className="text-sm text-fg-tertiary mt-0.5">Conecte o WhatsApp, configure o bot e adicione atendentes.</p>
         </div>
       </div>
 
-      <div className="flex gap-1 mb-6 bg-zinc-900 p-1 rounded-lg w-fit border border-zinc-800">
+      <div className="flex gap-1 mb-6 bg-page p-1 rounded-lg w-fit border border-border-subtle">
         {([
           { key: 'whatsapp', label: '📱 WhatsApp' },
           { key: 'prompt', label: '🤖 Personalidade da IA' },
@@ -1086,7 +1086,7 @@ export default function ConfiguracoesBotClient({ inModal }: { inModal?: boolean 
             key={tab.key}
             onClick={() => setAba(tab.key)}
             className={`text-xs px-4 py-2 rounded-md transition-colors ${
-              aba === tab.key ? 'bg-zinc-700 text-zinc-100 font-medium shadow-sm' : 'text-zinc-500 hover:text-zinc-300'
+              aba === tab.key ? 'bg-surface-hover text-fg font-medium shadow-sm' : 'text-fg-tertiary hover:text-fg-secondary'
             }`}
           >
             {tab.label}

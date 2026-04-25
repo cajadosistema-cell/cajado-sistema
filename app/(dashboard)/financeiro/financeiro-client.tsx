@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, MetricCard, EmptyState, StatusBadge } from '@/components/shared/ui'
@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/client'
 import { SecaoPagamentosParciais } from './_components/SecaoPagamentosParciais'
 import { SecaoAuditoria } from './_components/SecaoAuditoria'
 import { TabCartoes } from './_components/TabCartoes'
+import { TabCartoesSeparado } from './_components/TabCartoesSeparado'
+import { TabContas } from './_components/TabContas'
 import { useToast } from '@/components/shared/toast'
 
 // ── Tipagens ──────────────────────────────────────────────────
@@ -20,6 +22,12 @@ type Conta = {
   saldo_inicial: number
   ativo: boolean
   cor: string
+  bandeira?: 'visa' | 'mastercard' | 'elo' | 'amex' | 'hipercard' | 'outras'
+  limite?: number
+  dia_fechamento?: number
+  dia_vencimento?: number
+  conta_principal_id?: string | null
+  nome_cartao?: string
 }
 
 type Lancamento = {
@@ -235,19 +243,19 @@ function ModalImportarExtrato({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-100">Importar Extrato Bancário</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <h2 className="text-sm font-semibold text-fg">Importar Extrato Bancário</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">
               {etapa === 'upload' ? 'Selecione o banco e faça o upload do arquivo' :
                etapa === 'preview' ? `${lancamentos.length} lançamentos encontrados — revise antes de confirmar` :
                'Importação concluída!'}
             </p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
 
         {/* Etapa 1: Upload */}
@@ -255,16 +263,16 @@ function ModalImportarExtrato({
           <div className="p-6 space-y-5">
             {/* Seleção de banco */}
             <div>
-              <p className="text-xs text-zinc-400 font-medium mb-2">Qual banco?</p>
+              <p className="text-xs text-fg-secondary font-medium mb-2">Qual banco?</p>
               <div className="grid grid-cols-4 gap-2">
                 {BANCOS.map(b => (
                   <button key={b.id} onClick={() => setBanco(b.id as any)}
                     className={`p-3 rounded-xl border-2 text-center transition-all ${
-                      banco === b.id ? 'border-amber-500/60 bg-amber-500/5' : 'border-zinc-700 bg-zinc-800/30 hover:border-zinc-600'
+                      banco === b.id ? 'border-amber-500/60 bg-amber-500/5' : 'border-border-subtle bg-muted/30 hover:border-zinc-600'
                     }`}>
                     <div className="text-xl mb-1">{b.emoji}</div>
-                    <p className="text-xs font-semibold text-zinc-200">{b.label}</p>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">{b.ext}</p>
+                    <p className="text-xs font-semibold text-fg">{b.label}</p>
+                    <p className="text-[10px] text-fg-tertiary mt-0.5">{b.ext}</p>
                   </button>
                 ))}
               </div>
@@ -272,19 +280,19 @@ function ModalImportarExtrato({
 
             {/* Seleção de conta */}
             <div>
-              <label className="text-xs text-zinc-400 font-medium block mb-1.5">Vincular à conta</label>
+              <label className="text-xs text-fg-secondary font-medium block mb-1.5">Vincular à conta</label>
               <select className="input text-sm w-full" value={contaId} onChange={e => setContaId(e.target.value)}>
                 {contas.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
             </div>
 
             {/* Como exportar */}
-            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-3 space-y-1.5">
-              <p className="text-xs font-semibold text-zinc-300">📋 Como exportar o extrato do {BANCOS.find(b => b.id === banco)?.label}:</p>
-              {banco === 'bradesco' && <p className="text-xs text-zinc-500">Internet Banking → Extrato → Exportar → Selecionar OFX ou CSV</p>}
-              {banco === 'c6' && <p className="text-xs text-zinc-500">App C6 → Extrato → Exportar → CSV (ícone de compartilhar)</p>}
-              {banco === 'xp' && <p className="text-xs text-zinc-500">XP Investimentos → Conta → Extrato → Exportar CSV</p>}
-              {banco === 'generico' && <p className="text-xs text-zinc-500">No seu banco: acesse o Extrato e exporte no formato OFX, OFC ou CSV.</p>}
+            <div className="bg-muted/50 border border-border-subtle/50 rounded-lg p-3 space-y-1.5">
+              <p className="text-xs font-semibold text-fg-secondary">📋 Como exportar o extrato do {BANCOS.find(b => b.id === banco)?.label}:</p>
+              {banco === 'bradesco' && <p className="text-xs text-fg-tertiary">Internet Banking → Extrato → Exportar → Selecionar OFX ou CSV</p>}
+              {banco === 'c6' && <p className="text-xs text-fg-tertiary">App C6 → Extrato → Exportar → CSV (ícone de compartilhar)</p>}
+              {banco === 'xp' && <p className="text-xs text-fg-tertiary">XP Investimentos → Conta → Extrato → Exportar CSV</p>}
+              {banco === 'generico' && <p className="text-xs text-fg-tertiary">No seu banco: acesse o Extrato e exporte no formato OFX, OFC ou CSV.</p>}
             </div>
 
             {/* Drop zone */}
@@ -293,13 +301,13 @@ function ModalImportarExtrato({
               onDragLeave={() => setArrastando(false)}
               onDrop={handleDrop}
               className={`border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer ${
-                arrastando ? 'border-amber-500 bg-amber-500/5' : 'border-zinc-700 hover:border-zinc-500'
+                arrastando ? 'border-amber-500 bg-amber-500/5' : 'border-border-subtle hover:border-zinc-500'
               }`}
               onClick={() => document.getElementById('file-import')?.click()}
             >
               <p className="text-3xl mb-2">📂</p>
-              <p className="text-sm font-medium text-zinc-300">Arraste o arquivo aqui ou clique para selecionar</p>
-              <p className="text-xs text-zinc-600 mt-1">Suporte: .OFX, .OFC, .CSV</p>
+              <p className="text-sm font-medium text-fg-secondary">Arraste o arquivo aqui ou clique para selecionar</p>
+              <p className="text-xs text-fg-disabled mt-1">Suporte: .OFX, .OFC, .CSV</p>
               <input id="file-import" type="file" accept=".ofx,.ofc,.csv,.txt" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) processarArquivo(f) }} />
             </div>
@@ -312,17 +320,17 @@ function ModalImportarExtrato({
         {etapa === 'preview' && (
           <div className="flex flex-col max-h-[70vh]">
             {/* Resumo */}
-            <div className="px-6 py-3 border-b border-zinc-800 grid grid-cols-3 gap-3">
+            <div className="px-6 py-3 border-b border-border-subtle grid grid-cols-3 gap-3">
               <div className="text-center">
-                <p className="text-xs text-zinc-500">Selecionados</p>
-                <p className="text-base font-bold text-zinc-200">{selecionados.length}</p>
+                <p className="text-xs text-fg-tertiary">Selecionados</p>
+                <p className="text-base font-bold text-fg">{selecionados.length}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-zinc-500">Receitas</p>
+                <p className="text-xs text-fg-tertiary">Receitas</p>
                 <p className="text-sm font-bold text-emerald-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalReceita)}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-zinc-500">Despesas</p>
+                <p className="text-xs text-fg-tertiary">Despesas</p>
                 <p className="text-sm font-bold text-red-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalDespesa)}</p>
               </div>
             </div>
@@ -330,32 +338,32 @@ function ModalImportarExtrato({
             {/* Tabela de prévia */}
             <div className="flex-1 overflow-y-auto">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-zinc-900">
-                  <tr className="border-b border-zinc-800">
+                <thead className="sticky top-0 bg-page">
+                  <tr className="border-b border-border-subtle">
                     <th className="py-2 px-4 text-left">
                       <input type="checkbox" checked={lancamentos.every(l => l.selecionado)}
                         onChange={e => setLancamentos(prev => prev.map(l => ({ ...l, selecionado: e.target.checked })))} />
                     </th>
-                    <th className="py-2 px-2 text-left text-zinc-500">Data</th>
-                    <th className="py-2 px-2 text-left text-zinc-500">Descrição</th>
-                    <th className="py-2 px-2 text-right text-zinc-500">Valor</th>
-                    <th className="py-2 px-2 text-center text-zinc-500">Tipo</th>
+                    <th className="py-2 px-2 text-left text-fg-tertiary">Data</th>
+                    <th className="py-2 px-2 text-left text-fg-tertiary">Descrição</th>
+                    <th className="py-2 px-2 text-right text-fg-tertiary">Valor</th>
+                    <th className="py-2 px-2 text-center text-fg-tertiary">Tipo</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lancamentos.map(l => (
-                    <tr key={l._id} className={`border-b border-zinc-800/50 ${!l.selecionado ? 'opacity-40' : ''}`}>
+                    <tr key={l._id} className={`border-b border-border-subtle/50 ${!l.selecionado ? 'opacity-40' : ''}`}>
                       <td className="py-2 px-4">
                         <input type="checkbox" checked={l.selecionado}
                           onChange={() => setLancamentos(prev => prev.map(x => x._id === l._id ? { ...x, selecionado: !x.selecionado } : x))} />
                       </td>
-                      <td className="py-2 px-2 text-zinc-400 whitespace-nowrap">{l.data}</td>
-                      <td className="py-2 px-2 text-zinc-300 max-w-[260px] truncate">{l.descricao}</td>
+                      <td className="py-2 px-2 text-fg-secondary whitespace-nowrap">{l.data}</td>
+                      <td className="py-2 px-2 text-fg-secondary max-w-[260px] truncate">{l.descricao}</td>
                       <td className={`py-2 px-2 text-right font-semibold whitespace-nowrap ${l.tipo === 'receita' ? 'text-emerald-400' : 'text-red-400'}`}>
                         {l.tipo === 'receita' ? '+' : '-'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(l.valor)}
                       </td>
                       <td className="py-2 px-2 text-center">
-                        <select className="text-[10px] bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-300"
+                        <select className="text-[10px] bg-muted border border-border-subtle rounded px-1 py-0.5 text-fg-secondary"
                           value={l.tipo}
                           onChange={e => setLancamentos(prev => prev.map(x => x._id === l._id ? { ...x, tipo: e.target.value as any } : x))}>
                           <option value="receita">Receita</option>
@@ -371,7 +379,7 @@ function ModalImportarExtrato({
             {erro && <p className="text-xs text-red-400 px-6 py-2">{erro}</p>}
 
             {/* Ações */}
-            <div className="flex gap-3 px-6 py-4 border-t border-zinc-800 bg-zinc-900">
+            <div className="flex gap-3 px-6 py-4 border-t border-border-subtle bg-page">
               <button onClick={() => setEtapa('upload')} className="btn-secondary text-xs">← Voltar</button>
               <button onClick={handleImportar} disabled={importando || selecionados.length === 0} className="btn-primary text-xs flex-1">
                 {importando ? '⏳ Importando...' : `✅ Importar ${selecionados.length} lançamentos`}
@@ -388,7 +396,7 @@ function ModalImportarExtrato({
             </div>
             <div>
               <p className="text-lg font-bold text-emerald-400">{importados} lançamentos importados!</p>
-              <p className="text-sm text-zinc-500 mt-1">Todos já aparecem no módulo Financeiro e no gráfico de receitas vs despesas.</p>
+              <p className="text-sm text-fg-tertiary mt-1">Todos já aparecem no módulo Financeiro e no gráfico de receitas vs despesas.</p>
             </div>
             <button onClick={onClose} className="btn-primary text-sm px-8">Fechar</button>
           </div>
@@ -398,73 +406,294 @@ function ModalImportarExtrato({
   )
 }
 
-// ── Modais ─────────────────────────────────────────────────────
+// ── Bandeiras de cartão ──────────────────────────────────────
+const BANDEIRAS = [
+  { id: 'visa',       label: 'Visa',             emoji: '💳', cor: '#1a1f71' },
+  { id: 'mastercard', label: 'Mastercard',        emoji: '🔴', cor: '#eb001b' },
+  { id: 'elo',        label: 'Elo',               emoji: '🟡', cor: '#ffcb05' },
+  { id: 'amex',       label: 'American Express',  emoji: '💎', cor: '#2e77bc' },
+  { id: 'hipercard',  label: 'Hipercard',         emoji: '🔶', cor: '#e22c1b' },
+  { id: 'outras',     label: 'Outras',            emoji: '💳', cor: '#6b7280' },
+]
 
+function BandeiraBadge({ bandeira }: { bandeira?: string }) {
+  const b = BANDEIRAS.find(x => x.id === bandeira)
+  if (!b) return null
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
+      style={{ background: b.cor + '22', color: b.cor, border: `1px solid ${b.cor}44` }}>
+      {b.emoji} {b.label}
+    </span>
+  )
+}
 
-function ModalConta({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
-  const { insert, loading } = useSupabaseMutation('contas')
+// ── Modal Conta ───────────────────────────────────────────────
+function ModalConta({ onClose, onSave, isAdmin = false }: {
+  onClose: () => void
+  onSave: () => void
+  isAdmin?: boolean
+}) {
+  const supabase = createClient()
+  const [loading, setLoading] = useState(false)
+  const [abaModal, setAbaModal] = useState<'principal' | 'secundarias'>('principal')
   const [form, setForm] = useState({
     nome: '',
     tipo: 'corrente' as Conta['tipo'],
     categoria: 'pj' as Conta['categoria'],
     saldo_inicial: '',
-    cor: '#7c5cfc'
+    cor: '#7c5cfc',
+    bandeira: 'visa' as string,
+    nome_cartao: '',
+    limite: '',
+    dia_fechamento: '10',
+    dia_vencimento: '17',
   })
+  // Contas secundárias
+  const [subContas, setSubContas] = useState<{nome: string; banco: string; tipo: string; saldo: string}[]>([])
+  const [novaSubConta, setNovaSubConta] = useState({ nome: '', banco: '', tipo: 'corrente', saldo: '' })
+  const isCartao = form.tipo === 'cartao_credito' || form.tipo === 'cartao_debito'
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
     const saldo = parseFloat(form.saldo_inicial) || 0
-    await insert({
+    const payload: any = {
       nome: form.nome,
       tipo: form.tipo,
       categoria: form.categoria,
       saldo_inicial: saldo,
       saldo_atual: saldo,
       ativo: true,
-      cor: form.cor
-    })
+      cor: form.cor,
+    }
+    if (isCartao) {
+      payload.bandeira       = form.bandeira
+      payload.nome_cartao    = form.nome_cartao || form.nome
+      payload.limite         = parseFloat(form.limite) || null
+      payload.dia_fechamento = parseInt(form.dia_fechamento) || null
+      payload.dia_vencimento = parseInt(form.dia_vencimento) || null
+    }
+    const { data: contaCriada, error } = await (supabase.from('contas') as any).insert(payload).select().single()
+    if (!error && contaCriada && subContas.length > 0) {
+      // Salva contas secundárias (outros bancos) vinculadas
+      await Promise.all(subContas.map(sc =>
+        (supabase.from('contas') as any).insert({
+          nome: sc.banco ? `${sc.banco} — ${sc.nome}` : sc.nome,
+          tipo: sc.tipo,
+          categoria: form.categoria,
+          saldo_inicial: parseFloat(sc.saldo) || 0,
+          saldo_atual: parseFloat(sc.saldo) || 0,
+          ativo: true,
+          cor: form.cor,
+          conta_principal_id: contaCriada.id,
+        })
+      ))
+    }
+    setLoading(false)
     onSave(); onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Nova Conta</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+          <h2 className="text-sm font-semibold text-fg">Nova Conta</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="label">Nome da Conta *</label>
-            <input className="input mt-1" required value={form.nome} placeholder="Ex: Nubank PJ, Itaú PF..."
-              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Classificação</label>
-              <select className="input mt-1" value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value as Conta['categoria'] }))}>
-                <option value="pj">PJ (Empresa)</option>
-                <option value="pf">PF (Pessoal)</option>
-              </select>
+
+      {/* Abas — Contas Secundárias só para admin */}
+      <div className="flex border-b border-border-subtle">
+        <button onClick={() => setAbaModal('principal')}
+          className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors',
+            abaModal === 'principal' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-fg-tertiary hover:text-fg-secondary'
+          )}>
+          🏦 Dados Principais
+        </button>
+        {isAdmin && (
+          <button onClick={() => setAbaModal('secundarias')}
+            className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors',
+              abaModal === 'secundarias' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-fg-tertiary hover:text-fg-secondary'
+            )}>
+            🔒 Contas Secundárias {subContas.length > 0 ? `(${subContas.length})` : ''}
+          </button>
+        )}
+      </div>
+
+        <form onSubmit={handleSubmit}>
+          {/* ── ABA PRINCIPAL ─────────────────────────── */}
+          {abaModal === 'principal' && (
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="label">Nome da Conta *</label>
+                <input className="input mt-1" required value={form.nome}
+                  placeholder="Ex: Nubank PJ, Itaú PF..."
+                  onChange={e => set('nome', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Classificação</label>
+                  <select className="input mt-1" value={form.categoria} onChange={e => set('categoria', e.target.value)}>
+                    <option value="pj">PJ (Empresa)</option>
+                    <option value="pf">PF (Pessoal)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Tipo</label>
+                  <select className="input mt-1" value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+                    <option value="corrente">Corrente</option>
+                    <option value="poupanca">Poupança</option>
+                    <option value="cartao_credito">Cartão de Crédito</option>
+                    <option value="cartao_debito">Cartão de Débito</option>
+                    <option value="investimento">Investimento</option>
+                    <option value="dinheiro">Dinheiro (espécie)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Campos para cartão: só nome e bandeira */}
+              {isCartao && (
+                <div className="p-3 bg-blue-500/8 border border-blue-500/20 rounded-xl space-y-3">
+                  <p className="text-[10px] text-blue-400 uppercase tracking-wider font-semibold">💳 Dados do Cartão</p>
+                  <div>
+                    <label className="label">Nome do Cartão</label>
+                    <input className="input mt-1" value={form.nome_cartao}
+                      placeholder="Ex: Cartão da Esposa, Cartão PJ, Nubank Roxinho..."
+                      onChange={e => set('nome_cartao', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label">Bandeira</label>
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      {BANDEIRAS.map(b => (
+                        <button type="button" key={b.id}
+                          onClick={() => set('bandeira', b.id)}
+                          className={cn(
+                            'flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium border transition-all',
+                            form.bandeira === b.id
+                              ? 'border-amber-500/60 bg-amber-500/15 text-amber-300'
+                              : 'border-border-subtle text-fg-tertiary hover:border-border hover:text-fg'
+                          )}>
+                          <span>{b.emoji}</span> {b.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="label">Saldo Atual (R$)</label>
+                <input className="input mt-1" type="number" step="0.01" value={form.saldo_inicial}
+                  placeholder="0.00" onChange={e => set('saldo_inicial', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Cor de identificação</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input type="color" value={form.cor} onChange={e => set('cor', e.target.value)}
+                    className="w-10 h-10 rounded-lg border border-border-subtle cursor-pointer bg-transparent" />
+                  <span className="text-xs text-fg-tertiary">Usada para identificar a conta nos gráficos</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="label">Tipo</label>
-              <select className="input mt-1" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as Conta['tipo'] }))}>
-                <option value="corrente">Corrente</option>
-                <option value="poupanca">Poupança</option>
-                <option value="cartao_credito">Cartão de Crédito</option>
-              </select>
+          )}
+
+          {/* ── ABA CONTAS SECUNDÁRIAS ────────────────── */}
+          {abaModal === 'secundarias' && (
+            <div className="p-5 space-y-4">
+              <div className="p-3 bg-blue-500/8 border border-blue-500/20 rounded-xl">
+                <p className="text-xs text-blue-400 font-medium mb-1">🏦 Contas de Outros Bancos</p>
+                <p className="text-[11px] text-fg-tertiary">
+                  Cadastre contas vinculadas em outros bancos (ex: conta no Itaú, Bradesco, Caixa...).
+                  Serão criadas automaticamente ao salvar.
+                </p>
+              </div>
+
+              {subContas.length > 0 && (
+                <div className="space-y-2">
+                  {subContas.map((sc, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-muted/50 border border-border-subtle rounded-xl px-3 py-2">
+                      <span className="text-lg">🏦</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-fg truncate">
+                          {sc.banco ? `${sc.banco} — ` : ''}{sc.nome}
+                        </p>
+                        <p className="text-[10px] text-fg-tertiary capitalize">
+                          {sc.tipo} {sc.saldo ? `· Saldo: R$ ${sc.saldo}` : ''}
+                        </p>
+                      </div>
+                      <button type="button"
+                        onClick={() => setSubContas(prev => prev.filter((_, j) => j !== i))}
+                        className="text-fg-disabled hover:text-red-400 text-xs">✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="border border-dashed border-border-subtle rounded-xl p-4 space-y-3">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-wider font-semibold">+ Nova conta em outro banco</p>
+                <div>
+                  <label className="label">Nome do Banco</label>
+                  <select className="input mt-1" value={novaSubConta.banco}
+                    onChange={e => setNovaSubConta(f => ({ ...f, banco: e.target.value }))}>
+                    <option value="">Selecione o banco...</option>
+                    <option value="Itaú">🟠 Itaú</option>
+                    <option value="Bradesco">🔴 Bradesco</option>
+                    <option value="Santander">🔴 Santander</option>
+                    <option value="Caixa">🔵 Caixa Econômica</option>
+                    <option value="Banco do Brasil">🟡 Banco do Brasil</option>
+                    <option value="Nubank">🟣 Nubank</option>
+                    <option value="Inter">🟠 Banco Inter</option>
+                    <option value="C6 Bank">⚫ C6 Bank</option>
+                    <option value="XP">🟡 XP Investimentos</option>
+                    <option value="BTG">🔵 BTG Pactual</option>
+                    <option value="Sicoob">🟢 Sicoob</option>
+                    <option value="Sicredi">🟢 Sicredi</option>
+                    <option value="Outro">🏦 Outro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Nome / Apelido da Conta</label>
+                  <input className="input mt-1" value={novaSubConta.nome}
+                    placeholder="Ex: Conta PJ Itaú, Poupança Bradesco..."
+                    onChange={e => setNovaSubConta(f => ({ ...f, nome: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Tipo</label>
+                    <select className="input mt-1" value={novaSubConta.tipo}
+                      onChange={e => setNovaSubConta(f => ({ ...f, tipo: e.target.value }))}>
+                      <option value="corrente">Conta Corrente</option>
+                      <option value="poupanca">Poupança</option>
+                      <option value="investimento">Investimento</option>
+                      <option value="dinheiro">Dinheiro (espécie)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Saldo Inicial (R$)</label>
+                    <input className="input mt-1" type="number" step="0.01" value={novaSubConta.saldo}
+                      placeholder="0.00"
+                      onChange={e => setNovaSubConta(f => ({ ...f, saldo: e.target.value }))} />
+                  </div>
+                </div>
+                <button type="button"
+                  onClick={() => {
+                    if (!novaSubConta.nome.trim() && !novaSubConta.banco) return
+                    setSubContas(prev => [...prev, novaSubConta])
+                    setNovaSubConta({ nome: '', banco: '', tipo: 'corrente', saldo: '' })
+                  }}
+                  className="btn-secondary w-full text-xs">
+                  + Adicionar à lista
+                </button>
+              </div>
             </div>
-          </div>
-          <div>
-            <label className="label">Saldo Atual (R$)</label>
-            <input className="input mt-1" type="number" step="0.01" value={form.saldo_inicial} placeholder="0.00"
-              onChange={e => setForm(f => ({ ...f, saldo_inicial: e.target.value }))} />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
+          )}
+
+          <div className="flex justify-end gap-2 px-5 pb-5">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Salvando...' : 'Criar Conta'}
+              {loading ? 'Salvando...' : `Criar Conta${subContas.length > 0 ? ` + ${subContas.length} Secundária(s)` : ''}`}
             </button>
           </div>
         </form>
@@ -503,7 +732,9 @@ function ModalLancamento({
     const valor = parseFloat(form.valor.replace(',', '.'))
     if (!valor || valor <= 0) return
     const parcelas = parseInt(form.total_parcelas) || 1
+
     if (parcelas > 1) {
+      // Lançamento parcelado — insere cada parcela individualmente
       const supabase = createClient()
       for (let i = 1; i <= parcelas; i++) {
         const data = new Date(form.data_competencia)
@@ -521,13 +752,12 @@ function ModalLancamento({
           total_parcelas: parcelas,
         } as any)
       }
+      // Taxa de cartão (se houver)
       const taxa = parseFloat(form.taxa_cartao)
       if (taxa > 0) {
         let valorTaxa = 0
         if (form.taxa_cartao === 'boleto') valorTaxa = 2.50
         else valorTaxa = valor * (taxa / 100)
-
-        // Lança a tarifa automática
         await insert({
            conta_id: form.conta_id,
            descricao: `Taxa Auto: ${form.descricao}`,
@@ -540,7 +770,8 @@ function ModalLancamento({
            total_parcelas: 1,
         } as any)
       }
-
+    } else {
+      // ── Lançamento simples (1 parcela) ──────────────────────
       await insert({
         conta_id: form.conta_id,
         descricao: form.descricao,
@@ -558,13 +789,13 @@ function ModalLancamento({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl overflow-y-auto max-h-screen">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl overflow-y-auto max-h-screen">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Novo Lançamento</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <h2 className="text-base font-semibold text-fg">Novo Lançamento</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-4 gap-1 bg-zinc-800/50 p-1 rounded-lg">
+          <div className="grid grid-cols-4 gap-1 bg-muted/50 p-1 rounded-lg">
             {(['despesa', 'receita', 'investimento', 'transferencia'] as const).map(t => (
               <button key={t} type="button"
                 onClick={() => setForm(f => ({ ...f, tipo: t, categoria_id: '' }))}
@@ -573,8 +804,8 @@ function ModalLancamento({
                     ? t === 'receita' ? 'bg-emerald-500/20 text-emerald-400'
                       : t === 'despesa' ? 'bg-red-500/20 text-red-400'
                       : t === 'investimento' ? 'bg-blue-500/20 text-blue-400'
-                      : 'bg-zinc-700 text-zinc-300'
-                    : 'text-zinc-500 hover:text-zinc-300'
+                      : 'bg-surface-hover text-fg-secondary'
+                    : 'text-fg-tertiary hover:text-fg-secondary'
                 )}>
                 {t === 'transferencia' ? 'Transf.' : t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
@@ -667,14 +898,30 @@ function ModalLancamento({
 // ── Client Component ────────────────────────────────────────────
 
 export default function FinanceiroClient() {
-  const [view, setView] = useState<'geral' | 'cartoes'>('geral')
+  const [view, setView] = useState<'contas' | 'cartoes' | 'resumo'>('contas')
   const [modalLancamento, setModalLancamento] = useState(false)
   const [modalConta, setModalConta] = useState(false)
   const [modalImport, setModalImport] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState('')
   const [busca, setBusca] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const { success, error: toastError } = useToast()
   const { update: updateLancamento } = useSupabaseMutation('lancamentos')
+
+  // Detecta se é admin (admin = email NÃO está em funcionarios)
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: func } = await (supabase.from('funcionarios') as any)
+        .select('id')
+        .eq('email', user.email || '')
+        .maybeSingle()
+      setIsAdmin(!func) // admin = não está na tabela funcionarios
+    }
+    checkAdmin()
+  }, [])
 
   const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true } })
   const { data: categorias } = useSupabaseQuery<CategoriaFinanceira>('categorias_financeiras', { orderBy: { column: 'nome', ascending: true } })
@@ -729,53 +976,81 @@ export default function FinanceiroClient() {
       </PageHeader>
 
       {/* Tabs Menu Superior */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit mb-6">
-        <button onClick={() => setView('geral')}
-          className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', view === 'geral' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300')}>
-          Painel Geral
-        </button>
-        <button onClick={() => setView('cartoes')}
-          className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors', view === 'cartoes' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300')}>
-          Gestão de Cartões
-        </button>
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 w-fit mb-6">
+        {([
+          { id: 'contas',  label: '🏦 Contas'  },
+          { id: 'cartoes', label: '💳 Cartões' },
+          { id: 'resumo',  label: '📊 Resumo'  },
+        ] as const).map(tab => (
+          <button key={tab.id} onClick={() => setView(tab.id)}
+            className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
+              view === tab.id ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
+            )}>
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {view === 'geral' && (
+      {/* ── ABA CONTAS ──────────────────────────────────────── */}
+      {view === 'contas' && (
+        <TabContas
+          contas={contas}
+          lancamentos={lancamentos}
+          categorias={categorias}
+          onNovaConta={() => setModalConta(true)}
+          onImportar={() => setModalImport(true)}
+          onValidar={validarLancamento}
+        />
+      )}
+
+      {/* ── ABA CARTÕES ─────────────────────────────────────── */}
+      {view === 'cartoes' && (
+        <TabCartoesSeparado
+          contas={contas}
+          lancamentos={lancamentos}
+          categorias={categorias}
+          onImportar={() => setModalImport(true)}
+          onRefresh={refreshAll}
+        />
+      )}
+
+      {/* ── ABA RESUMO (Painel Geral original) ──────────────── */}
+      {view === 'resumo' && (
       <>
         {/* Métricas principais idênticas ao Início */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {/* Saldo Total */}
-          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+          <div className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(16,185,129,0.15),transparent_70%)]"></div>
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Saldo total</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">Saldo total</p>
             <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#10b981]">{formatCurrency(saldoTotal)}</p>
           </div>
 
           {/* Receitas */}
-          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+          <div className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(124,92,252,0.12),transparent_70%)]"></div>
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Receitas do mês</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">Receitas do mês</p>
             <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#a78bfa]">{formatCurrency(receitasMes)}</p>
           </div>
 
           {/* Despesas */}
-          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+          <div className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(244,63,94,0.1),transparent_70%)]"></div>
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Despesas do mês</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">Despesas do mês</p>
             <p className="font-['Syne'] text-[22px] font-bold tracking-tight mb-1 text-[#f43f5e]">{formatCurrency(despesasMes)}</p>
           </div>
 
           {/* Resultado */}
-          <div className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
+          <div className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden transition-transform hover:-translate-y-0.5">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(245,166,35,0.1),transparent_70%)]"></div>
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">Resultado</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">Resultado</p>
             <p className={`font-['Syne'] text-[22px] font-bold tracking-tight mb-1 ${resultado >= 0 ? 'text-[#f5a623]' : 'text-[#f43f5e]'}`}>{formatCurrency(resultado)}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Contas */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-5">
+        <div className="bg-surface border border-white/5 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Contas</h2>
             <button onClick={() => setModalConta(true)} className="btn-ghost text-xs">+ Conta</button>
@@ -788,10 +1063,10 @@ export default function FinanceiroClient() {
                 <div key={conta.id} className="flex justify-between items-center p-3 rounded-lg border border-white/5 bg-black/20">
                   <div>
                     <div className="flex gap-2 items-center">
-                      <h3 className="text-sm font-medium text-zinc-200">{conta.nome}</h3>
+                      <h3 className="text-sm font-medium text-fg">{conta.nome}</h3>
                       <StatusBadge status={conta.categoria.toUpperCase()} />
                     </div>
-                    <p className="text-xs text-zinc-500 mt-0.5 capitalize">{conta.tipo.replace('_', ' ')}</p>
+                    <p className="text-xs text-fg-tertiary mt-0.5 capitalize">{conta.tipo.replace('_', ' ')}</p>
                   </div>
                   <span className="text-sm font-semibold">{formatCurrency(conta.saldo_atual)}</span>
                 </div>
@@ -801,7 +1076,7 @@ export default function FinanceiroClient() {
         </div>
 
         {/* Últimos lançamentos */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-5 flex flex-col min-h-[300px] lg:col-span-2">
+        <div className="bg-surface border border-white/5 rounded-xl p-5 flex flex-col min-h-[300px] lg:col-span-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <h2 className="section-title mb-0">Lançamentos do mês</h2>
             <div className="flex gap-2 flex-wrap">
@@ -842,12 +1117,12 @@ export default function FinanceiroClient() {
                          {l.tipo === 'receita' ? '↓' : l.tipo === 'despesa' ? '↑' : '⇄'}
                        </span>
                        <div>
-                         <p className="text-sm font-medium text-zinc-200">{l.descricao}</p>
-                         <p className="text-xs text-zinc-500 whitespace-nowrap">{formatDate(l.data_competencia)} • <span className="capitalize">{l.regime}</span></p>
+                         <p className="text-sm font-medium text-fg">{l.descricao}</p>
+                         <p className="text-xs text-fg-tertiary whitespace-nowrap">{formatDate(l.data_competencia)} • <span className="capitalize">{l.regime}</span></p>
                        </div>
                     </div>
                     <div className="text-right">
-                       <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-zinc-200'}`}>
+                       <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-fg'}`}>
                          {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
                        </p>
                        {l.status !== 'validado' ? (
@@ -869,7 +1144,7 @@ export default function FinanceiroClient() {
         </div>
 
         {/* Previsão de caixa */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-5 lg:col-span-2">
+        <div className="bg-surface border border-white/5 rounded-xl p-5 lg:col-span-2">
           <h2 className="section-title">Previsão de caixa — próximos 30 dias</h2>
           {previsoes.length === 0 ? (
             <EmptyState message="Nenhuma despesa ou receita prevista para o futuro" />
@@ -882,12 +1157,12 @@ export default function FinanceiroClient() {
                         {l.tipo === 'receita' ? '↓' : l.tipo === 'despesa' ? '↑' : '⇄'}
                       </span>
                       <div>
-                        <p className="text-sm font-medium text-zinc-200">{l.descricao}</p>
-                        <p className="text-xs text-zinc-500 whitespace-nowrap">Vence em: {formatDate(l.data_competencia)}</p>
+                        <p className="text-sm font-medium text-fg">{l.descricao}</p>
+                        <p className="text-xs text-fg-tertiary whitespace-nowrap">Vence em: {formatDate(l.data_competencia)}</p>
                       </div>
                   </div>
                   <div className="text-right">
-                      <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-zinc-200'}`}>
+                      <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-fg'}`}>
                         {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
                       </p>
                   </div>
@@ -898,7 +1173,7 @@ export default function FinanceiroClient() {
         </div>
 
         {/* Conciliação pendente */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-5">
+        <div className="bg-surface border border-white/5 rounded-xl p-5">
           <h2 className="section-title">Conciliação pendente</h2>
           {conciliacoes.length === 0 ? (
             <EmptyState message="Nada pendente" />
@@ -907,15 +1182,15 @@ export default function FinanceiroClient() {
               {conciliacoes.map((l: Lancamento) => (
                 <div key={l.id} className="p-3 rounded-lg border border-white/5 bg-black/20">
                   <div className="flex justify-between items-start mb-2">
-                    <p className="text-sm font-medium text-zinc-200">{l.descricao}</p>
-                    <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-zinc-200'}`}>
+                    <p className="text-sm font-medium text-fg">{l.descricao}</p>
+                    <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-fg'}`}>
                       {formatCurrency(l.valor)}
                     </p>
                   </div>
                   <p className="text-xs text-amber-500 mb-3">Venceu: {formatDate(l.data_competencia)}</p>
                   <button
                     onClick={() => validarLancamento(l.id, l.descricao)}
-                    className="w-full text-xs font-semibold px-3 py-1.5 rounded-md border border-zinc-700 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
+                    className="w-full text-xs font-semibold px-3 py-1.5 rounded-md border border-border-subtle hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
                   >
                     ✓ Confirmar Pgto. / Recebimento
                   </button>
@@ -926,7 +1201,7 @@ export default function FinanceiroClient() {
         </div>
 
         {/* Recorrências */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-5">
+        <div className="bg-surface border border-white/5 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Recorrências ativas</h2>
             <button className="btn-ghost text-xs">+ Nova</button>
@@ -935,7 +1210,7 @@ export default function FinanceiroClient() {
         </div>
 
         {/* Receitas vs Despesas — dados reais */}
-        <div className="bg-[#111827] border border-white/5 rounded-xl p-5 lg:col-span-2">
+        <div className="bg-surface border border-white/5 rounded-xl p-5 lg:col-span-2">
           <h2 className="section-title mb-4">Receitas vs Despesas — últimos 6 meses</h2>
           {(() => {
             // Gera os últimos 6 meses
@@ -955,7 +1230,7 @@ export default function FinanceiroClient() {
             const maxVal = Math.max(...data.flatMap(d => [d.receita, d.despesa]), 1)
             const hasData = data.some(d => d.receita > 0 || d.despesa > 0)
             return hasData ? (
-              <div className="flex items-end justify-between gap-2 h-36 px-2 border-b border-zinc-800 pb-2">
+              <div className="flex items-end justify-between gap-2 h-36 px-2 border-b border-border-subtle pb-2">
                 {data.map((d, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full flex items-end justify-center gap-1 h-28">
@@ -970,13 +1245,13 @@ export default function FinanceiroClient() {
                         style={{ height: `${(d.despesa / maxVal) * 100}%`, minHeight: d.despesa > 0 ? '4px' : '0' }}
                       />
                     </div>
-                    <span className="text-[10px] text-zinc-600 capitalize">{d.label}</span>
+                    <span className="text-[10px] text-fg-disabled capitalize">{d.label}</span>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="h-36 flex flex-col items-center justify-center gap-2">
-                <p className="text-xs text-zinc-600">Nenhum lançamento ainda. Registre receitas e despesas para ver o gráfico.</p>
+                <p className="text-xs text-fg-disabled">Nenhum lançamento ainda. Registre receitas e despesas para ver o gráfico.</p>
                 <div className="flex gap-4 text-[10px] text-zinc-700">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500/70 inline-block"/> Receitas</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-500/70 inline-block"/> Despesas</span>
@@ -984,7 +1259,7 @@ export default function FinanceiroClient() {
               </div>
             )
           })()}
-          <div className="flex gap-4 text-[10px] text-zinc-600 mt-3 justify-center">
+          <div className="flex gap-4 text-[10px] text-fg-disabled mt-3 justify-center">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500/70 inline-block"/> Receitas</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-500/70 inline-block"/> Despesas</span>
           </div>
@@ -1006,14 +1281,6 @@ export default function FinanceiroClient() {
       </>
       )}
 
-      {view === 'cartoes' && (
-        <TabCartoes 
-           contas={contas}
-           lancamentos={lancamentos}
-           categorias={categorias}
-           onNovoGasto={() => setModalLancamento(true)}
-        />
-      )}
 
       {modalImport && (
         <ModalImportarExtrato
@@ -1036,6 +1303,7 @@ export default function FinanceiroClient() {
         <ModalConta
           onClose={() => setModalConta(false)}
           onSave={refreshAll}
+          isAdmin={isAdmin}
         />
       )}
     </>

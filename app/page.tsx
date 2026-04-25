@@ -14,11 +14,11 @@ export default function LandingPage() {
         </a>
 
         <ul className={`list-none gap-7 ${menuOpen ? 'flex flex-col absolute top-[70px] right-5 bg-[#141814] border border-[#2a2e2a] rounded-lg p-4 z-50' : 'hidden'} md:!flex md:!flex-row md:!static md:!bg-transparent md:!border-none md:!p-0 md:!items-center`}>
-          <li><a href="#cursos" className="text-[#aaa] text-sm hover:text-white transition-colors" onClick={() => setMenuOpen(false)}>Serviços</a></li>
-          <li><a href="#diferenciais" className="text-[#aaa] text-sm hover:text-white transition-colors" onClick={() => setMenuOpen(false)}>Nosso Diferencial</a></li>
-          <li><a href="#contato" className="text-[#aaa] text-sm hover:text-white transition-colors" onClick={() => setMenuOpen(false)}>Fale Conosco</a></li>
+          <li><a href="#cursos" className="text-[#aaa] text-sm hover:text-fg transition-colors" onClick={() => setMenuOpen(false)}>Serviços</a></li>
+          <li><a href="#diferenciais" className="text-[#aaa] text-sm hover:text-fg transition-colors" onClick={() => setMenuOpen(false)}>Nosso Diferencial</a></li>
+          <li><a href="#contato" className="text-[#aaa] text-sm hover:text-fg transition-colors" onClick={() => setMenuOpen(false)}>Fale Conosco</a></li>
           {/* Link para o sistema também integrado para clientes antigos */}
-          <li><a href="https://sistema.cajadosolucoes.com.br/login" className="text-[#8bc34a] text-sm hover:text-white transition-colors md:border-l border-[#2a2e2a] md:pl-4" onClick={() => setMenuOpen(false)}>Área Restrita</a></li>
+          <li><a href="https://sistema.cajadosolucoes.com.br/login" className="text-[#8bc34a] text-sm hover:text-fg transition-colors md:border-l border-[#2a2e2a] md:pl-4" onClick={() => setMenuOpen(false)}>Área Restrita</a></li>
         </ul>
 
         <a href="https://wa.me/5577991150728" className="hidden md:inline-flex items-center gap-2 bg-[#2d6a2d] hover:bg-[#3a7a3a] text-white px-5 py-2.5 rounded-lg text-[13px] font-medium transition-colors">
@@ -51,7 +51,7 @@ export default function LandingPage() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20.52 3.48A11.9 11.9 0 0 0 12 0C5.37 0 0 5.37 0 12c0 2.11.55 4.16 1.6 5.97L0 24l6.18-1.62A11.94 11.94 0 0 0 12 24c6.63 0 12-5.37 12-12 0-3.21-1.25-6.22-3.48-8.52zM12 22c-1.85 0-3.66-.5-5.24-1.44l-.38-.22-3.9 1.02 1.04-3.8-.25-.4A10 10 0 0 1 2 12C2 6.48 6.48 2 12 2a9.96 9.96 0 0 1 7.07 2.93A9.96 9.96 0 0 1 22 12c0 5.52-4.48 10-10 10zm5.44-7.4c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07a8.16 8.16 0 0 1-2.4-1.48 9.03 9.03 0 0 1-1.66-2.07c-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51H7.6c-.2 0-.52.07-.79.37-.27.3-1.03 1.01-1.03 2.46 0 1.45 1.06 2.86 1.21 3.06.15.2 2.08 3.18 5.04 4.46.7.3 1.25.48 1.68.62.71.22 1.35.19 1.86.11.57-.08 1.76-.72 2-1.41.25-.7.25-1.29.17-1.41-.07-.12-.27-.2-.57-.34z" fill="white"/></svg>
               Falar com um Especialista
             </a>
-            <a href="#cursos" className="inline-flex items-center gap-2 bg-transparent border border-[#333] hover:border-[#555] text-[#ccc] hover:text-white px-6 py-[14px] rounded-lg text-sm font-medium transition-colors">
+            <a href="#cursos" className="inline-flex items-center gap-2 bg-transparent border border-[#333] hover:border-[#555] text-[#ccc] hover:text-fg px-6 py-[14px] rounded-lg text-sm font-medium transition-colors">
               Ver cursos disponíveis →
             </a>
           </div>

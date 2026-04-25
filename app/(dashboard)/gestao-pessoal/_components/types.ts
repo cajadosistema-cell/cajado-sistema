@@ -73,7 +73,7 @@ export const STATUS_TAREFA_LABEL: Record<Tarefa['status'], string> = {
 }
 
 export const PRIORIDADE_COLOR: Record<Tarefa['prioridade'], string> = {
-  baixa: 'text-zinc-400 bg-zinc-800',
+  baixa: 'text-fg-secondary bg-muted',
   media: 'text-blue-400 bg-blue-500/10',
   alta: 'text-amber-400 bg-amber-500/10',
   urgente: 'text-red-400 bg-red-500/10',

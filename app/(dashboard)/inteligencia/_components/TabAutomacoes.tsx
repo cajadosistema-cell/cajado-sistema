@@ -23,16 +23,16 @@ export function TabAutomacoes() {
     <div className="space-y-6">
       
       {/* Health Score do Negócio */}
-      <div className="bg-zinc-900 border border-emerald-500/30 rounded-xl p-6 relative overflow-hidden">
+      <div className="bg-page border border-emerald-500/30 rounded-xl p-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-[50px] pointer-events-none"></div>
         <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
           <div className="shrink-0 flex items-center justify-center w-24 h-24 rounded-full border-4 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
             <span className="text-3xl font-bold text-emerald-400">{healthScore}</span>
-            <span className="text-xs text-zinc-500 mb-4">%</span>
+            <span className="text-xs text-fg-tertiary mb-4">%</span>
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">🩺 Saúde do Negócio</h3>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+            <h3 className="text-lg font-bold text-fg flex items-center gap-2">🩺 Saúde do Negócio</h3>
+            <p className="text-xs text-fg-secondary mt-1 leading-relaxed">
               Baseado no seu Caixa, Fluxo de Vendas (Cajado) e cumprimento dos OKRs Tri/Semanas, seu negócio está <strong>muito saudável</strong>. As métricas indicam crescimento projetado forte para os próximos 30 dias.
             </p>
           </div>
@@ -45,11 +45,11 @@ export function TabAutomacoes() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Relatório Semanal */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-sm">
-          <div className="mb-5 border-b border-zinc-800/60 pb-3 flex justify-between items-center">
+        <div className="bg-page border border-border-subtle rounded-xl p-6 shadow-sm">
+          <div className="mb-5 border-b border-border-subtle/60 pb-3 flex justify-between items-center">
              <div>
-               <h3 className="text-sm font-bold text-zinc-200">📱 Relatório Direto Diretor (WhatsApp)</h3>
-               <p className="text-[10px] text-zinc-500 mt-1">Configure Edge Functions para enviar resumos.</p>
+               <h3 className="text-sm font-bold text-fg">📱 Relatório Direto Diretor (WhatsApp)</h3>
+               <p className="text-[10px] text-fg-tertiary mt-1">Configure Edge Functions para enviar resumos.</p>
              </div>
              <span className="text-2xl">🤖</span>
           </div>
@@ -86,28 +86,28 @@ export function TabAutomacoes() {
         </div>
 
         {/* Alertas Estratégicos */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-sm">
-          <div className="mb-5 border-b border-zinc-800/60 pb-3 flex justify-between items-center">
+        <div className="bg-page border border-border-subtle rounded-xl p-6 shadow-sm">
+          <div className="mb-5 border-b border-border-subtle/60 pb-3 flex justify-between items-center">
              <div>
-               <h3 className="text-sm font-bold text-zinc-200">⚡ Alertas Estratégicos (Triggers)</h3>
-               <p className="text-[10px] text-zinc-500 mt-1">Avisos proativos de desvios no sistema.</p>
+               <h3 className="text-sm font-bold text-fg">⚡ Alertas Estratégicos (Triggers)</h3>
+               <p className="text-[10px] text-fg-tertiary mt-1">Avisos proativos de desvios no sistema.</p>
              </div>
              <span className="text-2xl">🚨</span>
           </div>
 
           <div className="space-y-3">
             {alertas.map(alerta => (
-              <div key={alerta.id} onClick={() => toggleAlerta(alerta.id)} className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${alerta.ativo ? 'border-amber-500/30 bg-amber-500/5' : 'border-zinc-800 bg-zinc-900/50'}`}>
+              <div key={alerta.id} onClick={() => toggleAlerta(alerta.id)} className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${alerta.ativo ? 'border-amber-500/30 bg-amber-500/5' : 'border-border-subtle bg-page/50'}`}>
                 <div>
-                  <h4 className={`text-xs font-bold ${alerta.ativo ? 'text-amber-400' : 'text-zinc-500'}`}>{alerta.nome}</h4>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">{alerta.desc}</p>
+                  <h4 className={`text-xs font-bold ${alerta.ativo ? 'text-amber-400' : 'text-fg-tertiary'}`}>{alerta.nome}</h4>
+                  <p className="text-[10px] text-fg-disabled mt-0.5">{alerta.desc}</p>
                 </div>
-                <div className={`w-8 h-4 rounded-full p-0.5 flex items-center transition-all ${alerta.ativo ? 'bg-amber-500 justify-end' : 'bg-zinc-700 justify-start'}`}>
+                <div className={`w-8 h-4 rounded-full p-0.5 flex items-center transition-all ${alerta.ativo ? 'bg-amber-500 justify-end' : 'bg-surface-hover justify-start'}`}>
                   <div className="w-3 h-3 bg-white rounded-full"></div>
                 </div>
               </div>
             ))}
-            <button className="w-full text-xs font-semibold py-2 rounded-lg border border-dashed border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 transition-colors mt-2">
+            <button className="w-full text-xs font-semibold py-2 rounded-lg border border-dashed border-border-subtle text-fg-tertiary hover:text-fg-secondary hover:border-zinc-500 transition-colors mt-2">
               + Criar nova regra
             </button>
           </div>

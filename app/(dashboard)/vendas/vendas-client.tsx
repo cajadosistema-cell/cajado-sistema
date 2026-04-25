@@ -94,7 +94,7 @@ const pagamentoColor: Record<string, string> = {
   pendente: 'text-amber-400',
   parcial: 'text-blue-400',
   pago: 'text-emerald-400',
-  cancelado: 'text-zinc-500',
+  cancelado: 'text-fg-tertiary',
 }
 
 // ── Mock Data Fallbacks ─────────────────────────────────────
@@ -171,10 +171,10 @@ function ModalAddItem({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-100">Adicionar Item à OS</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-border-subtle">
+          <h2 className="text-sm font-semibold text-fg">Adicionar Item à OS</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSave} className="p-5 space-y-4">
           {/* Produto (opcional) */}
@@ -219,8 +219,8 @@ function ModalAddItem({
           </div>
 
           {/* Total preview */}
-          <div className="bg-zinc-800/50 rounded-xl px-4 py-3 flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Total do item</span>
+          <div className="bg-muted/50 rounded-xl px-4 py-3 flex items-center justify-between">
+            <span className="text-xs text-fg-tertiary">Total do item</span>
             <span className="text-lg font-bold text-amber-400">
               R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
@@ -349,9 +349,9 @@ function DrawerOS({
   return (
     <div className="fixed inset-0 z-40 flex">
       <div className="flex-1 bg-black/40" onClick={onClose} />
-      <div className="w-full max-w-lg bg-zinc-900 border-l border-zinc-800 flex flex-col h-screen overflow-y-auto shadow-2xl">
+      <div className="w-full max-w-lg bg-page border-l border-border-subtle flex flex-col h-screen overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="p-5 border-b border-zinc-800">
+        <div className="p-5 border-b border-border-subtle">
           <div className="flex items-start justify-between mb-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -361,20 +361,20 @@ function DrawerOS({
                 )}>
                   {statusLocal.replace('_', ' ').toUpperCase()}
                 </span>
-                <span className="text-xs text-zinc-500">{tipoLabels[venda.tipo] || venda.tipo}</span>
-                {salvandoStatus && <span className="text-[10px] text-zinc-600 animate-pulse">salvando...</span>}
+                <span className="text-xs text-fg-tertiary">{tipoLabels[venda.tipo] || venda.tipo}</span>
+                {salvandoStatus && <span className="text-[10px] text-fg-disabled animate-pulse">salvando...</span>}
               </div>
-              <h2 className="text-base font-bold text-zinc-100">#{venda.numero}</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
+              <h2 className="text-base font-bold text-fg">#{venda.numero}</h2>
+              <p className="text-xs text-fg-tertiary mt-0.5">
                 {venda.cliente?.nome || 'Sem cliente'} · {new Date(venda.data_abertura).toLocaleDateString('pt-BR')}
               </p>
             </div>
-            <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+            <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
           </div>
 
           {/* ── Fluxo de Status ─────────────────────────── */}
           <div className="space-y-2">
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">Progresso da OS</p>
+            <p className="text-[10px] text-fg-disabled uppercase tracking-widest font-semibold">Progresso da OS</p>
             <div className="flex gap-1.5 flex-wrap">
               {[
                 { key: 'rascunho',      label: '📝 Rascunho',      next: true },
@@ -396,7 +396,7 @@ function DrawerOS({
                         ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 ring-1 ring-amber-500/30'
                         : isPast
                         ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                        : 'bg-zinc-800/60 border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                        : 'bg-muted/60 border-border-subtle text-fg-tertiary hover:border-zinc-500 hover:text-fg-secondary'
                     )}
                   >
                     {s.label}
@@ -408,7 +408,7 @@ function DrawerOS({
                 <button
                   onClick={() => handleMudarStatus('cancelada')}
                   disabled={salvandoStatus}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-zinc-800 text-zinc-700 hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/5 transition-all"
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-border-subtle text-zinc-700 hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/5 transition-all"
                 >
                   🚫 Cancelar
                 </button>
@@ -417,7 +417,7 @@ function DrawerOS({
 
             {/* ── Pagamento rápido ─────────────────────── */}
             <div className="flex items-center gap-2 pt-1">
-              <span className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold shrink-0">Pgto:</span>
+              <span className="text-[10px] text-fg-disabled uppercase tracking-widest font-semibold shrink-0">Pgto:</span>
               {(['pendente', 'parcial', 'pago'] as const).map(p => (
                 <button
                   key={p}
@@ -430,7 +430,7 @@ function DrawerOS({
                         : p === 'parcial'
                         ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
                         : 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                      : 'bg-zinc-800/50 border-zinc-800 text-zinc-600 hover:border-zinc-600'
+                      : 'bg-muted/50 border-border-subtle text-fg-disabled hover:border-zinc-600'
                   )}
                 >
                   {p === 'pendente' ? '⏳ Pendente' : p === 'parcial' ? '🔵 Parcial' : '✅ Pago'}
@@ -443,7 +443,7 @@ function DrawerOS({
         {/* Itens */}
         <div className="flex-1 p-5">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-zinc-500 uppercase tracking-wide font-semibold">
+            <p className="text-xs text-fg-tertiary uppercase tracking-wide font-semibold">
               Itens ({itens.length})
             </p>
             <button
@@ -455,9 +455,9 @@ function DrawerOS({
           </div>
 
           {itens.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-zinc-800 rounded-xl">
+            <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-border-subtle rounded-xl">
               <span className="text-3xl mb-2">📦</span>
-              <p className="text-sm text-zinc-500">Nenhum item nesta OS ainda</p>
+              <p className="text-sm text-fg-tertiary">Nenhum item nesta OS ainda</p>
               <button
                 onClick={() => setModalItem(true)}
                 className="btn-primary text-xs mt-3 py-1 px-3"
@@ -468,16 +468,16 @@ function DrawerOS({
           ) : (
             <div className="space-y-2">
               {itens.map(item => (
-                <div key={item.id} className="bg-zinc-800/40 border border-zinc-800 rounded-xl px-4 py-3 flex items-start justify-between group">
+                <div key={item.id} className="bg-muted/40 border border-border-subtle rounded-xl px-4 py-3 flex items-start justify-between group">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-200 truncate">{item.descricao}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-sm font-medium text-fg truncate">{item.descricao}</p>
+                    <p className="text-xs text-fg-tertiary mt-0.5">
                       {item.quantidade} × R$ {item.preco_unitario.toFixed(2)}
                       {item.desconto > 0 && <span className="text-amber-500 ml-1">(-{item.desconto}%)</span>}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 ml-3 shrink-0">
-                    <span className="text-sm font-bold text-zinc-100">
+                    <span className="text-sm font-bold text-fg">
                       R$ {item.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                     <button
@@ -495,19 +495,19 @@ function DrawerOS({
         </div>
 
         {/* Totais */}
-        <div className="p-5 border-t border-zinc-800 space-y-2 bg-zinc-900/80 backdrop-blur-sm">
+        <div className="p-5 border-t border-border-subtle space-y-2 bg-page/80 backdrop-blur-sm">
           <div className="flex justify-between text-sm">
-            <span className="text-zinc-500">Subtotal ({itens.length} itens)</span>
-            <span className="text-zinc-300">R$ {totalItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-fg-tertiary">Subtotal ({itens.length} itens)</span>
+            <span className="text-fg-secondary">R$ {totalItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
           {venda.desconto_valor > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-zinc-500">Desconto</span>
+              <span className="text-fg-tertiary">Desconto</span>
               <span className="text-red-400">- R$ {venda.desconto_valor.toFixed(2)}</span>
             </div>
           )}
-          <div className="flex justify-between text-base font-bold border-t border-zinc-800 pt-2 mt-1">
-            <span className="text-zinc-100">Total</span>
+          <div className="flex justify-between text-base font-bold border-t border-border-subtle pt-2 mt-1">
+            <span className="text-fg">Total</span>
             <span className="text-amber-400">
               R$ {(itens.length > 0 ? totalItens : venda.total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
@@ -516,7 +516,7 @@ function DrawerOS({
             <span className={cn('font-medium', pagamentoColor[venda.status_pagamento])}>
               {venda.status_pagamento.toUpperCase()}
             </span>
-            <span className="text-zinc-500">
+            <span className="text-fg-tertiary">
               Recebido: R$ {venda.total_recebido.toFixed(2)} · A receber: R$ {venda.total_a_receber.toFixed(2)}
             </span>
           </div>
@@ -557,8 +557,8 @@ export default function VendasClient() {
     orderBy: { column: 'nome', ascending: true },
   })
 
-  const vendas = vendasDB.length > 0 ? vendasDB : MOCK_VENDAS
-  const produtos = produtosDB.length > 0 ? produtosDB : MOCK_PRODUTOS
+  const vendas = vendasDB
+  const produtos = produtosDB
 
   const vendasFiltradas = vendas.filter(v => {
     if (tipoFiltro && v.tipo !== tipoFiltro) return false
@@ -619,7 +619,7 @@ export default function VendasClient() {
           <div className="overflow-x-auto -mx-1">
           <table className="w-full min-w-[560px]">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border-subtle">
                 <th className="table-header">Número</th>
                 <th className="table-header hidden sm:table-cell">Tipo</th>
                 <th className="table-header">Cliente</th>
@@ -633,24 +633,24 @@ export default function VendasClient() {
             <tbody>
               {loadingVendas ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-zinc-500 text-sm">Carregando dados...</td>
+                  <td colSpan={8} className="py-16 text-center text-fg-tertiary text-sm">Carregando dados...</td>
                 </tr>
               ) : vendasFiltradas.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-16 text-center">
-                    <p className="text-sm text-zinc-500">Nenhuma venda / OS registrada</p>
+                    <p className="text-sm text-fg-tertiary">Nenhuma venda / OS registrada</p>
                     <button onClick={() => setModalOS(true)} className="btn-primary mt-3 text-xs mx-auto block hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(245,166,35,0.3)]">
                       + Criar primeira OS
                     </button>
                   </td>
                 </tr>
               ) : vendasFiltradas.map((v) => (
-                <tr key={v.id} className="border-b border-zinc-800/50 hover:bg-white/5 transition-colors">
-                  <td className="table-cell font-mono text-zinc-300 text-xs">#{v.numero}</td>
+                <tr key={v.id} className="border-b border-border-subtle/50 hover:bg-white/5 transition-colors">
+                  <td className="table-cell font-mono text-fg-secondary text-xs">#{v.numero}</td>
                   <td className="table-cell hidden sm:table-cell">{tipoLabels[v.tipo] || v.tipo}</td>
                   <td className="table-cell truncate max-w-[120px]">{(v as unknown as any).cliente?.nome || 'N/A'}</td>
                   <td className="table-cell hidden sm:table-cell text-xs">{new Date(v.data_abertura).toLocaleDateString('pt-BR')}</td>
-                  <td className="table-cell text-zinc-300 font-medium whitespace-nowrap">R$ {(v.total || 0).toFixed(2)}</td>
+                  <td className="table-cell text-fg-secondary font-medium whitespace-nowrap">R$ {(v.total || 0).toFixed(2)}</td>
                   <td className="table-cell text-xs uppercase font-semibold hidden md:table-cell">
                     <span className={pagamentoColor[v.status_pagamento]}>{v.status_pagamento}</span>
                   </td>
@@ -679,23 +679,26 @@ export default function VendasClient() {
 
           {/* Pendências de cobrança */}
           <div className="card">
-            <h2 className="section-title text-red-500">Cobranças em atraso</h2>
+            <h2 className="section-title text-red-500">Pendências de Cobrança</h2>
             <div className="space-y-3 mt-2">
-              {[
-                { cliente: 'Carlos Eduardo', valor: 450, dias: 2, os: 'OS-2026/0405' },
-                { cliente: 'Marcos Lima', valor: 600, dias: 5, os: 'OS-2026/0403' },
-              ].map((c, i) => (
-                <div key={i} className="flex justify-between items-center py-2 border-b border-red-500/10 hover:bg-red-500/5 last:border-0 rounded transition-colors px-1">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">{c.cliente}</p>
-                    <p className="text-[10px] text-red-400/80">{c.dias} dias de atraso • {c.os}</p>
+              {vendas.filter(v => v.total_a_receber > 0 && v.status_pagamento !== 'pago').slice(0, 5).map((v) => {
+                const dias = Math.floor((new Date().getTime() - new Date(v.data_abertura).getTime()) / (1000 * 3600 * 24));
+                return (
+                  <div key={v.id} className="flex justify-between items-center py-2 border-b border-red-500/10 hover:bg-red-500/5 last:border-0 rounded transition-colors px-1">
+                    <div>
+                      <p className="text-sm font-medium text-fg">{(v as any).cliente?.nome || 'Cliente não informado'}</p>
+                      <p className="text-[10px] text-red-400/80">{dias} dias em aberto • #{v.numero}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-red-400">R$ {(v.total_a_receber || 0).toFixed(2)}</p>
+                      <button className="text-[10px] text-fg-secondary hover:text-fg uppercase tracking-widest mt-0.5">Cobrar</button>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-red-400">R$ {c.valor.toFixed(2)}</p>
-                    <button className="text-[10px] text-zinc-400 hover:text-zinc-200 uppercase tracking-widest mt-0.5">Cobrar</button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
+              {vendas.filter(v => v.total_a_receber > 0).length === 0 && (
+                <p className="text-xs text-fg-tertiary">Nenhuma cobrança pendente.</p>
+              )}
             </div>
           </div>
 
@@ -707,11 +710,11 @@ export default function VendasClient() {
                 { label: 'Concluídas', value: (vendas.filter(v => v.status === 'concluida').length), color: 'text-emerald-400' },
                 { label: 'Em andamento', value: (vendas.filter(v => v.status === 'em_andamento').length), color: 'text-amber-400' },
                 { label: 'Abertas', value: (vendas.filter(v => v.status === 'aberta').length), color: 'text-blue-400' },
-                { label: 'Canceladas', value: (vendas.filter(v => v.status === 'cancelada').length), color: 'text-zinc-500' },
+                { label: 'Canceladas', value: (vendas.filter(v => v.status === 'cancelada').length), color: 'text-fg-tertiary' },
                 { label: 'Orçamentos', value: (vendas.filter(v => v.tipo === 'orcamento').length), color: 'text-purple-400' },
               ].map(item => (
-                <div key={item.label} className="flex justify-between text-sm border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0">
-                  <span className="text-zinc-400">{item.label}</span>
+                <div key={item.label} className="flex justify-between text-sm border-b border-border-subtle/50 pb-2 last:border-0 last:pb-0">
+                  <span className="text-fg-secondary">{item.label}</span>
                   <span className={`font-semibold ${item.color}`}>{item.value}</span>
                 </div>
               ))}
@@ -744,7 +747,7 @@ export default function VendasClient() {
 
           <table className="w-full">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border-subtle">
                 <th className="table-header">#</th>
                 <th className="table-header">Produto / Serviço</th>
                 <th className="table-header">Tipo</th>
@@ -757,12 +760,12 @@ export default function VendasClient() {
               {produtos.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center">
-                    <p className="text-sm text-zinc-500">Nenhum produto cadastrado ainda</p>
+                    <p className="text-sm text-fg-tertiary">Nenhum produto cadastrado ainda</p>
                   </td>
                 </tr>
               ) : produtos.slice(0, 5).map((p, i) => (
-                <tr key={p.id} className="border-b border-zinc-800/50">
-                  <td className="table-cell text-zinc-500">{i+1}</td>
+                <tr key={p.id} className="border-b border-border-subtle/50">
+                  <td className="table-cell text-fg-tertiary">{i+1}</td>
                   <td className="table-cell">{p.nome}</td>
                   <td className="table-cell capitalize">{p.tipo}</td>
                   <td className="table-cell hidden md:table-cell">-</td>
@@ -782,19 +785,19 @@ export default function VendasClient() {
           </div>
 
           <div className="space-y-3 mt-4">
-            {[
-              { nome: 'Carlos Eduardo', valor: 450, data: 'Hoje' },
-              { nome: 'Marcos Lima', valor: 1200, data: 'Ontem' },
-              { nome: 'Ana Paula', valor: 850, data: 'Há 2 dias' },
-            ].map((c, i) => (
-              <div key={i} className="flex justify-between items-center py-2 border-b border-zinc-800/30 last:border-0">
-                <div>
-                  <p className="text-sm text-zinc-200">{c.nome}</p>
-                  <p className="text-[10px] text-zinc-500">Última compra: {c.data}</p>
+            {clientesDB.length === 0 ? (
+              <p className="text-xs text-fg-tertiary">Nenhum cliente cadastrado.</p>
+            ) : (
+              [...clientesDB].sort((a, b) => (b.total_gasto || 0) - (a.total_gasto || 0)).slice(0, 5).map((c) => (
+                <div key={c.id} className="flex justify-between items-center py-2 border-b border-border-subtle/30 last:border-0">
+                  <div>
+                    <p className="text-sm text-fg">{c.nome}</p>
+                    <p className="text-[10px] text-fg-tertiary">{c.total_compras || 0} compras realizadas</p>
+                  </div>
+                  <p className="text-sm font-semibold text-emerald-400">R$ {(c.total_gasto || 0).toFixed(2)}</p>
                 </div>
-                <p className="text-sm font-semibold text-emerald-400">R$ {c.valor.toFixed(2)}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -811,15 +814,15 @@ export default function VendasClient() {
           <h2 className="section-title">Formas de pagamento</h2>
           <div className="space-y-2">
             {[
-              { label: 'PIX', value: 1200 },
-              { label: 'Dinheiro', value: 150 },
-              { label: 'Cartão crédito', value: 850 },
-              { label: 'Cartão débito', value: 450 },
-              { label: 'Fiado', value: 0 },
-            ].map(item => (
-              <div key={item.label} className="flex justify-between text-sm border-b border-zinc-800/50 pb-2 last:border-0 last:pb-0">
-                <span className="text-zinc-400">{item.label}</span>
-                <span className="text-zinc-300 font-medium">R$ {item.value.toFixed(2)}</span>
+              { label: 'PIX', value: vendas.filter(v => v.forma_pagamento === 'pix').reduce((a, v) => a + (v.total || 0), 0) },
+              { label: 'Cartão de Crédito', value: vendas.filter(v => v.forma_pagamento === 'cartao_credito').reduce((a, v) => a + (v.total || 0), 0) },
+              { label: 'Cartão de Débito', value: vendas.filter(v => v.forma_pagamento === 'cartao_debito').reduce((a, v) => a + (v.total || 0), 0) },
+              { label: 'Dinheiro', value: vendas.filter(v => v.forma_pagamento === 'dinheiro').reduce((a, v) => a + (v.total || 0), 0) },
+              { label: 'Fiado', value: vendas.filter(v => v.forma_pagamento === 'fiado').reduce((a, v) => a + (v.total || 0), 0) },
+            ].sort((a,b) => b.value - a.value).map(item => (
+              <div key={item.label} className="flex justify-between text-sm border-b border-border-subtle/50 pb-2 last:border-0 last:pb-0">
+                <span className="text-fg-secondary">{item.label}</span>
+                <span className="text-fg-secondary font-medium">R$ {item.value.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -829,7 +832,7 @@ export default function VendasClient() {
         <div id="catalogo-produtos" className="card lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Catálogo de produtos e serviços</h2>
-            <div className="flex gap-2 text-zinc-100 flex-wrap">
+            <div className="flex gap-2 text-fg flex-wrap">
               <select className="input w-auto text-xs py-1 px-2">
                 <option>Todos</option>
                 <option>Produto</option>
@@ -844,7 +847,7 @@ export default function VendasClient() {
           <div className="overflow-x-auto w-full">
             <table className="w-full min-w-[800px]">
               <thead>
-                <tr className="border-b border-zinc-800">
+                <tr className="border-b border-border-subtle">
                   <th className="table-header">Nome</th>
                   <th className="table-header">Tipo</th>
                   <th className="table-header">Código</th>
@@ -860,7 +863,7 @@ export default function VendasClient() {
                 {produtos.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="py-12 text-center">
-                      <p className="text-sm text-zinc-500">Nenhum produto / serviço cadastrado</p>
+                      <p className="text-sm text-fg-tertiary">Nenhum produto / serviço cadastrado</p>
                       <button onClick={() => setModalProduto(true)} className="btn-primary mt-3 text-xs mx-auto block hover:scale-105 transition-transform shadow-[0_4px_14px_rgba(245,166,35,0.3)]">
                         + Cadastrar primeiro produto
                       </button>
@@ -869,20 +872,20 @@ export default function VendasClient() {
                 ) : produtos.map(p => {
                   const margem = p.preco_venda ? ((p.preco_venda - p.preco_custo) / p.preco_venda) * 100 : 0
                   return (
-                  <tr key={p.id} className="border-b border-zinc-800/50">
-                    <td className="table-cell font-medium text-zinc-200">{p.nome}</td>
-                    <td className="table-cell capitalize text-zinc-500">{p.tipo}</td>
-                    <td className="table-cell font-mono text-zinc-500">{p.codigo || '-'}</td>
+                  <tr key={p.id} className="border-b border-border-subtle/50">
+                    <td className="table-cell font-medium text-fg">{p.nome}</td>
+                    <td className="table-cell capitalize text-fg-tertiary">{p.tipo}</td>
+                    <td className="table-cell font-mono text-fg-tertiary">{p.codigo || '-'}</td>
                     <td className="table-cell">{p.categoria || '-'}</td>
-                    <td className="table-cell text-zinc-400">R$ {p.preco_custo.toFixed(2)}</td>
-                    <td className="table-cell text-zinc-200">R$ {p.preco_venda.toFixed(2)}</td>
+                    <td className="table-cell text-fg-secondary">R$ {p.preco_custo.toFixed(2)}</td>
+                    <td className="table-cell text-fg">R$ {p.preco_venda.toFixed(2)}</td>
                     <td className="table-cell">
                        <span className={margem > 30 ? 'text-emerald-400' : margem > 0 ? 'text-amber-400' : 'text-red-400'}>{margem.toFixed(0)}%</span>
                     </td>
                     <td className="table-cell">
                        {p.controla_estoque ? (
-                         <span className={p.estoque_atual <= p.estoque_minimo ? 'text-red-400 font-bold' : 'text-zinc-300'}>{p.estoque_atual} {p.unidade}</span>
-                       ) : <span className="text-zinc-600">N/A</span>}
+                         <span className={p.estoque_atual <= p.estoque_minimo ? 'text-red-400 font-bold' : 'text-fg-secondary'}>{p.estoque_atual} {p.unidade}</span>
+                       ) : <span className="text-fg-disabled">N/A</span>}
                     </td>
                     <td className="table-cell">
                       {p.ativo ? <span className="text-emerald-400 text-[10px] uppercase font-bold border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 rounded">Ativo</span> : <span className="text-red-400 text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 uppercase font-bold">Inativo</span>}
@@ -924,6 +927,9 @@ function ModalNovoProduto({ onClose, onSave }: { onClose: () => void; onSave?: (
     tipo: 'servico', 
     preco_venda: '', 
     preco_custo: '', 
+    imposto: '',
+    taxa_cartao: '',
+    comissao: '',
     codigo: '', 
     estoque: '0',
     unidade: 'UN',
@@ -931,38 +937,73 @@ function ModalNovoProduto({ onClose, onSave }: { onClose: () => void; onSave?: (
     controla_estoque: false,
   })
 
+  const vendaVal = parseFloat(form.preco_venda.replace(',', '.')) || 0
+  const custoVal = parseFloat(form.preco_custo.replace(',', '.')) || 0
+  const impostoVal = parseFloat(form.imposto.replace(',', '.')) || 0
+  const taxaVal = parseFloat(form.taxa_cartao.replace(',', '.')) || 0
+  const comissaoVal = parseFloat(form.comissao.replace(',', '.')) || 0
+
+  const lucroLiquido = vendaVal - custoVal - impostoVal - taxaVal - comissaoVal
+  const margem = vendaVal > 0 ? (lucroLiquido / vendaVal) * 100 : 0
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
-    const result = await insert({
+    
+    // Tenta salvar com todos os campos detalhados
+    const { error } = await insert({
       nome: form.nome,
       tipo: form.tipo,
       codigo: form.codigo || null,
-      preco_venda: parseFloat(form.preco_venda) || 0,
-      preco_custo: parseFloat(form.preco_custo) || 0,
+      preco_venda: vendaVal,
+      preco_custo: custoVal,
+      imposto: impostoVal,
+      taxa_cartao: taxaVal,
+      comissao: comissaoVal,
       unidade: form.unidade,
       controla_estoque: form.tipo === 'produto',
       estoque_atual: form.tipo === 'produto' ? parseInt(form.estoque) || 0 : 0,
       estoque_minimo: 0,
       ativo: true,
     })
-    if (result.error) { setErro(`Erro: ${result.error}`); return }
+
+    if (error) {
+      // Fallback: se as colunas novas não existirem, salva agrupando tudo no custo
+      const custoTotalAgrupado = custoVal + impostoVal + taxaVal + comissaoVal
+      const { error: fallbackError } = await insert({
+        nome: form.nome,
+        tipo: form.tipo,
+        codigo: form.codigo || null,
+        preco_venda: vendaVal,
+        preco_custo: custoTotalAgrupado, // agrupa todos os custos
+        unidade: form.unidade,
+        controla_estoque: form.tipo === 'produto',
+        estoque_atual: form.tipo === 'produto' ? parseInt(form.estoque) || 0 : 0,
+        estoque_minimo: 0,
+        ativo: true,
+      })
+      if (fallbackError) {
+        setErro(`Erro: ${fallbackError.message || fallbackError}`)
+        return
+      }
+    }
+    
     onSave?.()
     onClose()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-zinc-100">Novo Produto / Serviço</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-lg font-semibold text-fg">Novo Produto / Serviço</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         {erro && <div className="mb-3 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">⚠️ {erro}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="label">Nome *</label>
+              <label className="label">Nome do Produto / Serviço *</label>
               <input required autoFocus className="input mt-1" value={form.nome} onChange={e => setForm({...form, nome: e.target.value})} placeholder="Ex: Transferência de Veículo" />
             </div>
             <div>
@@ -983,26 +1024,58 @@ function ModalNovoProduto({ onClose, onSave }: { onClose: () => void; onSave?: (
                 <option value="HR">Hora (HR)</option>
               </select>
             </div>
-            <div>
-              <label className="label">Código (SKU)</label>
-              <input className="input mt-1" value={form.codigo} onChange={e => setForm({...form, codigo: e.target.value})} placeholder="Ex: TRF-001" />
-            </div>
-            <div>
-              <label className="label">Preço de Venda (R$) *</label>
-              <input required type="number" min="0" step="0.01" className="input mt-1 border-emerald-500/30" value={form.preco_venda} onChange={e => setForm({...form, preco_venda: e.target.value})} placeholder="0,00" />
-            </div>
-            <div className="col-span-2 md:col-span-1">
-              <label className="label">Preço de Custo (R$)</label>
-              <input type="number" min="0" step="0.01" className="input mt-1 border-amber-500/30" value={form.preco_custo} onChange={e => setForm({...form, preco_custo: e.target.value})} placeholder="0,00" />
-            </div>
-            {form.tipo === 'produto' && (
-              <div className="col-span-2">
-                <label className="label">Estoque Inicial</label>
-                <input required type="number" min="0" className="input mt-1" value={form.estoque} onChange={e => setForm({...form, estoque: e.target.value})} />
+
+            {/* Nova seção de precificação */}
+            <div className="col-span-2 mt-2 pt-4 border-t border-border-subtle">
+              <h3 className="text-sm font-semibold text-fg mb-3">Estrutura de Preço</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                
+                <div className="col-span-2 md:col-span-1">
+                  <label className="label">Valor Geral (Venda) *</label>
+                  <input required type="number" min="0" step="0.01" className="input mt-1 border-emerald-500/30 text-emerald-400 font-medium" value={form.preco_venda} onChange={e => setForm({...form, preco_venda: e.target.value})} placeholder="0.00" />
+                </div>
+                
+                <div>
+                  <label className="label">Custo Base (R$)</label>
+                  <input type="number" min="0" step="0.01" className="input mt-1" value={form.preco_custo} onChange={e => setForm({...form, preco_custo: e.target.value})} placeholder="0.00" />
+                </div>
+
+                <div>
+                  <label className="label">Imposto (R$)</label>
+                  <input type="number" min="0" step="0.01" className="input mt-1" value={form.imposto} onChange={e => setForm({...form, imposto: e.target.value})} placeholder="0.00" />
+                </div>
+
+                <div>
+                  <label className="label">Taxa Maquininha (R$)</label>
+                  <input type="number" min="0" step="0.01" className="input mt-1" value={form.taxa_cartao} onChange={e => setForm({...form, taxa_cartao: e.target.value})} placeholder="0.00" />
+                </div>
+
+                <div>
+                  <label className="label">Comissão (R$)</label>
+                  <input type="number" min="0" step="0.01" className="input mt-1" value={form.comissao} onChange={e => setForm({...form, comissao: e.target.value})} placeholder="0.00" />
+                </div>
+
+                {form.tipo === 'produto' && (
+                  <div>
+                    <label className="label">Estoque Inicial</label>
+                    <input required type="number" min="0" className="input mt-1" value={form.estoque} onChange={e => setForm({...form, estoque: e.target.value})} />
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Resultado do Lucro Líquido */}
+              <div className="mt-4 p-4 bg-black/40 border border-border-subtle rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-fg-tertiary font-bold uppercase tracking-wider block">Lucro Líquido Esperado</span>
+                  <span className="text-xs text-fg-disabled mt-0.5 block">Margem de Lucro: {margem.toFixed(1)}%</span>
+                </div>
+                <span className={`text-2xl font-bold ${lucroLiquido > 0 ? 'text-emerald-400' : lucroLiquido < 0 ? 'text-red-400' : 'text-fg-secondary'}`}>
+                  R$ {lucroLiquido.toFixed(2)}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+          <div className="flex justify-end gap-2 pt-2 border-t border-border-subtle">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary bg-emerald-600 hover:bg-emerald-500 border-emerald-600">
               {loading ? '⏳ Salvando...' : '✓ Cadastrar Item'}
@@ -1016,15 +1089,30 @@ function ModalNovoProduto({ onClose, onSave }: { onClose: () => void; onSave?: (
 
 function ModalNovaOS({ clientes, onClose, onSave }: { clientes: Cliente[]; onClose: () => void; onSave?: () => void }) {
   const { insert, loading } = useSupabaseMutation('vendas')
+  const { data: funcionarios } = useSupabaseQuery<any>('funcionarios')
+  const supabase = createClient()
+
   const [erro, setErro] = useState('')
   const [form, setForm] = useState({
     tipo: 'os',
     total: '',
     cliente_id: '',
+    responsavel_id: '',
     forma_pagamento: 'pix',
     observacoes: '',
     data_abertura: new Date().toISOString().split('T')[0],
   })
+
+  // Preenche o usuário logado automaticamente
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user && funcionarios.length > 0) {
+        // Tenta achar o funcionário logado pelo email ou pega o primeiro se não achar
+        const logado = funcionarios.find((f: any) => f.email === user.email)
+        setForm(prev => ({ ...prev, responsavel_id: logado ? logado.id : funcionarios[0]?.id || '' }))
+      }
+    })
+  }, [funcionarios])
 
   const gerarNumero = () => {
     const ano = new Date().getFullYear()
@@ -1054,6 +1142,7 @@ function ModalNovaOS({ clientes, onClose, onSave }: { clientes: Cliente[]; onClo
       total_recebido: 0,
       total_a_receber: totalVal,
       observacoes: form.observacoes || null,
+      funcionario_id: form.responsavel_id || null, // salva quem está criando
     })
     if (result.error) { setErro(`Erro: ${result.error}`); return }
     onSave?.()
@@ -1062,10 +1151,10 @@ function ModalNovaOS({ clientes, onClose, onSave }: { clientes: Cliente[]; onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-zinc-100">Nova Venda / Ordem de Serviço</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-lg font-semibold text-fg">Nova Venda / Ordem de Serviço</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         {erro && <div className="mb-3 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">⚠️ {erro}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1090,7 +1179,16 @@ function ModalNovaOS({ clientes, onClose, onSave }: { clientes: Cliente[]; onClo
                   <option key={c.id} value={c.id}>{c.nome}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-zinc-600 mt-1">Se o cliente não estiver cadastrado, cadastre primeiro em Clientes.</p>
+              <p className="text-[10px] text-fg-disabled mt-1">Se o cliente não estiver cadastrado, cadastre primeiro em Clientes.</p>
+            </div>
+            <div className="col-span-2">
+              <label className="label">Responsável / Usuário</label>
+              <select className="input mt-1" value={form.responsavel_id} onChange={e => setForm({...form, responsavel_id: e.target.value})}>
+                {funcionarios.map((f: any) => (
+                  <option key={f.id} value={f.id}>{f.nome} {f.cargo ? `(${f.cargo})` : ''}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-fg-disabled mt-1">Já vem preenchido com o seu usuário logado.</p>
             </div>
             <div>
               <label className="label">Valor Total (R$) *</label>
@@ -1112,7 +1210,7 @@ function ModalNovaOS({ clientes, onClose, onSave }: { clientes: Cliente[]; onClo
               <textarea className="input mt-1 resize-none" rows={2} value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} placeholder="Detalhes do serviço, itens incluídos, prazo de entrega..." />
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+          <div className="flex justify-end gap-2 pt-2 border-t border-border-subtle">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary">
               {loading ? '⏳ Criando...' : '✓ Criar Venda / OS'}
@@ -1157,31 +1255,31 @@ function ModalClientes({ clientes, onClose, onSave }: { clientes: Cliente[]; onC
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl p-6 shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-xl p-6 shadow-2xl max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between mb-5 shrink-0">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-zinc-100">👥 Clientes</h2>
+            <h2 className="text-lg font-semibold text-fg">👥 Clientes</h2>
             {modo === 'lista' && (
               <button onClick={() => setModo('novo')} className="btn-primary text-xs h-7 px-3">+ Novo Cliente</button>
             )}
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
 
         {modo === 'lista' ? (
           <div className="overflow-y-auto flex-1">
             {clientes.length === 0 ? (
               <div className="py-12 text-center">
-                <p className="text-zinc-500 text-sm mb-3">Nenhum cliente cadastrado</p>
+                <p className="text-fg-tertiary text-sm mb-3">Nenhum cliente cadastrado</p>
                 <button onClick={() => setModo('novo')} className="btn-primary text-xs">Cadastrar primeiro cliente</button>
               </div>
             ) : (
               <div className="space-y-2">
                 {clientes.map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-3 bg-zinc-800/40 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+                  <div key={c.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl border border-border-subtle hover:border-border-subtle transition-colors">
                     <div>
-                      <p className="text-sm font-medium text-zinc-200">{c.nome}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
+                      <p className="text-sm font-medium text-fg">{c.nome}</p>
+                      <p className="text-xs text-fg-tertiary mt-0.5">
                         {c.tipo === 'pf' ? 'Pessoa Física' : 'Pessoa Jurídica'}
                         {c.telefone && ` · ${c.telefone}`}
                         {c.cidade && ` · ${c.cidade}`}
@@ -1189,7 +1287,7 @@ function ModalClientes({ clientes, onClose, onSave }: { clientes: Cliente[]; onC
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-emerald-400 font-semibold">R$ {(c.total_gasto || 0).toFixed(2)}</p>
-                      <p className="text-[10px] text-zinc-600">{c.total_compras || 0} compra(s)</p>
+                      <p className="text-[10px] text-fg-disabled">{c.total_compras || 0} compra(s)</p>
                     </div>
                   </div>
                 ))}
@@ -1199,8 +1297,8 @@ function ModalClientes({ clientes, onClose, onSave }: { clientes: Cliente[]; onC
         ) : (
           <div className="overflow-y-auto flex-1">
             <div className="flex items-center gap-2 mb-4">
-              <button onClick={() => setModo('lista')} className="text-zinc-500 hover:text-zinc-300 text-sm">← Voltar</button>
-              <h3 className="text-sm font-semibold text-zinc-300">Novo Cliente</h3>
+              <button onClick={() => setModo('lista')} className="text-fg-tertiary hover:text-fg-secondary text-sm">← Voltar</button>
+              <h3 className="text-sm font-semibold text-fg-secondary">Novo Cliente</h3>
             </div>
             {erro && <div className="mb-3 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">⚠️ {erro}</div>}
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -1233,7 +1331,7 @@ function ModalClientes({ clientes, onClose, onSave }: { clientes: Cliente[]; onC
                   <input className="input mt-1" value={form.cidade} onChange={e => setForm({...form, cidade: e.target.value})} placeholder="Ex: São Paulo" />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+              <div className="flex justify-end gap-2 pt-2 border-t border-border-subtle">
                 <button type="button" onClick={() => setModo('lista')} className="btn-secondary">Cancelar</button>
                 <button type="submit" disabled={loading} className="btn-primary">
                   {loading ? '⏳ Salvando...' : '✓ Salvar Cliente'}

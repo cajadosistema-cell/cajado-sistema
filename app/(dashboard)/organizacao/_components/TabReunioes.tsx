@@ -89,12 +89,12 @@ export function TabReunioes({ projetos }: Props) {
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Total registradas', value: reunioes.length, color: 'text-zinc-200' },
+          { label: 'Total registradas', value: reunioes.length, color: 'text-fg' },
           { label: 'Essa semana',       value: semana,          color: 'text-blue-400' },
           { label: 'Com decisões',      value: comDecisoes,     color: 'text-amber-400' },
         ].map(k => (
-          <div key={k.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-            <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-[0.06em] mb-1">{k.label}</p>
+          <div key={k.label} className="bg-page border border-border-subtle rounded-xl p-3">
+            <p className="text-[10px] font-medium text-fg-tertiary uppercase tracking-[0.06em] mb-1">{k.label}</p>
             <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
@@ -114,8 +114,8 @@ export function TabReunioes({ projetos }: Props) {
 
       {/* Formulário */}
       {showForm && (
-        <form onSubmit={handleSalvar} className="bg-zinc-900 border border-zinc-700 rounded-xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-zinc-200">Registrar Reunião</p>
+        <form onSubmit={handleSalvar} className="bg-page border border-border-subtle rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-fg">Registrar Reunião</p>
           <div>
             <label className="label">Título *</label>
             <input className="input mt-1" required value={form.titulo}
@@ -177,7 +177,7 @@ export function TabReunioes({ projetos }: Props) {
 
       {/* Lista de reuniões */}
       {reunioesFiltradas.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
+        <div className="bg-page border border-border-subtle rounded-xl p-8">
           <EmptyState message="Nenhuma reunião registrada" />
         </div>
       ) : (
@@ -187,23 +187,23 @@ export function TabReunioes({ projetos }: Props) {
             const projetoNome = projetos.find(p => p.id === r.projeto_id)?.titulo
             return (
               <div key={r.id}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-all">
+                className="bg-page border border-border-subtle rounded-xl overflow-hidden hover:border-border-subtle transition-all">
                 {/* Header clicável */}
                 <button
                   onClick={() => setExpandida(isAberta ? null : r.id)}
                   className="w-full flex items-center gap-4 p-4 text-left">
-                  <div className="bg-zinc-800 rounded-lg p-2 text-center min-w-[52px]">
-                    <p className="text-[10px] text-zinc-500 uppercase">
+                  <div className="bg-muted rounded-lg p-2 text-center min-w-[52px]">
+                    <p className="text-[10px] text-fg-tertiary uppercase">
                       {new Date(r.data_reuniao + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short' })}
                     </p>
-                    <p className="text-lg font-bold text-zinc-200 leading-tight">
+                    <p className="text-lg font-bold text-fg leading-tight">
                       {new Date(r.data_reuniao + 'T12:00:00').getDate()}
                     </p>
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-zinc-200 truncate">{r.titulo}</p>
+                      <p className="text-sm font-medium text-fg truncate">{r.titulo}</p>
                       {r.decisoes_tomadas && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
                           Decisão
@@ -211,22 +211,22 @@ export function TabReunioes({ projetos }: Props) {
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5">
-                      {r.horario && <span className="text-[10px] text-zinc-500">🕐 {r.horario}</span>}
-                      {r.participantes && <span className="text-[10px] text-zinc-500">👥 {r.participantes}</span>}
-                      {projetoNome && <span className="text-[10px] text-zinc-600">📁 {projetoNome}</span>}
+                      {r.horario && <span className="text-[10px] text-fg-tertiary">🕐 {r.horario}</span>}
+                      {r.participantes && <span className="text-[10px] text-fg-tertiary">👥 {r.participantes}</span>}
+                      {projetoNome && <span className="text-[10px] text-fg-disabled">📁 {projetoNome}</span>}
                     </div>
                   </div>
 
-                  <span className={`text-zinc-500 text-xs transition-transform ${isAberta ? 'rotate-180' : ''}`}>▼</span>
+                  <span className={`text-fg-tertiary text-xs transition-transform ${isAberta ? 'rotate-180' : ''}`}>▼</span>
                 </button>
 
                 {/* Detalhes expandidos */}
                 {isAberta && (
-                  <div className="border-t border-zinc-800 p-4 space-y-3">
+                  <div className="border-t border-border-subtle p-4 space-y-3">
                     {r.pauta && (
                       <div>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Pauta</p>
-                        <p className="text-xs text-zinc-400 leading-relaxed">{r.pauta}</p>
+                        <p className="text-[10px] text-fg-tertiary uppercase tracking-wide mb-1">Pauta</p>
+                        <p className="text-xs text-fg-secondary leading-relaxed">{r.pauta}</p>
                       </div>
                     )}
                     {r.decisoes_tomadas && (

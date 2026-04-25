@@ -98,7 +98,7 @@ export function AppPatraoTabs() {
                       'shadow-md',
                       m.glow,
                     ]
-                  : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 hover:border-zinc-700'
+                  : 'bg-page border-border-subtle text-fg-tertiary hover:text-fg-secondary hover:bg-muted/60 hover:border-border-subtle'
               )}
             >
               <span className={cn('text-base leading-none', isActive ? '' : 'opacity-60')}>

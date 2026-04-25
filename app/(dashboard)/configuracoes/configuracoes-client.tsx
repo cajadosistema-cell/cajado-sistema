@@ -18,25 +18,26 @@ type Funcionario = {
   permissoes: string[]
 }
 
+// ── Módulos disponíveis para permissão de funcionários ────────
+// Espelha exatamente os itens do sidebar.tsx (exceto "Vida & Gestão Pessoal" — exclusivo do admin/CEO)
 const MODULOS_DISPONIVEIS = [
-  { id: 'financeiro',    nome: 'Financeiro (Empresa)' },
-  { id: 'comissoes',    nome: 'Comissões e Parceiros' },
-  { id: 'inbox',        nome: 'Inbox / WhatsApp' },
-  { id: 'cajado',       nome: 'CRM Cajado (Pipeline)' },
-  { id: 'vendas',       nome: 'Vendas e Ordens de Serviço' },
-  { id: 'pos-venda',    nome: 'Pós-venda e Automações' },
-  { id: 'seguranca-wa', nome: 'Anti-Ban WhatsApp' },
-  { id: 'expansao',     nome: 'Expansão e OKRs' },
-  { id: 'inteligencia', nome: 'Inteligência e IA' },
-  { id: 'organizacao',  nome: 'Organização (Projetos)' },
-  { id: 'diario',       nome: 'Diário de Bordo' },
-  { id: 'gestao-pessoal', nome: 'Gestão Pessoal (Equipe)' },
-  { id: 'pf-pessoal',   nome: 'App do Patrão (PF)' },
-  { id: 'patrimonio',   nome: 'Patrimônio Imobiliário' },
-  { id: 'investimentos', nome: 'Investimentos' },
-  { id: 'trader',       nome: 'Day Trader' },
-  { id: 'seguranca-geral', nome: 'Segurança e Logs' },
-  { id: 'configuracoes', nome: 'Configurações do Sistema' },
+  // ── 💰 Financeiro Corporativo ──
+  { id: 'financeiro',    nome: '📊 Painel Geral & Cartões',          grupo: '💰 Financeiro Corporativo' },
+  { id: 'comissoes',     nome: '🤝 Comissões & Parceiros',           grupo: '💰 Financeiro Corporativo' },
+  // ── 🤝 Comercial & WhatsApp ──
+  { id: 'inbox',         nome: '💬 Central Inbox (WhatsApp)',        grupo: '🤝 Comercial & WhatsApp' },
+  { id: 'cajado',        nome: '🔀 Funil de Negociações (CRM)',      grupo: '🤝 Comercial & WhatsApp' },
+  { id: 'vendas',        nome: '📋 Fechamentos & OS',                grupo: '🤝 Comercial & WhatsApp' },
+  { id: 'pos-venda',     nome: '🔁 Automação Pós-venda',             grupo: '🤝 Comercial & WhatsApp' },
+  { id: 'seguranca-wa',  nome: '🛡️ Anti-Ban WhatsApp',              grupo: '🤝 Comercial & WhatsApp' },
+  // ── 🚀 Estratégia Corporativa ──
+  { id: 'comunicacao',   nome: '💬 Chat da Equipe & Voz',            grupo: '🚀 Estratégia Corporativa' },
+  { id: 'inteligencia',  nome: '🧠 Inteligência & IA',               grupo: '🚀 Estratégia Corporativa' },
+  { id: 'organizacao',   nome: '📁 Organização (Tarefas)',            grupo: '🚀 Estratégia Corporativa' },
+  { id: 'diario',        nome: '📓 Diário de Bordo',                 grupo: '🚀 Estratégia Corporativa' },
+  // ── ⚙️ Configurações ──
+  { id: 'configuracoes',   nome: '🏢 Empresa & Permissões',          grupo: '⚙️ Configurações' },
+  { id: 'seguranca-geral', nome: '🔒 Segurança & Logs',              grupo: '⚙️ Configurações' },
 ]
 
 // ── Modal de Cadastro de Funcionário ──────────────────────────
@@ -121,11 +122,11 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto p-6">
+      <div className="bg-surface border border-white/5 rounded-2xl w-full max-w-2xl shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto p-6">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="flex items-center justify-between mb-5 relative z-10">
-          <h2 className="text-xl font-['Syne'] font-bold text-zinc-100">Novo Acesso (Funcionário)</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-2xl leading-none">×</button>
+          <h2 className="text-xl font-['Syne'] font-bold text-fg">Novo Acesso (Funcionário)</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-2xl leading-none">×</button>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
@@ -153,29 +154,35 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
           </div>
 
           <div>
-            <label className="label mb-2 block">Áreas Permitidas (Restrição de Módulos)</label>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-              {MODULOS_DISPONIVEIS.map(mod => (
-                <button
-                  key={mod.id}
-                  type="button"
-                  onClick={() => togglePermissao(mod.id)}
-                  className={cn(
-                    "flex flex-col items-start px-3 py-2 border rounded-lg transition-all text-left",
-                    form.permissoes.includes(mod.id)
-                      ? "bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-[0_0_15px_rgba(245,166,35,0.05)]"
-                      : "bg-[#080b14]/50 border-white/5 text-zinc-400 hover:border-white/10"
-                  )}
-                >
-                  <span className="text-xs font-semibold">{mod.nome}</span>
-                  <span className="text-[9px] mt-0.5 opacity-70">
-                    {form.permissoes.includes(mod.id) ? '✓ Permitido' : 'Bloqueado'}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-zinc-500 mt-2">
-              O sistema ocultará automaticamente barras laterais, relatórios e menus das áreas bloqueadas.
+            <label className="label mb-3 block">Áreas Permitidas <span className="text-fg-tertiary">(marque o que o funcionário pode acessar)</span></label>
+            {/* Agrupa por grupo */}
+            {Array.from(new Set(MODULOS_DISPONIVEIS.map(m => m.grupo))).map(grupo => (
+              <div key={grupo} className="mb-4">
+                <p className="text-[9px] font-bold text-fg-disabled uppercase tracking-[0.12em] mb-2 px-1">{grupo}</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {MODULOS_DISPONIVEIS.filter(m => m.grupo === grupo).map(mod => (
+                    <button
+                      key={mod.id}
+                      type="button"
+                      onClick={() => togglePermissao(mod.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 border rounded-lg transition-all text-left",
+                        form.permissoes.includes(mod.id)
+                          ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                          : "bg-page/50 border-white/5 text-fg-secondary hover:border-white/10"
+                      )}
+                    >
+                      <span className="text-base leading-none shrink-0">
+                        {form.permissoes.includes(mod.id) ? '✅' : '⬜'}
+                      </span>
+                      <span className="text-xs font-semibold leading-tight">{mod.nome}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[10px] text-fg-tertiary mt-1">
+              O sistema ocultará automaticamente as áreas bloqueadas para este usuário.
             </p>
           </div>
 
@@ -254,41 +261,46 @@ function ModalEditarLimites({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto p-6">
+      <div className="bg-surface border border-white/5 rounded-2xl w-full max-w-2xl shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto p-6">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="flex items-center justify-between mb-5 relative z-10">
           <div>
-            <h2 className="text-xl font-['Syne'] font-bold text-zinc-100">Editar Limites</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Controlando as áreas para: <span className="font-semibold text-emerald-400">{funcionario.nome}</span></p>
+            <h2 className="text-xl font-['Syne'] font-bold text-fg">Editar Limites</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">Controlando as áreas para: <span className="font-semibold text-emerald-400">{funcionario.nome}</span></p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-2xl leading-none">×</button>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
           <div>
-            <label className="label mb-2 block">Áreas Permitidas (Restrição de Módulos)</label>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-              {MODULOS_DISPONIVEIS.map(mod => (
-                <button
-                  key={mod.id}
-                  type="button"
-                  onClick={() => togglePermissao(mod.id)}
-                  className={cn(
-                    "flex flex-col items-start px-3 py-2 border rounded-lg transition-all text-left",
-                    permissoesAtuais.includes(mod.id)
-                      ? "bg-amber-500/10 border-amber-500/30 text-amber-500 shadow-[0_0_15px_rgba(245,166,35,0.05)]"
-                      : "bg-[#080b14]/50 border-white/5 text-zinc-400 hover:border-white/10"
-                  )}
-                >
-                  <span className="text-xs font-semibold">{mod.nome}</span>
-                  <span className="text-[9px] mt-0.5 opacity-70">
-                    {permissoesAtuais.includes(mod.id) ? '✓ Permitido' : 'Bloqueado'}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-zinc-500 mt-2">
-              Lembre-se que as atualizações de limite entrarão em vigor no próximo acesso do usuário ou ao atualizar a página.
+            <label className="label mb-3 block">Áreas Permitidas <span className="text-fg-tertiary">(marque o que {funcionario.nome} pode acessar)</span></label>
+            {Array.from(new Set(MODULOS_DISPONIVEIS.map(m => m.grupo))).map(grupo => (
+              <div key={grupo} className="mb-4">
+                <p className="text-[9px] font-bold text-fg-disabled uppercase tracking-[0.12em] mb-2 px-1">{grupo}</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {MODULOS_DISPONIVEIS.filter(m => m.grupo === grupo).map(mod => (
+                    <button
+                      key={mod.id}
+                      type="button"
+                      onClick={() => togglePermissao(mod.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 border rounded-lg transition-all text-left",
+                        permissoesAtuais.includes(mod.id)
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                          : "bg-page/50 border-white/5 text-fg-secondary hover:border-white/10"
+                      )}
+                    >
+                      <span className="text-base leading-none shrink-0">
+                        {permissoesAtuais.includes(mod.id) ? '✅' : '⬜'}
+                      </span>
+                      <span className="text-xs font-semibold leading-tight">{mod.nome}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[10px] text-fg-tertiary mt-1">
+              Atualizações entram em vigor no próximo acesso ou ao recarregar a página.
             </p>
           </div>
 
@@ -463,7 +475,7 @@ export default function ConfiguracoesClient() {
               onClick={() => setActiveTab('empresa')} 
               className={cn(
                 "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
-                activeTab === 'empresa' ? "bg-[#1f2744] text-white" : "text-[#8b98b8] hover:bg-white/5 hover:text-white"
+                activeTab === 'empresa' ? "bg-surface text-white" : "text-fg-secondary hover:bg-white/5 hover:text-fg"
               )}
             >
               🏢 Visão Geral (Empresa)
@@ -472,7 +484,7 @@ export default function ConfiguracoesClient() {
               onClick={() => setActiveTab('funcionarios')} 
               className={cn(
                 "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all flex items-center justify-between",
-                activeTab === 'funcionarios' ? "bg-[#1f2744] text-white" : "text-[#8b98b8] hover:bg-white/5 hover:text-white"
+                activeTab === 'funcionarios' ? "bg-surface text-white" : "text-fg-secondary hover:bg-white/5 hover:text-fg"
               )}
             >
               <span>👥 Equipe e Restrições</span>
@@ -482,7 +494,7 @@ export default function ConfiguracoesClient() {
               onClick={() => setActiveTab('permissoes')} 
               className={cn(
                 "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
-                activeTab === 'permissoes' ? "bg-[#1f2744] text-white" : "text-[#8b98b8] hover:bg-white/5 hover:text-white"
+                activeTab === 'permissoes' ? "bg-surface text-white" : "text-fg-secondary hover:bg-white/5 hover:text-fg"
               )}
             >
               🔐 Permissões (RBAC)
@@ -501,7 +513,7 @@ export default function ConfiguracoesClient() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <div className="md:col-span-2">
                     <label className="label">Símbolo / Marca Oficial</label>
-                    <div className="mt-2 flex items-center gap-4 p-4 border border-white/5 rounded-lg bg-[#080b14]/50">
+                    <div className="mt-2 flex items-center gap-4 p-4 border border-white/5 rounded-lg bg-page/50">
                        <div className="w-16 h-16 shrink-0 bg-gradient-to-br from-[#f5a623] to-[#c07000] rounded-lg flex items-center justify-center text-zinc-950 font-bold text-2xl shadow-lg shadow-amber-500/20 overflow-hidden relative group">
                          {logoPreview ? (
                            <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
@@ -510,8 +522,8 @@ export default function ConfiguracoesClient() {
                          )}
                        </div>
                        <div>
-                         <p className="text-sm font-medium text-zinc-100">Logo principal</p>
-                         <p className="text-[10px] text-zinc-500 mb-2">Recomendado: 500x500px em formato PNG/SVG sem fundo.</p>
+                         <p className="text-sm font-medium text-fg">Logo principal</p>
+                         <p className="text-[10px] text-fg-tertiary mb-2">Recomendado: 500x500px em formato PNG/SVG sem fundo.</p>
                          <input type="file" ref={fileInputRef} className="hidden" accept="image/png, image/jpeg, image/svg+xml" onChange={handleFileUpload} />
                          <button onClick={() => fileInputRef.current?.click()} className="btn-secondary text-xs bg-white/5 border-white/10 hover:bg-white/10">Atualizar imagem</button>
                        </div>
@@ -583,7 +595,7 @@ export default function ConfiguracoesClient() {
                         onBlur={e => handleBuscarCEP(e.target.value)}
                       />
                       {cepLoading && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500 animate-pulse">🔍</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-fg-tertiary animate-pulse">🔍</span>
                       )}
                     </div>
                   </div>
@@ -631,7 +643,7 @@ export default function ConfiguracoesClient() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="section-title mb-0">Contas de Acesso Restrito</h2>
-                  <p className="text-xs text-zinc-500">Gerencie e restrinja as áreas que os membros da sua equipe podem visualizar.</p>
+                  <p className="text-xs text-fg-tertiary">Gerencie e restrinja as áreas que os membros da sua equipe podem visualizar.</p>
                 </div>
                 <button onClick={() => setModalOpen(true)} className="btn-secondary text-xs">+ Adicionar Membro</button>
               </div>
@@ -643,20 +655,20 @@ export default function ConfiguracoesClient() {
               ) : (
                 <div className="space-y-3">
                   {funcionarios.map(func => (
-                    <div key={func.id} className="p-4 rounded-xl border border-white/5 bg-[#080b14]/50 flex items-start justify-between hover:border-white/10 transition-colors">
+                    <div key={func.id} className="p-4 rounded-xl border border-white/5 bg-page/50 flex items-start justify-between hover:border-white/10 transition-colors">
                       <div className="flex gap-4">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center border border-indigo-500/20">
                           <span className="text-indigo-400 font-bold text-sm font-['Syne']">{func.nome.charAt(0)}</span>
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-zinc-100">{func.nome} <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide bg-emerald-500/10 text-emerald-400">Ativo</span></p>
-                          <p className="text-xs text-[#8b98b8] mt-0.5">{func.cargo} · {func.email}</p>
+                          <p className="text-sm font-semibold text-fg">{func.nome} <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide bg-emerald-500/10 text-emerald-400">Ativo</span></p>
+                          <p className="text-xs text-fg-secondary mt-0.5">{func.cargo} · {func.email}</p>
                           
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {func.permissoes && func.permissoes.map((pID: string) => {
                               const moduleMatch = MODULOS_DISPONIVEIS.find(m => m.id === pID)
                               return (
-                                <span key={pID} className="px-2 py-0.5 bg-white/5 border border-white/5 rounded-md text-[10px] font-medium text-zinc-300">
+                                <span key={pID} className="px-2 py-0.5 bg-white/5 border border-white/5 rounded-md text-[10px] font-medium text-fg-secondary">
                                   {moduleMatch?.nome ?? pID}
                                 </span>
                               )

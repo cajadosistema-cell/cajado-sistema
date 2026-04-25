@@ -45,7 +45,7 @@ const CATEGORIA_CONFIG: Record<string, { icon: string; color: string }> = {
 const IMPACTO_STYLE: Record<string, string> = {
   alto:  'text-red-400 bg-red-500/10',
   medio: 'text-amber-400 bg-amber-500/10',
-  baixo: 'text-zinc-400 bg-zinc-800',
+  baixo: 'text-fg-secondary bg-muted',
 }
 
 function ModalAnalise({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
@@ -67,10 +67,10 @@ function ModalAnalise({ onClose, onSave }: { onClose: () => void; onSave: () => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Nova Análise</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-base font-semibold text-fg">Nova Análise</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -157,14 +157,14 @@ Foque em impacto nos negócios, oportunidades ocultas ou ameaças de concorrente
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-purple-500/30 rounded-2xl w-full max-w-lg p-6 shadow-[0_0_40px_rgba(168,85,247,0.15)] relative overflow-hidden">
+      <div className="bg-page border border-purple-500/30 rounded-2xl w-full max-w-lg p-6 shadow-[0_0_40px_rgba(168,85,247,0.15)] relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 to-blue-500"></div>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <span className="text-xl">✨</span>
-            <h2 className="text-base font-semibold text-zinc-100">Gerar Análise com Inteligência Artificial</h2>
+            <h2 className="text-base font-semibold text-fg">Gerar Análise com Inteligência Artificial</h2>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         
         {error && <div className="mb-4 text-xs text-red-400 bg-red-400/10 p-2 rounded border border-red-400/20">{error}</div>}
@@ -221,10 +221,10 @@ function ModalTendencia({ onClose, onSave }: { onClose: () => void; onSave: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Nova Tendência</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-base font-semibold text-fg">Nova Tendência</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -410,7 +410,7 @@ COMO OPERAR:
         </div>
         <div className="metric-card">
           <p className="metric-label">Alto impacto</p>
-          <p className={cn('metric-value', altoImpacto > 0 ? 'text-red-400' : 'text-zinc-100')}>{altoImpacto}</p>
+          <p className={cn('metric-value', altoImpacto > 0 ? 'text-red-400' : 'text-fg')}>{altoImpacto}</p>
         </div>
       </div>
 
@@ -425,12 +425,12 @@ COMO OPERAR:
         </div>
       )}
 
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 mb-4 w-fit">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              tab === t.key ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
             )}>
             {t.label}
           </button>
@@ -451,16 +451,16 @@ COMO OPERAR:
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{cfg.icon}</span>
                       <div>
-                        <p className="text-sm font-semibold text-zinc-100">{a.titulo}</p>
+                        <p className="text-sm font-semibold text-fg">{a.titulo}</p>
                         <span className={cn('text-[10px] font-medium', cfg.color)}>{cfg.label}</span>
                         {a.ia_gerada && <span className="text-[10px] text-purple-400 ml-2">✨ IA</span>}
                       </div>
                     </div>
-                    <span className="text-xs text-zinc-600 shrink-0">{formatRelative(a.created_at)}</span>
+                    <span className="text-xs text-fg-disabled shrink-0">{formatRelative(a.created_at)}</span>
                   </div>
-                  <p className="text-sm text-zinc-400 leading-relaxed">{a.conteudo}</p>
+                  <p className="text-sm text-fg-secondary leading-relaxed">{a.conteudo}</p>
                   {a.fonte && (
-                    <p className="text-[10px] text-zinc-600 mt-2">📎 Fonte: {a.fonte}</p>
+                    <p className="text-[10px] text-fg-disabled mt-2">📎 Fonte: {a.fonte}</p>
                   )}
                 </div>
               )
@@ -478,7 +478,7 @@ COMO OPERAR:
             if (grupo.length === 0) return null
             return (
               <div key={statusGrupo}>
-                <p className="text-xs text-zinc-600 uppercase tracking-widest mb-2 px-1">
+                <p className="text-xs text-fg-disabled uppercase tracking-widest mb-2 px-1">
                   {statusGrupo === 'ativa' ? '🟢 Ativas' : statusGrupo === 'monitorando' ? '🟡 Monitorando' : '⚫ Descartadas'}
                 </p>
                 <div className="space-y-2">
@@ -490,7 +490,7 @@ COMO OPERAR:
                           <div className="flex items-center gap-2">
                             <span className="text-xl">{catCfg.icon}</span>
                             <div>
-                              <p className="text-sm font-semibold text-zinc-100">{t.titulo}</p>
+                              <p className="text-sm font-semibold text-fg">{t.titulo}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className={cn('text-[10px] font-medium capitalize', catCfg.color)}>{t.categoria}</span>
                                 {t.impacto_estimado && (
@@ -513,18 +513,18 @@ COMO OPERAR:
                             {statusGrupo !== 'descartada' && (
                               <button
                                 onClick={() => { updateTendencia(t.id, { status: 'descartada' }); refetchTendencias() }}
-                                className="text-[10px] text-zinc-600 hover:text-zinc-400 px-2 py-1 rounded border border-zinc-800 transition-colors"
+                                className="text-[10px] text-fg-disabled hover:text-fg-secondary px-2 py-1 rounded border border-border-subtle transition-colors"
                               >
                                 Descartar
                               </button>
                             )}
                           </div>
                         </div>
-                        <p className="text-sm text-zinc-400 leading-relaxed">{t.descricao}</p>
+                        <p className="text-sm text-fg-secondary leading-relaxed">{t.descricao}</p>
                         {t.fontes && t.fontes.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {t.fontes.map(f => (
-                              <span key={f} className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded">📎 {f}</span>
+                              <span key={f} className="text-[10px] bg-muted text-fg-tertiary px-1.5 py-0.5 rounded">📎 {f}</span>
                             ))}
                           </div>
                         )}
@@ -544,14 +544,14 @@ COMO OPERAR:
 
       {/* Assistente IA (Chatbot de Treinamento) */}
       {tab === 'assistente' && (
-        <div className="flex flex-col h-[550px] bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl relative">
+        <div className="flex flex-col h-[550px] bg-page border border-border-subtle rounded-2xl overflow-hidden shadow-2xl relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 to-indigo-500 z-10"></div>
-          <div className="bg-zinc-950 px-5 py-4 border-b border-zinc-800 flex items-center justify-between z-10">
+          <div className="bg-sidebar px-5 py-4 border-b border-border-subtle flex items-center justify-between z-10">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-600/20 text-purple-400 rounded-full flex items-center justify-center text-xl shadow-[0_0_15px_rgba(168,85,247,0.3)]">✨</div>
               <div>
-                <h3 className="text-sm font-bold text-zinc-100">Vivi Assistente</h3>
-                <p className="text-[11px] text-zinc-500">I.A. treinada no Manual do Sistema Cajado</p>
+                <h3 className="text-sm font-bold text-fg">Vivi Assistente</h3>
+                <p className="text-[11px] text-fg-tertiary">I.A. treinada no Manual do Sistema Cajado</p>
               </div>
             </div>
           </div>
@@ -563,7 +563,7 @@ COMO OPERAR:
                   "max-w-[85%] rounded-2xl px-5 py-3 text-[14px] leading-relaxed shadow-md",
                   msg.role === 'user' 
                     ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm" 
-                    : "bg-zinc-800 text-zinc-300 border border-zinc-700 rounded-bl-sm"
+                    : "bg-muted text-fg-secondary border border-border-subtle rounded-bl-sm"
                 )}>
                   {msg.role === 'vivi' && <div className="text-[10px] text-purple-400 font-bold mb-1 tracking-wider">VIVI</div>}
                   <div className="whitespace-pre-wrap">{msg.text}</div>
@@ -572,7 +572,7 @@ COMO OPERAR:
             ))}
             {chatLoading && (
               <div className="flex justify-start">
-                <div className="bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-2xl rounded-bl-sm px-5 py-3 text-sm flex gap-1 items-center">
+                <div className="bg-muted text-fg-secondary border border-border-subtle rounded-2xl rounded-bl-sm px-5 py-3 text-sm flex gap-1 items-center">
                   <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce"></span>
                   <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
                   <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></span>
@@ -581,9 +581,9 @@ COMO OPERAR:
             )}
           </div>
           
-          <form onSubmit={handleSendChatMessage} className="p-4 bg-zinc-950 border-t border-zinc-800 flex gap-2">
+          <form onSubmit={handleSendChatMessage} className="p-4 bg-sidebar border-t border-border-subtle flex gap-2">
             <input 
-              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-100 text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 shadow-inner"
+              className="flex-1 bg-page border border-border-subtle rounded-xl px-4 py-3 text-fg text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 shadow-inner"
               placeholder="Pergunte como usar um módulo..."
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}

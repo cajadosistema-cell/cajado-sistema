@@ -36,7 +36,7 @@ export function TabEquityCurve({ operacoes }: { operacoes: any[] }) {
 
   if (chartData.data.length === 0) {
     return (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
+      <div className="bg-page border border-border-subtle rounded-xl p-8 text-center text-fg-tertiary">
         Registre operações finalizadas (com gain ou loss) para visualizar a curva de capital.
       </div>
     )
@@ -47,34 +47,34 @@ export function TabEquityCurve({ operacoes }: { operacoes: any[] }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Resultado Líquido</p>
+        <div className="bg-page border border-border-subtle rounded-xl p-4">
+          <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Resultado Líquido</p>
           <p className={`text-2xl font-bold ${balancoFinal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
             {formatCurrency(balancoFinal)}
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Max Drawdown (Rebaixamento)</p>
+        <div className="bg-page border border-border-subtle rounded-xl p-4">
+          <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Max Drawdown (Rebaixamento)</p>
           <p className="text-2xl font-bold text-red-500">
             {formatCurrency(-chartData.maxDrawdownAbs)}
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Total de Trades</p>
-          <p className="text-2xl font-bold text-zinc-100">
+        <div className="bg-page border border-border-subtle rounded-xl p-4">
+          <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Total de Trades</p>
+          <p className="text-2xl font-bold text-fg">
             {chartData.data.length}
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Recovery Factor</p>
+        <div className="bg-page border border-border-subtle rounded-xl p-4">
+          <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Recovery Factor</p>
           <p className="text-2xl font-bold text-blue-400">
              {chartData.maxDrawdownAbs > 0 ? (balancoFinal > 0 ? (balancoFinal / chartData.maxDrawdownAbs).toFixed(2) : '0.00') : '∞'}
           </p>
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 md:p-6 h-[400px]">
-        <h3 className="text-sm font-bold text-zinc-200 mb-6">Evolução do Capital (Equity Curve)</h3>
+      <div className="bg-page border border-border-subtle rounded-xl p-4 md:p-6 h-[400px]">
+        <h3 className="text-sm font-bold text-fg mb-6">Evolução do Capital (Equity Curve)</h3>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData.data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />

@@ -34,10 +34,10 @@ export function useToast() {
 
 // ── Config ───────────────────────────────────────────────────
 const TOAST_CONFIG: Record<ToastType, { icon: string; bar: string; bg: string; border: string; text: string }> = {
-  success: { icon: '✅', bar: 'bg-emerald-500', bg: 'bg-zinc-900', border: 'border-emerald-500/30', text: 'text-emerald-300' },
-  error:   { icon: '❌', bar: 'bg-red-500',     bg: 'bg-zinc-900', border: 'border-red-500/30',     text: 'text-red-300'     },
-  warning: { icon: '⚠️', bar: 'bg-amber-500',   bg: 'bg-zinc-900', border: 'border-amber-500/30',   text: 'text-amber-300'   },
-  info:    { icon: '💡', bar: 'bg-blue-500',    bg: 'bg-zinc-900', border: 'border-blue-500/30',    text: 'text-blue-300'    },
+  success: { icon: '✅', bar: 'bg-emerald-500', bg: 'bg-page', border: 'border-emerald-500/30', text: 'text-emerald-300' },
+  error:   { icon: '❌', bar: 'bg-red-500',     bg: 'bg-page', border: 'border-red-500/30',     text: 'text-red-300'     },
+  warning: { icon: '⚠️', bar: 'bg-amber-500',   bg: 'bg-page', border: 'border-amber-500/30',   text: 'text-amber-300'   },
+  info:    { icon: '💡', bar: 'bg-blue-500',    bg: 'bg-page', border: 'border-blue-500/30',    text: 'text-blue-300'    },
 }
 
 // ── Confirm Dialog State ─────────────────────────────────────
@@ -94,10 +94,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               {/* colored left bar */}
               <div className={cn('w-1 self-stretch rounded-full shrink-0 -ml-1 mr-1', cfg.bar)} />
               <span className="text-base leading-none mt-0.5 shrink-0">{cfg.icon}</span>
-              <p className="text-sm text-zinc-200 leading-snug flex-1">{t.message}</p>
+              <p className="text-sm text-fg leading-snug flex-1">{t.message}</p>
               <button
                 onClick={() => dismiss(t.id)}
-                className="text-zinc-600 hover:text-zinc-300 transition-colors text-lg leading-none shrink-0 -mt-0.5"
+                className="text-fg-disabled hover:text-fg-secondary transition-colors text-lg leading-none shrink-0 -mt-0.5"
               >
                 ×
               </button>
@@ -109,21 +109,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* ── Confirm Dialog ─────────────────────────────── */}
       {confirmDialog && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+          <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
             {/* top bar */}
             <div className="h-1 bg-amber-500 w-full" />
             <div className="p-6">
               <div className="flex items-start gap-3 mb-5">
                 <span className="text-2xl">⚠️</span>
                 <div>
-                  <p className="text-sm font-semibold text-zinc-100 mb-1">Confirmar ação</p>
-                  <p className="text-sm text-zinc-400 leading-relaxed">{confirmDialog.message}</p>
+                  <p className="text-sm font-semibold text-fg mb-1">Confirmar ação</p>
+                  <p className="text-sm text-fg-secondary leading-relaxed">{confirmDialog.message}</p>
                 </div>
               </div>
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setConfirmDialog(null)}
-                  className="px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+                  className="px-4 py-2 text-sm rounded-lg border border-border-subtle text-fg-secondary hover:text-fg hover:border-zinc-500 transition-colors"
                 >
                   Cancelar
                 </button>

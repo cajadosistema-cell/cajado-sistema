@@ -82,14 +82,14 @@ function StepIndicator({ step }: { step: Step }) {
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-colors ${
               i < idx ? 'bg-amber-500 border-amber-500 text-zinc-950' :
               i === idx ? 'border-amber-500 text-amber-400' :
-              'border-zinc-700 text-zinc-600'
+              'border-border-subtle text-fg-disabled'
             }`}>
               {i < idx ? '✓' : i + 1}
             </div>
-            <span className="text-[10px] text-zinc-500">{s.label}</span>
+            <span className="text-[10px] text-fg-tertiary">{s.label}</span>
           </div>
           {i < steps.length - 1 && (
-            <div className={`w-16 h-0.5 mb-4 mx-1 ${i < idx ? 'bg-amber-500' : 'bg-zinc-800'}`} />
+            <div className={`w-16 h-0.5 mb-4 mx-1 ${i < idx ? 'bg-amber-500' : 'bg-muted'}`} />
           )}
         </div>
       ))}
@@ -223,8 +223,8 @@ function StepWhatsApp({
     return (
       <div className="space-y-6">
         <div className="text-center">
-          <p className="text-sm text-zinc-300 mb-1">Escaneie o QR Code com seu WhatsApp</p>
-          <p className="text-xs text-zinc-500 mb-4">
+          <p className="text-sm text-fg-secondary mb-1">Escaneie o QR Code com seu WhatsApp</p>
+          <p className="text-xs text-fg-tertiary mb-4">
             Abra o WhatsApp → três pontos → Aparelhos conectados → Conectar aparelho
           </p>
           {canal.qrcode ? (
@@ -236,13 +236,13 @@ function StepWhatsApp({
               />
             </div>
           ) : (
-            <div className="w-48 h-48 bg-zinc-800 rounded-xl flex items-center justify-center mx-auto">
-              <p className="text-xs text-zinc-500">QR Code indisponível</p>
+            <div className="w-48 h-48 bg-muted rounded-xl flex items-center justify-center mx-auto">
+              <p className="text-xs text-fg-tertiary">QR Code indisponível</p>
             </div>
           )}
         </div>
         {verificando && (
-          <p className="text-xs text-zinc-500 text-center animate-pulse">
+          <p className="text-xs text-fg-tertiary text-center animate-pulse">
             Aguardando conexão...
           </p>
         )}
@@ -266,7 +266,7 @@ function StepWhatsApp({
           onChange={e => setNomeCanal(e.target.value)}
           placeholder="Ex: WhatsApp Comercial"
         />
-        <p className="text-xs text-zinc-600 mt-1">
+        <p className="text-xs text-fg-disabled mt-1">
           Você poderá adicionar mais números depois
         </p>
       </div>
@@ -376,7 +376,7 @@ function StepBot({ token, onNext }: { token: string; onNext: () => void }) {
               value={form.descricao}
               onChange={e => set('descricao', e.target.value)}
             />
-            <p className="text-xs text-zinc-600 mt-1">
+            <p className="text-xs text-fg-disabled mt-1">
               Quanto mais detalhar, mais personalizado será o bot
             </p>
           </div>
@@ -391,7 +391,7 @@ function StepBot({ token, onNext }: { token: string; onNext: () => void }) {
                   className={`text-xs px-3 py-2 rounded-lg border transition-colors text-left ${
                     form.tom === tom
                       ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                      : 'border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                      : 'border-border-subtle text-fg-secondary hover:border-zinc-600'
                   }`}
                 >
                   {tom}
@@ -441,8 +441,8 @@ function StepPronto() {
         <span className="text-4xl">🎉</span>
       </div>
       <div>
-        <h2 className="text-xl font-bold text-zinc-100 mb-2">Tudo configurado!</h2>
-        <p className="text-sm text-zinc-400">
+        <h2 className="text-xl font-bold text-fg mb-2">Tudo configurado!</h2>
+        <p className="text-sm text-fg-secondary">
           Seu WhatsApp está conectado e o bot está pronto para atender.
         </p>
       </div>
@@ -456,10 +456,10 @@ function StepPronto() {
           <a
             key={item.href}
             href={item.href}
-            className="card-sm flex items-center gap-3 hover:bg-zinc-800 transition-colors border border-zinc-800 p-4 rounded-lg"
+            className="card-sm flex items-center gap-3 hover:bg-muted transition-colors border border-border-subtle p-4 rounded-lg"
           >
             <span className="text-xl">{item.icon}</span>
-            <span className="text-sm text-zinc-300">{item.label}</span>
+            <span className="text-sm text-fg-secondary">{item.label}</span>
           </a>
         ))}
       </div>
@@ -480,8 +480,8 @@ export default function OnboardingClient() {
         <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center mx-auto mb-4">
           <span className="text-zinc-950 font-bold text-xl">C</span>
         </div>
-        <h1 className="text-xl font-bold text-zinc-100">Configurar nova empresa</h1>
-        <p className="text-sm text-zinc-500 mt-1">Configure tudo em menos de 5 minutos</p>
+        <h1 className="text-xl font-bold text-fg">Configurar nova empresa</h1>
+        <p className="text-sm text-fg-tertiary mt-1">Configure tudo em menos de 5 minutos</p>
       </div>
 
       <StepIndicator step={step} />

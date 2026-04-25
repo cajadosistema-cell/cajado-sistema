@@ -71,10 +71,10 @@ function ModalAtivo({ onClose, onSave }: { onClose: () => void; onSave: () => vo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Adicionar Ativo</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-base font-semibold text-fg">Adicionar Ativo</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -147,7 +147,7 @@ function ModalAtivo({ onClose, onSave }: { onClose: () => void; onSave: () => vo
             <input type="range" min="1" max="5" value={form.risco_nivel}
               onChange={e => setForm(f => ({ ...f, risco_nivel: e.target.value }))}
               className="w-full mt-1 accent-amber-500 cursor-pointer" />
-            <div className="flex justify-between text-[10px] text-zinc-600 mt-0.5">
+            <div className="flex justify-between text-[10px] text-fg-disabled mt-0.5">
               <span>Muito Baixo</span><span>Médio</span><span>Muito Alto</span>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function InvestimentosClient() {
         <div className="metric-card">
           <p className="metric-label">Total investido</p>
           <p className="metric-value">{formatCurrency(totalInvestido)}</p>
-          <p className="text-[11px] text-zinc-600 mt-1">{ativos.length} ativo(s)</p>
+          <p className="text-[11px] text-fg-disabled mt-1">{ativos.length} ativo(s)</p>
         </div>
         <div className="metric-card">
           <p className="metric-label">Valor atual</p>
@@ -226,7 +226,7 @@ export default function InvestimentosClient() {
       {/* Distribuição por tipo */}
       {Object.keys(porTipo).length > 0 && (
         <div className="card mb-4">
-          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-3">Distribuição da carteira</p>
+          <p className="text-xs text-fg-tertiary uppercase tracking-wide mb-3">Distribuição da carteira</p>
           <div className="space-y-2">
             {Object.entries(porTipo)
               .sort((a, b) => b[1].investido - a[1].investido)
@@ -238,18 +238,18 @@ export default function InvestimentosClient() {
                     <div className="flex justify-between text-xs mb-1">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full" style={{ background: TIPO_COLORS[tipo] }} />
-                        <span className="text-zinc-400 uppercase font-medium">{tipo}</span>
-                        <span className="text-zinc-600">({val.count})</span>
+                        <span className="text-fg-secondary uppercase font-medium">{tipo}</span>
+                        <span className="text-fg-disabled">({val.count})</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={cn('font-medium text-xs', rent >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                           {rent >= 0 ? '+' : ''}{rent.toFixed(1)}%
                         </span>
-                        <span className="text-zinc-500">{pct.toFixed(1)}%</span>
-                        <span className="text-zinc-300 font-medium w-28 text-right">{formatCurrency(val.investido)}</span>
+                        <span className="text-fg-tertiary">{pct.toFixed(1)}%</span>
+                        <span className="text-fg-secondary font-medium w-28 text-right">{formatCurrency(val.investido)}</span>
                       </div>
                     </div>
-                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all duration-700"
                         style={{ width: `${pct}%`, background: TIPO_COLORS[tipo] }} />
                     </div>
@@ -267,7 +267,7 @@ export default function InvestimentosClient() {
             className={cn('shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all uppercase',
               filtroTipo === t
                 ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
-                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 bg-zinc-900'
+                : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary bg-page'
             )}>
             {t}
           </button>
@@ -281,7 +281,7 @@ export default function InvestimentosClient() {
         <div className="card p-0 overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border-subtle">
                 <th className="table-header">Ativo</th>
                 <th className="table-header hidden md:table-cell">Tipo</th>
                 <th className="table-header hidden lg:table-cell">Quantidade</th>
@@ -304,19 +304,19 @@ export default function InvestimentosClient() {
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full shrink-0" style={{ background: TIPO_COLORS[a.tipo] }} />
                         <div>
-                          <p className="text-zinc-200 font-semibold text-sm">{a.ticker ?? a.nome}</p>
-                          <p className="text-[10px] text-zinc-600">{a.corretora ?? a.nome}</p>
+                          <p className="text-fg font-semibold text-sm">{a.ticker ?? a.nome}</p>
+                          <p className="text-[10px] text-fg-disabled">{a.corretora ?? a.nome}</p>
                         </div>
                       </div>
                     </td>
                     <td className="table-cell hidden md:table-cell">
-                      <span className="text-[10px] text-zinc-500 uppercase">{a.tipo}</span>
+                      <span className="text-[10px] text-fg-tertiary uppercase">{a.tipo}</span>
                     </td>
-                    <td className="table-cell hidden lg:table-cell text-zinc-400 text-xs">
+                    <td className="table-cell hidden lg:table-cell text-fg-secondary text-xs">
                       {a.quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
                     </td>
-                    <td className="table-cell text-right text-zinc-300 text-sm">{formatCurrency(a.valor_investido)}</td>
-                    <td className="table-cell text-right hidden md:table-cell text-zinc-300 text-sm">
+                    <td className="table-cell text-right text-fg-secondary text-sm">{formatCurrency(a.valor_investido)}</td>
+                    <td className="table-cell text-right hidden md:table-cell text-fg-secondary text-sm">
                       {formatCurrency(atual)}
                     </td>
                     <td className="table-cell text-right">
@@ -336,7 +336,7 @@ export default function InvestimentosClient() {
                     </td>
                     <td className="table-cell hidden lg:table-cell">
                       <div>
-                        <span className="text-xs text-zinc-500 capitalize">{a.liquidez.replace('_', ' ')}</span>
+                        <span className="text-xs text-fg-tertiary capitalize">{a.liquidez.replace('_', ' ')}</span>
                         {vencendo && a.data_vencimento && (
                           <p className="text-[10px] text-amber-400">⚠ {formatDate(a.data_vencimento)}</p>
                         )}

@@ -38,7 +38,7 @@ function CardColaborador({ colab, tarefas, ocorrencias }: {
     : 'text-red-400 bg-red-500/10'
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors">
+    <div className="bg-page border border-border-subtle rounded-2xl p-5 hover:border-border-subtle transition-colors">
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -50,8 +50,8 @@ function CardColaborador({ colab, tarefas, ocorrencias }: {
             </div>
           )}
           <div>
-            <p className="text-sm font-semibold text-zinc-200">{colab.nome}</p>
-            <p className="text-xs text-zinc-500">{colab.cargo ?? colab.setor ?? 'Colaborador'}</p>
+            <p className="text-sm font-semibold text-fg">{colab.nome}</p>
+            <p className="text-xs text-fg-tertiary">{colab.cargo ?? colab.setor ?? 'Colaborador'}</p>
           </div>
         </div>
         <div className={`text-xs font-bold px-2.5 py-1 rounded-lg ${scoreColor}`}>
@@ -67,10 +67,10 @@ function CardColaborador({ colab, tarefas, ocorrencias }: {
           { label: 'Acertos',          value: meusAcertos,       sub: 'registrados' },
           { label: 'Erros',            value: meuErros,          sub: 'registrados' },
         ].map(k => (
-          <div key={k.label} className="bg-zinc-800/50 rounded-lg p-2.5">
-            <p className="text-[10px] text-zinc-500">{k.label}</p>
-            <p className="text-base font-bold text-zinc-200">{k.value}</p>
-            <p className="text-[10px] text-zinc-600">{k.sub}</p>
+          <div key={k.label} className="bg-muted/50 rounded-lg p-2.5">
+            <p className="text-[10px] text-fg-tertiary">{k.label}</p>
+            <p className="text-base font-bold text-fg">{k.value}</p>
+            <p className="text-[10px] text-fg-disabled">{k.sub}</p>
           </div>
         ))}
       </div>
@@ -78,12 +78,12 @@ function CardColaborador({ colab, tarefas, ocorrencias }: {
       {/* Barra de taxa acerto */}
       <div>
         <div className="flex justify-between text-xs mb-1">
-          <span className="text-zinc-500">Taxa de acerto</span>
+          <span className="text-fg-tertiary">Taxa de acerto</span>
           <span className={taxaAcerto >= 80 ? 'text-emerald-400' : taxaAcerto >= 60 ? 'text-amber-400' : 'text-red-400'}>
             {taxaAcerto}%
           </span>
         </div>
-        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all ${
               taxaAcerto >= 80 ? 'bg-emerald-500' : taxaAcerto >= 60 ? 'bg-amber-500' : 'bg-red-500'
@@ -99,10 +99,10 @@ function CardColaborador({ colab, tarefas, ocorrencias }: {
 export function TabEquipe({ colaboradores, tarefas, ocorrencias }: Props) {
   if (colaboradores.length === 0) {
     return (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-16 text-center">
+      <div className="bg-page border border-border-subtle rounded-2xl p-16 text-center">
         <p className="text-3xl mb-3">👥</p>
-        <p className="text-sm text-zinc-500">Nenhum colaborador cadastrado ainda.</p>
-        <p className="text-xs text-zinc-600 mt-1">Os colaboradores são criados automaticamente quando um usuário faz login pela primeira vez.</p>
+        <p className="text-sm text-fg-tertiary">Nenhum colaborador cadastrado ainda.</p>
+        <p className="text-xs text-fg-disabled mt-1">Os colaboradores são criados automaticamente quando um usuário faz login pela primeira vez.</p>
       </div>
     )
   }
@@ -110,8 +110,8 @@ export function TabEquipe({ colaboradores, tarefas, ocorrencias }: Props) {
   return (
     <div className="space-y-5">
       {/* Ranking rápido */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-        <h3 className="text-sm font-semibold text-zinc-300 mb-3">📊 Visão Consolidada da Equipe</h3>
+      <div className="bg-page border border-border-subtle rounded-2xl p-5">
+        <h3 className="text-sm font-semibold text-fg-secondary mb-3">📊 Visão Consolidada da Equipe</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'Total colaboradores', value: colaboradores.filter(c => c.ativo).length },
@@ -119,9 +119,9 @@ export function TabEquipe({ colaboradores, tarefas, ocorrencias }: Props) {
             { label: 'Em andamento', value: tarefas.filter(t => t.status === 'em_andamento').length },
             { label: 'Ocorrências abertas', value: ocorrencias.filter(o => !o.resolvida && o.tipo === 'erro').length },
           ].map(k => (
-            <div key={k.label} className="bg-zinc-800/50 rounded-xl p-3">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{k.label}</p>
-              <p className="text-2xl font-bold text-zinc-200 mt-1">{k.value}</p>
+            <div key={k.label} className="bg-muted/50 rounded-xl p-3">
+              <p className="text-[10px] text-fg-tertiary uppercase tracking-wider">{k.label}</p>
+              <p className="text-2xl font-bold text-fg mt-1">{k.value}</p>
             </div>
           ))}
         </div>

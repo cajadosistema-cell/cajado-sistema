@@ -1,41 +1,76 @@
 {
-  "name": "Cajado Sistema",
+  "name": "Cajado Soluções",
   "short_name": "Cajado",
-  "description": "Sistema integrado de gestão Cajado Soluções",
-  "start_url": "/",
+  "description": "Sistema integrado de gestão Cajado — financeiro, comercial, WhatsApp, comissões e estratégia corporativa.",
+  "start_url": "/inicio",
+  "id": "/",
   "display": "standalone",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#080b14",
+  "theme_color": "#1F4A2E",
   "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "finance", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
+    { "src": "/icons/icon-72.png",           "sizes": "72x72",     "type": "image/png" },
+    { "src": "/icons/icon-96.png",           "sizes": "96x96",     "type": "image/png" },
+    { "src": "/icons/icon-128.png",          "sizes": "128x128",   "type": "image/png" },
+    { "src": "/icons/icon-144.png",          "sizes": "144x144",   "type": "image/png" },
+    { "src": "/icons/icon-152.png",          "sizes": "152x152",   "type": "image/png" },
+    { "src": "/icons/icon-180.png",          "sizes": "180x180",   "type": "image/png" },
+    { "src": "/icons/icon-192.png",          "sizes": "192x192",   "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-384.png",          "sizes": "384x384",   "type": "image/png" },
+    { "src": "/icons/icon-512.png",          "sizes": "512x512",   "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192-maskable.png", "sizes": "192x192",   "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512",   "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/icons/screenshots/screenshot-desktop.png",
+      "sizes": "1280x720",
       "type": "image/png",
-      "purpose": "any maskable"
+      "form_factor": "wide",
+      "label": "Dashboard principal do Cajado"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
+      "src": "/icons/screenshots/screenshot-mobile.png",
+      "sizes": "390x844",
       "type": "image/png",
-      "purpose": "any maskable"
+      "form_factor": "narrow",
+      "label": "Cajado no mobile"
     }
   ],
   "shortcuts": [
     {
-      "name": "Inbox",
+      "name": "Inbox WhatsApp",
       "short_name": "Inbox",
-      "description": "WhatsApp Inbox",
+      "description": "Central de mensagens WhatsApp",
       "url": "/inbox",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/shortcut-inbox.png", "sizes": "96x96", "type": "image/png" }]
     },
     {
-      "name": "CRM",
+      "name": "Financeiro",
+      "short_name": "Financeiro",
+      "description": "Dashboard Financeiro",
+      "url": "/financeiro",
+      "icons": [{ "src": "/icons/shortcut-financeiro.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Vendas",
+      "short_name": "Vendas",
+      "description": "Gestão de Vendas e OS",
+      "url": "/vendas",
+      "icons": [{ "src": "/icons/shortcut-vendas.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "CRM Pipeline",
       "short_name": "CRM",
-      "description": "Gestão de Leads",
+      "description": "Pipeline de Negócios Cajado",
       "url": "/cajado",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/shortcut-crm.png", "sizes": "96x96", "type": "image/png" }]
     }
-  ],
-  "categories": ["business", "productivity"]
+  ]
 }

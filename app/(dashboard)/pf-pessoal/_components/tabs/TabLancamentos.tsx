@@ -47,13 +47,13 @@ export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNova
     <div className="space-y-4">
       {/* Filtros e ações */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+        <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1">
           {(['todos', 'gastos', 'receitas'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFiltro(f)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${
-                filtro === f ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                filtro === f ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
               }`}
             >
               {f === 'todos' ? '📋 Todos' : f === 'gastos' ? '💸 Gastos' : '💰 Receitas'}
@@ -67,18 +67,18 @@ export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNova
       </div>
 
       {/* Lista */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+      <div className="bg-page border border-border-subtle rounded-2xl overflow-hidden">
         {filtrados.length === 0 ? (
           <div className="p-16 text-center">
             <p className="text-3xl mb-3">📋</p>
-            <p className="text-sm text-zinc-500">Nenhum lançamento encontrado.</p>
+            <p className="text-sm text-fg-tertiary">Nenhum lançamento encontrado.</p>
             <div className="flex gap-2 justify-center mt-4">
               <button onClick={onNovoGasto} className="btn-secondary text-xs">+ Registrar gasto</button>
               <button onClick={onNovaReceita} className="btn-primary text-xs">+ Registrar receita</button>
             </div>
           </div>
         ) : (
-          <div className="divide-y divide-zinc-800/50">
+          <div className="divide-y divide-border-subtle/50">
             {filtrados.map(item => {
               const isGasto = item._tipo === 'gasto'
               const catInfo = isGasto
@@ -86,7 +86,7 @@ export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNova
                 : CATEGORIAS_RECEITA[item.categoria]
 
               return (
-                <div key={item.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-zinc-800/20 transition-colors group">
+                <div key={item.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/20 transition-colors group">
                   {/* Ícone categoria */}
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${
                     isGasto ? 'bg-red-500/10' : 'bg-emerald-500/10'
@@ -96,8 +96,8 @@ export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNova
 
                   {/* Descrição + categoria */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-200 truncate">{item.descricao}</p>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-sm font-medium text-fg truncate">{item.descricao}</p>
+                    <p className="text-xs text-fg-tertiary">
                       {catInfo?.label ?? item.categoria} · {formatData(item.data)}
                       {item.recorrente && ' · 🔄 Recorrente'}
                     </p>

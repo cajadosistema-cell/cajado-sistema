@@ -37,9 +37,9 @@ const gatilhoLabels: Record<string, string> = {
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   na_fila:  { label: '⏳ Na fila',   color: 'text-blue-400 bg-blue-500/10' },
-  agendado: { label: '📅 Agendado',  color: 'text-zinc-400 bg-zinc-800' },
-  enviado:  { label: '✓ Enviado',    color: 'text-zinc-400 bg-zinc-800' },
-  entregue: { label: '✓✓ Entregue', color: 'text-zinc-300 bg-zinc-700' },
+  agendado: { label: '📅 Agendado',  color: 'text-fg-secondary bg-muted' },
+  enviado:  { label: '✓ Enviado',    color: 'text-fg-secondary bg-muted' },
+  entregue: { label: '✓✓ Entregue', color: 'text-fg-secondary bg-surface-hover' },
   lido:     { label: '✓✓ Lido',     color: 'text-blue-400 bg-blue-500/10' },
   falhou:   { label: '❌ Falhou',    color: 'text-red-400 bg-red-500/10' },
 }
@@ -72,10 +72,10 @@ function ModalNovoTemplate({ onClose, onSave }: { onClose: () => void; onSave: (
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-xl p-6 shadow-2xl">
+      <div className="bg-surface border border-white/5 rounded-2xl w-full max-w-xl p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-zinc-100">📨 Novo Template de Mensagem</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-lg font-bold text-fg">📨 Novo Template de Mensagem</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         {erro && <div className="mb-3 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">⚠️ {erro}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -95,7 +95,7 @@ function ModalNovoTemplate({ onClose, onSave }: { onClose: () => void; onSave: (
           </div>
           <div>
             <label className="label">Mensagem *</label>
-            <p className="text-[10px] text-zinc-600 mb-1">Variáveis: {'{{nome_cliente}}'}, {'{{servico}}'}, {'{{empresa}}'}</p>
+            <p className="text-[10px] text-fg-disabled mb-1">Variáveis: {'{{nome_cliente}}'}, {'{{servico}}'}, {'{{empresa}}'}</p>
             <textarea
               className="input mt-1 resize-none"
               rows={5}
@@ -104,11 +104,11 @@ function ModalNovoTemplate({ onClose, onSave }: { onClose: () => void; onSave: (
               onChange={e => setForm(f => ({...f, mensagem: e.target.value}))}
               placeholder={`Ex: Olá {{nome_cliente}}! Obrigado por escolher a {{empresa}}. Foi um prazer realizar o {{servico}} para você! 😊`}
             />
-            <div className="text-right text-[10px] text-zinc-600 mt-1">{form.mensagem.length} caracteres</div>
+            <div className="text-right text-[10px] text-fg-disabled mt-1">{form.mensagem.length} caracteres</div>
           </div>
           <div className="flex items-center gap-2">
             <input type="checkbox" id="ativo-tmpl" className="w-4 h-4 accent-emerald-500" checked={form.ativo} onChange={e => setForm(f => ({...f, ativo: e.target.checked}))} />
-            <label htmlFor="ativo-tmpl" className="text-sm text-zinc-400 cursor-pointer">Ativar template imediatamente</label>
+            <label htmlFor="ativo-tmpl" className="text-sm text-fg-secondary cursor-pointer">Ativar template imediatamente</label>
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
@@ -148,10 +148,10 @@ function ModalDispararManual({ onClose, onSave }: { onClose: () => void; onSave:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="bg-surface border border-white/5 rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-zinc-100">📤 Disparo Manual</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-lg font-bold text-fg">📤 Disparo Manual</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         {erro && <div className="mb-3 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">⚠️ {erro}</div>}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -228,14 +228,14 @@ export default function PosVendaClient() {
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Na fila / Agendados',  value: pending,        color: pending > 0 ? 'text-amber-400' : 'text-zinc-400' },
+          { label: 'Na fila / Agendados',  value: pending,        color: pending > 0 ? 'text-amber-400' : 'text-fg-secondary' },
           { label: 'Enviados este mês',    value: enviadosMes,    color: 'text-emerald-400' },
           { label: 'Templates ativos',     value: templatesAtivos, color: 'text-teal-400' },
-          { label: 'Falhas',               value: falharam,       color: falharam > 0 ? 'text-red-400' : 'text-zinc-400' },
+          { label: 'Falhas',               value: falharam,       color: falharam > 0 ? 'text-red-400' : 'text-fg-secondary' },
         ].map(k => (
-          <div key={k.label} className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden">
+          <div key={k.label} className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(20,184,166,0.06),transparent_70%)]" />
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">{k.label}</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">{k.label}</p>
             <p className={`text-[22px] font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
@@ -254,18 +254,18 @@ export default function PosVendaClient() {
           ) : (
             <div className="space-y-3">
               {templates.map(t => (
-                <div key={t.id} className="flex items-start justify-between py-2 border-b border-zinc-800/50 last:border-0">
+                <div key={t.id} className="flex items-start justify-between py-2 border-b border-border-subtle/50 last:border-0">
                   <div className="flex-1 min-w-0 mr-3">
-                    <p className="text-sm font-medium text-zinc-300 truncate">{t.nome}</p>
-                    <p className="text-xs text-zinc-500">{gatilhoLabels[t.gatilho] || t.gatilho}</p>
-                    <p className="text-[10px] text-zinc-600 mt-1 line-clamp-1">{t.mensagem}</p>
+                    <p className="text-sm font-medium text-fg-secondary truncate">{t.nome}</p>
+                    <p className="text-xs text-fg-tertiary">{gatilhoLabels[t.gatilho] || t.gatilho}</p>
+                    <p className="text-[10px] text-fg-disabled mt-1 line-clamp-1">{t.mensagem}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => toggleTemplate(t)}
                       className={cn(
                         'px-2 py-0.5 rounded-full text-[10px] font-medium border border-current transition-colors',
-                        t.ativo ? 'text-emerald-400 hover:text-red-400' : 'text-zinc-500 hover:text-emerald-400'
+                        t.ativo ? 'text-emerald-400 hover:text-red-400' : 'text-fg-tertiary hover:text-emerald-400'
                       )}
                     >
                       {t.ativo ? 'Ativo' : 'Inativo'}
@@ -296,9 +296,9 @@ export default function PosVendaClient() {
               {disparos.filter(d => ['na_fila','agendado'].includes(d.status)).slice(0, 5).map(d => {
                 const sc = statusConfig[d.status] || statusConfig.na_fila
                 return (
-                  <div key={d.id} className="flex items-center justify-between p-3 bg-zinc-800/30 rounded-lg border border-zinc-800/50">
+                  <div key={d.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border-subtle/50">
                     <div>
-                      <p className="text-sm font-medium text-zinc-200">{d.cliente_nome}</p>
+                      <p className="text-sm font-medium text-fg">{d.cliente_nome}</p>
                       <p className="text-xs text-teal-400/80 mt-0.5">
                         {(d.template as any)?.nome || 'Manual'}
                       </p>
@@ -308,7 +308,7 @@ export default function PosVendaClient() {
                         {sc.label}
                       </span>
                       {d.agendado_para && (
-                        <p className="text-xs text-zinc-500">{new Date(d.agendado_para).toLocaleString('pt-BR')}</p>
+                        <p className="text-xs text-fg-tertiary">{new Date(d.agendado_para).toLocaleString('pt-BR')}</p>
                       )}
                     </div>
                   </div>
@@ -327,7 +327,7 @@ export default function PosVendaClient() {
         ) : (
           <table className="w-full">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border-subtle">
                 <th className="table-header">Cliente</th>
                 <th className="table-header">Template</th>
                 <th className="table-header">Data</th>
@@ -341,12 +341,12 @@ export default function PosVendaClient() {
                 .map(d => {
                   const sc = statusConfig[d.status] || statusConfig.enviado
                   return (
-                    <tr key={d.id} className="border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/20 transition-colors">
-                      <td className="py-3 px-2 text-sm text-zinc-200">{d.cliente_nome}</td>
+                    <tr key={d.id} className="border-b border-border-subtle/50 last:border-0 hover:bg-muted/20 transition-colors">
+                      <td className="py-3 px-2 text-sm text-fg">{d.cliente_nome}</td>
                       <td className="py-3 px-2 text-xs text-teal-400/80">
                         {(d.template as any)?.nome || 'Manual'}
                       </td>
-                      <td className="py-3 px-2 text-xs text-zinc-500">
+                      <td className="py-3 px-2 text-xs text-fg-tertiary">
                         {d.enviado_em ? formatRelative(d.enviado_em) : formatRelative(d.created_at)}
                       </td>
                       <td className="py-3 px-2 text-xs">

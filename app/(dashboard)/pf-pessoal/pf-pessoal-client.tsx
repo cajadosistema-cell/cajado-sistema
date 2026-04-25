@@ -13,11 +13,12 @@ import { TabLancamentos } from './_components/tabs/TabLancamentos'
 import { TabOrcamentos }  from './_components/tabs/TabOrcamentos'
 import { TabPrevisao }    from './_components/tabs/TabPrevisao'
 import { TabAgenda }      from './_components/tabs/TabAgenda'
+import { TabIdeias }      from './_components/tabs/TabIdeias'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda' | 'ideias'
 
 const TABS = [
   { id: 'resumo'       as TabId, label: 'Resumo',      emoji: '📊' },
@@ -25,6 +26,7 @@ const TABS = [
   { id: 'orcamentos'   as TabId, label: 'Orçamentos',  emoji: '🎯' },
   { id: 'previsao'     as TabId, label: 'Previsão',    emoji: '🔮' },
   { id: 'agenda'       as TabId, label: 'Agenda',       emoji: '📅' },
+  { id: 'ideias'       as TabId, label: 'Ideias',       emoji: '💡' },
 ]
 
 export default function PfPessoalClient() {
@@ -90,22 +92,22 @@ export default function PfPessoalClient() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
         
-        <p className="text-[10px] md:text-xs font-semibold text-[#8b98b8] tracking-[0.1em] uppercase mb-1 relative z-10">Patrimônio Líquido</p>
+        <p className="text-[10px] md:text-xs font-semibold text-fg-secondary tracking-[0.1em] uppercase mb-1 relative z-10">Patrimônio Líquido</p>
         <p className="text-3xl md:text-5xl font-extrabold tracking-tight text-white mb-4 md:mb-6 relative z-10">
           {formatCurrency(netWorthTotal)}
         </p>
 
         <div className="grid grid-cols-3 gap-2 md:gap-4 relative z-10">
           <div>
-            <p className="text-[9px] md:text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Caixa</p>
+            <p className="text-[9px] md:text-[10px] text-fg-tertiary uppercase tracking-widest mb-0.5">Caixa</p>
             <p className="text-sm md:text-lg font-bold text-amber-400">{formatCurrency(saldo)}</p>
           </div>
           <div>
-            <p className="text-[9px] md:text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Investido</p>
+            <p className="text-[9px] md:text-[10px] text-fg-tertiary uppercase tracking-widest mb-0.5">Investido</p>
             <p className="text-sm md:text-lg font-bold text-blue-400">{formatCurrency(netWorthAtivos)}</p>
           </div>
           <div>
-            <p className="text-[9px] md:text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Bens</p>
+            <p className="text-[9px] md:text-[10px] text-fg-tertiary uppercase tracking-widest mb-0.5">Bens</p>
             <p className="text-sm md:text-lg font-bold text-indigo-400">{formatCurrency(netWorthFisico)}</p>
           </div>
         </div>
@@ -120,13 +122,13 @@ export default function PfPessoalClient() {
           {
             label: 'Lançamentos',
             value: gastosMes.length + receitasMes.length,
-            color: 'text-zinc-200',
+            color: 'text-fg',
             grad: 'rgba(139,92,246,0.08)',
           },
         ].map(k => (
-          <div key={k.label} className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden">
+          <div key={k.label} className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden">
             <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse at 80% 20%,${k.grad},transparent 70%)` }} />
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">{k.label}</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">{k.label}</p>
             <p className={`text-[22px] font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
@@ -141,7 +143,7 @@ export default function PfPessoalClient() {
             className={`shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
               tab === t.id
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-sm'
-                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700 bg-zinc-900'
+                : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary hover:border-border-subtle bg-page'
             }`}
           >
             {t.emoji} {t.label}
@@ -187,28 +189,25 @@ export default function PfPessoalClient() {
         <TabAgenda userId={authUserId} />
       )}
 
+      {tab === 'ideias' && (
+        <TabIdeias userId={authUserId} />
+      )}
+
       {/* Secretária Flutuante do Patrão */}
       <SecretariaFlutuante />
 
       {/* Modais */}
-      {modalGasto && userId && (
+      {modalGasto && (
         <ModalNovoGasto
-          userId={userId}
-          onSave={refetchGastos}
+          userId={authUserId}
+          onSave={() => { refetchGastos(); setModalGasto(false) }}
           onClose={() => setModalGasto(false)}
         />
       )}
-      {modalGasto && !userId && (
-        /* Usuário ainda sem ID — toast simples */
-        <div className="fixed bottom-4 right-4 bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl z-50">
-          Faça um lançamento de receita primeiro para inicializar seu perfil.
-          <button onClick={() => setModalGasto(false)} className="ml-3 text-amber-400 hover:text-amber-200">✕</button>
-        </div>
-      )}
       {modalReceita && (
         <ModalNovaReceita
-          userId={userId || 'temp'}
-          onSave={refetchReceitas}
+          userId={authUserId}
+          onSave={() => { refetchReceitas(); setModalReceita(false) }}
           onClose={() => setModalReceita(false)}
         />
       )}

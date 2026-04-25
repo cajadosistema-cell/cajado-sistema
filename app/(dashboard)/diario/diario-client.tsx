@@ -18,7 +18,7 @@ type EntradaDiario = {
 }
 
 const categoriaConfig: Record<string, { label: string; color: string }> = {
-  geral:          { label: 'Geral',            color: 'text-zinc-400 border-zinc-700' },
+  geral:          { label: 'Geral',            color: 'text-fg-secondary border-border-subtle' },
   decisao:        { label: 'Decisão',          color: 'text-purple-400 border-purple-700' },
   aprendizado:    { label: 'Aprendizado',      color: 'text-blue-400 border-blue-700' },
   patrimonio:     { label: 'Patrimônio',       color: 'text-amber-400 border-amber-700' },
@@ -35,7 +35,7 @@ const categoriaConfig: Record<string, { label: string; color: string }> = {
 const humorConfig: Record<string, { label: string; color: string; emoji: string }> = {
   otimo:   { label: 'Ótimo',   color: 'text-emerald-400', emoji: '😄' },
   bom:     { label: 'Bom',     color: 'text-green-400',   emoji: '🙂' },
-  neutro:  { label: 'Neutro',  color: 'text-zinc-400',    emoji: '😐' },
+  neutro:  { label: 'Neutro',  color: 'text-fg-secondary',    emoji: '😐' },
   ruim:    { label: 'Ruim',    color: 'text-amber-400',   emoji: '😕' },
   critico: { label: 'Crítico', color: 'text-red-400',     emoji: '😰' },
 }
@@ -78,14 +78,14 @@ function ModalNovaEntrada({ onClose, onSave }: { onClose: () => void; onSave: ()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden">
+      <div className="bg-surface border border-white/5 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
         <div className="flex items-center justify-between mb-5 relative z-10">
           <div className="flex items-center gap-2">
             <span className="text-xl">📓</span>
-            <h2 className="text-lg font-bold text-zinc-100">Nova Entrada</h2>
+            <h2 className="text-lg font-bold text-fg">Nova Entrada</h2>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         {erro && <div className="mb-3 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2 relative z-10">⚠️ {erro}</div>}
         <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
@@ -127,7 +127,7 @@ function ModalNovaEntrada({ onClose, onSave }: { onClose: () => void; onSave: ()
           </div>
           <div className="flex items-center gap-2">
             <input type="checkbox" id="fixada" className="w-4 h-4 accent-amber-500" checked={form.fixada} onChange={e => setForm(f => ({...f, fixada: e.target.checked}))} />
-            <label htmlFor="fixada" className="text-sm text-zinc-400 cursor-pointer">📌 Fixar esta entrada no painel lateral</label>
+            <label htmlFor="fixada" className="text-sm text-fg-secondary cursor-pointer">📌 Fixar esta entrada no painel lateral</label>
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
@@ -180,14 +180,14 @@ export default function DiarioEstrategicoClient() {
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Entradas totais',      value: entradas.length,  color: 'text-zinc-200' },
+          { label: 'Entradas totais',      value: entradas.length,  color: 'text-fg' },
           { label: 'Este mês',             value: totalMes,         color: 'text-amber-400' },
           { label: 'Decisões registradas', value: totalDecisoes,    color: 'text-purple-400' },
           { label: 'Snapshots gerados',    value: totalSnapshots,   color: 'text-blue-400' },
         ].map(k => (
-          <div key={k.label} className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden">
+          <div key={k.label} className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(245,166,35,0.06),transparent_70%)]" />
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">{k.label}</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">{k.label}</p>
             <p className={`text-[22px] font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
@@ -219,8 +219,8 @@ export default function DiarioEstrategicoClient() {
             <div className="flex-1 flex items-center justify-center">
               {entradas.length === 0 ? (
                 <div className="text-center">
-                  <p className="text-zinc-500 text-sm mb-3">Seu diário estratégico está vazio.</p>
-                  <p className="text-zinc-600 text-xs mb-4">Registre decisões, aprendizados e marcos do seu negócio.</p>
+                  <p className="text-fg-tertiary text-sm mb-3">Seu diário estratégico está vazio.</p>
+                  <p className="text-fg-disabled text-xs mb-4">Registre decisões, aprendizados e marcos do seu negócio.</p>
                   <button onClick={() => setModalAberto(true)} className="btn-primary text-xs">Criar primeira entrada</button>
                 </div>
               ) : (
@@ -235,7 +235,7 @@ export default function DiarioEstrategicoClient() {
                 const h = item.humor ? humorConfig[item.humor] : null
                 return (
                   <div key={item.id} className={cn(
-                    'p-4 border-l-2 bg-zinc-800/20 rounded-r-xl hover:bg-zinc-800/40 transition-colors group',
+                    'p-4 border-l-2 bg-muted/20 rounded-r-xl hover:bg-muted/40 transition-colors group',
                     tipo.borderColor
                   )}>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -245,12 +245,12 @@ export default function DiarioEstrategicoClient() {
                       </span>
                       {h && <span className="text-xs">{h.emoji} <span className={cn('text-[10px]', h.color)}>{h.label}</span></span>}
                       {item.fixada && <span className="text-amber-400 text-xs">📌</span>}
-                      <span className="text-[10px] text-zinc-600 ml-auto font-mono">{formatRelative(item.created_at)}</span>
+                      <span className="text-[10px] text-fg-disabled ml-auto font-mono">{formatRelative(item.created_at)}</span>
                     </div>
                     {item.titulo && (
-                      <h3 className="text-sm font-bold text-zinc-100 mb-1">{item.titulo}</h3>
+                      <h3 className="text-sm font-bold text-fg mb-1">{item.titulo}</h3>
                     )}
-                    <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap">{item.texto}</p>
+                    <p className="text-xs text-fg-secondary leading-relaxed whitespace-pre-wrap">{item.texto}</p>
                   </div>
                 )
               })}
@@ -265,17 +265,17 @@ export default function DiarioEstrategicoClient() {
           <div className="card">
             <h2 className="section-title">📌 Fixadas</h2>
             {fixadas.length === 0 ? (
-              <p className="text-xs text-zinc-600">Nenhuma entrada fixada. Ao criar uma entrada, marque "Fixar" para ela aparecer aqui.</p>
+              <p className="text-xs text-fg-disabled">Nenhuma entrada fixada. Ao criar uma entrada, marque "Fixar" para ela aparecer aqui.</p>
             ) : (
               <div className="space-y-3">
                 {fixadas.slice(0, 3).map(f => {
                   const cat = categoriaConfig[f.categoria] || categoriaConfig.geral
                   return (
-                    <div key={f.id} className="border-b border-zinc-800/50 pb-2 last:border-0">
+                    <div key={f.id} className="border-b border-border-subtle/50 pb-2 last:border-0">
                       <p className={cn('text-xs font-medium mb-1', cat.color.split(' ')[0])}>
                         {f.titulo || categoriaConfig[f.categoria]?.label || 'Sem título'}
                       </p>
-                      <p className="text-xs text-zinc-500 line-clamp-2">{f.texto}</p>
+                      <p className="text-xs text-fg-tertiary line-clamp-2">{f.texto}</p>
                     </div>
                   )
                 })}
@@ -287,7 +287,7 @@ export default function DiarioEstrategicoClient() {
           <div className="card">
             <h2 className="section-title">Por categoria</h2>
             {Object.keys(catCounts).length === 0 ? (
-              <p className="text-xs text-zinc-600">Sem entradas ainda.</p>
+              <p className="text-xs text-fg-disabled">Sem entradas ainda.</p>
             ) : (
               <div className="space-y-2">
                 {Object.entries(catCounts)
@@ -296,11 +296,11 @@ export default function DiarioEstrategicoClient() {
                   .map(([k, v]) => {
                     const cfg = categoriaConfig[k] || categoriaConfig.geral
                     return (
-                      <div key={k} className="flex items-center justify-between text-sm py-1 border-b border-zinc-800/50 last:border-0">
+                      <div key={k} className="flex items-center justify-between text-sm py-1 border-b border-border-subtle/50 last:border-0">
                         <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium border', cfg.color)}>
                           {cfg.label}
                         </span>
-                        <span className="text-zinc-500 text-xs font-mono">{v}</span>
+                        <span className="text-fg-tertiary text-xs font-mono">{v}</span>
                       </div>
                     )
                   })}
@@ -316,7 +316,7 @@ export default function DiarioEstrategicoClient() {
                 <button
                   key={k}
                   onClick={() => setModalAberto(true)}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/70 transition-all text-xs text-zinc-400 flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 rounded-lg bg-muted/40 border border-border-subtle hover:border-border-subtle hover:bg-muted/70 transition-all text-xs text-fg-secondary flex items-center gap-2"
                 >
                   <span>{v.icon}</span>
                   <span>Registrar {v.label}</span>

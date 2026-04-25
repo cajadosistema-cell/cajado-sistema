@@ -38,11 +38,11 @@ export function BottomNav() {
           onClick={() => setShowMore(false)}
         >
           <div
-            className="absolute bottom-[65px] left-0 right-0 bg-[#0a0d16] border-t border-zinc-800 rounded-t-2xl p-4"
+            className="absolute bottom-[65px] left-0 right-0 bg-[#0a0d16] border-t border-border-subtle rounded-t-2xl p-4"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto mb-4" />
-            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold mb-3">Mais módulos</p>
+            <div className="w-10 h-1 bg-surface-hover rounded-full mx-auto mb-4" />
+            <p className="text-[10px] text-fg-disabled uppercase tracking-widest font-bold mb-3">Mais módulos</p>
             <div className="grid grid-cols-4 gap-2">
               {moreItems.map(item => {
                 const isActive = pathname.startsWith(item.href)
@@ -55,7 +55,7 @@ export function BottomNav() {
                       'flex flex-col items-center justify-center p-3 rounded-xl gap-1 transition-all',
                       isActive
                         ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-transparent'
+                        : 'text-fg-secondary hover:text-fg hover:bg-muted border border-transparent'
                     )}
                   >
                     <span className="text-xl">{item.icon}</span>
@@ -69,7 +69,7 @@ export function BottomNav() {
       )}
 
       {/* ── Bottom Nav Bar ─────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0a0d16]/95 backdrop-blur-md border-t border-zinc-800 pb-safe">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0a0d16]/95 backdrop-blur-md border-t border-border-subtle pb-safe">
         <div className="flex items-center justify-around px-1 py-2">
           {mainItems.map(item => {
             const isActive = pathname.startsWith(item.href)
@@ -79,7 +79,7 @@ export function BottomNav() {
                 href={item.href}
                 className={cn(
                   'relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
-                  isActive ? `${item.activeColor} scale-105` : 'text-zinc-500 hover:text-zinc-300'
+                  isActive ? `${item.activeColor} scale-105` : 'text-fg-tertiary hover:text-fg-secondary'
                 )}
               >
                 <span className="text-lg mb-0.5">{item.icon}</span>
@@ -96,7 +96,7 @@ export function BottomNav() {
             onClick={() => setShowMore(prev => !prev)}
             className={cn(
               'relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
-              showMore ? 'text-amber-400 scale-105' : 'text-zinc-500 hover:text-zinc-300'
+              showMore ? 'text-amber-400 scale-105' : 'text-fg-tertiary hover:text-fg-secondary'
             )}
           >
             <span className="text-lg mb-0.5">⋯</span>

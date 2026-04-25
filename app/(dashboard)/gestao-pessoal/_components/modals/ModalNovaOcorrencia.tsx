@@ -48,10 +48,10 @@ export function ModalNovaOcorrencia({ colaboradores, onSave, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Registrar Ocorrência</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <h2 className="text-base font-semibold text-fg">Registrar Ocorrência</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -69,11 +69,11 @@ export function ModalNovaOcorrencia({ colaboradores, onSave, onClose }: Props) {
                       : t.value === 'acerto' ? 'border-emerald-500/60 bg-emerald-500/5'
                       : t.value === 'alerta' ? 'border-amber-500/60 bg-amber-500/5'
                       : 'border-purple-500/60 bg-purple-500/5'
-                      : 'border-zinc-700 bg-zinc-800/30 hover:border-zinc-600'
+                      : 'border-border-subtle bg-muted/30 hover:border-zinc-600'
                   }`}
                 >
-                  <p className="text-sm font-medium text-zinc-200">{t.label}</p>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">{t.desc}</p>
+                  <p className="text-sm font-medium text-fg">{t.label}</p>
+                  <p className="text-[10px] text-fg-tertiary mt-0.5">{t.desc}</p>
                 </button>
               ))}
             </div>

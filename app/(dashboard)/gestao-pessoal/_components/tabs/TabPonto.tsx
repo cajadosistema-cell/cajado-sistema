@@ -75,19 +75,19 @@ export function TabPonto({ registros, userId, onPonto }: Props) {
   return (
     <div className="space-y-6">
       {/* Status atual */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+      <div className="bg-page border border-border-subtle rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Status Hoje</p>
+            <p className="text-xs text-fg-tertiary uppercase tracking-wider mb-1">Status Hoje</p>
             <div className="flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${emServico ? 'bg-emerald-400 animate-pulse' : emPausa ? 'bg-amber-400' : 'bg-zinc-600'}`} />
-              <p className="text-lg font-bold text-zinc-100">
+              <p className="text-lg font-bold text-fg">
                 {emServico ? 'Em serviço' : emPausa ? 'Em pausa' : 'Fora do expediente'}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-xs text-zinc-500">Horas trabalhadas</p>
+            <p className="text-xs text-fg-tertiary">Horas trabalhadas</p>
             <p className="text-2xl font-bold text-amber-400 font-mono">{calcHorasTrabalhadas(registros)}</p>
           </div>
         </div>
@@ -103,13 +103,13 @@ export function TabPonto({ registros, userId, onPonto }: Props) {
       </div>
 
       {/* Timeline do dia */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Timeline de Hoje</h3>
+      <div className="bg-page border border-border-subtle rounded-2xl p-5">
+        <h3 className="text-sm font-semibold text-fg-secondary mb-4">Timeline de Hoje</h3>
         {registrosHoje.length === 0 ? (
-          <p className="text-sm text-zinc-600 text-center py-8">Nenhum registro hoje. Bata o ponto para começar.</p>
+          <p className="text-sm text-fg-disabled text-center py-8">Nenhum registro hoje. Bata o ponto para começar.</p>
         ) : (
           <div className="relative pl-5">
-            <div className="absolute left-0 top-0 bottom-0 w-px bg-zinc-800" />
+            <div className="absolute left-0 top-0 bottom-0 w-px bg-muted" />
             <div className="space-y-3">
               {registrosHoje.map((r, i) => (
                 <div key={r.id} className="relative flex items-start gap-3">
@@ -119,8 +119,8 @@ export function TabPonto({ registros, userId, onPonto }: Props) {
                     : 'bg-amber-400'
                   }`} />
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">{TIPO_PONTO_LABEL[r.tipo]}</p>
-                    <p className="text-xs text-zinc-500">{formatHora(r.timestamp)}</p>
+                    <p className="text-sm font-medium text-fg">{TIPO_PONTO_LABEL[r.tipo]}</p>
+                    <p className="text-xs text-fg-tertiary">{formatHora(r.timestamp)}</p>
                   </div>
                 </div>
               ))}
@@ -131,22 +131,22 @@ export function TabPonto({ registros, userId, onPonto }: Props) {
 
       {/* Histórico recente */}
       {registros.filter(r => !r.timestamp.startsWith(hoje)).length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-          <h3 className="text-sm font-semibold text-zinc-300 mb-4">Histórico Recente</h3>
+        <div className="bg-page border border-border-subtle rounded-2xl p-5">
+          <h3 className="text-sm font-semibold text-fg-secondary mb-4">Histórico Recente</h3>
           <div className="space-y-2">
             {registros
               .filter(r => !r.timestamp.startsWith(hoje))
               .slice(0, 10)
               .map(r => (
-                <div key={r.id} className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0">
+                <div key={r.id} className="flex items-center justify-between py-2 border-b border-border-subtle/50 last:border-0">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${
                       r.tipo === 'entrada' || r.tipo === 'pausa_fim' ? 'bg-emerald-400'
                       : r.tipo === 'saida' ? 'bg-red-400' : 'bg-amber-400'
                     }`} />
-                    <span className="text-sm text-zinc-300">{TIPO_PONTO_LABEL[r.tipo]}</span>
+                    <span className="text-sm text-fg-secondary">{TIPO_PONTO_LABEL[r.tipo]}</span>
                   </div>
-                  <span className="text-xs text-zinc-500">{formatData(r.timestamp)} — {formatHora(r.timestamp)}</span>
+                  <span className="text-xs text-fg-tertiary">{formatData(r.timestamp)} — {formatHora(r.timestamp)}</span>
                 </div>
               ))}
           </div>

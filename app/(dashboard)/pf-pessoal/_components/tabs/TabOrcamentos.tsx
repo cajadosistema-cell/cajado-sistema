@@ -44,8 +44,8 @@ export function TabOrcamentos({ gastos, orcamentos, onUpdate }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-300 mb-1">Orçamentos de {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
-        <p className="text-xs text-zinc-500">Defina limites por categoria e acompanhe se está dentro do planejado.</p>
+        <h3 className="text-sm font-semibold text-fg-secondary mb-1">Orçamentos de {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+        <p className="text-xs text-fg-tertiary">Defina limites por categoria e acompanhe se está dentro do planejado.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -58,24 +58,24 @@ export function TabOrcamentos({ gastos, orcamentos, onUpdate }: Props) {
           const isAlerta = limite > 0 && pct > 70
 
           return (
-            <div key={cat} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div key={cat} className="bg-page border border-border-subtle rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{info.icon}</span>
-                  <span className="text-sm font-medium text-zinc-200">{info.label}</span>
+                  <span className="text-sm font-medium text-fg">{info.label}</span>
                 </div>
                 <div className="text-right">
-                  <p className={`text-sm font-bold ${gasto > 0 ? 'text-zinc-200' : 'text-zinc-600'}`}>
+                  <p className={`text-sm font-bold ${gasto > 0 ? 'text-fg' : 'text-fg-disabled'}`}>
                     {formatCurrency(gasto)}
                   </p>
                   {limite > 0 && (
-                    <p className="text-xs text-zinc-500">de {formatCurrency(limite)}</p>
+                    <p className="text-xs text-fg-tertiary">de {formatCurrency(limite)}</p>
                   )}
                 </div>
               </div>
 
               {/* Barra de progresso */}
-              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden mb-3">
+              <div className="h-2 bg-muted rounded-full overflow-hidden mb-3">
                 {limite > 0 ? (
                   <div
                     className={`h-full rounded-full transition-all ${
@@ -84,7 +84,7 @@ export function TabOrcamentos({ gastos, orcamentos, onUpdate }: Props) {
                     style={{ width: `${pct}%` }}
                   />
                 ) : (
-                  <div className="h-full w-full bg-zinc-700/30 rounded-full" />
+                  <div className="h-full w-full bg-surface-hover/30 rounded-full" />
                 )}
               </div>
 
@@ -112,7 +112,7 @@ export function TabOrcamentos({ gastos, orcamentos, onUpdate }: Props) {
               ) : (
                 <button
                   onClick={() => { setEditando(cat); setNovoLimite(limite ? String(limite) : '') }}
-                  className="text-xs text-zinc-500 hover:text-amber-400 transition-colors"
+                  className="text-xs text-fg-tertiary hover:text-amber-400 transition-colors"
                 >
                   {limite > 0 ? '✏️ Editar limite' : '+ Definir limite'}
                 </button>

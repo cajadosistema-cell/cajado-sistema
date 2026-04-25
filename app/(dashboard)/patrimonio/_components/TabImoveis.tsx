@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
   alugado:    { label: 'Alugado',     color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   disponivel: { label: 'Disponível',  color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
   em_reforma: { label: 'Em Reforma',  color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-  vendido:    { label: 'Vendido',     color: 'text-zinc-400 bg-zinc-800 border-zinc-700' },
+  vendido:    { label: 'Vendido',     color: 'text-fg-secondary bg-muted border-border-subtle' },
 }
 
 export function TabImoveis() {
@@ -65,14 +65,14 @@ export function TabImoveis() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-sm font-semibold text-zinc-200">🏠 Carteira de Imóveis</h2>
+        <h2 className="text-sm font-semibold text-fg">🏠 Carteira de Imóveis</h2>
         <button onClick={() => setShowForm(s => !s)} className="btn-primary text-xs">
           {showForm ? '✕ Cancelar' : '+ Cadastrar Imóvel'}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSalvar} className="bg-zinc-900 border border-zinc-700 rounded-xl p-4 space-y-3">
+        <form onSubmit={handleSalvar} className="bg-page border border-border-subtle rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Título / Apelido *</label>
@@ -120,37 +120,37 @@ export function TabImoveis() {
       )}
 
       {imoveis.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8"><EmptyState message="Nenhum imóvel detalhado cadastrado" /></div>
+        <div className="bg-page border border-border-subtle rounded-xl p-8"><EmptyState message="Nenhum imóvel detalhado cadastrado" /></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {imoveis.map(i => (
-            <div key={i.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors">
+            <div key={i.id} className="bg-page border border-border-subtle rounded-xl p-5 hover:border-border-subtle transition-colors">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <h3 className="text-sm font-bold text-zinc-100">{i.titulo}</h3>
-                  <p className="text-xs text-zinc-500 capitalize">{i.tipo_imovel}</p>
+                  <h3 className="text-sm font-bold text-fg">{i.titulo}</h3>
+                  <p className="text-xs text-fg-tertiary capitalize">{i.tipo_imovel}</p>
                 </div>
-                <select className={cn("text-[10px] px-2 py-1 rounded-full border bg-zinc-900 outline-none", STATUS_CONFIG[i.status].color)}
+                <select className={cn("text-[10px] px-2 py-1 rounded-full border bg-page outline-none", STATUS_CONFIG[i.status].color)}
                   value={i.status} onChange={e => mudarStatus(i.id, e.target.value as Imovel['status'])}>
                   {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
               </div>
 
-              {i.endereco && <p className="text-[10px] text-zinc-400 mb-4 line-clamp-1">📍 {i.endereco}</p>}
+              {i.endereco && <p className="text-[10px] text-fg-secondary mb-4 line-clamp-1">📍 {i.endereco}</p>}
 
               <div className="flex gap-4 mb-4">
-                {i.area_m2 && <div className="text-xs text-zinc-500">📏 <span className="text-zinc-300 font-medium">{i.area_m2}m²</span></div>}
-                {i.quartos && <div className="text-xs text-zinc-500">🛏️ <span className="text-zinc-300 font-medium">{i.quartos}</span></div>}
-                {i.vagas && <div className="text-xs text-zinc-500">🚗 <span className="text-zinc-300 font-medium">{i.vagas}</span></div>}
+                {i.area_m2 && <div className="text-xs text-fg-tertiary">📏 <span className="text-fg-secondary font-medium">{i.area_m2}m²</span></div>}
+                {i.quartos && <div className="text-xs text-fg-tertiary">🛏️ <span className="text-fg-secondary font-medium">{i.quartos}</span></div>}
+                {i.vagas && <div className="text-xs text-fg-tertiary">🚗 <span className="text-fg-secondary font-medium">{i.vagas}</span></div>}
               </div>
 
-              <div className="pt-3 border-t border-zinc-800/80 grid grid-cols-2 gap-2">
+              <div className="pt-3 border-t border-border-subtle/80 grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[9px] text-zinc-600 uppercase tracking-widest">Valor de Compra</p>
-                  <p className="text-sm font-semibold text-zinc-300">{i.valor_compra ? formatCurrency(i.valor_compra) : '—'}</p>
+                  <p className="text-[9px] text-fg-disabled uppercase tracking-widest">Valor de Compra</p>
+                  <p className="text-sm font-semibold text-fg-secondary">{i.valor_compra ? formatCurrency(i.valor_compra) : '—'}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-zinc-600 uppercase tracking-widest">Valor de Mercado</p>
+                  <p className="text-[9px] text-fg-disabled uppercase tracking-widest">Valor de Mercado</p>
                   <p className="text-sm font-semibold text-emerald-400">{i.valor_mercado ? formatCurrency(i.valor_mercado) : '—'}</p>
                 </div>
               </div>

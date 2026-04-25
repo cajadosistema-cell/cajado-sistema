@@ -54,13 +54,13 @@ export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-base font-semibold text-zinc-100">Novo Gasto Pessoal</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Categoria detectada automaticamente</p>
+            <h2 className="text-base font-semibold text-fg">Novo Gasto Pessoal</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">Categoria detectada automaticamente</p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -71,7 +71,7 @@ export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
               onChange={e => handleDescricao(e.target.value)} />
             {/* Preview da categoria detectada */}
             {form.descricao && (
-              <p className="text-[10px] text-zinc-500 mt-1">
+              <p className="text-[10px] text-fg-tertiary mt-1">
                 Categoria detectada: {CATEGORIAS_GASTO[form.categoria]?.icon} {CATEGORIAS_GASTO[form.categoria]?.label}
               </p>
             )}
@@ -116,7 +116,7 @@ export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" className="w-4 h-4 rounded" checked={form.recorrente}
               onChange={e => set('recorrente', e.target.checked)} />
-            <span className="text-sm text-zinc-400">Gasto recorrente (mensal)</span>
+            <span className="text-sm text-fg-secondary">Gasto recorrente (mensal)</span>
           </label>
 
           <div className="flex justify-end gap-2 pt-2">

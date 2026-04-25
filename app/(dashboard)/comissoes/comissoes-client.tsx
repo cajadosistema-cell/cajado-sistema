@@ -16,6 +16,17 @@ type Parceiro = {
   meta_mensal: number | null
 }
 
+type ParceiroServico = {
+  id: string
+  parceiro_id: string
+  descricao: string
+  valor_bruto: number
+  porcentagem: number
+  comissao: number
+  data_criacao: string
+}
+
+
 const motivoLabel: Record<string, string> = {
   servico_nao_oferecido: 'Serviço não oferecido',
   deixou_pra_depois:     'Deixou pra depois',
@@ -30,6 +41,8 @@ export default function ComissoesClient() {
   
   const [modalPagamento, setModalPagamento] = useState(false)
   const [modalParceiro, setModalParceiro] = useState(false)
+  const [parceiroSelecionado, setParceiroSelecionado] = useState<Parceiro | null>(null)
+
 
   // Cálculos Básicos
   const parceirosAtivos = parceiros.length
@@ -64,7 +77,7 @@ export default function ComissoesClient() {
           </div>
           <table className="w-full min-w-[500px]">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border-subtle">
                 <th className="table-header">Parceiro</th>
                 <th className="table-header">Contato</th>
                 <th className="table-header">% Recorrente</th>
@@ -74,20 +87,29 @@ export default function ComissoesClient() {
             </thead>
             <tbody>
               {parceiros.length === 0 ? (
-                <tr><td colSpan={5} className="py-8 text-center text-zinc-500 text-sm">Nenhum parceiro cadastrado.</td></tr>
+                <tr><td colSpan={5} className="py-8 text-center text-fg-tertiary text-sm">Nenhum parceiro cadastrado.</td></tr>
               ) : (
                 parceiros.map((p) => (
-                  <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/20 transition-colors">
-                    <td className="py-3 text-sm text-zinc-200 font-medium">{p.nome}</td>
-                    <td className="py-3 text-xs text-zinc-500">{p.telefone}</td>
+                  <tr key={p.id} className="border-b border-border-subtle/50 hover:bg-muted/20 transition-colors group">
+                    <td className="py-3 text-sm text-fg font-medium">{p.nome}</td>
+                    <td className="py-3 text-xs text-fg-tertiary">{p.telefone}</td>
                     <td className="py-3 text-sm">{p.comissao_percentual}%</td>
                     <td className="py-3 text-sm font-semibold">{p.total_convertidas || 0}</td>
-                    <td className="py-3 text-sm font-semibold text-emerald-400">R$ {(p.total_comissao || 0).toFixed(2)}</td>
+                    <td className="py-3 flex items-center justify-between">
+                      <span className="text-sm font-semibold text-emerald-400">R$ {(p.total_comissao || 0).toFixed(2)}</span>
+                      <button 
+                        onClick={() => setParceiroSelecionado(p)}
+                        className="btn-ghost text-xs border border-white/10 hover:border-white/20 transition-all bg-white/5"
+                      >
+                        + Serviços
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+          <p className="text-[10px] text-fg-tertiary mt-2">Dica: Clique em "+ Serviços" para gerenciar as vendas trazidas pelo parceiro e gerar as comissões.</p>
         </div>
 
         {/* Ranking de parceiros */}
@@ -95,14 +117,14 @@ export default function ComissoesClient() {
           <h2 className="section-title">Ranking de parceiros</h2>
           <div className="space-y-1 mt-4">
             {[...parceiros].sort((a,b) => (b.total_convertidas || 0) - (a.total_convertidas || 0)).map((p,i) => (
-              <div key={p.id} className="flex justify-between items-center py-2 border-b border-zinc-800/30 last:border-0 hover:bg-zinc-800/20 rounded px-2 transition-colors">
+              <div key={p.id} className="flex justify-between items-center py-2 border-b border-border-subtle/30 last:border-0 hover:bg-muted/20 rounded px-2 transition-colors">
                 <div>
                   <span className="text-xs text-amber-500 font-bold w-5 inline-block">{i+1}º</span>
-                  <span className="text-sm text-zinc-200">{p.nome}</span>
+                  <span className="text-sm text-fg">{p.nome}</span>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-emerald-400">R$ {(p.total_comissao||0).toLocaleString('pt-BR')}</p>
-                  <p className="text-[10px] text-zinc-500">{p.total_convertidas || 0} conversões</p>
+                  <p className="text-[10px] text-fg-tertiary">{p.total_convertidas || 0} conversões</p>
                 </div>
               </div>
             ))}
@@ -124,12 +146,12 @@ export default function ComissoesClient() {
               const val = mockValues[key] || 0
               return (
                 <div key={key} className="flex items-center justify-between">
-                  <span className="text-sm text-zinc-400">{label}</span>
+                  <span className="text-sm text-fg-secondary">{label}</span>
                   <div className="flex items-center gap-3">
-                    <div className="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                       <div className="h-full bg-red-400 rounded-full" style={{ width: `${val}%` }} />
                     </div>
-                    <span className="text-xs text-zinc-500 w-6 text-right">{val}%</span>
+                    <span className="text-xs text-fg-tertiary w-6 text-right">{val}%</span>
                   </div>
                 </div>
               )
@@ -152,10 +174,10 @@ export default function ComissoesClient() {
               return (
                 <div key={item.label}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-zinc-400">{item.label}</span>
-                    <span className="text-xs text-zinc-500">{item.fechados}/{item.total} · {pct}%</span>
+                    <span className="text-sm text-fg-secondary">{item.label}</span>
+                    <span className="text-xs text-fg-tertiary">{item.fechados}/{item.total} · {pct}%</span>
                   </div>
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full bg-amber-500"
                       style={{ width: `${pct}%` }}
@@ -170,6 +192,13 @@ export default function ComissoesClient() {
 
       {modalParceiro && <ModalParceiro onClose={() => setModalParceiro(false)} onRefresh={refetchParceiros} />}
       {modalPagamento && <ModalPagamento parceiros={parceiros} onClose={() => setModalPagamento(false)} onRefresh={refetchParceiros} />}
+      {parceiroSelecionado && (
+        <ModalGerenciarServicos 
+          parceiro={parceiroSelecionado} 
+          onClose={() => setParceiroSelecionado(null)} 
+          onRefresh={refetchParceiros} 
+        />
+      )}
     </div>
   )
 }
@@ -193,8 +222,8 @@ function ModalParceiro({ onClose, onRefresh }: { onClose: () => void, onRefresh:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-        <h2 className="text-lg font-semibold text-zinc-100 mb-4">Adicionar Parceiro</h2>
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+        <h2 className="text-lg font-semibold text-fg mb-4">Adicionar Parceiro</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="label">Nome da Autoescola / Parceiro</label>
@@ -241,8 +270,8 @@ function ModalPagamento({ parceiros, onClose, onRefresh }: { parceiros: Parceiro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-        <h2 className="text-lg font-semibold text-zinc-100 mb-4">Registrar Pagamento de Comissão</h2>
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+        <h2 className="text-lg font-semibold text-fg mb-4">Registrar Pagamento de Comissão</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="label">Parceiro a receber</label>
@@ -261,7 +290,7 @@ function ModalPagamento({ parceiros, onClose, onRefresh }: { parceiros: Parceiro
               value={valor} 
               onChange={e => setValor(e.target.value)} 
             />
-            <p className="text-[10px] text-zinc-500 mt-1">Este valor será deduzido do acumulado do parceiro.</p>
+            <p className="text-[10px] text-fg-tertiary mt-1">Este valor será deduzido do acumulado do parceiro.</p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
@@ -270,6 +299,171 @@ function ModalPagamento({ parceiros, onClose, onRefresh }: { parceiros: Parceiro
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function ModalGerenciarServicos({ parceiro, onClose, onRefresh }: { parceiro: Parceiro, onClose: () => void, onRefresh: () => void }) {
+  const { data: servicos, refetch } = useSupabaseQuery<ParceiroServico>('parceiro_servicos', {
+    filter: { column: 'parceiro_id', value: parceiro.id }
+  })
+  const { insert: insertServico, loading: loadingServico } = useSupabaseMutation('parceiro_servicos')
+  const { update: updateParceiro } = useSupabaseMutation('parceiros')
+
+  const [form, setForm] = useState({
+    descricao: '',
+    valor_bruto: '',
+    porcentagem: parceiro.comissao_percentual.toString()
+  })
+  const [erro, setErro] = useState('')
+
+  const valorBrutoNum = parseFloat(form.valor_bruto.replace(',', '.')) || 0
+  const porcentagemNum = parseFloat(form.porcentagem.replace(',', '.')) || 0
+  const comissaoCalculada = valorBrutoNum * (porcentagemNum / 100)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    
+    if (valorBrutoNum <= 0 || porcentagemNum <= 0) {
+      setErro('Informe um valor bruto e porcentagem válidos.')
+      return
+    }
+
+    const { error: err1 } = await insertServico({
+      parceiro_id: parceiro.id,
+      descricao: form.descricao,
+      valor_bruto: valorBrutoNum,
+      porcentagem: porcentagemNum,
+      comissao: comissaoCalculada,
+      data_criacao: new Date().toISOString()
+    })
+
+    if (err1) {
+      if (err1.message.includes('does not exist')) {
+        setErro('⚠️ A tabela de serviços não existe no banco. Por favor, execute o SQL de migração no Supabase.')
+      } else {
+        setErro(`Erro: ${err1.message}`)
+      }
+      return
+    }
+
+    // Atualiza o total do parceiro no banco
+    const novoTotalConvertidas = (parceiro.total_convertidas || 0) + 1
+    const novoTotalComissao = (parceiro.total_comissao || 0) + comissaoCalculada
+    
+    await updateParceiro(parceiro.id, {
+      total_convertidas: novoTotalConvertidas,
+      total_comissao: novoTotalComissao
+    })
+
+    setForm({ descricao: '', valor_bruto: '', porcentagem: parceiro.comissao_percentual.toString() })
+    refetch()
+    onRefresh()
+  }
+
+  const valorTotalAcumulado = servicos.reduce((acc, s) => acc + (s.comissao || 0), 0)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle bg-surface/50">
+          <div>
+            <h2 className="text-lg font-semibold text-fg">Serviços e Vendas do Parceiro</h2>
+            <p className="text-sm text-fg-tertiary">Gerenciando: <span className="font-medium text-amber-400">{parceiro.nome}</span></p>
+          </div>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-2xl leading-none">×</button>
+        </div>
+
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-[450px]">
+          {/* Formulário Novo Serviço */}
+          <div className="w-full md:w-[45%] p-5 border-r border-border-subtle bg-surface/30 overflow-y-auto">
+            <h3 className="text-sm font-semibold mb-4 text-fg">Adicionar Novo Serviço</h3>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="label">Descrição do Serviço / Cliente</label>
+                <input required className="input mt-1 text-sm" placeholder="Ex: Indicação do Cliente João"
+                  value={form.descricao} onChange={e => setForm({ ...form, descricao: e.target.value })} />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Valor Bruto (R$)</label>
+                  <input required type="number" step="0.01" className="input mt-1 text-sm" placeholder="Ex: 1500.00"
+                    value={form.valor_bruto} onChange={e => setForm({ ...form, valor_bruto: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Porcentagem (%)</label>
+                  <input required type="number" step="0.01" className="input mt-1 text-sm"
+                    value={form.porcentagem} onChange={e => setForm({ ...form, porcentagem: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="p-4 bg-black/40 border border-border-subtle rounded-xl flex items-center justify-between mt-6">
+                <div>
+                  <span className="text-[10px] text-fg-tertiary font-bold uppercase tracking-wider block">Comissão a Gerar</span>
+                  <span className="text-xs text-fg-disabled mt-0.5 block">{valorBrutoNum > 0 ? `${form.porcentagem}% de R$ ${valorBrutoNum.toFixed(2)}` : 'Calculado automaticamente'}</span>
+                </div>
+                <span className="text-xl font-bold text-emerald-400">R$ {comissaoCalculada.toFixed(2)}</span>
+              </div>
+
+              {erro && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-400 mt-4">
+                  {erro}
+                </div>
+              )}
+
+              <button type="submit" disabled={loadingServico} className="btn-primary w-full mt-4">
+                {loadingServico ? 'Salvando...' : '+ Inserir Serviço'}
+              </button>
+            </form>
+          </div>
+
+          {/* Histórico de Serviços */}
+          <div className="w-full md:w-[55%] flex flex-col overflow-hidden bg-page">
+            <div className="p-5 border-b border-border-subtle flex justify-between items-center bg-surface/50">
+              <h3 className="text-sm font-semibold text-fg flex items-center gap-2">
+                Histórico de Serviços
+                <span className="bg-white/10 text-fg-secondary text-[10px] py-0.5 px-2 rounded-full">{servicos.length}</span>
+              </h3>
+              <div className="text-right">
+                <span className="text-[10px] text-fg-tertiary block mb-0.5">Total Acumulado (Histórico)</span>
+                <span className="text-sm font-bold text-emerald-400">R$ {valorTotalAcumulado.toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar bg-black/20">
+              {servicos.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-4xl mb-3 opacity-30">📂</div>
+                  <h4 className="text-sm font-medium text-fg mb-1">Nenhum serviço registrado</h4>
+                  <p className="text-xs text-fg-tertiary max-w-[200px] mx-auto">Os serviços registrados para este parceiro aparecerão aqui.</p>
+                </div>
+              ) : (
+                servicos.map(s => (
+                  <div key={s.id} className="p-3 rounded-xl border border-white/5 bg-surface hover:bg-white/10 transition-colors">
+                    <p className="text-sm font-medium text-fg mb-2">{s.descricao}</p>
+                    <div className="flex items-end justify-between bg-black/40 p-2.5 rounded-lg border border-white/5">
+                      <div className="text-xs text-fg-tertiary space-y-1.5 w-1/2">
+                        <p className="flex justify-between gap-4"><span>Valor Bruto:</span> <span className="text-fg-secondary font-medium">R$ {(s.valor_bruto||0).toFixed(2)}</span></p>
+                        <p className="flex justify-between gap-4"><span>Porcentagem:</span> <span className="text-amber-400 font-medium">{(s.porcentagem||0)}%</span></p>
+                      </div>
+                      <div className="text-right pl-4 border-l border-white/10">
+                        <span className="text-[9px] uppercase text-fg-tertiary font-bold tracking-wider block mb-1">Comissão Gerada</span>
+                        <span className="text-sm font-bold text-emerald-400">+ R$ {(s.comissao||0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   )

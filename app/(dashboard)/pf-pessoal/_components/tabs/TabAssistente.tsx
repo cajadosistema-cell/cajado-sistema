@@ -16,10 +16,12 @@ interface Mensagem {
 }
 
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'tarefa'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia'
   dados: Record<string, any>
   label: string
   executada?: boolean
+  status?: 'pending' | 'saving' | 'saved' | 'error'
+  errorMsg?: string
 }
 
 // ── System Prompt com suporte a ações estruturadas ───────────
@@ -30,18 +32,19 @@ Suas responsabilidades:
 - Orientar sobre gestão de leads, CRM, vendas e pós-venda
 - Auxiliar com organização pessoal, agenda e diário estratégico
 - Interpretar dados financeiros e dar insights práticos
-- **Registrar gastos, receitas e compromissos quando solicitado**
+- **Registrar gastos, receitas, compromissos e ocorrências da equipe quando solicitado**
 
 AÇÕES ESTRUTURADAS:
-Quando o usuário pedir para registrar um gasto, receita ou evento, inclua ao final da sua resposta um bloco JSON assim:
+Quando o usuário pedir para registrar um gasto, receita, evento ou ocorrência, inclua ao final da sua resposta um bloco JSON:
 
+Para gasto:
 \`\`\`json
-{"acao":"gasto","valor":50.00,"descricao":"Almoço restaurante","categoria":"Alimentação"}
+{"acao":"gasto","valor":50.00,"descricao":"Almoço restaurante","categoria":"alimentacao","forma_pagamento":"pix"}
 \`\`\`
 
 Para receita:
 \`\`\`json
-{"acao":"receita","valor":1500.00,"descricao":"Freelance design","categoria":"Renda Extra"}
+{"acao":"receita","valor":1500.00,"descricao":"Freelance design","categoria":"freelance"}
 \`\`\`
 
 Para agendar:
@@ -49,18 +52,33 @@ Para agendar:
 {"acao":"agenda","titulo":"Reunião com cliente","data_inicio":"2025-04-22T14:00:00","tipo":"reuniao"}
 \`\`\`
 
-Regras:
+Para registrar ocorrência da equipe:
+\`\`\`json
+{"acao":"ocorrencia","tipo":"erro","descricao":"Colaborador chegou atrasado ao plantão","colaborador_nome":"Pedro","impacto":"medio","modulo":"operacional"}
+\`\`\`
+
+CATEGORIAS válidas para gastos: alimentacao, transporte, saude, lazer, educacao, moradia, vestuario, tecnologia, investimento, outros
+CATEGORIAS válidas para receitas: pro_labore, freelance, investimentos, aluguel, vendas, outros
+FORMAS DE PAGAMENTO: pix, cartao_debito, cartao_credito, dinheiro, transferencia
+
+REGRAS PARA OCORRÊNCIAS:
+- Tipos válidos: "erro", "acerto", "alerta", "elogio"
+- Impacto válido: "baixo", "medio", "alto"
+- Módulos: "financeiro", "crm", "inbox", "vendas", "operacional"
+- Se faltar algum dado, PERGUNTE antes de gerar o JSON
+
+Regras gerais:
 - Responda SEMPRE em português brasileiro
 - Use formatação Markdown quando útil
 - Para valores monetários, use formato R$ 1.000,00
 - Seja direto e profissional
-- Quando detectar pedido de registro, SEMPRE inclua o bloco JSON`
+- Só inclua o JSON quando tiver TODOS os dados necessários`
 
 // ── Sugestões rápidas ────────────────────────────────────────
 const SUGESTOES = [
   '💸 Gastei R$ 80 de gasolina',
   '📅 Agendar reunião amanhã 10h',
-  '💡 Como melhorar meu funil de vendas?',
+  '🚨 Abrir ocorrência de erro',
   '💰 Recebi R$ 500 de um freela',
 ]
 
@@ -102,6 +120,14 @@ function extrairAcoes(texto: string): AcaoIA[] {
           dados,
           label: `📅 Agendar: ${dados.titulo} — ${dados.data_inicio ? new Date(dados.data_inicio).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}`,
         })
+      } else if (dados.acao === 'ocorrencia') {
+        const tipoEmoji: Record<string, string> = { erro: '❌', acerto: '✅', alerta: '⚠️', elogio: '⭐' }
+        const impactoLabel: Record<string, string> = { baixo: '🟢 Baixo', medio: '🟡 Médio', alto: '🔴 Alto' }
+        acoes.push({
+          tipo: 'ocorrencia',
+          dados,
+          label: `${tipoEmoji[dados.tipo] || '📋'} Ocorrência ${dados.tipo}: ${dados.descricao?.substring(0, 50)}${dados.descricao?.length > 50 ? '...' : ''} · ${impactoLabel[dados.impacto] || dados.impacto}`,
+        })
       }
     } catch {}
   }
@@ -119,11 +145,12 @@ export function TabAssistente() {
   const { warning, success, error: toastError } = useToast()
   const supabase = createClient()
   const [userId, setUserId] = useState('')
+  const [colaboradores, setColaboradores] = useState<{id: string, nome: string}[]>([])
   const [mensagens, setMensagens] = useState<Mensagem[]>([
     {
       id: '0',
       role: 'ai',
-      texto: 'Olá, chefe! 👋 Sou sua **Assistente Executiva IA**.\n\nPosso **registrar gastos e receitas**, **agendar compromissos** e responder sobre estratégia de negócios.\n\nDita um comando de voz ou escreva algo como:\n- *"Gastei R$ 50 de almoço"*\n- *"Recebi R$ 500 de freela"*\n- *"Agenda reunião amanhã às 14h"*',
+      texto: 'Olá, chefe! 👋 Sou sua **Assistente Executiva IA**.\n\nPosso **registrar gastos, receitas, ocorrências da equipe** e **agendar compromissos**.\n\nExemplos:\n- *"Gastei R$ 50 de almoço"*\n- *"Abrir ocorrência de erro para o Pedro"*\n- *"Agendar reunião amanhã às 14h"*',
     },
   ])
   const [input, setInput] = useState('')
@@ -143,44 +170,92 @@ export function TabAssistente() {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id)
     })
+    // Carregar colaboradores para resolver nome -> ID nas ocorrências
+    supabase.from('funcionarios').select('id, nome').eq('ativo', true).then(({ data }) => {
+      if (data) setColaboradores(data as {id: string, nome: string}[])
+    })
   }, [supabase])
 
-  // ── Executar ação estruturada no Supabase ──────────────────
-  const executarAcao = async (msgId: string, acaoIdx: number) => {
-    const msg = mensagens.find(m => m.id === msgId)
-    const acao = msg?.acoes?.[acaoIdx]
-    if (!acao || acao.executada || !userId) return
+  // ── Helper para atualizar status de uma ação ──────────────
+  const setAcaoStatus = (msgId: string, acaoIdx: number, status: AcaoIA['status'], errorMsg?: string) => {
+    setMensagens(prev => prev.map(m =>
+      m.id === msgId
+        ? { ...m, acoes: m.acoes?.map((a, i) => i === acaoIdx ? { ...a, status, executada: status === 'saved', errorMsg } : a) }
+        : m
+    ))
+  }
 
+  // ── Execução automática (sem clique) ──────────────────────
+  const executarAcaoAuto = async (msgId: string, acaoIdx: number) => {
+    // Busca o estado atual diretamente (sem captura de closure)
+    let uid = userId
+    if (!uid) {
+      const { data } = await supabase.auth.getUser()
+      uid = data.user?.id || ''
+      if (uid) setUserId(uid)
+    }
+    if (!uid) return
+
+    // Precisa buscar a ação do estado atual
+    setMensagens(prev => {
+      const msg = prev.find(m => m.id === msgId)
+      const acao = msg?.acoes?.[acaoIdx]
+      if (!acao || acao.status === 'saving' || acao.status === 'saved') return prev
+      return prev.map(m =>
+        m.id === msgId
+          ? { ...m, acoes: m.acoes?.map((a, i) => i === acaoIdx ? { ...a, status: 'saving' as const } : a) }
+          : m
+      )
+    })
+
+    // Busca a ação do estado (usando ref para evitar closure stale)
+    setMensagens(prev => {
+      const msg = prev.find(m => m.id === msgId)
+      const acao = msg?.acoes?.[acaoIdx]
+      if (!acao || acao.status !== 'saving') return prev
+
+      // Executa a ação assincronamente
+      salvarAcao(msgId, acaoIdx, acao, uid).catch(() => {})
+      return prev
+    })
+  }
+
+  const salvarAcao = async (msgId: string, acaoIdx: number, acao: AcaoIA, uid: string) => {
     try {
       if (acao.tipo === 'gasto') {
         const { error } = await (supabase.from('gastos_pessoais') as any).insert({
-          user_id: userId,
+          user_id: uid,
           descricao: acao.dados.descricao || 'Gasto via IA',
           valor: Number(acao.dados.valor) || 0,
-          categoria: acao.dados.categoria || 'Outros',
+          categoria: acao.dados.categoria || 'outros',
+          forma_pagamento: acao.dados.forma_pagamento || 'pix',
           data: new Date().toISOString().split('T')[0],
           tipo: 'variavel',
           pago: true,
         })
-        if (error) throw error
-        success(`✅ Gasto de R$ ${Number(acao.dados.valor).toFixed(2)} registrado!`)
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        success(`✅ Gasto de R$ ${Number(acao.dados.valor).toFixed(2)} registrado automaticamente!`)
+
       } else if (acao.tipo === 'receita') {
         const { error } = await (supabase.from('receitas_pessoais') as any).insert({
-          user_id: userId,
+          user_id: uid,
           descricao: acao.dados.descricao || 'Receita via IA',
           valor: Number(acao.dados.valor) || 0,
           categoria: acao.dados.categoria || 'Outros',
           data: new Date().toISOString().split('T')[0],
           recorrente: false,
         })
-        if (error) throw error
-        success(`✅ Receita de R$ ${Number(acao.dados.valor).toFixed(2)} registrada!`)
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        success(`✅ Receita de R$ ${Number(acao.dados.valor).toFixed(2)} registrada automaticamente!`)
+
       } else if (acao.tipo === 'agenda') {
         const dataInicio = acao.dados.data_inicio
           ? new Date(acao.dados.data_inicio).toISOString()
           : new Date(Date.now() + 86400000).toISOString()
         const { error } = await (supabase.from('agenda_eventos') as any).insert({
-          user_id: userId,
+          user_id: uid,
           titulo: acao.dados.titulo || 'Evento via IA',
           tipo: acao.dados.tipo || 'compromisso',
           data_inicio: dataInicio,
@@ -189,21 +264,38 @@ export function TabAssistente() {
           cor: '#3b82f6',
           origem: 'ia',
         })
-        if (error) throw error
-        success(`📅 Evento "${acao.dados.titulo}" agendado!`)
-      }
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        success(`📅 "${acao.dados.titulo}" agendado automaticamente!`)
 
-      // Marcar como executada
-      setMensagens(prev => prev.map(m =>
-        m.id === msgId
-          ? {
-              ...m,
-              acoes: m.acoes?.map((a, i) => i === acaoIdx ? { ...a, executada: true } : a)
-            }
-          : m
-      ))
+      } else if (acao.tipo === 'ocorrencia') {
+        let colaboradorId: string | null = null
+        if (acao.dados.colaborador_nome && colaboradores.length > 0) {
+          const nomeBusca = acao.dados.colaborador_nome.toLowerCase()
+          const encontrado = colaboradores.find(c =>
+            c.nome.toLowerCase().includes(nomeBusca) || nomeBusca.includes(c.nome.toLowerCase().split(' ')[0])
+          )
+          colaboradorId = encontrado?.id || null
+        }
+        const tiposValidos = ['erro', 'acerto', 'alerta', 'elogio']
+        const impactosValidos = ['baixo', 'medio', 'alto']
+        const { error } = await (supabase.from('ocorrencias') as any).insert({
+          tipo: tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'alerta',
+          descricao: acao.dados.descricao || 'Ocorrência registrada via IA',
+          colaborador_id: colaboradorId,
+          modulo: acao.dados.modulo || null,
+          impacto: impactosValidos.includes(acao.dados.impacto) ? acao.dados.impacto : 'medio',
+          resolvida: false,
+        })
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        const colaboradorNome = acao.dados.colaborador_nome || ''
+        success(`📋 Ocorrência ${colaboradorNome ? `para ${colaboradorNome}` : ''} registrada automaticamente!`)
+      }
     } catch (err: any) {
-      toastError('Erro ao registrar: ' + (err.message || 'tente novamente'))
+      console.error('[Assistente] Falha ao salvar automaticamente:', err)
+      setAcaoStatus(msgId, acaoIdx, 'error', err.message || 'Erro ao salvar')
+      toastError('Falha ao salvar: ' + (err.message || 'tente novamente'))
     }
   }
 
@@ -265,11 +357,16 @@ export function TabAssistente() {
         )
         if (idx >= resposta.length) {
           clearInterval(interval)
-          // Após animação, adicionar ações
           if (acoes.length > 0) {
+            // Define as ações com status 'pending'
+            const acoesComStatus = acoes.map(a => ({ ...a, status: 'pending' as const }))
             setMensagens(prev =>
-              prev.map(m => m.id === aiMsgId ? { ...m, acoes } : m)
+              prev.map(m => m.id === aiMsgId ? { ...m, acoes: acoesComStatus } : m)
             )
+            // Executa automaticamente após 600ms (tempo para UX visualizar)
+            setTimeout(() => {
+              acoesComStatus.forEach((_, idx) => executarAcaoAuto(aiMsgId, idx))
+            }, 600)
           }
         }
       }, 10)
@@ -331,14 +428,14 @@ export function TabAssistente() {
   }
 
   return (
-    <div className="bg-[#111827] border border-white/5 rounded-2xl flex flex-col h-[620px] overflow-hidden shadow-2xl relative">
+    <div className="bg-surface border border-white/5 rounded-2xl flex flex-col h-[620px] overflow-hidden shadow-2xl relative">
 
       {/* Glow decorativo */}
       <div className="absolute top-0 right-0 w-72 h-72 bg-fuchsia-500/8 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-48 h-48 bg-violet-500/8 rounded-full blur-[80px] pointer-events-none" />
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="px-5 py-3.5 border-b border-zinc-800/80 bg-[#0a0d16]/80 flex items-center gap-3 relative z-10 shrink-0">
+      <div className="px-5 py-3.5 border-b border-border-subtle/80 bg-[#0a0d16]/80 flex items-center gap-3 relative z-10 shrink-0">
         <div className="relative">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(217,70,239,0.3)]">
             <span className="text-lg">🤖</span>
@@ -346,13 +443,13 @@ export function TabAssistente() {
           <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-[#0a0d16]" />
         </div>
         <div className="flex-1">
-          <h2 className="text-sm font-bold text-zinc-100">Assistente IA Executiva</h2>
+          <h2 className="text-sm font-bold text-fg">Assistente IA Executiva</h2>
           <p className="text-[10px] text-fuchsia-400 font-medium">Registra gastos, receitas e agenda • {modelo.split('/')[1]}</p>
         </div>
         <select
           value={modelo}
           onChange={e => setModelo(e.target.value)}
-          className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 rounded-lg px-2 py-1 focus:outline-none focus:border-fuchsia-500/40 cursor-pointer"
+          className="text-[10px] bg-muted border border-border-subtle text-fg-secondary rounded-lg px-2 py-1 focus:outline-none focus:border-fuchsia-500/40 cursor-pointer"
         >
           <option value="openai/gpt-4o-mini">GPT-4o mini 🚀</option>
           <option value="openai/gpt-4o">GPT-4o 🧠</option>
@@ -361,7 +458,7 @@ export function TabAssistente() {
           <option value="google/gemini-flash-1.5">Gemini Flash 🔥</option>
           <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 (Free)</option>
         </select>
-        <button onClick={limparChat} title="Limpar" className="text-zinc-600 hover:text-zinc-400 text-xs px-2 py-1 rounded-lg hover:bg-zinc-800">🗑</button>
+        <button onClick={limparChat} title="Limpar" className="text-fg-disabled hover:text-fg-secondary text-xs px-2 py-1 rounded-lg hover:bg-muted">🗑</button>
       </div>
 
       {/* ── Mensagens ──────────────────────────────────────── */}
@@ -374,7 +471,7 @@ export function TabAssistente() {
               <button
                 key={s}
                 onClick={() => handleEnviar(s)}
-                className="text-left text-[11px] text-zinc-400 border border-zinc-800 bg-zinc-900/50 hover:border-fuchsia-500/30 hover:bg-fuchsia-500/5 hover:text-fuchsia-300 rounded-xl px-3 py-2 transition-all leading-snug"
+                className="text-left text-[11px] text-fg-secondary border border-border-subtle bg-page/50 hover:border-fuchsia-500/30 hover:bg-fuchsia-500/5 hover:text-fuchsia-300 rounded-xl px-3 py-2 transition-all leading-snug"
               >
                 {s}
               </button>
@@ -397,7 +494,7 @@ export function TabAssistente() {
                   isAi
                     ? msg.erro
                       ? 'bg-red-900/30 text-red-300 border border-red-500/20 rounded-tl-sm'
-                      : 'bg-zinc-800 text-zinc-200 border border-zinc-700/50 rounded-tl-sm'
+                      : 'bg-muted text-fg border border-border-subtle/50 rounded-tl-sm'
                     : 'bg-fuchsia-600 text-white rounded-tr-sm shadow-[0_4px_15px_rgba(192,38,211,0.25)]'
                 )}>
                   {msg.loading ? (
@@ -417,28 +514,50 @@ export function TabAssistente() {
                 </div>
               </div>
 
-              {/* ── Botões de ação estruturada ─────────────── */}
+              {/* ── Badges de ação automática ─────────────── */}
               {isAi && msg.acoes && msg.acoes.length > 0 && (
                 <div className="ml-9 mt-2 flex flex-col gap-1.5 w-full max-w-[72%]">
-                  {msg.acoes.map((acao, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => executarAcao(msg.id, idx)}
-                      disabled={acao.executada}
-                      className={cn(
-                        'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left',
-                        acao.executada
-                          ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600 cursor-not-allowed'
-                          : acao.tipo === 'gasto'
-                            ? 'bg-red-500/10 border-red-500/20 text-red-300 hover:bg-red-500/20'
-                            : acao.tipo === 'receita'
-                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/20'
-                              : 'bg-blue-500/10 border-blue-500/20 text-blue-300 hover:bg-blue-500/20'
-                      )}
-                    >
-                      {acao.executada ? '✅ Registrado no sistema' : acao.label}
-                    </button>
-                  ))}
+                  {msg.acoes.map((acao, idx) => {
+                    const tipoEmoji = acao.tipo === 'gasto' ? '💸' : acao.tipo === 'receita' ? '💰' : acao.tipo === 'ocorrencia' ? '📋' : '📅'
+                    if (acao.status === 'saving' || (!acao.status && !acao.executada)) {
+                      return (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs border bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-300">
+                          <svg className="w-3.5 h-3.5 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          <span>Salvando automaticamente...</span>
+                        </div>
+                      )
+                    }
+                    if (acao.status === 'saved' || acao.executada) {
+                      return (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs border bg-emerald-500/10 border-emerald-500/25 text-emerald-400">
+                          <span className="text-sm">✅</span>
+                          <span className="font-medium">Registrado automaticamente</span>
+                          <span className="ml-auto text-emerald-600 text-[10px]">{tipoEmoji} {acao.tipo}</span>
+                        </div>
+                      )
+                    }
+                    if (acao.status === 'error') {
+                      return (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs border bg-red-500/10 border-red-500/25 text-red-400">
+                          <span className="text-sm">❌</span>
+                          <span className="flex-1">{acao.errorMsg || 'Erro ao salvar'}</span>
+                          <button
+                            onClick={() => executarAcaoAuto(msg.id, idx)}
+                            className="shrink-0 px-2 py-0.5 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-300 text-[10px] font-medium transition-colors"
+                          >
+                            Tentar novamente
+                          </button>
+                        </div>
+                      )
+                    }
+                    // Status 'pending' — aguardando execução
+                    return (
+                      <div key={idx} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs border bg-blue-500/10 border-blue-500/20 text-blue-300 animate-pulse">
+                        <span className="text-sm">{tipoEmoji}</span>
+                        <span>{acao.label}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -448,11 +567,11 @@ export function TabAssistente() {
       </div>
 
       {/* ── Input ──────────────────────────────────────────── */}
-      <div className="p-4 border-t border-zinc-800/80 bg-[#0a0d16] relative z-10 shrink-0">
-        <div className="flex items-end gap-2 bg-[#111625] border border-zinc-800/80 rounded-2xl px-3 py-2 focus-within:border-fuchsia-500/40 transition-colors">
+      <div className="p-4 border-t border-border-subtle/80 bg-[#0a0d16] relative z-10 shrink-0">
+        <div className="flex items-end gap-2 bg-[#111625] border border-border-subtle/80 rounded-2xl px-3 py-2 focus-within:border-fuchsia-500/40 transition-colors">
           <textarea
             ref={textareaRef}
-            className="flex-1 bg-transparent text-sm text-zinc-100 placeholder-zinc-600 resize-none max-h-28 min-h-[40px] py-2 px-1 focus:outline-none focus:ring-0"
+            className="flex-1 bg-transparent text-sm text-fg placeholder-zinc-600 resize-none max-h-28 min-h-[40px] py-2 px-1 focus:outline-none focus:ring-0"
             rows={1}
             placeholder="Diga: Gastei R$ 50, Recebi R$ 200, Agendar reunião..."
             value={input}
@@ -471,7 +590,7 @@ export function TabAssistente() {
                 'p-2.5 rounded-xl transition-all',
                 isListening
                   ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse'
-                  : 'text-zinc-500 hover:text-fuchsia-400 hover:bg-zinc-800'
+                  : 'text-fg-tertiary hover:text-fuchsia-400 hover:bg-muted'
               )}
               title={isListening ? 'Gravando — solte para enviar' : 'Falar'}
             >
@@ -488,7 +607,7 @@ export function TabAssistente() {
             <button
               onClick={() => handleEnviar()}
               disabled={!input.trim() || loading}
-              className="bg-fuchsia-600 hover:bg-fuchsia-500 active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-600 text-white p-2.5 rounded-xl transition-all shadow-lg disabled:shadow-none"
+              className="bg-fuchsia-600 hover:bg-fuchsia-500 active:scale-95 disabled:bg-muted disabled:text-fg-disabled text-white p-2.5 rounded-xl transition-all shadow-lg disabled:shadow-none"
             >
               {loading ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">

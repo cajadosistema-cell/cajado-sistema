@@ -41,7 +41,7 @@ const etiquetaColors: Record<string, string> = {
   proposta:   'bg-amber-500/15 text-amber-400',
   cliente:    'bg-emerald-500/15 text-emerald-400',
   retomar:    'bg-purple-500/15 text-purple-400',
-  perdido:    'bg-zinc-700 text-zinc-400',
+  perdido:    'bg-surface-hover text-fg-secondary',
   aguardando: 'bg-yellow-500/15 text-yellow-400',
 }
 
@@ -70,7 +70,7 @@ function IconNote({ className }: { className?: string }) {
 
 function IconDoubleCheck({ className, blue }: { className?: string; blue?: boolean }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={cn('inline-block', blue ? 'text-sky-400' : 'text-zinc-500', className)}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={cn('inline-block', blue ? 'text-sky-400' : 'text-fg-tertiary', className)}>
       <polyline points="20 6 9 17 4 12"/>
       <polyline points="16 6 9 13"/>
     </svg>
@@ -100,8 +100,8 @@ function ConversaItem({
     <button
       onClick={onClick}
       className={cn(
-        'w-full text-left px-3 py-3.5 border-b border-zinc-800/60 transition-colors active:bg-zinc-700/40',
-        ativa ? 'bg-zinc-800' : 'hover:bg-zinc-800/50'
+        'w-full text-left px-3 py-3.5 border-b border-border-subtle/60 transition-colors active:bg-surface-hover/40',
+        ativa ? 'bg-muted' : 'hover:bg-surface-hover/50'
       )}
     >
       <div className="flex items-center gap-3">
@@ -117,11 +117,11 @@ function ConversaItem({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
-            <p className="text-sm font-semibold text-zinc-100 truncate">{conv.nome}</p>
-            <span className="text-[10px] text-zinc-600 shrink-0">{conv.ultimoHorario}</span>
+            <p className="text-sm font-semibold text-fg truncate">{conv.nome}</p>
+            <span className="text-[10px] text-fg-disabled shrink-0">{conv.ultimoHorario}</span>
           </div>
           <div className="flex items-center justify-between gap-1 mt-0.5">
-            <p className="text-xs text-zinc-500 truncate flex-1">{conv.ultimaMensagem}</p>
+            <p className="text-xs text-fg-tertiary truncate flex-1">{conv.ultimaMensagem}</p>
             {conv.unread > 0 ? (
               <span className="w-5 h-5 rounded-full bg-emerald-500 text-zinc-950 text-[10px] font-bold flex items-center justify-center shrink-0">
                 {conv.unread > 9 ? '9+' : conv.unread}
@@ -131,12 +131,12 @@ function ConversaItem({
           {/* Etiqueta + status bot */}
           <div className="flex items-center gap-1.5 mt-1">
             {conv.etiqueta && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide', etiquetaColors[conv.etiqueta] || 'bg-zinc-700 text-zinc-400')}>
+              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide', etiquetaColors[conv.etiqueta] || 'bg-surface-hover text-fg-secondary')}>
                 {conv.etiqueta}
               </span>
             )}
             {conv.setor && (
-              <span className="text-[9px] text-zinc-600">{conv.setor}</span>
+              <span className="text-[9px] text-fg-disabled">{conv.setor}</span>
             )}
             {!conv.botOn && (
               <span className="text-[9px] text-amber-400 font-semibold">● humano</span>
@@ -164,8 +164,8 @@ function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: strin
           isInterna
             ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300 italic text-xs max-w-full w-full text-center rounded-lg'
             : isEnviada
-            ? 'bg-zinc-700 text-zinc-100 rounded-br-sm'
-            : 'bg-zinc-800 text-zinc-200 rounded-bl-sm'
+            ? 'bg-surface-hover text-fg rounded-br-sm'
+            : 'bg-muted text-fg rounded-bl-sm'
         )}
       >
         {isInterna && <span className="text-amber-500 mr-1">📝</span>}
@@ -173,9 +173,9 @@ function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: strin
         
         {/* Bloco de Transcrição de Áudio */}
         {transcricaoUI && (
-          <div className="mt-2 text-xs bg-zinc-900/50 p-2 rounded border border-zinc-700/50">
-            <p className="text-[10px] text-zinc-500 font-bold mb-0.5">✨ Transcrição de Áudio</p>
-            <p className="text-zinc-300 italic">"{transcricaoUI}"</p>
+          <div className="mt-2 text-xs bg-page/50 p-2 rounded border border-border-subtle/50">
+            <p className="text-[10px] text-fg-tertiary font-bold mb-0.5">✨ Transcrição de Áudio</p>
+            <p className="text-fg-secondary italic">"{transcricaoUI}"</p>
           </div>
         )}
 
@@ -186,7 +186,7 @@ function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: strin
           </span>
           {isEnviada && !isInterna && (
             // ✓✓ azul para mensagens entregues (quando tivermos status real, passaríamos lida=true)
-            <span className="text-[10px] text-zinc-500 leading-none">✓✓</span>
+            <span className="text-[10px] text-fg-tertiary leading-none">✓✓</span>
           )}
         </div>
       </div>
@@ -201,7 +201,7 @@ const STATUS_CONFIG_CRM: Record<string, { label: string; color: string; bg: stri
   proposta:      { label: 'Proposta',      color: 'text-amber-400',   bg: 'bg-amber-500/10' },
   retomar:       { label: 'Retomar',       color: 'text-purple-400',  bg: 'bg-purple-500/10' },
   cliente_ativo: { label: 'Cliente Ativo', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-  perdido:       { label: 'Perdido',       color: 'text-zinc-500',    bg: 'bg-zinc-800' },
+  perdido:       { label: 'Perdido',       color: 'text-fg-tertiary',    bg: 'bg-muted' },
 }
 const STATUS_PIPELINE = ['novo', 'proposta', 'retomar', 'cliente_ativo', 'perdido'] as const
 
@@ -276,16 +276,16 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
 
   if (loading) return (
     <div className="flex items-center justify-center h-32">
-      <p className="text-xs text-zinc-600 animate-pulse">Buscando no CRM...</p>
+      <p className="text-xs text-fg-disabled animate-pulse">Buscando no CRM...</p>
     </div>
   )
 
   if (!lead && !criando) return (
     <div className="p-4 space-y-3">
-      <div className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl p-4 text-center space-y-2">
+      <div className="bg-muted/40 border border-border-subtle/50 rounded-xl p-4 text-center space-y-2">
         <p className="text-2xl">🔍</p>
-        <p className="text-sm font-medium text-zinc-300">Não encontrado no CRM</p>
-        <p className="text-xs text-zinc-600 font-mono">{telefone}</p>
+        <p className="text-sm font-medium text-fg-secondary">Não encontrado no CRM</p>
+        <p className="text-xs text-fg-disabled font-mono">{telefone}</p>
         <button
           onClick={() => { setNovoNome(nome || ''); setCriando(true) }}
           className="w-full mt-2 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-semibold hover:bg-amber-500/25 transition-colors"
@@ -298,7 +298,7 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
 
   if (criando) return (
     <div className="p-4 space-y-3">
-      <p className="text-xs text-zinc-400 font-semibold">Novo lead via WhatsApp</p>
+      <p className="text-xs text-fg-secondary font-semibold">Novo lead via WhatsApp</p>
       <input
         className="input w-full text-sm"
         placeholder="Nome do contato *"
@@ -326,7 +326,7 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
           <span className="text-amber-400 font-bold text-sm">{lead.nome?.[0] || '#'}</span>
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-zinc-200 truncate">{lead.nome}</p>
+          <p className="text-sm font-semibold text-fg truncate">{lead.nome}</p>
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.color}`}>
             {cfg.label}
           </span>
@@ -335,14 +335,14 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
 
       {/* Trocar status no funil diretamente do inbox */}
       <div>
-        <p className="text-[10px] text-zinc-600 uppercase tracking-widest mb-1.5">Mover no funil</p>
+        <p className="text-[10px] text-fg-disabled uppercase tracking-widest mb-1.5">Mover no funil</p>
         <div className="flex flex-wrap gap-1">
           {STATUS_PIPELINE.map(s => (
             <button key={s} onClick={() => mudarStatus(s)}
               className={`text-[10px] px-2 py-1 rounded-full border font-medium transition-all ${
                 lead.status === s
                   ? `${STATUS_CONFIG_CRM[s].bg} ${STATUS_CONFIG_CRM[s].color} border-current`
-                  : 'bg-zinc-800/50 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+                  : 'bg-muted/50 text-fg-tertiary border-border-subtle hover:border-zinc-500'
               }`}>
               {STATUS_CONFIG_CRM[s].label}
             </button>
@@ -352,21 +352,21 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
 
       {/* Métricas */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-zinc-800/40 rounded-lg p-2.5 text-center">
+        <div className="bg-muted/40 rounded-lg p-2.5 text-center">
           <p className="text-sm font-bold text-amber-400">
             {lead.valor_estimado ? formatCurrency(lead.valor_estimado) : '—'}
           </p>
-          <p className="text-[10px] text-zinc-600">pipeline</p>
+          <p className="text-[10px] text-fg-disabled">pipeline</p>
         </div>
-        <div className="bg-zinc-800/40 rounded-lg p-2.5 text-center">
-          <p className="text-sm font-bold text-zinc-300">{lead.origem || '—'}</p>
-          <p className="text-[10px] text-zinc-600">origem</p>
+        <div className="bg-muted/40 rounded-lg p-2.5 text-center">
+          <p className="text-sm font-bold text-fg-secondary">{lead.origem || '—'}</p>
+          <p className="text-[10px] text-fg-disabled">origem</p>
         </div>
       </div>
 
       {/* Follow-up */}
       {lead.proximo_followup && (
-        <div className={`rounded-lg p-2.5 border text-xs ${followupAtrasado ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-zinc-800/40 border-zinc-700 text-zinc-400'}`}>
+        <div className={`rounded-lg p-2.5 border text-xs ${followupAtrasado ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-muted/40 border-border-subtle text-fg-secondary'}`}>
           📅 {followupAtrasado ? '⚠ Atrasado! ' : 'Follow-up: '}
           {new Date(lead.proximo_followup).toLocaleDateString('pt-BR')}
         </div>
@@ -374,24 +374,24 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
 
       {/* Notas do lead */}
       {lead.notas && (
-        <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-2.5">
-          <p className="text-[10px] text-zinc-500 mb-1">Notas</p>
-          <p className="text-xs text-zinc-400 leading-relaxed">{lead.notas}</p>
+        <div className="bg-muted/30 border border-border-subtle/50 rounded-lg p-2.5">
+          <p className="text-[10px] text-fg-tertiary mb-1">Notas</p>
+          <p className="text-xs text-fg-secondary leading-relaxed">{lead.notas}</p>
         </div>
       )}
 
       {/* Registrar atividade rápida */}
       <div className="space-y-2">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Registrar no CRM</p>
+        <p className="text-[10px] text-fg-tertiary uppercase tracking-widest">Registrar no CRM</p>
         <textarea
-          className="input w-full text-xs resize-none bg-zinc-900"
+          className="input w-full text-xs resize-none bg-page"
           rows={2}
           placeholder="Ex: Enviou proposta, confirmou reunião..."
           value={novaAtiv}
           onChange={e => setNovaAtiv(e.target.value)}
         />
         <button onClick={registrarAtividade} disabled={salvando || !novaAtiv.trim()}
-          className="w-full py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs text-zinc-300 font-medium transition-colors disabled:opacity-40">
+          className="w-full py-1.5 rounded-lg bg-muted hover:bg-surface-hover border border-border-subtle text-xs text-fg-secondary font-medium transition-colors disabled:opacity-40">
           {salvando ? 'Salvando...' : '+ Registrar atividade'}
         </button>
       </div>
@@ -399,10 +399,10 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
       {/* Histórico rápido */}
       {atividades.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Histórico ({atividades.length})</p>
+          <p className="text-[10px] text-fg-disabled uppercase tracking-widest">Histórico ({atividades.length})</p>
           {atividades.map((a: any) => (
-            <div key={a.id} className="bg-zinc-800/30 rounded-lg px-3 py-2">
-              <p className="text-xs text-zinc-400">{a.descricao}</p>
+            <div key={a.id} className="bg-muted/30 rounded-lg px-3 py-2">
+              <p className="text-xs text-fg-secondary">{a.descricao}</p>
               <p className="text-[10px] text-zinc-700 mt-0.5">
                 {new Date(a.realizado_em).toLocaleDateString('pt-BR')}
               </p>
@@ -412,7 +412,7 @@ function PainelCRM({ numero, nome }: { numero: string; nome?: string }) {
       )}
 
       {/* Link para o CRM completo */}
-      <a href="/cajado" className="block text-center text-[10px] text-zinc-600 hover:text-amber-400 transition-colors pt-1">
+      <a href="/cajado" className="block text-center text-[10px] text-fg-disabled hover:text-amber-400 transition-colors pt-1">
         Ver perfil completo no CRM →
       </a>
     </div>
@@ -527,10 +527,10 @@ export default function InboxClient() {
     <div className="flex h-[calc(100dvh-88px)] sm:h-[calc(100dvh-100px)] -mx-4 md:-mx-6 -mt-4 md:-mt-6 overflow-hidden">
 
       {/* ── Coluna 1: Lista de conversas ──────────────────────── */}
-      <div className={cn("shrink-0 border-r border-zinc-800 flex-col bg-[#05070a]", (numeroAtivo || showConfig) ? "hidden md:flex md:w-80" : "flex w-full md:w-80")}>
-        <div className="px-3 pt-3 pb-2 border-b border-zinc-800 flex-shrink-0">
+      <div className={cn("shrink-0 border-r border-border-subtle flex-col bg-[#05070a]", (numeroAtivo || showConfig) ? "hidden md:flex md:w-80" : "flex w-full md:w-80")}>
+        <div className="px-3 pt-3 pb-2 border-b border-border-subtle flex-shrink-0">
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-semibold text-zinc-100 font-display">
+            <h2 className="text-sm font-semibold text-fg font-display">
               Inbox <span className="text-emerald-400 font-normal">WhatsApp</span>
             </h2>
             <div className="flex items-center gap-2">
@@ -541,7 +541,7 @@ export default function InboxClient() {
               )}
               <button 
                 onClick={() => setShowConfig(!showConfig)}
-                className={cn('text-xs transition-colors', showConfig ? 'text-emerald-400' : 'text-zinc-600 hover:text-emerald-400')}
+                className={cn('text-xs transition-colors', showConfig ? 'text-emerald-400' : 'text-fg-disabled hover:text-emerald-400')}
                 title="Configurar WhatsApp do Inbox"
               >
                 ⚙️
@@ -551,7 +551,7 @@ export default function InboxClient() {
                   localStorage.removeItem('cajado_inbox_token')
                   window.location.reload()
                 }}
-                className="text-zinc-600 hover:text-red-400 text-xs transition-colors"
+                className="text-fg-disabled hover:text-red-400 text-xs transition-colors"
                 title="Sair do Inbox"
               >
                 Sair
@@ -561,9 +561,9 @@ export default function InboxClient() {
 
           {/* Campo de busca com botão X para limpar */}
           <div className="relative">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-sm pointer-events-none">🔍</span>
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-tertiary text-sm pointer-events-none">🔍</span>
             <input
-              className="w-full text-xs py-2 pl-7 pr-8 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
+              className="w-full text-xs py-2 pl-7 pr-8 bg-page border border-border-subtle rounded-lg text-fg placeholder:text-fg-disabled focus:outline-none focus:border-emerald-500/50 transition-colors"
               placeholder="Buscar nome, número ou ticket..."
               value={filtro}
               onChange={e => setFiltro(e.target.value)}
@@ -571,7 +571,7 @@ export default function InboxClient() {
             {filtro && (
               <button
                 onClick={() => setFiltro('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-zinc-700 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200 flex items-center justify-center transition-colors text-xs font-bold"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-surface-hover text-fg-secondary hover:bg-zinc-600 hover:text-fg flex items-center justify-center transition-colors text-xs font-bold"
               >
                 ✕
               </button>
@@ -581,10 +581,10 @@ export default function InboxClient() {
 
         <div className="flex-1 overflow-y-auto">
           {loading && (
-            <p className="text-xs text-zinc-600 text-center py-8">Sincronizando com WhatsApp...</p>
+            <p className="text-xs text-fg-disabled text-center py-8">Sincronizando com WhatsApp...</p>
           )}
           {!loading && conversasFiltradas.length === 0 && (
-            <p className="text-xs text-zinc-600 text-center py-8">Caixa de entrada limpa! ✅</p>
+            <p className="text-xs text-fg-disabled text-center py-8">Caixa de entrada limpa! ✅</p>
           )}
           {conversasFiltradas.map(c => (
             <ConversaItem
@@ -598,8 +598,8 @@ export default function InboxClient() {
       </div>
 
       {showConfig ? (
-        <div className={cn("overflow-y-auto bg-[#080b14] p-4 md:p-8", showConfig ? "flex-1 flex flex-col w-full" : "hidden md:flex")}>
-          <button onClick={() => setShowConfig(false)} className="md:hidden flex items-center gap-1 text-zinc-400 mb-6 bg-zinc-800/50 w-fit px-3 py-1.5 rounded-lg text-sm">
+        <div className={cn("overflow-y-auto bg-page p-4 md:p-8", showConfig ? "flex-1 flex flex-col w-full" : "hidden md:flex")}>
+          <button onClick={() => setShowConfig(false)} className="md:hidden flex items-center gap-1 text-fg-secondary mb-6 bg-muted/50 w-fit px-3 py-1.5 rounded-lg text-sm">
             <IconBack className="w-4 h-4" />
             Voltar
           </button>
@@ -608,7 +608,7 @@ export default function InboxClient() {
       ) : (
         <>
           {/* ── Coluna 2: Chat ────────────────────────────────────── */}
-          <div className={cn("flex-col min-w-0 bg-[#080b14] relative", numeroAtivo ? "flex flex-1 w-full" : "hidden md:flex flex-1")}>
+          <div className={cn("flex-col min-w-0 bg-page relative", numeroAtivo ? "flex flex-1 w-full" : "hidden md:flex flex-1")}>
             
             {/* Background pattern CSS puro — sem CDN externa */}
             <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
@@ -621,20 +621,20 @@ export default function InboxClient() {
             {!numeroAtivo ? (
               <div className="flex items-center justify-center h-full relative z-10">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-zinc-800/50 border border-zinc-700 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+                  <div className="w-16 h-16 bg-muted/50 border border-border-subtle rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
                     <span className="text-2xl">📱</span>
                   </div>
-                  <p className="text-zinc-400">Selecione uma conversa para iniciar o atendimento</p>
+                  <p className="text-fg-secondary">Selecione uma conversa para iniciar o atendimento</p>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col h-full relative z-10">
                 {/* ── Header do chat — simplificado ── */}
-                <div className="px-3 md:px-4 py-2.5 border-b border-zinc-800/80 flex items-center justify-between flex-shrink-0 bg-[#0a0d16]/90 backdrop-blur-md">
+                <div className="px-3 md:px-4 py-2.5 border-b border-border-subtle/80 flex items-center justify-between flex-shrink-0 bg-[#0a0d16]/90 backdrop-blur-md">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <button 
                       onClick={() => { setNumeroAtivo(null); setShowConfig(false); }} 
-                      className="md:hidden text-zinc-400 hover:text-zinc-100 flex items-center justify-center w-8 h-8 -ml-1 rounded-full hover:bg-zinc-800/50 transition-colors"
+                      className="md:hidden text-fg-secondary hover:text-fg flex items-center justify-center w-8 h-8 -ml-1 rounded-full hover:bg-surface-hover/50 transition-colors"
                     >
                       <IconBack className="w-5 h-5" />
                     </button>
@@ -648,8 +648,8 @@ export default function InboxClient() {
                       {conversa?.nome?.[0]?.toUpperCase() || '#'}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-zinc-100 truncate">{conversa?.nome || numeroAtivo}</p>
-                      <p className="text-[10px] text-zinc-500 font-mono">{numeroAtivo}</p>
+                      <p className="text-sm font-bold text-fg truncate">{conversa?.nome || numeroAtivo}</p>
+                      <p className="text-[10px] text-fg-tertiary font-mono">{numeroAtivo}</p>
                     </div>
                   </div>
 
@@ -659,7 +659,7 @@ export default function InboxClient() {
                     <select 
                       className={cn(
                         "text-[10px] px-1.5 py-1 rounded-lg border appearance-none outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium max-w-[90px] hidden sm:block",
-                        conversa?.etiqueta ? (etiquetaColors[conversa.etiqueta] || 'bg-zinc-800 border-zinc-700 text-zinc-300') : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                        conversa?.etiqueta ? (etiquetaColors[conversa.etiqueta] || 'bg-muted border-border-subtle text-fg-secondary') : 'bg-muted border-border-subtle text-fg-secondary'
                       )}
                       value={conversa?.etiqueta || ''}
                       onChange={async (e) => {
@@ -684,7 +684,7 @@ export default function InboxClient() {
                       className={cn(
                         'text-[10px] px-2.5 py-1.5 rounded-lg border transition-all duration-300 font-semibold flex items-center gap-1 whitespace-nowrap',
                         conversa?.botOn !== false
-                          ? 'border-zinc-700 text-zinc-400 hover:border-emerald-500/50 hover:text-emerald-400 hover:bg-emerald-500/5'
+                          ? 'border-border-subtle text-fg-secondary hover:border-emerald-500/50 hover:text-emerald-400 hover:bg-emerald-500/5'
                           : 'border-amber-500/30 text-amber-400 bg-amber-500/10'
                       )}
                     >
@@ -696,7 +696,7 @@ export default function InboxClient() {
                 {/* ── Área de mensagens ── */}
                 <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 scroll-smooth">
                   {!conversa?.mensagens?.length && (
-                    <p className="text-xs text-zinc-600 text-center py-8">Nenhuma mensagem neste chat.</p>
+                    <p className="text-xs text-fg-disabled text-center py-8">Nenhuma mensagem neste chat.</p>
                   )}
                   {conversa?.mensagens?.map(msg => (
                     <MensagemBubble key={msg.id} msg={msg} />
@@ -707,12 +707,12 @@ export default function InboxClient() {
                 {/* ── Input de envio — WhatsApp style ── */}
                 <div className={cn(
                   "px-3 py-2.5 border-t flex-shrink-0 transition-colors",
-                  nota ? 'border-amber-500/20 bg-amber-500/5' : 'border-zinc-800 bg-[#05070a]'
+                  nota ? 'border-amber-500/20 bg-amber-500/5' : 'border-border-subtle bg-[#05070a]'
                 )}>
                   {/* Menu de Snippets */}
                   {showSnippets && !nota && (
-                    <div className="mb-2 bg-zinc-800 border border-zinc-700 shadow-xl rounded-xl p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-                      <p className="text-[10px] font-bold text-zinc-500 px-2 py-1 uppercase tracking-wider">⚡ Respostas Rápidas</p>
+                    <div className="mb-2 bg-muted border border-border-subtle shadow-xl rounded-xl p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
+                      <p className="text-[10px] font-bold text-fg-tertiary px-2 py-1 uppercase tracking-wider">⚡ Respostas Rápidas</p>
                       <div className="flex flex-col gap-1 mt-1 max-h-48 overflow-y-auto">
                         {SNIPPETS.map(snip => (
                           <button
@@ -721,13 +721,13 @@ export default function InboxClient() {
                               setTexto(snip.texto)
                               setShowSnippets(false)
                             }}
-                            className="text-left px-3 py-2 rounded-lg hover:bg-zinc-700/50 transition-colors flex flex-col group"
+                            className="text-left px-3 py-2 rounded-lg hover:bg-surface-hover/50 transition-colors flex flex-col group"
                           >
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded">{snip.atalho}</span>
-                              <span className="text-xs font-semibold text-zinc-200 group-hover:text-emerald-400">{snip.titulo}</span>
+                              <span className="text-xs font-semibold text-fg group-hover:text-emerald-400">{snip.titulo}</span>
                             </div>
-                            <span className="text-[10px] text-zinc-500 truncate mt-0.5">{snip.texto}</span>
+                            <span className="text-[10px] text-fg-tertiary truncate mt-0.5">{snip.texto}</span>
                           </button>
                         ))}
                       </div>
@@ -738,7 +738,7 @@ export default function InboxClient() {
                   {nota && (
                     <div className="flex items-center gap-1.5 mb-2 px-1">
                       <span className="text-[10px] text-amber-400 font-semibold">📝 Nota interna — apenas sua equipe verá</span>
-                      <button onClick={() => setNota(false)} className="ml-auto text-zinc-600 hover:text-zinc-400 text-[10px]">✕ cancelar</button>
+                      <button onClick={() => setNota(false)} className="ml-auto text-fg-disabled hover:text-fg-secondary text-[10px]">✕ cancelar</button>
                     </div>
                   )}
 
@@ -749,7 +749,7 @@ export default function InboxClient() {
                       <button
                         onClick={() => setNota(true)}
                         title="Nota interna"
-                        className="flex-shrink-0 w-10 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-500 hover:text-amber-400 flex items-center justify-center transition-colors"
+                        className="flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors"
                       >
                         <IconNote className="w-4 h-4" />
                       </button>
@@ -759,10 +759,10 @@ export default function InboxClient() {
                     <textarea
                       ref={textareaRef}
                       className={cn(
-                        'flex-1 min-h-[40px] max-h-40 px-3 py-2.5 rounded-xl text-sm resize-none bg-zinc-900 border text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 transition-all overflow-y-auto',
+                        'flex-1 min-h-[40px] max-h-40 px-3 py-2.5 rounded-xl text-sm resize-none bg-page border text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-1 transition-all overflow-y-auto',
                         nota
                           ? 'border-amber-500/40 focus:ring-amber-500/40 focus:border-amber-500/60'
-                          : 'border-zinc-700 focus:ring-emerald-500/30 focus:border-emerald-500/50'
+                          : 'border-border-subtle focus:ring-emerald-500/30 focus:border-emerald-500/50'
                       )}
                       style={{ height: 'auto' }}
                       rows={1}
@@ -808,9 +808,9 @@ export default function InboxClient() {
           </div>
 
           {/* ── Coluna 3: Painel CRM dinâmico ────────────────────── */}
-          <div className="hidden lg:block w-72 shrink-0 border-l border-zinc-800 overflow-y-auto bg-[#05070a]">
-            <div className="p-4 border-b border-zinc-800 bg-zinc-900/50">
-              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+          <div className="hidden lg:block w-72 shrink-0 border-l border-border-subtle overflow-y-auto bg-[#05070a]">
+            <div className="p-4 border-b border-border-subtle bg-page/50">
+              <p className="text-[10px] font-bold text-fg-tertiary uppercase tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                 CRM Cajado
               </p>
@@ -819,10 +819,10 @@ export default function InboxClient() {
               <PainelCRM numero={numeroAtivo} nome={conversas.find(c => c.numero === numeroAtivo)?.nome} />
             ) : (
               <div className="p-6 text-center">
-                <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center mx-auto mb-3 opacity-50">
+                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center mx-auto mb-3 opacity-50">
                   🎯
                 </div>
-                <p className="text-xs text-zinc-600 leading-relaxed">Selecione um chat para ver o lead no CRM — altere o status do funil e registre atividades sem sair do Inbox.</p>
+                <p className="text-xs text-fg-disabled leading-relaxed">Selecione um chat para ver o lead no CRM — altere o status do funil e registre atividades sem sair do Inbox.</p>
               </div>
             )}
           </div>

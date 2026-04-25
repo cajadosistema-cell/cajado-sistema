@@ -50,7 +50,7 @@ function StatCard({ icon, label, value, sub, color }: {
         <p className="metric-label">{label}</p>
       </div>
       <p className={cn('metric-value', color)}>{value}</p>
-      {sub && <p className="text-[11px] text-zinc-600 mt-1">{sub}</p>}
+      {sub && <p className="text-[11px] text-fg-disabled mt-1">{sub}</p>}
     </div>
   )
 }
@@ -140,12 +140,12 @@ export default function SegurancaGeralClient() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 mb-4 w-fit">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              tab === t.key ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
             )}>
             {t.label}
           </button>
@@ -182,12 +182,12 @@ export default function SegurancaGeralClient() {
               )}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className={cn('w-2 h-2 rounded-full animate-pulse', s.status === 'ok' ? 'bg-emerald-500' : 'bg-amber-500')} />
-                  <p className="text-sm font-semibold text-zinc-200">{s.titulo}</p>
+                  <p className="text-sm font-semibold text-fg">{s.titulo}</p>
                 </div>
-                <p className="text-xs text-zinc-500 mb-3">{s.desc}</p>
+                <p className="text-xs text-fg-tertiary mb-3">{s.desc}</p>
                 <div className="space-y-1">
                   {s.items.map(item => (
-                    <p key={item} className="text-[11px] text-zinc-500 flex items-center gap-1">
+                    <p key={item} className="text-[11px] text-fg-tertiary flex items-center gap-1">
                       <span className={cn('w-1 h-1 rounded-full shrink-0', s.status === 'ok' ? 'bg-emerald-500' : 'bg-amber-500')} />
                       {item}
                     </p>
@@ -200,7 +200,7 @@ export default function SegurancaGeralClient() {
           {/* Atividade por módulo */}
           {Object.keys(porTabela).length > 0 && (
             <div className="card">
-              <p className="text-xs text-zinc-500 uppercase tracking-wide mb-3">Atividade por módulo</p>
+              <p className="text-xs text-fg-tertiary uppercase tracking-wide mb-3">Atividade por módulo</p>
               <div className="space-y-2">
                 {Object.entries(porTabela)
                   .sort((a, b) => b[1] - a[1])
@@ -211,13 +211,13 @@ export default function SegurancaGeralClient() {
                     return (
                       <div key={tabela}>
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-zinc-400 flex items-center gap-1.5">
+                          <span className="text-fg-secondary flex items-center gap-1.5">
                             <span>{TABELA_ICONS[tabela] ?? '📄'}</span>
                             {tabela}
                           </span>
-                          <span className="text-zinc-600">{count} operações</span>
+                          <span className="text-fg-disabled">{count} operações</span>
                         </div>
-                        <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
                           <div className="h-full bg-amber-500/60 rounded-full transition-all duration-700"
                             style={{ width: `${pct}%` }} />
                         </div>
@@ -237,7 +237,7 @@ export default function SegurancaGeralClient() {
             {(['todos', 'sucesso', 'erro'] as const).map(f => (
               <button key={f} onClick={() => setFiltroSucesso(f)}
                 className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-all capitalize',
-                  filtroSucesso === f ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                  filtroSucesso === f ? 'bg-muted text-fg border-border-subtle' : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary'
                 )}>
                 {f === 'todos' ? 'Todos' : f === 'sucesso' ? '✅ Sucesso' : '❌ Erros'}
               </button>
@@ -250,7 +250,7 @@ export default function SegurancaGeralClient() {
             <div className="card p-0 overflow-hidden">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-zinc-800">
+                  <tr className="border-b border-border-subtle">
                     <th className="table-header">Usuário</th>
                     <th className="table-header">Ação</th>
                     <th className="table-header hidden md:table-cell">Recurso</th>
@@ -263,17 +263,17 @@ export default function SegurancaGeralClient() {
                   {logsFiltrados.slice(0, 50).map(l => (
                     <tr key={l.id} className={cn('table-row', !l.sucesso ? 'bg-red-500/5' : '')}>
                       <td className="table-cell">
-                        <p className="text-zinc-300 text-xs font-medium">{l.perfis?.nome ?? 'Sistema'}</p>
-                        {l.perfis?.email && <p className="text-[10px] text-zinc-600">{l.perfis.email}</p>}
+                        <p className="text-fg-secondary text-xs font-medium">{l.perfis?.nome ?? 'Sistema'}</p>
+                        {l.perfis?.email && <p className="text-[10px] text-fg-disabled">{l.perfis.email}</p>}
                       </td>
-                      <td className="table-cell text-zinc-400 text-xs">{l.acao}</td>
+                      <td className="table-cell text-fg-secondary text-xs">{l.acao}</td>
                       <td className="table-cell hidden md:table-cell">
                         <div className="flex items-center gap-1">
                           <span className="text-sm">{TABELA_ICONS[l.recurso] ?? '📄'}</span>
-                          <span className="text-xs text-zinc-500">{l.recurso}</span>
+                          <span className="text-xs text-fg-tertiary">{l.recurso}</span>
                         </div>
                       </td>
-                      <td className="table-cell hidden lg:table-cell text-zinc-600 text-xs font-mono">
+                      <td className="table-cell hidden lg:table-cell text-fg-disabled text-xs font-mono">
                         {l.ip ?? '—'}
                       </td>
                       <td className="table-cell">
@@ -283,7 +283,7 @@ export default function SegurancaGeralClient() {
                           {l.sucesso ? '✓ OK' : '✕ Erro'}
                         </span>
                       </td>
-                      <td className="table-cell text-right text-zinc-600 text-xs">
+                      <td className="table-cell text-right text-fg-disabled text-xs">
                         {formatRelative(l.created_at)}
                       </td>
                     </tr>
@@ -291,8 +291,8 @@ export default function SegurancaGeralClient() {
                 </tbody>
               </table>
               {logsFiltrados.length > 50 && (
-                <div className="px-4 py-2 border-t border-zinc-800 text-center">
-                  <p className="text-xs text-zinc-600">Exibindo 50 de {logsFiltrados.length} registros</p>
+                <div className="px-4 py-2 border-t border-border-subtle text-center">
+                  <p className="text-xs text-fg-disabled">Exibindo 50 de {logsFiltrados.length} registros</p>
                 </div>
               )}
             </div>
@@ -307,7 +307,7 @@ export default function SegurancaGeralClient() {
             {(['todos', 'create', 'update', 'delete'] as const).map(f => (
               <button key={f} onClick={() => setFiltroAcao(f)}
                 className={cn('px-3 py-1.5 rounded-lg text-xs font-medium border transition-all',
-                  filtroAcao === f ? 'bg-zinc-800 text-zinc-100 border-zinc-700' : 'text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                  filtroAcao === f ? 'bg-muted text-fg border-border-subtle' : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary'
                 )}>
                 {f === 'todos' ? 'Todos' : `${ACAO_CONFIG[f].icon} ${ACAO_CONFIG[f].label}`}
               </button>
@@ -331,12 +331,12 @@ export default function SegurancaGeralClient() {
                             {cfg.icon} {cfg.label}
                           </span>
                           <span className="text-sm">{TABELA_ICONS[a.tabela] ?? '📄'}</span>
-                          <span className="text-xs text-zinc-400 font-medium">{a.tabela}</span>
+                          <span className="text-xs text-fg-secondary font-medium">{a.tabela}</span>
                           {a.perfis?.nome && (
-                            <span className="text-[10px] text-zinc-600">por {a.perfis.nome}</span>
+                            <span className="text-[10px] text-fg-disabled">por {a.perfis.nome}</span>
                           )}
                         </div>
-                        <span className="text-[10px] text-zinc-600">{formatRelative(a.created_at)}</span>
+                        <span className="text-[10px] text-fg-disabled">{formatRelative(a.created_at)}</span>
                       </div>
 
                       {/* Diff de valores */}
@@ -344,13 +344,13 @@ export default function SegurancaGeralClient() {
                         <div className="grid grid-cols-2 gap-2 mt-2">
                           <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-2">
                             <p className="text-[10px] text-red-400 mb-1 font-medium">Antes</p>
-                            <pre className="text-[10px] text-zinc-500 overflow-hidden max-h-20 whitespace-pre-wrap">
+                            <pre className="text-[10px] text-fg-tertiary overflow-hidden max-h-20 whitespace-pre-wrap">
                               {JSON.stringify(a.valores_anteriores, null, 2).slice(0, 200)}
                             </pre>
                           </div>
                           <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-2">
                             <p className="text-[10px] text-emerald-400 mb-1 font-medium">Depois</p>
-                            <pre className="text-[10px] text-zinc-500 overflow-hidden max-h-20 whitespace-pre-wrap">
+                            <pre className="text-[10px] text-fg-tertiary overflow-hidden max-h-20 whitespace-pre-wrap">
                               {JSON.stringify(a.valores_novos, null, 2).slice(0, 200)}
                             </pre>
                           </div>

@@ -30,12 +30,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-sidebar flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Cajado Soluções" className="h-16 w-auto mx-auto mb-4 object-contain drop-shadow-sm" />
-          <h1 className="text-xl font-semibold text-zinc-100">Sistema Cajado</h1>
-          <p className="text-sm text-zinc-500 mt-1">Acesse sua conta</p>
+          <h1 className="text-xl font-semibold text-fg">Sistema Cajado</h1>
+          <p className="text-sm text-fg-tertiary mt-1">Acesse sua conta</p>
         </div>
 
         <form onSubmit={handleLogin} className="card space-y-4">
@@ -75,8 +75,8 @@ export default function LoginPage() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
           
-          <div className="pt-4 mt-2 border-t border-zinc-800 text-center">
-            <a href="/cadastro" className="text-xs text-zinc-500 hover:text-amber-400 transition-colors">
+          <div className="pt-4 mt-2 border-t border-border-subtle text-center">
+            <a href="/cadastro" className="text-xs text-fg-tertiary hover:text-amber-400 transition-colors">
               + Cadastrar novo colaborador
             </a>
           </div>

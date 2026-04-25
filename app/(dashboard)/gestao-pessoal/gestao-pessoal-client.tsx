@@ -76,14 +76,14 @@ export default function GestaoPessoalClient() {
       {/* KPIs resumo */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Colaboradores',    value: colaboradores.filter(c => c.ativo).length, color: 'text-zinc-200' },
-          { label: 'Tarefas abertas', value: tarefasAbertas, color: tarefasAbertas > 10 ? 'text-amber-400' : 'text-zinc-200' },
+          { label: 'Colaboradores',    value: colaboradores.filter(c => c.ativo).length, color: 'text-fg' },
+          { label: 'Tarefas abertas', value: tarefasAbertas, color: tarefasAbertas > 10 ? 'text-amber-400' : 'text-fg' },
           { label: 'Erros pendentes', value: errosPendentes, color: errosPendentes > 0 ? 'text-red-400' : 'text-emerald-400' },
           { label: 'Acertos do mês',  value: ocorrencias.filter(o => o.tipo === 'acerto').length, color: 'text-emerald-400' },
         ].map(k => (
-          <div key={k.label} className="bg-[#111827] border border-white/5 rounded-xl p-4 relative overflow-hidden">
+          <div key={k.label} className="bg-surface border border-white/5 rounded-xl p-4 relative overflow-hidden">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_80%_20%,rgba(245,166,35,0.08),transparent_70%)]" />
-            <p className="text-[10px] font-medium text-[#8b98b8] tracking-[0.06em] uppercase mb-2">{k.label}</p>
+            <p className="text-[10px] font-medium text-fg-secondary tracking-[0.06em] uppercase mb-2">{k.label}</p>
             <p className={`text-[22px] font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
@@ -98,7 +98,7 @@ export default function GestaoPessoalClient() {
             className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
               tab === t.id
                 ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 shadow-sm'
-                : 'text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700 bg-zinc-900'
+                : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary hover:border-border-subtle bg-page'
             }`}
           >
             <span>{t.emoji}</span> {t.label}

@@ -64,20 +64,20 @@ function NumeroCard({
     ativo: 'text-emerald-400',
     backup: 'text-blue-400',
     bloqueado: 'text-red-400',
-    inativo: 'text-zinc-500',
+    inativo: 'text-fg-tertiary',
   }[numero.status]
 
   const barColor = pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-500' : 'bg-emerald-500'
 
   return (
-    <div className="card hover:bg-zinc-800/60 transition-all">
+    <div className="card hover:bg-muted/60 transition-all">
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xl">{numero.status === 'ativo' ? '🟢' : numero.status === 'backup' ? '🔵' : numero.status === 'bloqueado' ? '🔴' : '⚪'}</span>
             <div>
-              <p className="text-sm font-semibold text-zinc-100">{numero.nome}</p>
-              <p className="text-xs font-mono text-zinc-500">{numero.numero}</p>
+              <p className="text-sm font-semibold text-fg">{numero.nome}</p>
+              <p className="text-xs font-mono text-fg-tertiary">{numero.numero}</p>
             </div>
           </div>
           {numero.is_backup && (
@@ -88,19 +88,19 @@ function NumeroCard({
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={numero.status} />
-          <button onClick={onEdit} className="text-zinc-600 hover:text-zinc-300 text-sm transition-colors">✏️</button>
+          <button onClick={onEdit} className="text-fg-disabled hover:text-fg-secondary text-sm transition-colors">✏️</button>
         </div>
       </div>
 
       {/* Barra de uso */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs">
-          <span className="text-zinc-500">Enviados hoje</span>
-          <span className={pct > 80 ? 'text-red-400 font-semibold' : 'text-zinc-400'}>
+          <span className="text-fg-tertiary">Enviados hoje</span>
+          <span className={pct > 80 ? 'text-red-400 font-semibold' : 'text-fg-secondary'}>
             {numero.enviados_hoje} / {numero.limite_diario} ({pct}%)
           </span>
         </div>
-        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
           <div
             className={cn('h-full rounded-full transition-all duration-700', barColor)}
             style={{ width: `${pct}%` }}
@@ -108,8 +108,8 @@ function NumeroCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-800">
-        <span className="text-xs text-zinc-600">
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border-subtle">
+        <span className="text-xs text-fg-disabled">
           ⏱ Intervalo: {numero.intervalo_minimo_segundos}s entre msgs
         </span>
         {pct >= 80 && (
@@ -118,7 +118,7 @@ function NumeroCard({
       </div>
 
       {numero.notas && (
-        <p className="text-xs text-zinc-600 mt-2 italic">{numero.notas}</p>
+        <p className="text-xs text-fg-disabled mt-2 italic">{numero.notas}</p>
       )}
     </div>
   )
@@ -160,12 +160,12 @@ function ModalNumero({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">
+          <h2 className="text-base font-semibold text-fg">
             {numero ? 'Editar Número' : 'Cadastrar Número'}
           </h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -208,13 +208,13 @@ function ModalNumero({
             <div
               onClick={() => setForm(f => ({ ...f, is_backup: !f.is_backup }))}
               className={cn('w-10 h-5 rounded-full transition-colors relative',
-                form.is_backup ? 'bg-blue-500' : 'bg-zinc-700'
+                form.is_backup ? 'bg-blue-500' : 'bg-surface-hover'
               )}>
               <div className={cn('absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all',
                 form.is_backup ? 'left-5' : 'left-0.5'
               )} />
             </div>
-            <span className="text-sm text-zinc-300">Marcar como número reserva/backup</span>
+            <span className="text-sm text-fg-secondary">Marcar como número reserva/backup</span>
           </label>
           <div>
             <label className="label">Notas</label>
@@ -329,7 +329,7 @@ export default function SegurancaWAClient() {
         </div>
         <div className="metric-card">
           <p className="metric-label">Bloqueados</p>
-          <p className={cn('metric-value', bloqueados > 0 ? 'text-red-400' : 'text-zinc-100')}>{bloqueados}</p>
+          <p className={cn('metric-value', bloqueados > 0 ? 'text-red-400' : 'text-fg')}>{bloqueados}</p>
         </div>
         <div className="metric-card">
           <p className="metric-label">Backups</p>
@@ -341,7 +341,7 @@ export default function SegurancaWAClient() {
         </div>
         <div className="metric-card">
           <p className="metric-label">Em risco (80%+)</p>
-          <p className={cn('metric-value', emRisco > 0 ? 'text-amber-400' : 'text-zinc-100')}>{emRisco}</p>
+          <p className={cn('metric-value', emRisco > 0 ? 'text-amber-400' : 'text-fg')}>{emRisco}</p>
         </div>
       </div>
 
@@ -357,12 +357,12 @@ export default function SegurancaWAClient() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 mb-4 w-fit">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              tab === t.key ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
             )}>
             {t.label}
           </button>
@@ -379,7 +379,7 @@ export default function SegurancaWAClient() {
               {/* Ativos em destaque */}
               {numeros.filter(n => n.status === 'ativo').length > 0 && (
                 <div>
-                  <p className="text-xs text-zinc-600 uppercase tracking-widest mb-2 px-1">● Números ativos</p>
+                  <p className="text-xs text-fg-disabled uppercase tracking-widest mb-2 px-1">● Números ativos</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {numeros.filter(n => n.status === 'ativo').map(n => (
                       <NumeroCard key={n.id} numero={n} onEdit={() => setEditando(n)} />
@@ -390,7 +390,7 @@ export default function SegurancaWAClient() {
               {/* Backups */}
               {numeros.filter(n => n.status === 'backup').length > 0 && (
                 <div>
-                  <p className="text-xs text-zinc-600 uppercase tracking-widest mb-2 px-1">● Números backup</p>
+                  <p className="text-xs text-fg-disabled uppercase tracking-widest mb-2 px-1">● Números backup</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {numeros.filter(n => n.status === 'backup').map(n => (
                       <NumeroCard key={n.id} numero={n} onEdit={() => setEditando(n)} />
@@ -401,7 +401,7 @@ export default function SegurancaWAClient() {
               {/* Outros */}
               {numeros.filter(n => !['ativo', 'backup'].includes(n.status)).length > 0 && (
                 <div>
-                  <p className="text-xs text-zinc-600 uppercase tracking-widest mb-2 px-1">● Inativos / Bloqueados</p>
+                  <p className="text-xs text-fg-disabled uppercase tracking-widest mb-2 px-1">● Inativos / Bloqueados</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {numeros.filter(n => !['ativo', 'backup'].includes(n.status)).map(n => (
                       <NumeroCard key={n.id} numero={n} onEdit={() => setEditando(n)} />
@@ -425,18 +425,18 @@ export default function SegurancaWAClient() {
                 <div key={m.id} className="card space-y-2">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-zinc-100">{m.titulo}</p>
-                      <span className="text-[10px] text-zinc-600 uppercase tracking-wide">{m.categoria}</span>
+                      <p className="text-sm font-semibold text-fg">{m.titulo}</p>
+                      <span className="text-[10px] text-fg-disabled uppercase tracking-wide">{m.categoria}</span>
                     </div>
                     <button
                       onClick={() => navigator.clipboard.writeText(m.conteudo)}
-                      className="text-xs text-zinc-500 hover:text-amber-400 transition-colors px-2 py-1 rounded"
+                      className="text-xs text-fg-tertiary hover:text-amber-400 transition-colors px-2 py-1 rounded"
                       title="Copiar mensagem"
                     >
                       📋 Copiar
                     </button>
                   </div>
-                  <p className="text-sm text-zinc-400 leading-relaxed bg-zinc-800 rounded-lg p-3 font-mono text-xs">
+                  <p className="text-sm text-fg-secondary leading-relaxed bg-muted rounded-lg p-3 font-mono text-xs">
                     {m.conteudo}
                   </p>
                   {m.variaveis && m.variaveis.length > 0 && (
@@ -460,7 +460,7 @@ export default function SegurancaWAClient() {
         <div className="space-y-4">
           {/* Ação rápida */}
           <div className="card">
-            <p className="text-sm font-semibold text-zinc-200 mb-4">Registro rápido de presença</p>
+            <p className="text-sm font-semibold text-fg mb-4">Registro rápido de presença</p>
             <div className="flex gap-3">
               <button
                 onClick={() => handleCheckin('entrada')}
@@ -477,36 +477,36 @@ export default function SegurancaWAClient() {
                 🚪 Check-out (Saída)
               </button>
             </div>
-            <p className="text-xs text-zinc-600 mt-2 text-center">
+            <p className="text-xs text-fg-disabled mt-2 text-center">
               A localização GPS será capturada automaticamente pelo navegador
             </p>
           </div>
 
           {/* Histórico */}
           <div className="card p-0 overflow-hidden">
-            <div className="px-4 py-3 border-b border-zinc-800">
-              <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">Histórico de check-ins</p>
+            <div className="px-4 py-3 border-b border-border-subtle">
+              <p className="text-xs text-fg-tertiary uppercase tracking-wide font-medium">Histórico de check-ins</p>
             </div>
             {checkins.length === 0 ? (
               <div className="p-6"><EmptyState message="Nenhum check-in registrado" /></div>
             ) : (
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-border-subtle">
                 {checkins.map(c => (
-                  <div key={c.id} className="px-4 py-3 flex items-center justify-between hover:bg-zinc-800/30 transition-colors">
+                  <div key={c.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
                     <div className="flex items-center gap-3">
                       <span className="text-xl shrink-0">
                         {c.tipo === 'entrada' ? '✅' : '🚪'}
                       </span>
                       <div>
-                        <p className="text-sm font-medium text-zinc-200">
+                        <p className="text-sm font-medium text-fg">
                           {c.tipo === 'entrada' ? 'Entrada' : 'Saída'}
-                          {c.perfis?.nome && <span className="text-zinc-500"> · {c.perfis.nome}</span>}
+                          {c.perfis?.nome && <span className="text-fg-tertiary"> · {c.perfis.nome}</span>}
                         </p>
-                        {c.endereco && <p className="text-xs text-zinc-600">📍 {c.endereco}</p>}
-                        {c.servico_descricao && <p className="text-xs text-zinc-500">{c.servico_descricao}</p>}
+                        {c.endereco && <p className="text-xs text-fg-disabled">📍 {c.endereco}</p>}
+                        {c.servico_descricao && <p className="text-xs text-fg-tertiary">{c.servico_descricao}</p>}
                       </div>
                     </div>
-                    <span className="text-xs text-zinc-600 shrink-0">{formatRelative(c.timestamp)}</span>
+                    <span className="text-xs text-fg-disabled shrink-0">{formatRelative(c.timestamp)}</span>
                   </div>
                 ))}
               </div>
@@ -526,10 +526,10 @@ export default function SegurancaWAClient() {
 
       {modalMsg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-zinc-100">Nova Mensagem Padrão</h2>
-              <button onClick={() => setModalMsg(false)} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+              <h2 className="text-base font-semibold text-fg">Nova Mensagem Padrão</h2>
+              <button onClick={() => setModalMsg(false)} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
             </div>
             <form onSubmit={handleSaveMsg} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -558,7 +558,7 @@ export default function SegurancaWAClient() {
                   value={formMsg.conteudo}
                   onChange={e => setFormMsg(f => ({ ...f, conteudo: e.target.value }))}
                   placeholder="Use {{nome}}, {{servico}} para variáveis dinâmicas..." />
-                <p className="text-[10px] text-zinc-600 mt-1">Use {'{{variavel}}'} para personalizar</p>
+                <p className="text-[10px] text-fg-disabled mt-1">Use {'{{variavel}}'} para personalizar</p>
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setModalMsg(false)} className="btn-secondary">Cancelar</button>

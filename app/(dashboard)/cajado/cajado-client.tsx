@@ -56,7 +56,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   proposta:      { label: 'Proposta',      color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30' },
   retomar:       { label: 'Retomar',       color: 'text-purple-400',  bg: 'bg-purple-500/10',  border: 'border-purple-500/30' },
   cliente_ativo: { label: 'Cliente Ativo', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-  perdido:       { label: 'Perdido',       color: 'text-zinc-500',    bg: 'bg-zinc-800',       border: 'border-zinc-700' },
+  perdido:       { label: 'Perdido',       color: 'text-fg-tertiary',    bg: 'bg-muted',       border: 'border-border-subtle' },
 }
 
 const ORIGEM_ICONS: Record<string, string> = {
@@ -145,12 +145,12 @@ function ModalLead({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-zinc-800">
-          <h2 className="text-base font-semibold text-zinc-100">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-border-subtle">
+          <h2 className="text-base font-semibold text-fg">
             {lead ? 'Editar Lead' : 'Novo Lead'}
           </h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -299,20 +299,20 @@ function ModalAtividade({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">Registrar Atividade</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl leading-none">×</button>
+          <h2 className="text-base font-semibold text-fg">Registrar Atividade</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="label">Tipo de Atividade</label>
-            <div className="grid grid-cols-3 gap-1 bg-zinc-800/50 p-1 rounded-lg mt-1">
+            <div className="grid grid-cols-3 gap-1 bg-muted/50 p-1 rounded-lg mt-1">
               {(['mensagem', 'ligacao', 'reuniao', 'proposta', 'visita', 'outro'] as const).map(t => (
                 <button key={t} type="button"
                   onClick={() => setForm(f => ({ ...f, tipo: t }))}
                   className={cn('py-1.5 rounded-md text-xs font-medium transition-colors',
-                    form.tipo === t ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                    form.tipo === t ? 'bg-surface-hover text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
                   )}>
                   {ATIVIDADE_ICONS[t]} {t.charAt(0).toUpperCase() + t.slice(1)}
                 </button>
@@ -393,18 +393,18 @@ function LeadDrawer({
   return (
     <div className="fixed inset-0 z-40 flex">
       <div className="flex-1 bg-black/40" onClick={onClose} />
-      <div className="w-full max-w-md bg-zinc-900 border-l border-zinc-800 flex flex-col h-screen overflow-y-auto">
+      <div className="w-full max-w-md bg-page border-l border-border-subtle flex flex-col h-screen overflow-y-auto">
         {/* Header */}
-        <div className="p-5 border-b border-zinc-800">
+        <div className="p-5 border-b border-border-subtle">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="text-2xl">{ORIGEM_ICONS[lead.origem]}</span>
               <div>
-                <h2 className="text-base font-semibold text-zinc-100">{lead.nome}</h2>
-                <p className="text-xs text-zinc-500">{lead.telefone}</p>
+                <h2 className="text-base font-semibold text-fg">{lead.nome}</h2>
+                <p className="text-xs text-fg-tertiary">{lead.telefone}</p>
               </div>
             </div>
-            <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+            <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
           </div>
 
           {/* Troca de status rápida */}
@@ -415,7 +415,7 @@ function LeadDrawer({
                   'px-2.5 py-1 rounded-full text-xs font-medium transition-all border',
                   lead.status === s
                     ? `${STATUS_CONFIG[s].bg} ${STATUS_CONFIG[s].color} ${STATUS_CONFIG[s].border}`
-                    : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:border-zinc-500'
+                    : 'bg-muted text-fg-tertiary border-border-subtle hover:border-zinc-500'
                 )}>
                 {STATUS_CONFIG[s].label}
               </button>
@@ -424,22 +424,22 @@ function LeadDrawer({
         </div>
 
         {/* Infos */}
-        <div className="p-5 space-y-3 border-b border-zinc-800">
+        <div className="p-5 space-y-3 border-b border-border-subtle">
           <div className="grid grid-cols-2 gap-3">
             <div className="card-sm">
-              <p className="text-[10px] text-zinc-600 uppercase tracking-wide">Valor estimado</p>
+              <p className="text-[10px] text-fg-disabled uppercase tracking-wide">Valor estimado</p>
               <p className="text-sm font-bold text-amber-400 mt-0.5">
                 {lead.valor_estimado ? formatCurrency(lead.valor_estimado) : '—'}
               </p>
             </div>
             <div className="card-sm">
-              <p className="text-[10px] text-zinc-600 uppercase tracking-wide">Serviço</p>
-              <p className="text-sm font-medium text-zinc-300 mt-0.5 truncate">
+              <p className="text-[10px] text-fg-disabled uppercase tracking-wide">Serviço</p>
+              <p className="text-sm font-medium text-fg-secondary mt-0.5 truncate">
                 {lead.servico_interesse ?? '—'}
               </p>
             </div>
             <div className="card-sm col-span-2">
-              <p className="text-[10px] text-zinc-600 uppercase tracking-wide">Atendente Responsável</p>
+              <p className="text-[10px] text-fg-disabled uppercase tracking-wide">Atendente Responsável</p>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-xs">👤</span>
                 <select className="input text-xs py-1" value={lead.atendente_id || ''} onChange={async (e) => {
@@ -454,8 +454,8 @@ function LeadDrawer({
           </div>
           {lead.notas && (
             <div className="card-sm">
-              <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">Notas</p>
-              <p className="text-sm text-zinc-400 leading-relaxed">{lead.notas}</p>
+              <p className="text-[10px] text-fg-disabled uppercase tracking-wide mb-1">Notas</p>
+              <p className="text-sm text-fg-secondary leading-relaxed">{lead.notas}</p>
             </div>
           )}
           {lead.proximo_followup && (
@@ -465,8 +465,8 @@ function LeadDrawer({
             )}>
               <span className="text-base">📅</span>
               <div>
-                <p className="text-[10px] text-zinc-600">Próximo follow-up</p>
-                <p className={cn('text-sm font-medium', new Date(lead.proximo_followup) < new Date() ? 'text-red-400' : 'text-zinc-300')}>
+                <p className="text-[10px] text-fg-disabled">Próximo follow-up</p>
+                <p className={cn('text-sm font-medium', new Date(lead.proximo_followup) < new Date() ? 'text-red-400' : 'text-fg-secondary')}>
                   {formatDate(lead.proximo_followup)} — {formatRelative(lead.proximo_followup)}
                 </p>
               </div>
@@ -475,7 +475,7 @@ function LeadDrawer({
         </div>
 
         {/* Ações */}
-        <div className="p-5 flex gap-2 border-b border-zinc-800">
+        <div className="p-5 flex gap-2 border-b border-border-subtle">
           <button onClick={onEdit} className="btn-secondary text-xs flex-1">✏️ Editar</button>
           <a href={`https://wa.me/${lead.telefone.replace(/\D/g, '')}`}
             target="_blank" rel="noopener noreferrer"
@@ -489,11 +489,11 @@ function LeadDrawer({
 
         {/* Histórico */}
         <div className="p-5 flex-1">
-          <p className="text-xs text-zinc-500 uppercase tracking-wide mb-3">
+          <p className="text-xs text-fg-tertiary uppercase tracking-wide mb-3">
             Histórico de atividades ({atividades.length})
           </p>
           {atividades.length === 0 ? (
-            <p className="text-sm text-zinc-600 text-center py-8">Nenhuma atividade registrada</p>
+            <p className="text-sm text-fg-disabled text-center py-8">Nenhuma atividade registrada</p>
           ) : (
             <div className="space-y-2">
               {atividades.map(a => (
@@ -501,11 +501,11 @@ function LeadDrawer({
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm">{ATIVIDADE_ICONS[a.tipo]}</span>
-                      <span className="text-xs font-medium text-zinc-300 capitalize">{a.tipo}</span>
+                      <span className="text-xs font-medium text-fg-secondary capitalize">{a.tipo}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-600">{formatRelative(a.realizado_em)}</span>
+                    <span className="text-[10px] text-fg-disabled">{formatRelative(a.realizado_em)}</span>
                   </div>
-                  <p className="text-sm text-zinc-400">{a.descricao}</p>
+                  <p className="text-sm text-fg-secondary">{a.descricao}</p>
                   {a.resultado && (
                     <p className="text-xs text-emerald-400 mt-1">→ {a.resultado}</p>
                   )}
@@ -536,23 +536,23 @@ function LeadCard({ lead, onClick, onDragStart }: { lead: Lead; onClick: () => v
       draggable
       onDragStart={onDragStart}
       onClick={onClick}
-      className="card-sm cursor-grab active:cursor-grabbing hover:bg-zinc-800/80 transition-all group space-y-2 relative border border-zinc-800/50 hover:border-zinc-700 hover:shadow-lg hover:-translate-y-0.5"
+      className="card-sm cursor-grab active:cursor-grabbing hover:bg-muted/80 transition-all group space-y-2 relative border border-border-subtle/50 hover:border-border-subtle hover:shadow-lg hover:-translate-y-0.5"
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-1.5 pointer-events-none">
           <span className="text-base">{ORIGEM_ICONS[lead.origem]}</span>
-          <p className="text-sm font-medium text-zinc-200 group-hover:text-amber-400 transition-colors leading-tight">
+          <p className="text-sm font-medium text-fg group-hover:text-amber-400 transition-colors leading-tight">
             {lead.nome}
           </p>
         </div>
         {atrasado && <span className="text-red-400 text-xs shrink-0 pointer-events-none">⚠</span>}
       </div>
       {lead.servico_interesse && (
-        <p className="text-xs text-zinc-500 truncate pointer-events-none">{lead.servico_interesse}</p>
+        <p className="text-xs text-fg-tertiary truncate pointer-events-none">{lead.servico_interesse}</p>
       )}
       <div className="flex items-center justify-between pointer-events-none mt-1">
         {lead.perfis?.nome ? (
-          <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">👤 {lead.perfis.nome.split(' ')[0]}</span>
+          <span className="text-[10px] text-fg-tertiary bg-muted px-1.5 py-0.5 rounded">👤 {lead.perfis.nome.split(' ')[0]}</span>
         ) : (
           <span />
         )}
@@ -561,7 +561,7 @@ function LeadCard({ lead, onClick, onDragStart }: { lead: Lead; onClick: () => v
         {lead.valor_estimado ? (
           <span className="text-xs font-semibold text-amber-400">{formatCurrency(lead.valor_estimado)}</span>
         ) : <span />}
-        <span className="text-[10px] text-zinc-600">{formatRelative(lead.created_at)}</span>
+        <span className="text-[10px] text-fg-disabled">{formatRelative(lead.created_at)}</span>
       </div>
     </div>
   )
@@ -602,7 +602,7 @@ function TabParceiros() {
         <div className="card p-0 overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-zinc-800">
+              <tr className="border-b border-border-subtle">
                 <th className="table-header">Parceiro</th>
                 <th className="table-header">Status</th>
                 <th className="table-header text-right">Indicações</th>
@@ -620,17 +620,17 @@ function TabParceiros() {
                         {i + 1}
                       </span>
                       <div>
-                        <p className="text-zinc-200 font-medium text-sm">{p.nome}</p>
-                        <p className="text-xs text-zinc-600">{p.telefone}</p>
+                        <p className="text-fg font-medium text-sm">{p.nome}</p>
+                        <p className="text-xs text-fg-disabled">{p.telefone}</p>
                       </div>
                     </div>
                   </td>
                   <td className="table-cell"><StatusBadge status={p.status} /></td>
-                  <td className="table-cell text-right text-zinc-300">{p.total_indicacoes}</td>
+                  <td className="table-cell text-right text-fg-secondary">{p.total_indicacoes}</td>
                   <td className="table-cell text-right">
                     <span className="text-emerald-400 font-medium">{p.total_convertidas}</span>
                   </td>
-                  <td className="table-cell text-right text-zinc-400">{p.comissao_percentual}%</td>
+                  <td className="table-cell text-right text-fg-secondary">{p.comissao_percentual}%</td>
                   <td className="table-cell text-right font-semibold text-amber-400">
                     {formatCurrency(p.total_comissao)}
                   </td>
@@ -643,10 +643,10 @@ function TabParceiros() {
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-zinc-100">Novo Parceiro</h2>
-              <button onClick={() => setModalOpen(false)} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+              <h2 className="text-base font-semibold text-fg">Novo Parceiro</h2>
+              <button onClick={() => setModalOpen(false)} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
             </div>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
@@ -773,7 +773,7 @@ function TabRelatorio({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => vo
           <div key={item.label} className="card-sm text-center">
             <p className="text-2xl mb-1">{item.icon}</p>
             <p className={cn('text-2xl font-bold', item.color)}>{item.items.length}</p>
-            <p className="text-[10px] text-zinc-500 mt-1 leading-tight">{item.label}</p>
+            <p className="text-[10px] text-fg-tertiary mt-1 leading-tight">{item.label}</p>
           </div>
         ))}
       </div>
@@ -785,10 +785,10 @@ function TabRelatorio({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => vo
           </p>
           <div className="space-y-2">
             {item.items.slice(0, 5).map(l => (
-              <div key={l.id} className="flex items-center justify-between py-1 border-b border-zinc-800 last:border-0">
+              <div key={l.id} className="flex items-center justify-between py-1 border-b border-border-subtle last:border-0">
                 <div>
-                  <p className="text-sm text-zinc-300">{l.nome}</p>
-                  <p className="text-xs text-zinc-600">{l.telefone} · {l.perfis?.nome ? `Resp: ${l.perfis.nome.split(' ')[0]}` : 'Sem resp.'}</p>
+                  <p className="text-sm text-fg-secondary">{l.nome}</p>
+                  <p className="text-xs text-fg-disabled">{l.telefone} · {l.perfis?.nome ? `Resp: ${l.perfis.nome.split(' ')[0]}` : 'Sem resp.'}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -798,7 +798,7 @@ function TabRelatorio({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => vo
                       'text-[10px] border px-2 py-1 rounded font-medium transition-all',
                       reativando === l.id
                         ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 cursor-wait'
-                        : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-400'
+                        : 'border-border-subtle bg-muted text-fg-secondary hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-400'
                     )}
                   >
                     {reativando === l.id ? '⏳ Enviando...' : '⚡ Reativar'}
@@ -819,8 +819,8 @@ function TabRelatorio({ leads, onRefresh }: { leads: Lead[]; onRefresh: () => vo
         <div className="card">
           <div className="flex flex-col items-center py-10 gap-2">
             <span className="text-4xl">✅</span>
-            <p className="text-zinc-400 font-medium">Tudo em dia!</p>
-            <p className="text-zinc-600 text-sm">Nenhuma pendência no momento</p>
+            <p className="text-fg-secondary font-medium">Tudo em dia!</p>
+            <p className="text-fg-disabled text-sm">Nenhuma pendência no momento</p>
           </div>
         </div>
       )}
@@ -933,26 +933,26 @@ export default function CajadoClient() {
         </div>
         <div className="metric-card">
           <p className="metric-label">Follow-ups atrasados</p>
-          <p className={cn('metric-value', followupsAtrasados.length > 0 ? 'text-red-400' : 'text-zinc-100')}>
+          <p className={cn('metric-value', followupsAtrasados.length > 0 ? 'text-red-400' : 'text-fg')}>
             {followupsAtrasados.length}
           </p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 mb-4 w-fit">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              tab === t.key ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
             )}>
             {t.label}
           </button>
         ))}
         {/* Filtro de atendente inline no Kanban/Lista */}
         {(tab === 'kanban' || tab === 'lista' || tab === 'relatorio') && (
-          <select className="ml-4 input py-1 text-xs bg-zinc-800/50 w-auto" value={atendenteFiltro} onChange={e => setAtendenteFiltro(e.target.value)}>
+          <select className="ml-4 input py-1 text-xs bg-muted/50 w-auto" value={atendenteFiltro} onChange={e => setAtendenteFiltro(e.target.value)}>
              <option value="todos">Todos os atendentes</option>
              <option value="sem_responsavel">Sem responsável</option>
              {perfis.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
@@ -970,7 +970,7 @@ export default function CajadoClient() {
               <div key={status}
                    onDragOver={e => e.preventDefault()}
                    onDrop={e => handleDrop(e, status)}
-                   className="flex-1 flex flex-col transition-colors border border-transparent hover:border-zinc-800 rounded-xl bg-zinc-900/30 p-1"
+                   className="flex-1 flex flex-col transition-colors border border-transparent hover:border-border-subtle rounded-xl bg-page/30 p-1"
                 >
                 <div className={cn('flex items-center justify-between mb-3 px-1')}>
                   <div className="flex items-center gap-2">
@@ -980,15 +980,15 @@ export default function CajadoClient() {
                     </span>
                   </div>
                   {leadsColuna.length > 0 && (
-                    <span className="text-[10px] text-zinc-600">
+                    <span className="text-[10px] text-fg-disabled">
                       {formatCurrency(leadsColuna.reduce((a, l) => a + (l.valor_estimado ?? 0), 0))}
                     </span>
                   )}
                 </div>
                 <div className="space-y-2 flex-1 relative min-h-[120px]">
                   {leadsColuna.length === 0 ? (
-                    <div className={cn('absolute inset-0 flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center transition-colors hover:bg-zinc-800/30', cfg.border)}>
-                      <p className="text-xs text-zinc-600 font-medium">Solte o Card aqui</p>
+                    <div className={cn('absolute inset-0 flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center transition-colors hover:bg-muted/30', cfg.border)}>
+                      <p className="text-xs text-fg-disabled font-medium">Solte o Card aqui</p>
                     </div>
                   ) : (
                     leadsColuna.map(lead => (
@@ -1025,7 +1025,7 @@ export default function CajadoClient() {
             ) : (
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-zinc-800">
+                  <tr className="border-b border-border-subtle">
                     <th className="table-header">Lead</th>
                     <th className="table-header hidden md:table-cell">Origem</th>
                     <th className="table-header hidden lg:table-cell">Serviço</th>
@@ -1041,19 +1041,19 @@ export default function CajadoClient() {
                       <tr key={l.id} className="table-row cursor-pointer"
                         onClick={() => setLeadSelecionado(l)}>
                         <td className="table-cell">
-                          <p className="text-zinc-200 font-medium text-sm">{l.nome}</p>
-                          <p className="text-xs text-zinc-600">{l.telefone}</p>
+                          <p className="text-fg font-medium text-sm">{l.nome}</p>
+                          <p className="text-xs text-fg-disabled">{l.telefone}</p>
                         </td>
                         <td className="table-cell hidden md:table-cell">
                           <span className="text-base">{ORIGEM_ICONS[l.origem]}</span>
                         </td>
-                        <td className="table-cell hidden lg:table-cell text-zinc-400 text-xs">
+                        <td className="table-cell hidden lg:table-cell text-fg-secondary text-xs">
                           {l.servico_interesse ?? '—'}
                         </td>
                         <td className="table-cell"><StatusBadge status={l.status} /></td>
                         <td className="table-cell hidden md:table-cell">
                           {l.proximo_followup ? (
-                            <span className={cn('text-xs', atrasado ? 'text-red-400 font-medium' : 'text-zinc-500')}>
+                            <span className={cn('text-xs', atrasado ? 'text-red-400 font-medium' : 'text-fg-tertiary')}>
                               {atrasado ? '⚠ ' : ''}{formatDate(l.proximo_followup)}
                             </span>
                           ) : <span className="text-zinc-700">—</span>}

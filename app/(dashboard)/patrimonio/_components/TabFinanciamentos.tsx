@@ -64,25 +64,25 @@ export function TabFinanciamentos() {
     <div className="space-y-4">
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Custo Mensal (Parcelas)</p>
+        <div className="bg-page border border-border-subtle rounded-xl p-4">
+          <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Custo Mensal (Parcelas)</p>
           <p className="text-2xl font-bold text-red-400">{formatCurrency(custoMensal)}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Saldo Devedor Estimado</p>
-          <p className="text-2xl font-bold text-zinc-100">{formatCurrency(saldoDevedorEstimado)}</p>
+        <div className="bg-page border border-border-subtle rounded-xl p-4">
+          <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Saldo Devedor Estimado</p>
+          <p className="text-2xl font-bold text-fg">{formatCurrency(saldoDevedorEstimado)}</p>
         </div>
       </div>
 
       <div className="flex justify-between items-center mt-6">
-        <h2 className="text-sm font-semibold text-zinc-200">🏦 Contratos Ativos</h2>
+        <h2 className="text-sm font-semibold text-fg">🏦 Contratos Ativos</h2>
         <button onClick={() => setShowForm(s => !s)} className="btn-primary text-xs">
           {showForm ? '✕ Cancelar' : '+ Novo Financiamento'}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSalvar} className="bg-zinc-900 border border-zinc-700 rounded-xl p-4 space-y-3">
+        <form onSubmit={handleSalvar} className="bg-page border border-border-subtle rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Instituição Financeira / Banco *</label>
@@ -106,39 +106,39 @@ export function TabFinanciamentos() {
       )}
 
       {financiamentos.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8"><EmptyState message="Nenhum financiamento cadastrado" /></div>
+        <div className="bg-page border border-border-subtle rounded-xl p-8"><EmptyState message="Nenhum financiamento cadastrado" /></div>
       ) : (
         <div className="space-y-3">
           {financiamentos.map(f => {
              const progresso = f.prazo_meses ? Math.min(100, (f.parcelas_pagas / f.prazo_meses) * 100) : 0
              return (
-              <div key={f.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors">
+              <div key={f.id} className="bg-page border border-border-subtle rounded-xl p-5 hover:border-border-subtle transition-colors">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">🏦 {f.banco}</h3>
-                    {f.vencimento_dia && <p className="text-xs text-zinc-500 mt-0.5">Vence dia {f.vencimento_dia}</p>}
+                    <h3 className="text-sm font-bold text-fg flex items-center gap-2">🏦 {f.banco}</h3>
+                    {f.vencimento_dia && <p className="text-xs text-fg-tertiary mt-0.5">Vence dia {f.vencimento_dia}</p>}
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-zinc-500 uppercase tracking-widest">Valor Parcela</p>
+                    <p className="text-xs text-fg-tertiary uppercase tracking-widest">Valor Parcela</p>
                     <p className="text-lg font-bold text-red-400">{f.valor_parcela ? formatCurrency(f.valor_parcela) : '—'}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  <div><p className="text-[10px] text-zinc-600 uppercase tracking-widest">Financiado</p><p className="text-sm font-medium">{f.valor_financiado ? formatCurrency(f.valor_financiado) : '—'}</p></div>
-                  <div><p className="text-[10px] text-zinc-600 uppercase tracking-widest">Taxa (a.a.)</p><p className="text-sm text-zinc-300 font-medium">{f.taxa_juros ? `${f.taxa_juros}%` : '—'}</p></div>
+                  <div><p className="text-[10px] text-fg-disabled uppercase tracking-widest">Financiado</p><p className="text-sm font-medium">{f.valor_financiado ? formatCurrency(f.valor_financiado) : '—'}</p></div>
+                  <div><p className="text-[10px] text-fg-disabled uppercase tracking-widest">Taxa (a.a.)</p><p className="text-sm text-fg-secondary font-medium">{f.taxa_juros ? `${f.taxa_juros}%` : '—'}</p></div>
                   <div>
-                    <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Progresso</p>
+                    <p className="text-[10px] text-fg-disabled uppercase tracking-widest">Progresso</p>
                     <p className="text-sm font-medium text-emerald-400">{f.parcelas_pagas} de {f.prazo_meses}</p>
                   </div>
                   <div className="flex items-end justify-end">
-                    <button onClick={() => addParcelaPaga(f)} className="btn-ghost text-xs border border-zinc-700">Pagar Parcela ✅</button>
+                    <button onClick={() => addParcelaPaga(f)} className="btn-ghost text-xs border border-border-subtle">Pagar Parcela ✅</button>
                   </div>
                 </div>
 
                 {f.prazo_meses && (
                   <div className="mt-2">
-                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${progresso}%` }} />
                     </div>
                   </div>

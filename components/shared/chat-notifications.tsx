@@ -38,11 +38,11 @@ function NotificationToast({ msg, onClose, onClick }: {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-bold text-violet-300 truncate">{msg.nome}</p>
-        <p className="text-xs text-zinc-300 truncate mt-0.5 leading-relaxed">{msg.texto}</p>
+        <p className="text-xs text-fg-secondary truncate mt-0.5 leading-relaxed">{msg.texto}</p>
       </div>
       <button
         onClick={e => { e.stopPropagation(); onClose() }}
-        className="text-zinc-600 hover:text-zinc-400 text-lg leading-none shrink-0 -mt-0.5"
+        className="text-fg-disabled hover:text-fg-secondary text-lg leading-none shrink-0 -mt-0.5"
         aria-label="Fechar"
       >×</button>
     </div>

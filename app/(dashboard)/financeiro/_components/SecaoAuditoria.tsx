@@ -59,16 +59,16 @@ function DiffViewer({ anterior, novo }: {
         const mudou = JSON.stringify(v_antes) !== JSON.stringify(v_depois)
         if (!mudou && v_antes === undefined) return null
         return (
-          <div key={campo} className="bg-zinc-950/50 rounded-lg px-3 py-2 text-xs">
-            <p className="text-zinc-600 capitalize mb-1">{campo.replace('_', ' ')}</p>
+          <div key={campo} className="bg-sidebar/50 rounded-lg px-3 py-2 text-xs">
+            <p className="text-fg-disabled capitalize mb-1">{campo.replace('_', ' ')}</p>
             {mudou ? (
               <div className="flex items-center gap-2">
                 <span className="text-red-400 line-through">{String(v_antes ?? '—')}</span>
-                <span className="text-zinc-500">→</span>
+                <span className="text-fg-tertiary">→</span>
                 <span className="text-emerald-400">{String(v_depois ?? '—')}</span>
               </div>
             ) : (
-              <span className="text-zinc-400">{String(v_depois ?? v_antes ?? '—')}</span>
+              <span className="text-fg-secondary">{String(v_depois ?? v_antes ?? '—')}</span>
             )}
           </div>
         )
@@ -99,20 +99,20 @@ export function SecaoAuditoria() {
   }, [filtroTabela])
 
   return (
-    <div className="bg-[#111827] border border-white/5 rounded-xl p-5 lg:col-span-3">
+    <div className="bg-surface border border-white/5 rounded-xl p-5 lg:col-span-3">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 className="section-title mb-0">🔍 Auditoria de Alterações</h2>
-          <p className="text-xs text-zinc-600 mt-0.5">Histórico completo de criações, edições e exclusões</p>
+          <p className="text-xs text-fg-disabled mt-0.5">Histórico completo de criações, edições e exclusões</p>
         </div>
         {/* Filtro por tabela */}
-        <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+        <div className="flex gap-1 bg-page border border-border-subtle rounded-xl p-1">
           {Object.entries(TABELA_LABEL).map(([k, v]) => (
             <button
               key={k}
               onClick={() => setFiltroTabela(k)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filtroTabela === k ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                filtroTabela === k ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
               }`}
             >
               {v}
@@ -123,11 +123,11 @@ export function SecaoAuditoria() {
 
       {carregando ? (
         <div className="flex items-center justify-center py-12">
-          <p className="text-sm text-zinc-600">Carregando auditoria...</p>
+          <p className="text-sm text-fg-disabled">Carregando auditoria...</p>
         </div>
       ) : logs.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-sm text-zinc-600">Nenhum registro de auditoria para esta tabela.</p>
+          <p className="text-sm text-fg-disabled">Nenhum registro de auditoria para esta tabela.</p>
           <p className="text-xs text-zinc-700 mt-1">A auditoria é registrada automaticamente via trigger no banco de dados.</p>
         </div>
       ) : (
@@ -135,7 +135,7 @@ export function SecaoAuditoria() {
           {logs.map(log => (
             <div
               key={log.id}
-              className="border border-white/5 bg-black/20 rounded-xl p-4 cursor-pointer hover:border-zinc-700 transition-colors"
+              className="border border-white/5 bg-black/20 rounded-xl p-4 cursor-pointer hover:border-border-subtle transition-colors"
               onClick={() => setExpandido(expandido === log.id ? null : log.id)}
             >
               <div className="flex items-center justify-between gap-3">
@@ -144,14 +144,14 @@ export function SecaoAuditoria() {
                     {ACAO_LABEL[log.acao]}
                   </span>
                   <div>
-                    <p className="text-sm text-zinc-300">
+                    <p className="text-sm text-fg-secondary">
                       {TABELA_LABEL[log.tabela] ?? log.tabela}
-                      <span className="text-zinc-600 text-xs ml-1">#{log.registro_id.slice(0, 8)}…</span>
+                      <span className="text-fg-disabled text-xs ml-1">#{log.registro_id.slice(0, 8)}…</span>
                     </p>
-                    <p className="text-xs text-zinc-600">{formatTs(log.created_at)}</p>
+                    <p className="text-xs text-fg-disabled">{formatTs(log.created_at)}</p>
                   </div>
                 </div>
-                <span className="text-zinc-600 text-xs">{expandido === log.id ? '▲' : '▼'}</span>
+                <span className="text-fg-disabled text-xs">{expandido === log.id ? '▲' : '▼'}</span>
               </div>
 
               {expandido === log.id && (

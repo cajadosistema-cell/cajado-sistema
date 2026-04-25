@@ -15,7 +15,7 @@ export function MetricCard({ label, value, change, suffix, className }: MetricCa
       <p className="metric-label">{label}</p>
       <p className="metric-value">
         {value}
-        {suffix && <span className="text-sm font-normal text-zinc-500 ml-1">{suffix}</span>}
+        {suffix && <span className="text-sm font-normal text-fg-tertiary ml-1">{suffix}</span>}
       </p>
       {change !== undefined && (
         <p className={change >= 0 ? 'metric-change-pos' : 'metric-change-neg'}>
@@ -40,7 +40,7 @@ export function PageHeader({ title, subtitle, showBack = true, children }: PageH
         {showBack && (
           <Link
             href="/inicio"
-            className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-amber-500 hover:border-amber-500/50 transition-all shrink-0 mt-0.5"
+            className="w-8 h-8 rounded-lg bg-page border border-border-subtle flex items-center justify-center text-fg-secondary hover:text-amber-500 hover:border-amber-500/50 transition-all shrink-0 mt-0.5"
             title="Voltar ao Menu"
           >
             <span className="text-lg leading-none">←</span>
@@ -48,7 +48,7 @@ export function PageHeader({ title, subtitle, showBack = true, children }: PageH
         )}
         <div className="min-w-0">
           <h1 className="page-title truncate">{title}</h1>
-          {subtitle && <p className="text-sm text-zinc-500 mt-0.5 line-clamp-2">{subtitle}</p>}
+          {subtitle && <p className="text-sm text-fg-tertiary mt-0.5 line-clamp-2">{subtitle}</p>}
         </div>
       </div>
       {children && (
@@ -63,10 +63,10 @@ export function PageHeader({ title, subtitle, showBack = true, children }: PageH
 export function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center mb-3">
-        <span className="text-zinc-600">○</span>
+      <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center mb-3">
+        <span className="text-fg-disabled">○</span>
       </div>
-      <p className="text-sm text-zinc-500">{message}</p>
+      <p className="text-sm text-fg-tertiary">{message}</p>
     </div>
   )
 }

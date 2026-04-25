@@ -70,7 +70,7 @@ const IDEIA_STATUS_FLOW: Ideia['status'][] = ['ideia', 'analise', 'execucao', 'v
 const IMPACTO_COLORS = {
   alto:  'text-red-400 bg-red-500/10',
   medio: 'text-amber-400 bg-amber-500/10',
-  baixo: 'text-zinc-400 bg-zinc-800',
+  baixo: 'text-fg-secondary bg-muted',
 }
 
 // ── Modal Projeto ───────────────────────────────────────────
@@ -105,10 +105,10 @@ function ModalProjeto({ projeto, onClose, onSave }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">{projeto ? 'Editar Projeto' : 'Novo Projeto'}</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-base font-semibold text-fg">{projeto ? 'Editar Projeto' : 'Novo Projeto'}</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -196,10 +196,10 @@ function ModalIdeia({ projetos, onClose, onSave, ideia }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">{ideia ? 'Editar Ideia' : 'Nova Ideia'}</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+          <h2 className="text-base font-semibold text-fg">{ideia ? 'Editar Ideia' : 'Nova Ideia'}</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -274,7 +274,7 @@ function ModalIdeia({ projetos, onClose, onSave, ideia }: {
 // ── Progress Bar ─────────────────────────────────────────────
 function ProgressBar({ value, className }: { value: number; className?: string }) {
   return (
-    <div className={cn('h-1.5 bg-zinc-800 rounded-full overflow-hidden', className)}>
+    <div className={cn('h-1.5 bg-muted rounded-full overflow-hidden', className)}>
       <div
         className="h-full bg-amber-500 rounded-full transition-all duration-700"
         style={{ width: `${value}%` }}
@@ -378,12 +378,12 @@ export default function OrganizacaoClient() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mb-4 w-fit">
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 mb-4 w-fit">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={cn(
               'px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              tab === t.key ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              tab === t.key ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
             )}>
             {t.label}
           </button>
@@ -401,21 +401,21 @@ export default function OrganizacaoClient() {
                 ativo: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5',
                 pausado: 'text-amber-400 border-amber-500/30 bg-amber-500/5',
                 concluido: 'text-blue-400 border-blue-500/30 bg-blue-500/5',
-                cancelado: 'text-zinc-500 border-zinc-700 bg-zinc-800/50',
+                cancelado: 'text-fg-tertiary border-border-subtle bg-muted/50',
               }
               return (
                 <div key={p.id} className={cn('card border', statusColors[p.status])}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 mr-4">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm font-semibold text-zinc-100">{p.titulo}</h3>
+                        <h3 className="text-sm font-semibold text-fg">{p.titulo}</h3>
                         <StatusBadge status={p.status} />
                       </div>
-                      {p.descricao && <p className="text-xs text-zinc-500">{p.descricao}</p>}
+                      {p.descricao && <p className="text-xs text-fg-tertiary">{p.descricao}</p>}
                     </div>
                     <button
                       onClick={() => setEditandoProjeto(p)}
-                      className="text-zinc-600 hover:text-zinc-300 text-sm transition-colors shrink-0"
+                      className="text-fg-disabled hover:text-fg-secondary text-sm transition-colors shrink-0"
                     >
                       ✏️
                     </button>
@@ -424,8 +424,8 @@ export default function OrganizacaoClient() {
                   {/* Progresso */}
                   <div className="mb-3">
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-zinc-500">Progresso</span>
-                      <span className="text-zinc-400">{p.progresso_percentual}%</span>
+                      <span className="text-fg-tertiary">Progresso</span>
+                      <span className="text-fg-secondary">{p.progresso_percentual}%</span>
                     </div>
                     <ProgressBar value={p.progresso_percentual} />
                     <input
@@ -439,14 +439,14 @@ export default function OrganizacaoClient() {
                   <div className="grid grid-cols-2 gap-3">
                     {p.data_inicio && (
                       <div>
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-wide">Início</p>
-                        <p className="text-xs text-zinc-400">{formatDate(p.data_inicio)}</p>
+                        <p className="text-[10px] text-fg-disabled uppercase tracking-wide">Início</p>
+                        <p className="text-xs text-fg-secondary">{formatDate(p.data_inicio)}</p>
                       </div>
                     )}
                     {p.data_fim_prevista && (
                       <div>
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-wide">Previsão</p>
-                        <p className={cn('text-xs', new Date(p.data_fim_prevista) < new Date() ? 'text-red-400' : 'text-zinc-400')}>
+                        <p className="text-[10px] text-fg-disabled uppercase tracking-wide">Previsão</p>
+                        <p className={cn('text-xs', new Date(p.data_fim_prevista) < new Date() ? 'text-red-400' : 'text-fg-secondary')}>
                           {formatDate(p.data_fim_prevista)}
                         </p>
                       </div>
@@ -454,9 +454,9 @@ export default function OrganizacaoClient() {
                   </div>
 
                   {p.proximos_passos && (
-                    <div className="mt-3 pt-3 border-t border-zinc-800">
-                      <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">Próximos passos</p>
-                      <p className="text-xs text-zinc-400 leading-relaxed">{p.proximos_passos}</p>
+                    <div className="mt-3 pt-3 border-t border-border-subtle">
+                      <p className="text-[10px] text-fg-disabled uppercase tracking-wide mb-1">Próximos passos</p>
+                      <p className="text-xs text-fg-secondary leading-relaxed">{p.proximos_passos}</p>
                     </div>
                   )}
                 </div>
@@ -494,22 +494,22 @@ export default function OrganizacaoClient() {
                   </div>
                   <div className="space-y-2">
                     {ideia_prazo.length === 0 ? (
-                      <div className="border-2 border-dashed border-zinc-800 rounded-xl p-4 text-center">
+                      <div className="border-2 border-dashed border-border-subtle rounded-xl p-4 text-center">
                         <p className="text-xs text-zinc-700">Nenhuma ideia</p>
                       </div>
                     ) : (
                       ideia_prazo.map(i => (
                         <div key={i.id}
                           onClick={() => setEditandoIdeia(i)}
-                          className="card-sm cursor-pointer hover:bg-zinc-800/80 transition-all group space-y-2">
+                          className="card-sm cursor-pointer hover:bg-muted/80 transition-all group space-y-2">
                           <div className="flex items-start justify-between">
-                            <p className="text-sm font-medium text-zinc-200 group-hover:text-amber-400 transition-colors leading-tight flex-1 mr-2">
+                            <p className="text-sm font-medium text-fg group-hover:text-amber-400 transition-colors leading-tight flex-1 mr-2">
                               {i.titulo}
                             </p>
                             <StatusBadge status={i.status} />
                           </div>
                           {i.descricao && (
-                            <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">{i.descricao}</p>
+                            <p className="text-xs text-fg-tertiary leading-relaxed line-clamp-2">{i.descricao}</p>
                           )}
                           <div className="flex items-center justify-between">
                             {i.potencial_impacto && (
@@ -531,7 +531,7 @@ export default function OrganizacaoClient() {
           {/* Descartadas (colapsável) */}
           {ideiasFiltered.filter(i => i.status === 'descartada').length > 0 && (
             <details className="group">
-              <summary className="cursor-pointer text-xs text-zinc-600 hover:text-zinc-400 flex items-center gap-2 py-2">
+              <summary className="cursor-pointer text-xs text-fg-disabled hover:text-fg-secondary flex items-center gap-2 py-2">
                 <span className="group-open:rotate-90 transition-transform">▶</span>
                 Ideias descartadas ({ideiasFiltered.filter(i => i.status === 'descartada').length})
               </summary>
@@ -539,7 +539,7 @@ export default function OrganizacaoClient() {
                 {ideiasFiltered.filter(i => i.status === 'descartada').map(i => (
                   <div key={i.id} className="card-sm opacity-50 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => setEditandoIdeia(i)}>
-                    <p className="text-xs text-zinc-500 line-through">{i.titulo}</p>
+                    <p className="text-xs text-fg-tertiary line-through">{i.titulo}</p>
                   </div>
                 ))}
               </div>
@@ -557,25 +557,25 @@ export default function OrganizacaoClient() {
             decisoes.map(d => (
               <div key={d.id} className="card space-y-3">
                 <div className="flex items-start justify-between">
-                  <h3 className="text-sm font-semibold text-zinc-100">{d.titulo}</h3>
-                  <span className="text-xs text-zinc-600 shrink-0">{formatDate(d.data_decisao)}</span>
+                  <h3 className="text-sm font-semibold text-fg">{d.titulo}</h3>
+                  <span className="text-xs text-fg-disabled shrink-0">{formatDate(d.data_decisao)}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">Contexto</p>
-                    <p className="text-xs text-zinc-400 leading-relaxed">{d.contexto}</p>
+                    <p className="text-[10px] text-fg-disabled uppercase tracking-wide mb-1">Contexto</p>
+                    <p className="text-xs text-fg-secondary leading-relaxed">{d.contexto}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">Decisão tomada</p>
-                    <p className="text-xs text-zinc-300 font-medium leading-relaxed">{d.decisao_tomada}</p>
+                    <p className="text-[10px] text-fg-disabled uppercase tracking-wide mb-1">Decisão tomada</p>
+                    <p className="text-xs text-fg-secondary font-medium leading-relaxed">{d.decisao_tomada}</p>
                   </div>
                 </div>
                 {(d.resultado || d.aprendizado) && (
-                  <div className="pt-3 border-t border-zinc-800 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="pt-3 border-t border-border-subtle grid grid-cols-1 md:grid-cols-2 gap-3">
                     {d.resultado && (
                       <div>
-                        <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">Resultado</p>
-                        <p className="text-xs text-zinc-400 leading-relaxed">{d.resultado}</p>
+                        <p className="text-[10px] text-fg-disabled uppercase tracking-wide mb-1">Resultado</p>
+                        <p className="text-xs text-fg-secondary leading-relaxed">{d.resultado}</p>
                       </div>
                     )}
                     {d.aprendizado && (
@@ -616,10 +616,10 @@ export default function OrganizacaoClient() {
       )}
       {modalDecisao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+          <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-zinc-100">Registrar Decisão</h2>
-              <button onClick={() => setModalDecisao(false)} className="text-zinc-500 hover:text-zinc-300 text-xl">×</button>
+              <h2 className="text-base font-semibold text-fg">Registrar Decisão</h2>
+              <button onClick={() => setModalDecisao(false)} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
             </div>
             <form onSubmit={handleSaveDecisao} className="space-y-4">
               <div>

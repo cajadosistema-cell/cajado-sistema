@@ -24,17 +24,17 @@ type Projeto = {
 }
 
 const PRIORIDADE_CONFIG = {
-  baixa:   { label: 'Baixa',   color: 'text-zinc-400',   bg: 'bg-zinc-700/50 border-zinc-700', dot: 'bg-zinc-500' },
+  baixa:   { label: 'Baixa',   color: 'text-fg-secondary',   bg: 'bg-surface-hover/50 border-border-subtle', dot: 'bg-zinc-500' },
   media:   { label: 'Média',   color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20', dot: 'bg-blue-500' },
   alta:    { label: 'Alta',    color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-500' },
   urgente: { label: 'Urgente', color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20', dot: 'bg-red-500' },
 }
 
 const STATUS_CONFIG = {
-  aberta:       { label: 'Aberta',       color: 'text-zinc-400   border-zinc-700    bg-zinc-800' },
+  aberta:       { label: 'Aberta',       color: 'text-fg-secondary   border-border-subtle    bg-muted' },
   em_andamento: { label: 'Em andamento', color: 'text-blue-400   border-blue-500/30  bg-blue-500/10' },
   concluida:    { label: 'Concluída',    color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
-  cancelada:    { label: 'Cancelada',    color: 'text-zinc-600   border-zinc-800    bg-zinc-900' },
+  cancelada:    { label: 'Cancelada',    color: 'text-fg-disabled   border-border-subtle    bg-page' },
 }
 
 function isVencida(prazo: string | null): boolean {
@@ -100,13 +100,13 @@ export function TabPendencias({ projetos }: Props) {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Abertas',   value: abertas,   color: 'text-zinc-200' },
-          { label: 'Urgentes',  value: urgentes,  color: urgentes > 0 ? 'text-red-400' : 'text-zinc-200' },
-          { label: 'Vencidas',  value: vencidas,  color: vencidas > 0 ? 'text-amber-400' : 'text-zinc-200' },
+          { label: 'Abertas',   value: abertas,   color: 'text-fg' },
+          { label: 'Urgentes',  value: urgentes,  color: urgentes > 0 ? 'text-red-400' : 'text-fg' },
+          { label: 'Vencidas',  value: vencidas,  color: vencidas > 0 ? 'text-amber-400' : 'text-fg' },
           { label: 'Concluídas', value: concluidas, color: 'text-emerald-400' },
         ].map(k => (
-          <div key={k.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-            <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-[0.06em] mb-1">{k.label}</p>
+          <div key={k.label} className="bg-page border border-border-subtle rounded-xl p-3">
+            <p className="text-[10px] font-medium text-fg-tertiary uppercase tracking-[0.06em] mb-1">{k.label}</p>
             <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
@@ -120,11 +120,11 @@ export function TabPendencias({ projetos }: Props) {
           <option value="">Sem projeto</option>
         </select>
 
-        <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-lg p-1">
           {(['todas', 'aberta', 'em_andamento', 'concluida'] as const).map(s => (
             <button key={s} onClick={() => setStatusFiltro(s)}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                statusFiltro === s ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                statusFiltro === s ? 'bg-surface-hover text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
               }`}>
               {s === 'todas' ? 'Todas' : STATUS_CONFIG[s].label}
             </button>
@@ -138,8 +138,8 @@ export function TabPendencias({ projetos }: Props) {
 
       {/* Formulário rápido */}
       {showForm && (
-        <form onSubmit={handleSalvar} className="bg-zinc-900 border border-zinc-700 rounded-xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-zinc-200 mb-3">Nova Pendência</p>
+        <form onSubmit={handleSalvar} className="bg-page border border-border-subtle rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-fg mb-3">Nova Pendência</p>
           <div>
             <label className="label">Descrição *</label>
             <input className="input mt-1" required value={form.descricao}
@@ -187,7 +187,7 @@ export function TabPendencias({ projetos }: Props) {
 
       {/* Lista de pendências */}
       {pendenciasFiltradas.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
+        <div className="bg-page border border-border-subtle rounded-xl p-8">
           <EmptyState message="Nenhuma pendência encontrada" />
         </div>
       ) : (
@@ -198,8 +198,8 @@ export function TabPendencias({ projetos }: Props) {
             const vencida = isVencida(p.prazo) && !isC
             return (
               <div key={p.id}
-                className={`bg-zinc-900 border rounded-xl p-4 flex items-start gap-4 transition-all ${
-                  isC ? 'opacity-50 border-zinc-800' : vencida ? 'border-amber-500/30' : 'border-zinc-800 hover:border-zinc-700'
+                className={`bg-page border rounded-xl p-4 flex items-start gap-4 transition-all ${
+                  isC ? 'opacity-50 border-border-subtle' : vencida ? 'border-amber-500/30' : 'border-border-subtle hover:border-border-subtle'
                 }`}>
 
                 {/* Checkbox */}
@@ -213,7 +213,7 @@ export function TabPendencias({ projetos }: Props) {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className={`text-sm font-medium ${isC ? 'line-through text-zinc-500' : 'text-zinc-200'}`}>
+                    <p className={`text-sm font-medium ${isC ? 'line-through text-fg-tertiary' : 'text-fg'}`}>
                       {p.descricao}
                     </p>
                     {/* Badge prioridade */}
@@ -224,16 +224,16 @@ export function TabPendencias({ projetos }: Props) {
 
                   <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                     {p.responsavel && (
-                      <span className="text-[10px] text-zinc-500">👤 {p.responsavel}</span>
+                      <span className="text-[10px] text-fg-tertiary">👤 {p.responsavel}</span>
                     )}
                     {p.prazo && (
-                      <span className={`text-[10px] ${vencida ? 'text-amber-400' : 'text-zinc-500'}`}>
+                      <span className={`text-[10px] ${vencida ? 'text-amber-400' : 'text-fg-tertiary'}`}>
                         {vencida ? '⚠️' : '📅'} {formatDate(p.prazo)}
                         {vencida && ' — vencida!'}
                       </span>
                     )}
                     {p.projeto_id && (
-                      <span className="text-[10px] text-zinc-600">
+                      <span className="text-[10px] text-fg-disabled">
                         📁 {projetos.find(pr => pr.id === p.projeto_id)?.titulo ?? 'Projeto'}
                       </span>
                     )}

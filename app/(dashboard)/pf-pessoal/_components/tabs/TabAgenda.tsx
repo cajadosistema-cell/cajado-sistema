@@ -35,7 +35,7 @@ const TIPO_CONFIG: Record<TipoEvento, { icon: string; cor: string; label: string
 }
 
 const PRIORIDADE_CONFIG: Record<Prioridade, { label: string; badge: string }> = {
-  baixa:   { label: 'Baixa',   badge: 'text-zinc-400 border-zinc-700 bg-zinc-700/20'       },
+  baixa:   { label: 'Baixa',   badge: 'text-fg-secondary border-border-subtle bg-surface-hover/20'       },
   normal:  { label: 'Normal',  badge: 'text-blue-400 border-blue-500/30 bg-blue-500/10'    },
   alta:    { label: 'Alta',    badge: 'text-amber-400 border-amber-500/30 bg-amber-500/10' },
   urgente: { label: 'Urgente', badge: 'text-red-400 border-red-500/30 bg-red-500/10'       },
@@ -188,12 +188,12 @@ function ModalEvento({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#111827] border border-white/5 rounded-2xl w-full max-w-lg shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface border border-white/5 rounded-2xl w-full max-w-lg shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-zinc-100 font-['Syne']">
+          <h2 className="text-lg font-bold text-fg font-['Syne']">
             {inicial?.id ? '✏️ Editar Evento' : '📅 Novo Evento'}
           </h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-2xl leading-none">×</button>
         </div>
 
         <form onSubmit={handleSave} className="space-y-4">
@@ -210,7 +210,7 @@ function ModalEvento({
                     'flex flex-col items-center px-2 py-2.5 rounded-xl border text-xs font-semibold transition-all gap-1',
                     form.tipo === key
                       ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                      : 'bg-[#080b14]/50 border-white/5 text-zinc-400 hover:border-white/10'
+                      : 'bg-page/50 border-white/5 text-fg-secondary hover:border-white/10'
                   )}
                 >
                   <span className="text-lg">{cfg.icon}</span>
@@ -266,7 +266,7 @@ function ModalEvento({
                   onClick={() => setForm(f => ({ ...f, prioridade: key }))}
                   className={cn(
                     'flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all',
-                    form.prioridade === key ? cfg.badge : 'border-zinc-800 text-zinc-600 hover:border-zinc-700'
+                    form.prioridade === key ? cfg.badge : 'border-border-subtle text-fg-disabled hover:border-border-subtle'
                   )}
                 >
                   {cfg.label}
@@ -336,6 +336,13 @@ export function TabAgenda({ userId }: { userId: string }) {
   }, [userId, supabase])
 
   useEffect(() => { if (userId) carregar() }, [userId, carregar])
+
+  // Escuta evento da Elena (assistente flutuante) para recarregar a agenda
+  useEffect(() => {
+    const handler = () => { if (userId) carregar() }
+    window.addEventListener('elena:agenda-updated', handler)
+    return () => window.removeEventListener('elena:agenda-updated', handler)
+  }, [userId, carregar])
 
   // ── Concluir/Cancelar evento ────────────────────────────
   const handleStatus = async (id: string, status: StatusEvento) => {
@@ -408,15 +415,15 @@ export function TabAgenda({ userId }: { userId: string }) {
       {/* ── Header ──────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-zinc-100">📅 Agenda Pessoal</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <h2 className="text-base font-bold text-fg">📅 Agenda Pessoal</h2>
+          <p className="text-xs text-fg-tertiary mt-0.5">
             {pendentes.length} compromisso{pendentes.length !== 1 ? 's' : ''} pendente{pendentes.length !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
-          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-            <button onClick={() => setViewMode('semana')} className={cn('px-3 py-1 rounded-lg text-xs font-semibold transition-all', viewMode === 'semana' ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-500 hover:text-zinc-300')}>📆 Semana</button>
-            <button onClick={() => setViewMode('lista')} className={cn('px-3 py-1 rounded-lg text-xs font-semibold transition-all', viewMode === 'lista' ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-500 hover:text-zinc-300')}>📋 Lista</button>
+          <div className="flex gap-1 bg-page border border-border-subtle rounded-xl p-1">
+            <button onClick={() => setViewMode('semana')} className={cn('px-3 py-1 rounded-lg text-xs font-semibold transition-all', viewMode === 'semana' ? 'bg-amber-500/10 text-amber-400' : 'text-fg-tertiary hover:text-fg-secondary')}>📆 Semana</button>
+            <button onClick={() => setViewMode('lista')} className={cn('px-3 py-1 rounded-lg text-xs font-semibold transition-all', viewMode === 'lista' ? 'bg-amber-500/10 text-amber-400' : 'text-fg-tertiary hover:text-fg-secondary')}>📋 Lista</button>
           </div>
           <button onClick={() => { setEventoEditar(null); setEventoPreview(null); setModalOpen(true) }} className="btn-primary text-xs h-8 px-4">
             + Novo
@@ -429,9 +436,9 @@ export function TabAgenda({ userId }: { userId: string }) {
         'rounded-2xl border p-4 transition-all',
         ouvindo
           ? 'bg-red-500/5 border-red-500/30'
-          : 'bg-[#111827] border-white/5'
+          : 'bg-surface border-white/5'
       )}>
-        <p className="text-xs font-semibold text-zinc-400 mb-2">🎙️ Agendar por Voz ou Texto</p>
+        <p className="text-xs font-semibold text-fg-secondary mb-2">🎙️ Agendar por Voz ou Texto</p>
         <div className="flex gap-2">
           <input
             className="input flex-1 text-sm"
@@ -451,7 +458,7 @@ export function TabAgenda({ userId }: { userId: string }) {
               'w-10 h-10 rounded-xl flex items-center justify-center border transition-all shrink-0',
               ouvindo
                 ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse'
-                : 'bg-white/5 border-white/10 text-zinc-400 hover:text-amber-400 hover:border-amber-500/30'
+                : 'bg-white/5 border-white/10 text-fg-secondary hover:text-amber-400 hover:border-amber-500/30'
             )}
             title="Falar"
           >
@@ -470,8 +477,8 @@ export function TabAgenda({ userId }: { userId: string }) {
           <div className="mt-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-start justify-between gap-3">
             <div className="flex-1">
               <p className="text-xs text-emerald-400 font-semibold mb-1">✨ IA interpretou:</p>
-              <p className="text-sm font-bold text-zinc-100">{TIPO_CONFIG[eventoPreview.tipo!]?.icon} {eventoPreview.titulo}</p>
-              <p className="text-xs text-zinc-500 mt-0.5">
+              <p className="text-sm font-bold text-fg">{TIPO_CONFIG[eventoPreview.tipo!]?.icon} {eventoPreview.titulo}</p>
+              <p className="text-xs text-fg-tertiary mt-0.5">
                 {eventoPreview.tipo && TIPO_CONFIG[eventoPreview.tipo].label} ·{' '}
                 {eventoPreview.data_inicio && new Date(eventoPreview.data_inicio).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} ·{' '}
                 {eventoPreview.prioridade && PRIORIDADE_CONFIG[eventoPreview.prioridade].label}
@@ -481,7 +488,7 @@ export function TabAgenda({ userId }: { userId: string }) {
               <button onClick={confirmarVoz} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-xs font-semibold transition-all">
                 ✓ Confirmar
               </button>
-              <button onClick={() => setEventoPreview(null)} className="px-2 py-1.5 text-zinc-500 hover:text-zinc-300 text-xs">
+              <button onClick={() => setEventoPreview(null)} className="px-2 py-1.5 text-fg-tertiary hover:text-fg-secondary text-xs">
                 ✕
               </button>
             </div>
@@ -502,14 +509,14 @@ export function TabAgenda({ userId }: { userId: string }) {
                   'rounded-xl border p-3 min-h-[120px]',
                   isHoje
                     ? 'bg-amber-500/5 border-amber-500/20'
-                    : 'bg-[#111827] border-white/5'
+                    : 'bg-surface border-white/5'
                 )}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <p className={cn('text-xs font-bold capitalize', isHoje ? 'text-amber-400' : 'text-zinc-400')}>
+                  <p className={cn('text-xs font-bold capitalize', isHoje ? 'text-amber-400' : 'text-fg-secondary')}>
                     {isHoje ? '⭐ Hoje' : formatDia(dia)}
                   </p>
-                  {!isHoje && <p className="text-[10px] text-zinc-600">{formatDia(dia)}</p>}
+                  {!isHoje && <p className="text-[10px] text-fg-disabled">{formatDia(dia)}</p>}
                 </div>
                 {evs.length === 0 ? (
                   <p className="text-[10px] text-zinc-700 italic">Livre</p>
@@ -521,17 +528,17 @@ export function TabAgenda({ userId }: { userId: string }) {
                         className={cn(
                           'group flex items-start gap-1.5 p-1.5 rounded-lg border transition-all cursor-pointer',
                           ev.status === 'concluido'
-                            ? 'opacity-40 border-zinc-800 bg-zinc-900'
+                            ? 'opacity-40 border-border-subtle bg-page'
                             : 'border-white/5 bg-black/20 hover:border-white/10'
                         )}
                         onClick={() => { setEventoEditar(ev); setModalOpen(true) }}
                       >
                         <span className="text-sm shrink-0">{TIPO_CONFIG[ev.tipo]?.icon}</span>
                         <div className="min-w-0 flex-1">
-                          <p className={cn('text-xs font-semibold truncate', ev.status === 'concluido' ? 'line-through text-zinc-600' : 'text-zinc-200')}>
+                          <p className={cn('text-xs font-semibold truncate', ev.status === 'concluido' ? 'line-through text-fg-disabled' : 'text-fg')}>
                             {ev.titulo}
                           </p>
-                          <p className="text-[9px] text-zinc-600">{formatHora(ev.data_inicio)}</p>
+                          <p className="text-[9px] text-fg-disabled">{formatHora(ev.data_inicio)}</p>
                         </div>
                         <button
                           onClick={e => { e.stopPropagation(); handleStatus(ev.id, ev.status === 'concluido' ? 'pendente' : 'concluido') }}
@@ -552,11 +559,11 @@ export function TabAgenda({ userId }: { userId: string }) {
       {viewMode === 'lista' && (
         <div className="space-y-2">
           {loading ? (
-            <p className="text-zinc-600 text-sm text-center py-8">Carregando agenda...</p>
+            <p className="text-fg-disabled text-sm text-center py-8">Carregando agenda...</p>
           ) : eventos.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-4xl mb-3">📅</p>
-              <p className="text-sm text-zinc-500">Nenhum evento nos próximos 60 dias</p>
+              <p className="text-sm text-fg-tertiary">Nenhum evento nos próximos 60 dias</p>
               <button onClick={() => { setModalOpen(true); setEventoEditar(null) }} className="btn-primary mt-4 text-xs mx-auto block">
                 + Criar primeiro evento
               </button>
@@ -568,8 +575,8 @@ export function TabAgenda({ userId }: { userId: string }) {
                 className={cn(
                   'flex items-start gap-3 p-3 rounded-xl border transition-all group',
                   ev.status === 'concluido'
-                    ? 'opacity-50 border-zinc-800 bg-zinc-900'
-                    : 'border-white/5 bg-[#111827] hover:border-white/10'
+                    ? 'opacity-50 border-border-subtle bg-page'
+                    : 'border-white/5 bg-surface hover:border-white/10'
                 )}
               >
                 {/* Indicador de cor/tipo */}
@@ -580,7 +587,7 @@ export function TabAgenda({ userId }: { userId: string }) {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className={cn('text-sm font-semibold', ev.status === 'concluido' ? 'line-through text-zinc-600' : 'text-zinc-100')}>
+                    <p className={cn('text-sm font-semibold', ev.status === 'concluido' ? 'line-through text-fg-disabled' : 'text-fg')}>
                       {ev.titulo}
                     </p>
                     <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border', PRIORIDADE_CONFIG[ev.prioridade]?.badge)}>
@@ -592,13 +599,13 @@ export function TabAgenda({ userId }: { userId: string }) {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <p className="text-xs text-fg-tertiary mt-0.5">
                     {new Date(ev.data_inicio).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
                     {' às '}
                     {formatHora(ev.data_inicio)}
                     {ev.data_fim && ` → ${formatHora(ev.data_fim)}`}
                   </p>
-                  {ev.descricao && <p className="text-xs text-zinc-600 mt-1 line-clamp-1">{ev.descricao}</p>}
+                  {ev.descricao && <p className="text-xs text-fg-disabled mt-1 line-clamp-1">{ev.descricao}</p>}
                 </div>
 
                 {/* Ações */}
@@ -613,7 +620,7 @@ export function TabAgenda({ userId }: { userId: string }) {
                   <button
                     onClick={() => { setEventoEditar(ev); setModalOpen(true) }}
                     title="Editar"
-                    className="w-7 h-7 rounded-lg bg-white/5 text-zinc-400 hover:bg-white/10 flex items-center justify-center text-sm transition-all"
+                    className="w-7 h-7 rounded-lg bg-white/5 text-fg-secondary hover:bg-white/10 flex items-center justify-center text-sm transition-all"
                   >✎</button>
                   <button
                     onClick={() => handleDelete(ev.id, ev.titulo)}
@@ -629,7 +636,7 @@ export function TabAgenda({ userId }: { userId: string }) {
 
       {/* Resumo rápido */}
       {eventos.length > 0 && (
-        <div className="flex gap-3 text-xs text-zinc-600 border-t border-white/5 pt-3">
+        <div className="flex gap-3 text-xs text-fg-disabled border-t border-white/5 pt-3">
           <span>📌 {pendentes.length} pendente{pendentes.length !== 1 ? 's' : ''}</span>
           <span>✅ {concluidos.length} concluído{concluidos.length !== 1 ? 's' : ''}</span>
           <span className="ml-auto">{eventos.length} evento{eventos.length !== 1 ? 's' : ''} no período</span>

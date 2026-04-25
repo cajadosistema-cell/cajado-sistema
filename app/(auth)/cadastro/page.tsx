@@ -47,12 +47,12 @@ export default function CadastroPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-sidebar flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Cajado Soluções" className="h-16 w-auto mx-auto mb-4 object-contain drop-shadow-sm" />
-          <h1 className="text-xl font-semibold text-zinc-100">Criar Acesso (Equipe)</h1>
-          <p className="text-sm text-zinc-500 mt-1">Crie senhas para a sua Equipe</p>
+          <h1 className="text-xl font-semibold text-fg">Criar Acesso (Equipe)</h1>
+          <p className="text-sm text-fg-tertiary mt-1">Crie senhas para a sua Equipe</p>
         </div>
 
         {success ? (
@@ -61,7 +61,7 @@ export default function CadastroPage() {
               ✓
             </div>
             <h3 className="text-emerald-400 font-bold">Colaborador Criado!</h3>
-            <p className="text-sm text-zinc-400">Autenticação gerada com sucesso. Redirecionando para o sistema...</p>
+            <p className="text-sm text-fg-secondary">Autenticação gerada com sucesso. Redirecionando para o sistema...</p>
           </div>
         ) : (
           <form onSubmit={handleRegister} className="card space-y-4">
@@ -114,8 +114,8 @@ export default function CadastroPage() {
               {loading ? 'Gerando Acesso...' : 'Registrar Funcionário'}
             </button>
             
-            <div className="pt-3 border-t border-zinc-800 text-center">
-              <Link href="/login" className="text-xs text-zinc-500 hover:text-zinc-300">
+            <div className="pt-3 border-t border-border-subtle text-center">
+              <Link href="/login" className="text-xs text-fg-tertiary hover:text-fg-secondary">
                 Voltar para o Login
               </Link>
             </div>
