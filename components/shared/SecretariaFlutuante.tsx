@@ -60,10 +60,18 @@ RECEITA DA EMPRESA:
 {"acao":"receita_empresa","valor":5000.00,"descricao":"Serviço prestado","categoria":"servicos"}
 \`\`\`
 
-AGENDA:
+AGENDA / EVENTO:
 \`\`\`json
 {"acao":"agenda","titulo":"Reunião com cliente","data_inicio":"${amanhaStr}T14:00:00","tipo":"reuniao"}
 \`\`\`
+
+ALARME / LEMBRETE SONORO (use tipo="lembrete" — o sistema tocará som 15 min antes e na hora):
+\`\`\`json
+{"acao":"agenda","titulo":"⏰ Tomar remédio","data_inicio":"${anoAtual}-${mesAtual}-${diaAtual}T08:00:00","tipo":"lembrete","descricao":"Alarme automático"}
+\`\`\`
+- Use tipo="lembrete" SEMPRE que o chefe pedir: "me avisa", "toca um alarme", "lembra de mim às X horas", "cria um alerta"
+- TIPOS de agenda: reuniao, lembrete, tarefa, prazo, pessoal, vencimento
+- Para lembretes de vencimento de cartão, use tipo="vencimento"
 
 OCORRÊNCIA DA EQUIPE:
 \`\`\`json

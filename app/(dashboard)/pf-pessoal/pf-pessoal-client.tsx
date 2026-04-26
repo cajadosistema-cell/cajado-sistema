@@ -16,6 +16,7 @@ import { TabAgenda }      from './_components/tabs/TabAgenda'
 import { TabIdeias }      from './_components/tabs/TabIdeias'
 import { TabRegistros }   from './_components/tabs/TabRegistros'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
+import { AlarmManager } from '@/components/shared/AlarmManager'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 
@@ -201,6 +202,9 @@ export default function PfPessoalClient() {
 
       {/* Secretária Flutuante do Patrão */}
       <SecretariaFlutuante />
+
+      {/* Gerenciador de Alarmes Sonoros da Agenda */}
+      <AlarmManager userId={authUserId} />
 
       {/* Modais */}
       {modalGasto && (
