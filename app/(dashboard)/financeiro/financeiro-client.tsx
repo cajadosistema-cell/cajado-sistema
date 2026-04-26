@@ -11,6 +11,7 @@ import { TabCartoes } from './_components/TabCartoes'
 import { TabCartoesSeparado } from './_components/TabCartoesSeparado'
 import { TabContas } from './_components/TabContas'
 import { useToast } from '@/components/shared/toast'
+import { TabRegistros } from '../pf-pessoal/_components/tabs/TabRegistros'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Conta = {
@@ -898,13 +899,14 @@ function ModalLancamento({
 // ── Client Component ────────────────────────────────────────────
 
 export default function FinanceiroClient() {
-  const [view, setView] = useState<'contas' | 'cartoes' | 'resumo'>('contas')
+  const [view, setView] = useState<'contas' | 'cartoes' | 'resumo' | 'registros'>('contas')
   const [modalLancamento, setModalLancamento] = useState(false)
   const [modalConta, setModalConta] = useState(false)
   const [modalImport, setModalImport] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState('')
   const [busca, setBusca] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [authUserId, setAuthUserId] = useState('')
   const { success, error: toastError } = useToast()
   const { update: updateLancamento } = useSupabaseMutation('lancamentos')
 
@@ -921,6 +923,14 @@ export default function FinanceiroClient() {
       setIsAdmin(!func) // admin = não está na tabela funcionarios
     }
     checkAdmin()
+  }, [])
+
+  // Carrega userId para a aba de registros
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setAuthUserId(data.user.id)
+    })
   }, [])
 
   const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true } })
@@ -977,9 +987,10 @@ export default function FinanceiroClient() {
       {/* Tabs Menu Superior */}
       <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 w-fit mb-6">
         {([
-          { id: 'contas',  label: '🏦 Contas'  },
-          { id: 'cartoes', label: '💳 Cartões' },
-          { id: 'resumo',  label: '📊 Resumo'  },
+          { id: 'contas',     label: '🏦 Contas'     },
+          { id: 'cartoes',    label: '💳 Cartões'  },
+          { id: 'resumo',     label: '📊 Resumo'     },
+          { id: 'registros',  label: '🗂️ Registros' },
         ] as const).map(tab => (
           <button key={tab.id} onClick={() => setView(tab.id)}
             className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
@@ -1011,6 +1022,11 @@ export default function FinanceiroClient() {
           onImportar={() => setModalImport(true)}
           onRefresh={refreshAll}
         />
+      )}
+
+      {/* ── ABA REGISTROS ────────────────────────────────── */}
+      {view === 'registros' && (
+        <TabRegistros userId={authUserId} />
       )}
 
       {/* ── ABA RESUMO (Painel Geral original) ──────────────── */}

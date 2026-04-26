@@ -14,11 +14,12 @@ import { TabOrcamentos }  from './_components/tabs/TabOrcamentos'
 import { TabPrevisao }    from './_components/tabs/TabPrevisao'
 import { TabAgenda }      from './_components/tabs/TabAgenda'
 import { TabIdeias }      from './_components/tabs/TabIdeias'
+import { TabRegistros }   from './_components/tabs/TabRegistros'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda' | 'ideias'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda' | 'ideias' | 'registros'
 
 const TABS = [
   { id: 'resumo'       as TabId, label: 'Resumo',      emoji: '📊' },
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'previsao'     as TabId, label: 'Previsão',    emoji: '🔮' },
   { id: 'agenda'       as TabId, label: 'Agenda',       emoji: '📅' },
   { id: 'ideias'       as TabId, label: 'Ideias',       emoji: '💡' },
+  { id: 'registros'    as TabId, label: 'Registros',    emoji: '🗂️' },
 ]
 
 export default function PfPessoalClient() {
@@ -191,6 +193,10 @@ export default function PfPessoalClient() {
 
       {tab === 'ideias' && (
         <TabIdeias userId={authUserId} />
+      )}
+
+      {tab === 'registros' && (
+        <TabRegistros userId={authUserId} />
       )}
 
       {/* Secretária Flutuante do Patrão */}
