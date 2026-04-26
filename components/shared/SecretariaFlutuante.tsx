@@ -150,13 +150,20 @@ export function SecretariaFlutuante() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
-  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null)
+  const [attachedFile, setAttachedFileState] = useState<AttachedFile | null>(null)
+  const attachedFileRef = useRef<AttachedFile | null>(null)
   const [processingFile, setProcessingFile] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
   const historyLoadedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Helper: mantém ref e state sincronizados
+  const setAttachedFile = (f: AttachedFile | null) => {
+    attachedFileRef.current = f
+    setAttachedFileState(f)
+  }
   // sessão = dia atual, agrupa mensagens por dia
   const sessaoId = new Date().toISOString().split('T')[0]
 
@@ -464,12 +471,14 @@ export function SecretariaFlutuante() {
   // ── Enviar ────────────────────────────────────────────────
   const handleEnviar = useCallback(async (textToSubmit?: string) => {
     const userText = (textToSubmit ?? input).trim()
-    if ((!userText && !attachedFile) || loading) return
+    // Usa ref para sempre ter o valor mais recente de attachedFile (evita stale closure)
+    const currentFile = attachedFileRef.current
+    if ((!userText && !currentFile) || loading) return
     const aiMsgId = (Date.now() + 1).toString()
-    const userMsgTexto = userText || (attachedFile?.isImage ? `📎 ${attachedFile.name}` : `📄 ${attachedFile?.name}`)
+    const userMsgTexto = userText || (currentFile?.isImage ? `📎 ${currentFile.name}` : `📄 ${currentFile?.name}`)
     setMensagens(prev => [
       ...prev,
-      { id: Date.now().toString(), role: 'user', texto: userMsgTexto, anexo: attachedFile?.isImage ? attachedFile.preview : undefined },
+      { id: Date.now().toString(), role: 'user', texto: userMsgTexto, anexo: currentFile?.isImage ? currentFile.preview : undefined },
       { id: aiMsgId, role: 'ai', texto: '...' }
     ])
     setInput('')
@@ -484,7 +493,8 @@ export function SecretariaFlutuante() {
       if (uid) setUserId(uid)
     }
 
-    const fileSnap = attachedFile
+    // Captura e limpa o arquivo
+    const fileSnap = currentFile
     setAttachedFile(null)
 
     try {
@@ -537,9 +547,11 @@ export function SecretariaFlutuante() {
       if (acoesComStatus.length > 0 && uid) {
         setTimeout(() => executarAcoesAuto(aiMsgId, acoesComStatus, uid), 600)
       }
-    } catch {
+    } catch (err: any) {
+      const errMsg = err?.message || 'Erro desconhecido'
+      console.error('[Elena]', errMsg)
       setMensagens(prev => prev.map(m =>
-        m.id === aiMsgId ? { ...m, texto: 'Perdão, chefe. Tive um problema de comunicação. Tente novamente.' } : m
+        m.id === aiMsgId ? { ...m, texto: `Perdão, chefe. Tive um problema: ${errMsg.substring(0, 120)}` } : m
       ))
     } finally {
       setLoading(false)
