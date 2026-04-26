@@ -24,6 +24,9 @@ function tocarChime(tipo: 'aviso' | 'urgente' = 'aviso') {
     const Ctx = window.AudioContext || (window as any).webkitAudioContext
     if (!Ctx) return
     const ctx = new Ctx()
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+    }
 
     // Acorde: C5 - E5 - G5 (aviso) | A4 - C5 - E5 (urgente)
     const notas = tipo === 'aviso'
