@@ -258,7 +258,7 @@ REGRAS:
       const jsonMatch = texto.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         const cls: { id: number; tipo: string; categoria: string }[] = JSON.parse(jsonMatch[0])
-        setTransacoes(prev => prev.map((t, i) => {
+        const atualizadas = txs.map((t, i) => {
           const c = cls.find(x => x.id === i + 1)
           if (!c) return t
           return { ...t, tipo: (c.tipo === 'receita' ? 'receita' : 'despesa') as any, categoria: c.categoria || 'outros', aiCategoria: c.categoria || '' }
