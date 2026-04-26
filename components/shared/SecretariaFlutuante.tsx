@@ -84,12 +84,9 @@ ANÁLISE DE IMAGENS E PDFs:
 Quando o chefe enviar uma imagem ou PDF, analise o conteúdo e:
 - FATURA DE CARTÃO DE CRÉDITO: extraia CADA compra com valor, descrição, data e forma_pagamento="cartao_credito". Gere um bloco JSON para CADA item.
 - NOTA FISCAL / CUPOM: extraia valor total, fornecedor e gere um gasto.
-- LISTA DE CARTÕES: identifique cada cartão, bandeira, limite, vencimento da fatura. Para CADA cartão, crie um evento na agenda no próximo vencimento:
-  ```json
-  {"acao":"agenda","titulo":"🔴 Vencimento [Banco] - [final do cartão]","data_inicio":"${anoAtual}-MM-DDT10:00:00","tipo":"lembrete","descricao":"Valor estimado: R$ XXX,XX"}
-  ```
+- LISTA DE CARTÕES: identifique cada cartão, bandeira, limite, vencimento da fatura. Para CADA cartão, crie um evento na agenda no próximo vencimento usando o JSON de agenda abaixo. Exemplo: acao=agenda, titulo=🔴 Vencimento [Banco] [final cartão], data_inicio=${anoAtual}-MM-DDT10:00:00, tipo=lembrete.
 - COMPROVANTE DE PAGAMENTO: registre como gasto ou receita conforme o documento.
-- CRONOGRAMA: quando pedir cronograma de cartões, Monte uma tabela organizada com: Cartão | Vencimento | Valor estimado | Parcelas ativas — e gere um evento de agenda por cartão.
+- CRONOGRAMA: quando pedir cronograma de cartões, monte uma tabela organizada com: Cartão | Vencimento | Valor estimado | Parcelas ativas — e gere um evento de agenda por cartão.
 
 REGRAS:
 - PERGUNTE se o gasto é PESSOAL ou DA EMPRESA antes de registrar
