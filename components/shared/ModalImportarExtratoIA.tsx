@@ -88,18 +88,104 @@ export function ModalImportarExtratoIA({ userId, modo, contasPJ = [], onClose, o
 
   // ── Lê arquivo ────────────────────────────────────────────────
   const handleArquivo = useCallback(async (file: File) => {
+    const ext = file.name.toLowerCase()
+    
+    // Processamento especial para PDF
+    if (ext.endsWith('.pdf')) {
+      setAnalisando(true)
+      setErroIA('')
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch('/api/parse-pdf', { method: 'POST', body: formData })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        if (!data.text || data.text.trim().length < 10) {
+          throw new Error('O PDF parece estar vazio ou não é texto pesquisável (imagem).')
+        }
+        await extrairEClassificarComIA(data.text)
+      } catch (err: any) {
+        alert('Erro ao processar PDF: ' + err.message)
+        setAnalisando(false)
+      }
+      return
+    }
+
     const conteudo = await file.text()
     let parsed: TransacaoImportada[] = []
-    const ext = file.name.toLowerCase()
+    
     if (ext.endsWith('.ofx') || ext.endsWith('.qif') || conteudo.includes('<STMTTRN>')) {
       parsed = parsearOFX(conteudo)
     } else if (ext.endsWith('.csv') || ext.endsWith('.txt')) {
       parsed = parsearCSV(conteudo)
-    } else { alert('Formato não suportado. Use OFX ou CSV.'); return }
+    } else { alert('Formato não suportado. Use OFX, CSV ou PDF.'); return }
+    
     if (parsed.length === 0) { alert('Nenhuma transação encontrada no arquivo.'); return }
     setTransacoes(parsed)
     await analisarComIA(parsed)
   }, [modo])
+
+  // ── IA extrai e categoriza (PDF) ───────────────────────────────
+  const extrairEClassificarComIA = async (texto: string) => {
+    try {
+      const catDesp = modo === 'pj' ? CAT_PJ_DESPESA.join(', ') : CAT_PF_DESPESA.join(', ')
+      const catRec  = modo === 'pj' ? CAT_PJ_RECEITA.join(', ') : CAT_PF_RECEITA.join(', ')
+
+      const prompt = `Você é um extrator de dados financeiros. Leia o texto extraído de um extrato em PDF e extraia TODAS as transações financeiras.
+
+TEXTO DO EXTRATO:
+${texto.slice(0, 15000)}
+
+Extraia e retorne SOMENTE um JSON array no formato exato:
+[
+  {"descricao":"MERCADO MUNICIPAL","valor":150.50,"data":"2023-10-25","tipo":"despesa","categoria":"alimentacao"},
+  {"descricao":"PIX JOAO","valor":500.00,"data":"2023-10-26","tipo":"receita","categoria":"servicos"}
+]
+
+Categorias de despesa: ${catDesp}
+Categorias de receita: ${catRec}
+
+REGRAS:
+- "despesa" = débito, compra, pagamento, tarifa, saque (retorne valor numérico positivo)
+- "receita" = crédito, salário, pix recebido, rendimento, estorno
+- Use o formato de data YYYY-MM-DD. Tente inferir o ano se não estiver explícito.
+- Ignore saldos iniciais/finais, avisos ou cabeçalhos.
+- Retorne SOMENTE o JSON array`
+
+      const res = await fetch('/api/openrouter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          model: 'openai/gpt-4o-mini', max_tokens: 3000,
+        }),
+      })
+      const data = await res.json()
+      const respTexto = data.choices?.[0]?.message?.content || ''
+      const jsonMatch = respTexto.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        const cls: any[] = JSON.parse(jsonMatch[0])
+        const mapeado = cls.map((c, i) => ({
+          _id: \`pdf_\${i}\`,
+          descricao: c.descricao || 'Transação',
+          valor: Math.abs(c.valor || 0),
+          data: c.data || new Date().toISOString().split('T')[0],
+          tipo: (c.tipo === 'receita' ? 'receita' : 'despesa') as any,
+          categoria: c.categoria || 'outros',
+          selecionado: true,
+          aiCategoria: c.categoria || ''
+        }))
+        setTransacoes(mapeado)
+        if (mapeado.length === 0) setErroIA('Nenhuma transação encontrada no PDF.')
+      } else {
+        setErroIA('IA não conseguiu extrair transações. O PDF pode estar ilegível ou ser uma imagem.')
+      }
+    } catch (err: any) {
+      setErroIA('Erro na IA: ' + err.message)
+    }
+    setAnalisando(false)
+    setStep('review')
+  }
 
   // ── IA categoriza em lote ──────────────────────────────────────
   const analisarComIA = async (txs: TransacaoImportada[]) => {
@@ -223,7 +309,7 @@ REGRAS:
               </h2>
               <p className="text-[10px] text-fg-disabled">
                 {step === 'upload'
-                  ? 'Faça upload do extrato OFX ou CSV'
+                  ? 'Faça upload do extrato OFX, CSV ou PDF'
                   : analisando
                   ? 'Analisando com inteligência artificial...'
                   : `${transacoes.length} transações encontradas`}
@@ -251,22 +337,22 @@ REGRAS:
             )}
 
             <label className="w-full max-w-md cursor-pointer group">
-              <input type="file" accept=".ofx,.qif,.csv,.txt" className="hidden"
+              <input type="file" accept=".ofx,.qif,.csv,.txt,.pdf" className="hidden"
                 onChange={e => { if (e.target.files?.[0]) handleArquivo(e.target.files[0]) }} />
               <div className="border-2 border-dashed border-white/10 group-hover:border-amber-500/40 rounded-2xl p-10 text-center transition-all group-hover:bg-amber-500/3">
                 <p className="text-4xl mb-3">📂</p>
                 <p className="text-sm font-bold text-fg group-hover:text-amber-400 transition-colors">
                   Clique ou arraste o extrato aqui
                 </p>
-                <p className="text-xs text-fg-disabled mt-1">OFX (banco) · CSV (Excel/Sheets)</p>
+                <p className="text-xs text-fg-disabled mt-1">OFX (banco) · CSV (Excel) · PDF (fatura/extrato)</p>
               </div>
             </label>
 
             <div className="grid grid-cols-3 gap-3 w-full max-w-md">
               {[
-                { icon: '🏦', label: 'OFX/QIF', desc: 'Formato bancário padrão' },
-                { icon: '📊', label: 'CSV', desc: 'Excel, Sheets, exportações' },
-                { icon: '🤖', label: 'IA Classifica', desc: modo === 'pj' ? 'Lança nas contas PJ' : 'Categoriza para PF' },
+                { icon: '🏦', label: 'OFX/CSV', desc: 'Formatos padrão bancários' },
+                { icon: '📄', label: 'PDF', desc: 'A IA extrai faturas e extratos' },
+                { icon: '🤖', label: 'Classificação', desc: modo === 'pj' ? 'Lança nas contas PJ' : 'Categoriza para PF' },
               ].map(item => (
                 <div key={item.label} className="bg-white/3 border border-white/5 rounded-xl p-3 text-center">
                   <p className="text-xl mb-1">{item.icon}</p>
