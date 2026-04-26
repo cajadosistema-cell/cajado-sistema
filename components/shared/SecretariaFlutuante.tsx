@@ -26,6 +26,7 @@ const CAT_RECEITA_ID  = '2774932e-75c8-4b7e-b88f-12a6f1a0744a'     // Receita Op
 function buildSystemPrompt(): string {
   const agora = new Date()
   const dataAtual = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+  const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const anoAtual = agora.getFullYear()
   const mesAtual = String(agora.getMonth() + 1).padStart(2, '0')
   const diaAtual = String(agora.getDate()).padStart(2, '0')
@@ -35,8 +36,8 @@ function buildSystemPrompt(): string {
   return `Você é a Elena, Secretária Executiva Premium do Sistema Cajado.
 Você pode REGISTRAR dados reais no sistema quando o chefe solicitar.
 
-⚠️ DATA ATUAL: ${dataAtual} (${anoAtual}-${mesAtual}-${diaAtual})
-⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. NUNCA use anos anteriores.
+⚠️ DATA E HORA ATUAL: ${dataAtual} às ${horaAtual} (Horário de Brasília)
+⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. Se o chefe pedir "daqui a X minutos", calcule somando a partir das ${horaAtual}.
 
 AÇÕES ESTRUTURADAS — inclua ao final da resposta:
 
