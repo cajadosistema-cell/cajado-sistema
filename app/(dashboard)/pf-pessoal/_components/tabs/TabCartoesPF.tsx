@@ -484,6 +484,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
       {modalImport && (
         <ModalImportarExtratoIA
           userId={userId}
+          modo="pf"
           onClose={() => setModalImport(false)}
           onSave={() => { setModalImport(false); onUpdate() }}
         />
