@@ -125,6 +125,35 @@ export function ModalImportarExtratoIA({ userId, modo, contasPJ = [], onClose, o
     await analisarComIA(parsed)
   }, [modo])
 
+  // ── Verifica Duplicatas ────────────────────────────────────────
+  const verificarDuplicatas = async (txs: TransacaoImportada[]) => {
+    if (txs.length === 0) return txs
+    const datas = txs.map(t => t.data).sort()
+    const min = datas[0]
+    const max = datas[datas.length - 1]
+
+    let dbTxs: any[] = []
+    if (modo === 'pj') {
+      if (!contaId) return txs
+      const { data } = await supabase.from('lancamentos').select('valor, data_competencia')
+        .eq('conta_id', contaId).gte('data_competencia', min).lte('data_competencia', max)
+      if (data) dbTxs = data.map(d => ({ v: Number(d.valor), d: d.data_competencia }))
+    } else {
+      const [g, r] = await Promise.all([
+        supabase.from('gastos_pessoais').select('valor, data').eq('user_id', userId).gte('data', min).lte('data', max),
+        supabase.from('receitas_pessoais').select('valor, data').eq('user_id', userId).gte('data', min).lte('data', max)
+      ])
+      const gD = (g.data || []).map(d => ({ v: Number(d.valor), d: d.data }))
+      const rD = (r.data || []).map(d => ({ v: Number(d.valor), d: d.data }))
+      dbTxs = [...gD, ...rD]
+    }
+
+    return txs.map(t => {
+      const isDup = dbTxs.some(db => Math.abs(db.v - t.valor) < 0.01 && db.d === t.data)
+      return { ...t, duplicata: isDup, selecionado: !isDup }
+    })
+  }
+
   // ── IA extrai e categoriza (PDF) ───────────────────────────────
   const extrairEClassificarComIA = async (texto: string) => {
     try {
@@ -175,8 +204,9 @@ REGRAS:
           selecionado: true,
           aiCategoria: c.categoria || ''
         }))
-        setTransacoes(mapeado)
-        if (mapeado.length === 0) setErroIA('Nenhuma transação encontrada no PDF.')
+        const verificados = await verificarDuplicatas(mapeado)
+        setTransacoes(verificados)
+        if (verificados.length === 0) setErroIA('Nenhuma transação encontrada no PDF.')
       } else {
         setErroIA('IA não conseguiu extrair transações. O PDF pode estar ilegível ou ser uma imagem.')
       }
@@ -232,7 +262,9 @@ REGRAS:
           const c = cls.find(x => x.id === i + 1)
           if (!c) return t
           return { ...t, tipo: (c.tipo === 'receita' ? 'receita' : 'despesa') as any, categoria: c.categoria || 'outros', aiCategoria: c.categoria || '' }
-        }))
+        })
+        const verificadas = await verificarDuplicatas(atualizadas)
+        setTransacoes(verificadas)
       } else {
         setErroIA('IA não retornou categorias. Classifique manualmente.')
       }
@@ -428,7 +460,10 @@ REGRAS:
                     onChange={e => setTransacoes(prev => prev.map((t, j) => j === i ? { ...t, selecionado: e.target.checked } : t))} />
 
                   <span className="text-[10px] text-fg-disabled shrink-0 w-12">{tx.data.slice(5)}</span>
-                  <span className="text-xs text-fg flex-1 truncate">{tx.descricao}</span>
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <span className="text-xs text-fg truncate">{tx.descricao}</span>
+                    {tx.duplicata && <span className="text-[9px] text-orange-400 font-bold uppercase tracking-wider">⚠️ Provável Duplicata</span>}
+                  </div>
 
                   {/* Tipo */}
                   <select value={tx.tipo} className="text-[10px] bg-transparent border border-white/10 rounded-lg px-1.5 py-1 shrink-0 w-24"

@@ -275,17 +275,24 @@ export function SecretariaFlutuante() {
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA, uid: string) => {
     try {
       if (acao.tipo === 'gasto') {
-        // Gasto PESSOAL — tabela gastos_pessoais
-        // Colunas: id, user_id, descricao, valor, categoria, forma_pagamento, data, recorrente, notas
+        const hoje = new Date().toISOString().split('T')[0]
+        const valor = Number(acao.dados.valor) || 0
+        // Verifica duplicidade
+        const { data: dups } = await supabase.from('gastos_pessoais').select('id')
+          .eq('user_id', uid).eq('data', hoje).eq('valor', valor)
+        if (dups && dups.length > 0 && !acao.dados.forcar) {
+          throw new Error('⚠️ Duplicidade! Já existe um gasto com este exato valor hoje.')
+        }
+
         const formasPagValidas = ['pix','cartao_debito','cartao_credito','dinheiro','transferencia']
         const forma = formasPagValidas.includes(acao.dados.forma_pagamento) ? acao.dados.forma_pagamento : 'pix'
         const { error } = await (supabase.from('gastos_pessoais') as any).insert({
           user_id: uid,
           descricao: acao.dados.descricao || 'Gasto via Elena',
-          valor: Number(acao.dados.valor) || 0,
+          valor,
           categoria: acao.dados.categoria || 'outros',
           forma_pagamento: forma,
-          data: new Date().toISOString().split('T')[0],
+          data: hoje,
           recorrente: false,
           notas: 'Registrado pela Elena',
         })
@@ -293,14 +300,20 @@ export function SecretariaFlutuante() {
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       } else if (acao.tipo === 'receita') {
-        // Receita PESSOAL — tabela receitas_pessoais
-        // Colunas: id, user_id, descricao, valor, categoria, recorrente, data, notas
+        const hoje = new Date().toISOString().split('T')[0]
+        const valor = Number(acao.dados.valor) || 0
+        const { data: dups } = await supabase.from('receitas_pessoais').select('id')
+          .eq('user_id', uid).eq('data', hoje).eq('valor', valor)
+        if (dups && dups.length > 0 && !acao.dados.forcar) {
+          throw new Error('⚠️ Duplicidade! Já existe uma receita com este exato valor hoje.')
+        }
+
         const { error } = await (supabase.from('receitas_pessoais') as any).insert({
           user_id: uid,
           descricao: acao.dados.descricao || 'Receita via Elena',
-          valor: Number(acao.dados.valor) || 0,
+          valor,
           categoria: acao.dados.categoria || 'outros',
-          data: new Date().toISOString().split('T')[0],
+          data: hoje,
           recorrente: false,
           notas: 'Registrado pela Elena',
         })
@@ -308,13 +321,18 @@ export function SecretariaFlutuante() {
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       } else if (acao.tipo === 'gasto_empresa') {
-        // Despesa EMPRESA — tabela lancamentos
-        // Colunas: conta_id, descricao, valor, tipo, regime, status, data_competencia, data_caixa, categoria_id, created_by
         const hoje = new Date().toISOString().split('T')[0]
+        const valor = Number(acao.dados.valor) || 0
+        const { data: dups } = await supabase.from('lancamentos').select('id')
+          .eq('conta_id', CONTA_PADRAO_ID).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'despesa')
+        if (dups && dups.length > 0 && !acao.dados.forcar) {
+          throw new Error('⚠️ Duplicidade! Já existe uma despesa PJ com este exato valor hoje.')
+        }
+
         const { error } = await (supabase.from('lancamentos') as any).insert({
           conta_id: CONTA_PADRAO_ID,
           descricao: acao.dados.descricao || 'Despesa via Elena',
-          valor: Number(acao.dados.valor) || 0,
+          valor,
           tipo: 'despesa',
           regime: 'caixa',
           status: 'validado',
@@ -328,12 +346,18 @@ export function SecretariaFlutuante() {
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       } else if (acao.tipo === 'receita_empresa') {
-        // Receita EMPRESA — tabela lancamentos
         const hoje = new Date().toISOString().split('T')[0]
+        const valor = Number(acao.dados.valor) || 0
+        const { data: dups } = await supabase.from('lancamentos').select('id')
+          .eq('conta_id', CONTA_PADRAO_ID).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'receita')
+        if (dups && dups.length > 0 && !acao.dados.forcar) {
+          throw new Error('⚠️ Duplicidade! Já existe uma receita PJ com este exato valor hoje.')
+        }
+
         const { error } = await (supabase.from('lancamentos') as any).insert({
           conta_id: CONTA_PADRAO_ID,
           descricao: acao.dados.descricao || 'Receita via Elena',
-          valor: Number(acao.dados.valor) || 0,
+          valor,
           tipo: 'receita',
           regime: 'caixa',
           status: 'validado',
