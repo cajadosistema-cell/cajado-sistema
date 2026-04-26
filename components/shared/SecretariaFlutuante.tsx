@@ -432,41 +432,64 @@ export function SecretariaFlutuante() {
       const isPDF = file.type === 'application/pdf'
       if (!isImage && !isPDF) {
         alert('Formato não suportado. Envie uma imagem (JPG, PNG, etc.) ou PDF.')
+        setProcessingFile(false)
         return
       }
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        const dataUrl = e.target?.result as string
-        const base64 = dataUrl.split(',')[1]
-        if (isImage) {
-          setAttachedFile({ base64, mime: file.type, name: file.name, isImage: true, preview: dataUrl })
-          setProcessingFile(false)
-        } else {
-          // PDF: extrai texto no servidor
-          try {
-            const res = await fetch('/api/elena/extrair-pdf', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ base64 }),
-            })
-            const data = await res.json()
-            if (data.texto) {
-              // PDF com texto: armazena como base64 + texto extraído
-              setAttachedFile({ base64: data.texto, mime: 'text/plain', name: file.name, isImage: false })
-            } else {
-              alert(data.aviso || data.error || 'Não foi possível ler o PDF.')
-            }
-          } catch {
-            alert('Erro ao processar o PDF. Tente novamente.')
-          }
+
+      if (isImage) {
+        // Imagem: converte para base64 e mostra preview
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const dataUrl = e.target?.result as string
+          setAttachedFile({ base64: dataUrl.split(',')[1], mime: file.type, name: file.name, isImage: true, preview: dataUrl })
           setProcessingFile(false)
         }
+        reader.readAsDataURL(file)
+      } else {
+        // PDF: extrai texto no navegador usando PDF.js (CDN)
+        const extractPdfText = async (): Promise<string> => {
+          // Carrega PDF.js do CDN se ainda não estiver carregado
+          if (!(window as any).pdfjsLib) {
+            await new Promise<void>((resolve, reject) => {
+              const s = document.createElement('script')
+              s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+              s.onload = () => {
+                (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
+                  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+                resolve()
+              }
+              s.onerror = reject
+              document.head.appendChild(s)
+            })
+          }
+          const arrayBuffer = await file.arrayBuffer()
+          const pdf = await (window as any).pdfjsLib.getDocument({ data: arrayBuffer }).promise
+          let text = ''
+          for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) {
+            const page = await pdf.getPage(i)
+            const content = await page.getTextContent()
+            text += content.items.map((item: any) => item.str).join(' ') + '\n'
+          }
+          return text.trim().substring(0, 6000)
+        }
+
+        try {
+          const texto = await extractPdfText()
+          if (texto) {
+            setAttachedFile({ base64: texto, mime: 'text/plain', name: file.name, isImage: false })
+          } else {
+            alert('PDF sem texto legível. Tente converter para imagem e envie como foto.')
+          }
+        } catch {
+          alert('Erro ao processar o PDF. Tente novamente ou converta para imagem.')
+        }
+        setProcessingFile(false)
       }
-      reader.readAsDataURL(file)
     } catch {
       setProcessingFile(false)
     }
   }, [])
+
 
   // ── Enviar ────────────────────────────────────────────────
   const handleEnviar = useCallback(async (textToSubmit?: string) => {
