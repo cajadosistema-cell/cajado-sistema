@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
 interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -125,6 +125,11 @@ function extrairAcoes(texto: string): AcaoIA[] {
         acoes.push({ tipo: 'agenda', dados: d, label: `📅 ${d.titulo}`, status: 'pending' })
       } else if (d.acao === 'ocorrencia') {
         acoes.push({ tipo: 'ocorrencia', dados: d, label: `📋 Ocorrência ${d.tipo}: ${d.descricao?.substring(0, 40)}`, status: 'pending' })
+      } else if (d.acao === 'registro') {
+        acoes.push({ tipo: 'registro', dados: d, label: `🗂️ Registro: ${d.titulo || d.descricao?.substring(0, 40)}`, status: 'pending' })
+      } else if (d.acao) {
+        // Fallback: qualquer acao desconhecida vira um registro generico
+        acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `🗂️ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
       }
     } catch {}
   }
@@ -394,6 +399,23 @@ export function SecretariaFlutuante() {
         setAcaoStatus(msgId, acaoIdx, 'saved')
         // Notifica TabIdeias para recarregar
         window.dispatchEvent(new CustomEvent('elena:ideia-salva'))
+
+      } else if (acao.tipo === 'registro') {
+        // Registro GENÉRICO — tabela elena_registros (fallback universal)
+        const tiposValidos = ['contrato', 'emprestimo', 'nota', 'lembrete', 'compra', 'venda', 'outro', 'geral']
+        const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'geral'
+        const { error } = await (supabase.from('elena_registros') as any).insert({
+          user_id: uid,
+          tipo,
+          titulo: acao.dados.titulo || acao.dados.descricao?.substring(0, 100) || 'Registro via Elena',
+          descricao: acao.dados.descricao || null,
+          valor: acao.dados.valor ? Number(acao.dados.valor) : null,
+          data: new Date().toISOString().split('T')[0],
+          metadados: acao.dados, // salva o JSON completo da IA para não perder dados
+          origem: 'elena',
+        })
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
       }
     } catch (err: any) {
       setAcaoStatus(msgId, acaoIdx, 'error', err.message)
