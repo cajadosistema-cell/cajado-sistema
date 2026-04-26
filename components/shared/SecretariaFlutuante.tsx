@@ -184,6 +184,7 @@ export function SecretariaFlutuante() {
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
   const historyLoadedRef = useRef(false)
+  const isSendingRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Helper: mantém ref e state sincronizados
@@ -568,10 +569,12 @@ export function SecretariaFlutuante() {
 
   // ── Enviar ────────────────────────────────────────────────
   const handleEnviar = useCallback(async (textToSubmit?: string) => {
+    if (isSendingRef.current) return
     const userText = (textToSubmit ?? input).trim()
-    // Usa ref para sempre ter o valor mais recente de attachedFile (evita stale closure)
     const currentFile = attachedFileRef.current
     if ((!userText && !currentFile) || loading) return
+    
+    isSendingRef.current = true
     const aiMsgId = (Date.now() + 1).toString()
     const userMsgTexto = userText || (currentFile?.isImage ? `📎 ${currentFile.name}` : `📄 ${currentFile?.name}`)
     setMensagens(prev => [
@@ -653,6 +656,7 @@ export function SecretariaFlutuante() {
       ))
     } finally {
       setLoading(false)
+      isSendingRef.current = false
     }
   }, [input, loading, mensagens, userId, supabase, executarAcoesAuto, salvarHistorico])
 
