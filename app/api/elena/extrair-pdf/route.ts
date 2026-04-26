@@ -10,9 +10,10 @@ export async function POST(req: Request) {
     // Converte base64 para Buffer
     const buffer = Buffer.from(base64, 'base64')
 
-    // Usa pdf-parse para extrair texto
+    // Usa pdf-parse para extrair texto (compatível com CJS/ESM)
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse')
+    const pdfParseModule = require('pdf-parse')
+    const pdfParse = typeof pdfParseModule === 'function' ? pdfParseModule : pdfParseModule.default
     const resultado = await pdfParse(buffer)
 
     const texto = resultado.text?.trim() || ''
