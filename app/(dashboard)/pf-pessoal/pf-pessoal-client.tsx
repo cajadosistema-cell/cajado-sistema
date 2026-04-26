@@ -15,12 +15,13 @@ import { TabPrevisao }    from './_components/tabs/TabPrevisao'
 import { TabAgenda }      from './_components/tabs/TabAgenda'
 import { TabIdeias }      from './_components/tabs/TabIdeias'
 import { TabRegistros }   from './_components/tabs/TabRegistros'
+import { TabCartoesPF }   from './_components/tabs/TabCartoesPF'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { AlarmManager } from '@/components/shared/AlarmManager'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda' | 'ideias' | 'registros'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda' | 'ideias' | 'registros' | 'cartoes'
 
 const TABS = [
   { id: 'resumo'       as TabId, label: 'Resumo',      emoji: '📊' },
@@ -28,7 +29,8 @@ const TABS = [
   { id: 'orcamentos'   as TabId, label: 'Orçamentos',  emoji: '🎯' },
   { id: 'previsao'     as TabId, label: 'Previsão',    emoji: '🔮' },
   { id: 'agenda'       as TabId, label: 'Agenda',       emoji: '📅' },
-  { id: 'ideias'       as TabId, label: 'Ideias',       emoji: '💡' },
+  { id: 'ideias'       as TabId, label: 'Ideias',        emoji: '💡' },
+  { id: 'cartoes'      as TabId, label: 'Cartões',      emoji: '💳' },
   { id: 'registros'    as TabId, label: 'Registros',    emoji: '🗂️' },
 ]
 
@@ -194,6 +196,15 @@ export default function PfPessoalClient() {
 
       {tab === 'ideias' && (
         <TabIdeias userId={authUserId} />
+      )}
+
+      {tab === 'cartoes' && (
+        <TabCartoesPF
+          userId={authUserId}
+          gastos={gastos}
+          receitas={receitas}
+          onUpdate={refreshTudo}
+        />
       )}
 
       {tab === 'registros' && (
