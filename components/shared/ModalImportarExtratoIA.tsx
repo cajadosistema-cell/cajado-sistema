@@ -166,7 +166,7 @@ REGRAS:
       if (jsonMatch) {
         const cls: any[] = JSON.parse(jsonMatch[0])
         const mapeado = cls.map((c, i) => ({
-          _id: \`pdf_\${i}\`,
+          _id: `pdf_${i}`,
           descricao: c.descricao || 'Transação',
           valor: Math.abs(c.valor || 0),
           data: c.data || new Date().toISOString().split('T')[0],
