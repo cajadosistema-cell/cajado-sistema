@@ -3,12 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { ModalRelatorio, buscarDadosRelatorio } from './ModalRelatorio'
+import type { } from './ModalRelatorio'
 
 // ── Types ────────────────────────────────────────────────────
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
 interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -100,7 +102,15 @@ REGRAS:
   * "cartão hiper", "hipercard", "cartão crédito", "crédito" → cartao_credito
   * "débito", "cartão débito" → cartao_debito
   * "pix", "transferência", "ted", "doc" → pix
-  * "dinheiro", "espécie", "cash" → dinheiro`
+  * "dinheiro", "espécie", "cash" → dinheiro
+
+RELATÓRIO / RESUMO (quando o chefe pedir um relatório, resumo ou visão geral):
+\`\`\`json
+{"acao":"relatorio","periodo":"mes_atual"}
+\`\`\`
+PERÍODOS válidos: mes_atual, ultimos_7_dias, ultimos_30_dias, ano_atual
+- Use relatorio SEMPRE que o chefe pedir: "resumo", "relatório", "como estou financeiramente", "visão geral", "quanto gastei", "mostre meus lançamentos"
+- O sistema irá buscar os dados reais e abrir um painel visual automáticamente`
 }
 
 // ── Extrai JSONs da resposta da IA ──────────────────────────
@@ -127,6 +137,8 @@ function extrairAcoes(texto: string): AcaoIA[] {
         acoes.push({ tipo: 'ocorrencia', dados: d, label: `📋 Ocorrência ${d.tipo}: ${d.descricao?.substring(0, 40)}`, status: 'pending' })
       } else if (d.acao === 'registro') {
         acoes.push({ tipo: 'registro', dados: d, label: `🗂️ Registro: ${d.titulo || d.descricao?.substring(0, 40)}`, status: 'pending' })
+      } else if (d.acao === 'relatorio') {
+        acoes.push({ tipo: 'relatorio', dados: d, label: `\uD83D\uDCC8 Gerar Relat\u00f3rio: ${d.periodo || 'mes_atual'}`, status: 'pending' })
       } else if (d.acao) {
         // Fallback: qualquer acao desconhecida vira um registro generico
         acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `🗂️ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
@@ -158,6 +170,7 @@ export function SecretariaFlutuante() {
   const [attachedFile, setAttachedFileState] = useState<AttachedFile | null>(null)
   const attachedFileRef = useRef<AttachedFile | null>(null)
   const [processingFile, setProcessingFile] = useState(false)
+  const [relatorioData, setRelatorioData] = useState<any>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
@@ -415,6 +428,13 @@ export function SecretariaFlutuante() {
           origem: 'elena',
         })
         if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'relatorio') {
+        // Relatório — busca dados reais no banco e abre o modal
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const dados = await buscarDadosRelatorio(supabase, uid, acao.dados.periodo || 'mes_atual')
+        setRelatorioData(dados)
         setAcaoStatus(msgId, acaoIdx, 'saved')
       }
     } catch (err: any) {
@@ -818,6 +838,14 @@ export function SecretariaFlutuante() {
           to   { opacity: 1; transform: translateY(0)    scale(1); }
         }
       `}</style>
+
+      {/* Modal de Relatório — abre quando Elena gera um relatório */}
+      {relatorioData && (
+        <ModalRelatorio
+          dados={relatorioData}
+          onClose={() => setRelatorioData(null)}
+        />
+      )}
     </>
   )
 }
