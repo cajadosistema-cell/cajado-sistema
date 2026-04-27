@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/lib/theme-provider'
+import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
 const mainItems = [
   { href: '/inicio',      label: 'Início',    icon: '⬡',  activeColor: 'text-amber-400'  },
@@ -100,8 +101,11 @@ export function BottomNav() {
               })}
             </div>
 
-            {/* Separador + Trocar tema */}
-            <ThemeToggleMobile />
+            {/* Separador + Trocar tema + Instalar App */}
+            <div className="space-y-2">
+              <PWAInstallButton className="w-full flex items-center justify-between px-3 py-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors mt-3 pt-3 border-t border-white/10 text-amber-400 font-semibold text-xs" />
+              <ThemeToggleMobile />
+            </div>
           </div>
         </div>
       )}

@@ -217,7 +217,9 @@ export function PWAInstallBanner() {
     // Android / Desktop: aguardar beforeinstallprompt
     const handler = (e: Event) => {
       e.preventDefault()
+      ;(window as any).deferredPrompt = e
       setDeferredPrompt(e as BeforeInstallPromptEvent)
+      window.dispatchEvent(new Event('pwa-prompt-ready'))
       setTimeout(() => setMode('android'), 3000)
     }
     const installedHandler = () => {
@@ -265,4 +267,53 @@ export function PWAInstallBanner() {
     />
   )
   return null
+}
+
+export function PWAInstallButton({ className }: { className?: string }) {
+  const [canInstall, setCanInstall] = useState(false)
+
+  useEffect(() => {
+    if (isInStandaloneMode()) return
+
+    const check = () => {
+      if ((window as any).deferredPrompt || isIOS()) {
+        setCanInstall(true)
+      }
+    }
+    
+    check()
+    window.addEventListener('beforeinstallprompt', check)
+    window.addEventListener('pwa-prompt-ready', check)
+    window.addEventListener('appinstalled', () => setCanInstall(false))
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', check)
+      window.removeEventListener('pwa-prompt-ready', check)
+    }
+  }, [])
+
+  if (!canInstall) return null
+
+  const handleInstall = async () => {
+    if (isIOS()) {
+      alert('Para instalar no iPhone:\n\n1. Toque no ícone Compartilhar (quadrado com seta para cima) na barra inferior do Safari.\n2. Role para baixo e selecione "Adicionar à Tela de Início".')
+      return
+    }
+    const promptEvent = (window as any).deferredPrompt
+    if (promptEvent) {
+      await promptEvent.prompt()
+      const choice = await promptEvent.userChoice
+      if (choice.outcome === 'accepted') {
+        localStorage.setItem(INSTALLED_KEY, '1')
+        setCanInstall(false)
+      }
+    }
+  }
+
+  return (
+    <button onClick={handleInstall} className={className || "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-surface-hover/50 text-amber-400"}>
+      <span className="text-lg">⬇️</span>
+      <span>Instalar App</span>
+    </button>
+  )
 }

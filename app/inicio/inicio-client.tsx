@@ -6,6 +6,7 @@ import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import DashboardPessoalClient from '@/app/(dashboard)/dashboard-pessoal/dashboard-pessoal-client'
+import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
 Chart.register(DoughnutController, LineController, BarController, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Filler)
 
@@ -677,6 +678,8 @@ export default function InicioClient() {
               <div className="nav-icon">☰</div>
               <span>Painel de Gestão</span>
             </a>
+
+            <PWAInstallButton className="nav-btn text-amber-400" />
 
             <div className="years">
               {ANOS.map(ano => (

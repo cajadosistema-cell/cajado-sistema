@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/cajado/ThemeToggle'
+import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
 const navItems = [
   // ── 💰 Financeiro da Empresa ─────────────────────────────────
@@ -215,6 +216,7 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="px-3 py-3 space-y-2" style={{ borderTop: '0.5px solid var(--border-subtle)' }}>
+        <PWAInstallButton />
         <ThemeToggle />
         <SidebarUser userData={userData} />
       </div>
