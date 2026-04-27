@@ -704,13 +704,21 @@ export function SecretariaFlutuante() {
       recognitionRef.current = null
     }
     setIsListening(false)
-    // Aguarda o último onresult disparar e envia direto (sem exibir no input)
+    // Aguarda o último onresult disparar e envia direto
     setTimeout(() => {
       const text = transcriptRef.current.trim()
       transcriptRef.current = ''
       setInput('')
       if (text) handleEnviar(text)
     }, 300)
+  }
+
+  const toggleMic = () => {
+    if (isListening) {
+      handleReleaseMic()
+    } else {
+      handlePressMic()
+    }
   }
 
 
@@ -832,13 +840,12 @@ export function SecretariaFlutuante() {
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
               />
               <div className="flex items-center gap-2 bg-page rounded-xl p-1 border border-border-subtle focus-within:border-amber-500/40 transition-colors">
-                {/* Botão microfone */}
+                {/* Botão microfone (Toggle) */}
                 <button
-                  onPointerDown={handlePressMic} onPointerUp={handleReleaseMic} onPointerLeave={handleReleaseMic}
-                  onContextMenu={e => e.preventDefault()}
-                  style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+                  onClick={toggleMic}
                   className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
                     isListening ? 'bg-red-500 text-white animate-pulse' : 'text-fg-tertiary hover:text-amber-400')}
+                  title={isListening ? 'Parar e enviar' : 'Clique para falar'}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
                 </button>
@@ -860,7 +867,7 @@ export function SecretariaFlutuante() {
                 <input
                   type="text"
                   className="flex-1 bg-transparent border-0 focus:ring-0 text-xs text-fg placeholder-zinc-600 h-8"
-                  placeholder={isListening ? '\uD83C\uDF99\uFE0F Ouvindo voc\u00ea...' : attachedFile ? 'Descreva o que quer saber...' : 'Diga um comando para a Elena...'}
+                  placeholder={isListening ? '\uD83C\uDF99\uFE0F Ouvindo... (Clique no microfone para enviar)' : attachedFile ? 'Descreva o que quer saber...' : 'Diga um comando para a Elena...'}
                   value={isListening ? '' : input}
                   onChange={e => !isListening && setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !isListening && handleEnviar()}
