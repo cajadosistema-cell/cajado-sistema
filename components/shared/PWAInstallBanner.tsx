@@ -8,6 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const STORAGE_KEY = 'cajado-pwa-dismissed'
+const INSTALLED_KEY = 'cajado-pwa-installed'
 
 // ── Detectores de plataforma ──────────────────────────────────
 function isIOS() {
@@ -200,8 +201,12 @@ export function PWAInstallBanner() {
   const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
-    // Já instalado ou dispensado
-    if (isInStandaloneMode() || localStorage.getItem(STORAGE_KEY) === '1') return
+    // Já instalado (standalone) ou usuário já dispensou/instalou antes
+    if (
+      isInStandaloneMode() ||
+      localStorage.getItem(STORAGE_KEY) === '1' ||
+      localStorage.getItem(INSTALLED_KEY) === '1'
+    ) return
 
     if (isIOS()) {
       // iOS: mostrar banner de instrução manual após 4s
@@ -215,9 +220,16 @@ export function PWAInstallBanner() {
       setDeferredPrompt(e as BeforeInstallPromptEvent)
       setTimeout(() => setMode('android'), 3000)
     }
+    const installedHandler = () => {
+      localStorage.setItem(INSTALLED_KEY, '1')
+      setMode('hidden')
+    }
     window.addEventListener('beforeinstallprompt', handler)
-    window.addEventListener('appinstalled', () => setMode('hidden'))
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', installedHandler)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('appinstalled', installedHandler)
+    }
   }, [])
 
   const handleDismiss = () => {
@@ -230,7 +242,16 @@ export function PWAInstallBanner() {
     setInstalling(true)
     await deferredPrompt.prompt()
     const choice = await deferredPrompt.userChoice
-    if (choice.outcome === 'accepted') setMode('hidden')
+    // Independente do resultado (accepted ou dismissed pelo browser nativo),
+    // marca como "visto" para não mostrar o banner novamente nesta sessão.
+    // O evento 'appinstalled' cuida de gravar INSTALLED_KEY se realmente instalou.
+    if (choice.outcome === 'accepted') {
+      localStorage.setItem(INSTALLED_KEY, '1')
+    } else {
+      // Usuário fechou o prompt nativo sem instalar — oculta por 7 dias
+      localStorage.setItem(STORAGE_KEY, '1')
+    }
+    setMode('hidden')
     setInstalling(false)
     setDeferredPrompt(null)
   }

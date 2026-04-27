@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+const NOTIF_ASKED_KEY = 'cajado-notif-asked'
+
 interface AgendaEvento {
   id: string
   titulo: string
@@ -141,7 +143,12 @@ export function AlarmManager({ userId }: { userId: string }) {
 
     // Verifica permissão atual
     if ('Notification' in window) {
-      setPermissao(Notification.permission)
+      const currentPerm = Notification.permission
+      setPermissao(currentPerm)
+      // Se já foi solicitado antes (independente do resultado), não mostra mais o banner
+      if (currentPerm !== 'default' || localStorage.getItem(NOTIF_ASKED_KEY) === '1') {
+        setPermissao(currentPerm === 'default' ? 'denied' : currentPerm) // trata 'default+já pedido' como oculto
+      }
     }
   }, [])
 
@@ -227,6 +234,8 @@ export function AlarmManager({ userId }: { userId: string }) {
   // Solicita permissão de notificação se ainda não concedida
   const pedirPermissao = async () => {
     if (!('Notification' in window)) return
+    // Marca que já pediu para nunca mais mostrar o banner
+    localStorage.setItem(NOTIF_ASKED_KEY, '1')
     const result = await Notification.requestPermission()
     setPermissao(result)
   }

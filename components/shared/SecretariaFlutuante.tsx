@@ -675,15 +675,13 @@ export function SecretariaFlutuante() {
     r.interimResults = true
     r.onstart = () => setIsListening(true)
     r.onresult = (e: any) => {
-      // Acumula só os resultados finais + o interim atual para evitar duplicações
+      // Acumula resultados finais + interim na ref (NÃO coloca no input para evitar "pedir confirmação")
       let finalText = ''
       let interimText = ''
       for (let i = 0; i < e.results.length; i++) {
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript
         else interimText += e.results[i][0].transcript
       }
-      const combined = (finalText + interimText).trim()
-      setInput(combined)
       transcriptRef.current = finalText + interimText
     }
     r.onerror = () => setIsListening(false)
@@ -697,12 +695,13 @@ export function SecretariaFlutuante() {
       recognitionRef.current = null
     }
     setIsListening(false)
-    // Aguarda o último onresult disparar antes de enviar
+    // Aguarda o último onresult disparar e envia direto (sem exibir no input)
     setTimeout(() => {
       const text = transcriptRef.current.trim()
-      if (text) handleEnviar(text)
       transcriptRef.current = ''
-    }, 400)
+      setInput('')
+      if (text) handleEnviar(text)
+    }, 300)
   }
 
 
@@ -851,10 +850,10 @@ export function SecretariaFlutuante() {
                 <input
                   type="text"
                   className="flex-1 bg-transparent border-0 focus:ring-0 text-xs text-fg placeholder-zinc-600 h-8"
-                  placeholder={attachedFile ? 'Descreva o que quer saber...' : 'Diga um comando para a Elena...'}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleEnviar()}
+                  placeholder={isListening ? '\uD83C\uDF99\uFE0F Ouvindo voc\u00ea...' : attachedFile ? 'Descreva o que quer saber...' : 'Diga um comando para a Elena...'}
+                  value={isListening ? '' : input}
+                  onChange={e => !isListening && setInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !isListening && handleEnviar()}
                 />
                 <button
                   onClick={() => handleEnviar()}
