@@ -37,6 +37,7 @@ const TABS = [
 export default function PfPessoalClient() {
   const supabase = createClient()
   const [tab, setTab] = useState<TabId>('resumo')
+  const [modalGasto, setModalGasto] = useState(false)
   const [modalReceita, setModalReceita] = useState(false)
   const [gastoEdit, setGastoEdit] = useState<any>(null)
   const [receitaEdit, setReceitaEdit] = useState<any>(null)
