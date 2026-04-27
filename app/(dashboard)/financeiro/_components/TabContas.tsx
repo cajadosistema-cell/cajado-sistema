@@ -246,15 +246,15 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: 'Saldo em Contas', val: saldoContas, color: saldoContas >= 0 ? 'text-emerald-400' : 'text-red-400', bg: 'bg-emerald-500/10' },
           { label: 'Receitas do Mês', val: receitasMes, color: 'text-purple-400', bg: 'bg-purple-500/10' },
           { label: 'Despesas do Mês', val: despesasMes, color: 'text-red-400', bg: 'bg-red-500/10' },
         ].map(({ label, val, color, bg }) => (
-          <div key={label} className={`${bg} border border-white/5 rounded-xl p-4`}>
+          <div key={label} className={`${bg} border border-white/5 rounded-xl p-3 sm:p-4`}>
             <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">{label}</p>
-            <p className={`text-xl font-bold ${color}`}>{formatCurrency(val)}</p>
+            <p className={`text-lg sm:text-xl font-bold ${color}`}>{formatCurrency(val)}</p>
           </div>
         ))}
       </div>

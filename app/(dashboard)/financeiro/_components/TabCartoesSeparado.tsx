@@ -487,15 +487,15 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Despesas', val: totalDespesas, color: 'text-red-400', bg: 'bg-red-500/10' },
               { label: 'Receitas/Estornos', val: totalReceitas, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
               { label: 'Saldo Fatura', val: totalReceitas - totalDespesas, color: (totalReceitas - totalDespesas) >= 0 ? 'text-emerald-400' : 'text-red-400', bg: 'bg-blue-500/10' },
             ].map(({ label, val, color, bg }) => (
-              <div key={label} className={`${bg} border border-white/5 rounded-xl p-4`}>
+              <div key={label} className={`${bg} border border-white/5 rounded-xl p-3 sm:p-4`}>
                 <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">{label}</p>
-                <p className={`text-xl font-bold ${color}`}>{formatCurrency(val)}</p>
+                <p className={`text-lg sm:text-xl font-bold ${color}`}>{formatCurrency(val)}</p>
               </div>
             ))}
           </div>
