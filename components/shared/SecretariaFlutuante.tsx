@@ -684,7 +684,16 @@ export function SecretariaFlutuante() {
       }
       transcriptRef.current = finalText + interimText
     }
-    r.onerror = () => setIsListening(false)
+    r.onerror = (e: any) => {
+      setIsListening(false)
+      if (e.error === 'not-allowed') {
+        alert('Permissão de microfone negada. Clique no cadeado na barra de endereços e permita o uso do microfone.')
+      } else if (e.error === 'audio-capture') {
+        alert('Nenhum microfone encontrado. Verifique se o microfone está conectado.')
+      } else if (e.error !== 'no-speech') {
+        console.error('Erro no microfone:', e.error)
+      }
+    }
     r.onend = () => setIsListening(false)
     r.start()
   }
@@ -826,7 +835,8 @@ export function SecretariaFlutuante() {
                 {/* Botão microfone */}
                 <button
                   onPointerDown={handlePressMic} onPointerUp={handleReleaseMic} onPointerLeave={handleReleaseMic}
-                  style={{ touchAction: 'none' }}
+                  onContextMenu={e => e.preventDefault()}
+                  style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
                   className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
                     isListening ? 'bg-red-500 text-white animate-pulse' : 'text-fg-tertiary hover:text-amber-400')}
                 >
