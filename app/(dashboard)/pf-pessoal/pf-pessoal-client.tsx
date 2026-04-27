@@ -37,8 +37,9 @@ const TABS = [
 export default function PfPessoalClient() {
   const supabase = createClient()
   const [tab, setTab] = useState<TabId>('resumo')
-  const [modalGasto, setModalGasto] = useState(false)
   const [modalReceita, setModalReceita] = useState(false)
+  const [gastoEdit, setGastoEdit] = useState<any>(null)
+  const [receitaEdit, setReceitaEdit] = useState<any>(null)
   const [authUserId, setAuthUserId] = useState('')
 
   useEffect(() => {
@@ -171,8 +172,10 @@ export default function PfPessoalClient() {
           gastos={gastos}
           receitas={receitas}
           onUpdate={refreshTudo}
-          onNovoGasto={() => setModalGasto(true)}
-          onNovaReceita={() => setModalReceita(true)}
+          onNovoGasto={() => { setGastoEdit(null); setModalGasto(true) }}
+          onNovaReceita={() => { setReceitaEdit(null); setModalReceita(true) }}
+          onEditGasto={(g) => { setGastoEdit(g); setModalGasto(true) }}
+          onEditReceita={(r) => { setReceitaEdit(r); setModalReceita(true) }}
         />
       )}
       {tab === 'orcamentos' && (
@@ -221,15 +224,17 @@ export default function PfPessoalClient() {
       {modalGasto && (
         <ModalNovoGasto
           userId={authUserId}
-          onSave={() => { refetchGastos(); setModalGasto(false) }}
-          onClose={() => setModalGasto(false)}
+          gastoEdit={gastoEdit}
+          onSave={() => { refetchGastos(); setModalGasto(false); setGastoEdit(null); }}
+          onClose={() => { setModalGasto(false); setGastoEdit(null); }}
         />
       )}
       {modalReceita && (
         <ModalNovaReceita
           userId={authUserId}
-          onSave={() => { refetchReceitas(); setModalReceita(false) }}
-          onClose={() => setModalReceita(false)}
+          receitaEdit={receitaEdit}
+          onSave={() => { refetchReceitas(); setModalReceita(false); setReceitaEdit(null); }}
+          onClose={() => { setModalReceita(false); setReceitaEdit(null); }}
         />
       )}
     </>

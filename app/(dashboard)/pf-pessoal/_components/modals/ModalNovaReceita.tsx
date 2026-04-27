@@ -8,19 +8,20 @@ type Props = {
   userId: string
   onSave: () => void
   onClose: () => void
+  receitaEdit?: any
 }
 
-export function ModalNovaReceita({ userId, onSave, onClose }: Props) {
+export function ModalNovaReceita({ userId, onSave, onClose, receitaEdit }: Props) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
-    descricao: '',
-    valor: '',
-    categoria: 'pro_labore',
-    data: today,
-    recorrente: true,
-    notas: '',
+    descricao: receitaEdit?.descricao ?? '',
+    valor: receitaEdit?.valor?.toString() ?? '',
+    categoria: receitaEdit?.categoria ?? 'pro_labore',
+    data: receitaEdit?.data ?? today,
+    recorrente: receitaEdit?.recorrente ?? true,
+    notas: receitaEdit?.notas ?? '',
   })
 
   const set = (k: keyof typeof form, v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
@@ -30,7 +31,7 @@ export function ModalNovaReceita({ userId, onSave, onClose }: Props) {
     const valor = parseFloat(form.valor.replace(',', '.'))
     if (!valor || valor <= 0) return
     setLoading(true)
-    await (supabase.from('receitas_pessoais') as any).insert({
+    const payload = {
       user_id: userId,
       descricao: form.descricao,
       valor,
@@ -38,7 +39,13 @@ export function ModalNovaReceita({ userId, onSave, onClose }: Props) {
       data: form.data,
       recorrente: form.recorrente,
       notas: form.notas || null,
-    })
+    }
+
+    if (receitaEdit) {
+      await (supabase.from('receitas_pessoais') as any).update(payload).eq('id', receitaEdit.id)
+    } else {
+      await (supabase.from('receitas_pessoais') as any).insert(payload)
+    }
     setLoading(false)
     onSave()
     onClose()
@@ -48,7 +55,7 @@ export function ModalNovaReceita({ userId, onSave, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-fg">Nova Receita Pessoal</h2>
+          <h2 className="text-base font-semibold text-fg">{receitaEdit ? '✏️ Editar Receita' : 'Nova Receita Pessoal'}</h2>
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
 
@@ -92,7 +99,7 @@ export function ModalNovaReceita({ userId, onSave, onClose }: Props) {
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Salvando...' : '💰 Registrar Receita'}
+              {loading ? 'Salvando...' : receitaEdit ? 'Salvar Alterações' : '💰 Registrar Receita'}
             </button>
           </div>
         </form>

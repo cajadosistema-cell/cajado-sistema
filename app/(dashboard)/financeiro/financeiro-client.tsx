@@ -355,26 +355,27 @@ function ModalConta({ onClose, onSave, isAdmin = false }: {
 }
 
 function ModalLancamento({
-  onClose, onSave, contas, categorias,
+  onClose, onSave, contas, categorias, lancamentoEdit
 }: {
   onClose: () => void
   onSave: () => void
   contas: Conta[]
   categorias: CategoriaFinanceira[]
+  lancamentoEdit?: Lancamento | null
 }) {
-  const { insert, loading } = useSupabaseMutation('lancamentos')
+  const { insert, update, loading } = useSupabaseMutation('lancamentos')
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
-    conta_id: contas[0]?.id ?? '',
-    descricao: '',
-    valor: '',
-    tipo: 'despesa' as Lancamento['tipo'],
-    regime: 'caixa' as Lancamento['regime'],
-    data_competencia: today,
-    categoria_id: '',
-    total_parcelas: '1',
+    conta_id: lancamentoEdit?.conta_id ?? contas[0]?.id ?? '',
+    descricao: lancamentoEdit?.descricao ?? '',
+    valor: lancamentoEdit?.valor?.toString() ?? '',
+    tipo: lancamentoEdit?.tipo ?? 'despesa',
+    regime: lancamentoEdit?.regime ?? 'caixa',
+    data_competencia: lancamentoEdit?.data_competencia ?? today,
+    categoria_id: lancamentoEdit?.categoria_id ?? '',
+    total_parcelas: lancamentoEdit?.total_parcelas?.toString() ?? '1',
     observacoes: '',
-    taxa_cartao: '0', // 0 | 3.5 | 1.5 | boleto
+    taxa_cartao: '0',
   })
 
   const categoriasFiltradas = categorias.filter(c => c.tipo === form.tipo)
@@ -423,18 +424,23 @@ function ModalLancamento({
         } as any)
       }
     } else {
-      // ── Lançamento simples (1 parcela) ──────────────────────
-      await insert({
+      // ── Lançamento simples (1 parcela) ou Edição ──────────────────────
+      const payload = {
         conta_id: form.conta_id,
         descricao: form.descricao,
         valor,
         tipo: form.tipo,
         regime: form.regime,
-        status: 'pendente',
         data_competencia: form.data_competencia,
         categoria_id: form.categoria_id || null,
-        total_parcelas: 1,
-      } as any)
+        total_parcelas: parcelas,
+      } as any
+
+      if (lancamentoEdit) {
+        await update(lancamentoEdit.id, payload)
+      } else {
+        await insert({ ...payload, status: 'pendente' })
+      }
     }
     onSave(); onClose()
   }
@@ -443,7 +449,7 @@ function ModalLancamento({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl overflow-y-auto max-h-screen">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-fg">Novo Lançamento</h2>
+          <h2 className="text-base font-semibold text-fg">{lancamentoEdit ? '✏️ Editar Lançamento' : 'Novo Lançamento'}</h2>
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -481,6 +487,7 @@ function ModalLancamento({
               <label className="label">Parcelas</label>
               <input className="input mt-1" type="number" min="1" max="60"
                 value={form.total_parcelas}
+                disabled={!!lancamentoEdit}
                 onChange={e => setForm(f => ({ ...f, total_parcelas: e.target.value }))} />
             </div>
           </div>
@@ -538,7 +545,7 @@ function ModalLancamento({
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Salvando...' : 'Registrar'}
+              {loading ? 'Salvando...' : lancamentoEdit ? 'Salvar Alterações' : 'Registrar'}
             </button>
           </div>
         </form>
@@ -552,6 +559,7 @@ function ModalLancamento({
 export default function FinanceiroClient() {
   const [view, setView] = useState<'contas' | 'cartoes' | 'resumo' | 'registros'>('contas')
   const [modalLancamento, setModalLancamento] = useState(false)
+  const [lancamentoEdit, setLancamentoEdit] = useState<Lancamento | null>(null)
   const [modalConta, setModalConta] = useState(false)
   const [modalImport, setModalImport] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState('')
@@ -559,7 +567,8 @@ export default function FinanceiroClient() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [authUserId, setAuthUserId] = useState('')
   const { success, error: toastError } = useToast()
-  const { update: updateLancamento } = useSupabaseMutation('lancamentos')
+  const { update: updateLancamento, remove: removeLancamento } = useSupabaseMutation('lancamentos')
+  const { remove: removeConta } = useSupabaseMutation('contas')
 
   // Detecta se é admin (admin = email NÃO está em funcionarios)
   useEffect(() => {
@@ -605,6 +614,34 @@ export default function FinanceiroClient() {
     }
   }
 
+  const handleEditLancamento = (lancamento: Lancamento) => {
+    setLancamentoEdit(lancamento)
+    setModalLancamento(true)
+  }
+
+  const handleDeleteLancamento = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este lançamento?')) return
+    const res = await removeLancamento(id)
+    if (!res.error) {
+      refetchLancamentos()
+      success('Lançamento excluído com sucesso!')
+    } else {
+      toastError('Erro ao excluir: ' + res.error)
+    }
+  }
+
+  const handleDeleteConta = async (id: string) => {
+    if (!confirm('Atenção: Deseja excluir esta conta/cartão? Todos os lançamentos vinculados a ela também serão perdidos.')) return
+    const res = await removeConta(id)
+    if (!res.error) {
+      refetchContas()
+      refetchLancamentos()
+      success('Conta/Cartão excluído com sucesso!')
+    } else {
+      toastError('Erro ao excluir conta: ' + res.error)
+    }
+  }
+
   const refreshAll = () => {
     refetchContas();
     refetchLancamentos();
@@ -632,7 +669,7 @@ export default function FinanceiroClient() {
         subtitle="Contas PF/PJ · Caixa · Conciliação · Previsão"
       >
         <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 print:hidden" title="Exportar para PDF ou Imprimir">🖨️ PDF / Imprimir</button>
-        <button onClick={() => setModalLancamento(true)} className="btn-primary print:hidden" disabled={contas.length === 0}>+ Lançamento</button>
+        <button onClick={() => { setLancamentoEdit(null); setModalLancamento(true) }} className="btn-primary print:hidden" disabled={contas.length === 0}>+ Lançamento</button>
       </PageHeader>
 
       {/* Tabs Menu Superior */}
@@ -661,6 +698,9 @@ export default function FinanceiroClient() {
           onNovaConta={() => setModalConta(true)}
           onImportar={() => setModalImport(true)}
           onValidar={validarLancamento}
+          onEditLancamento={handleEditLancamento}
+          onDeleteLancamento={handleDeleteLancamento}
+          onDeleteConta={handleDeleteConta}
         />
       )}
 
@@ -672,6 +712,9 @@ export default function FinanceiroClient() {
           categorias={categorias}
           onImportar={() => setModalImport(true)}
           onRefresh={refreshAll}
+          onEditLancamento={handleEditLancamento}
+          onDeleteLancamento={handleDeleteLancamento}
+          onDeleteConta={handleDeleteConta}
         />
       )}
 
@@ -726,7 +769,7 @@ export default function FinanceiroClient() {
           ) : (
             <div className="space-y-2">
               {contas.map(conta => (
-                <div key={conta.id} className="flex justify-between items-center p-3 rounded-lg border border-white/5 bg-black/20">
+                <div key={conta.id} className="flex justify-between items-center p-3 rounded-lg border border-white/5 bg-black/20 group">
                   <div>
                     <div className="flex gap-2 items-center">
                       <h3 className="text-sm font-medium text-fg">{conta.nome}</h3>
@@ -734,7 +777,12 @@ export default function FinanceiroClient() {
                     </div>
                     <p className="text-xs text-fg-tertiary mt-0.5 capitalize">{conta.tipo.replace('_', ' ')}</p>
                   </div>
-                  <span className="text-sm font-semibold">{formatCurrency(conta.saldo_atual)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold">{formatCurrency(conta.saldo_atual)}</span>
+                    <button onClick={() => handleDeleteConta(conta.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity" title="Excluir">
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -787,20 +835,30 @@ export default function FinanceiroClient() {
                          <p className="text-xs text-fg-tertiary whitespace-nowrap">{formatDate(l.data_competencia)} • <span className="capitalize">{l.regime}</span></p>
                        </div>
                     </div>
-                    <div className="text-right">
-                       <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-fg'}`}>
-                         {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
-                       </p>
-                       {l.status !== 'validado' ? (
-                          <button
-                            onClick={() => validarLancamento(l.id, l.descricao)}
-                            className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 transition-colors cursor-pointer"
-                          >
-                            ⏳ Pendente ✔
-                          </button>
-                       ) : (
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-emerald-500/30 text-emerald-500 bg-emerald-500/10">Validado</span>
-                       )}
+                    <div className="flex items-center gap-3 shrink-0">
+                       <div className="text-right">
+                         <p className={`text-sm font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-fg'}`}>
+                           {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
+                         </p>
+                         {l.status !== 'validado' ? (
+                            <button
+                              onClick={() => validarLancamento(l.id, l.descricao)}
+                              className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 transition-colors cursor-pointer"
+                            >
+                              ⏳ Pendente ✔
+                            </button>
+                         ) : (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-emerald-500/30 text-emerald-500 bg-emerald-500/10">Validado</span>
+                         )}
+                       </div>
+                       <div className="flex items-center gap-1">
+                         <button onClick={() => handleEditLancamento(l)} className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 transition-opacity ml-2" title="Editar">
+                           ✏️
+                         </button>
+                         <button onClick={() => handleDeleteLancamento(l.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity ml-1" title="Excluir">
+                           🗑️
+                         </button>
+                       </div>
                     </div>
                   </div>
                ))}
@@ -962,8 +1020,13 @@ export default function FinanceiroClient() {
         <ModalLancamento
           contas={contas}
           categorias={categorias}
-          onClose={() => setModalLancamento(false)}
-          onSave={refreshAll}
+          lancamentoEdit={lancamentoEdit}
+          onClose={() => { setModalLancamento(false); setLancamentoEdit(null); }}
+          onSave={() => {
+            setModalLancamento(false)
+            setLancamentoEdit(null)
+            refreshAll()
+          }}
         />
       )}
 

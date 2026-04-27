@@ -11,13 +11,15 @@ type Props = {
   onUpdate: () => void
   onNovoGasto: () => void
   onNovaReceita: () => void
+  onEditGasto: (g: GastoPessoal) => void
+  onEditReceita: (r: ReceitaPessoal) => void
 }
 
 function formatData(data: string) {
   return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
-export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNovaReceita }: Props) {
+export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNovaReceita, onEditGasto, onEditReceita }: Props) {
   const supabase = createClient()
   const [filtro, setFiltro] = useState<'todos' | 'gastos' | 'receitas'>('todos')
 
@@ -34,11 +36,13 @@ export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNova
   })
 
   const excluirGasto = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este gasto?')) return
     await (supabase.from('gastos_pessoais') as any).delete().eq('id', id)
     onUpdate()
   }
 
   const excluirReceita = async (id: string) => {
+    if (!confirm('Deseja realmente excluir esta receita?')) return
     await (supabase.from('receitas_pessoais') as any).delete().eq('id', id)
     onUpdate()
   }
@@ -108,14 +112,22 @@ export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNova
                     {isGasto ? '-' : '+'}{formatCurrency(item.valor)}
                   </p>
 
-                  {/* Excluir (hover) */}
-                  <button
-                    onClick={() => isGasto ? excluirGasto(item.id) : excluirReceita(item.id)}
-                    className="text-zinc-700 hover:text-red-400 text-sm transition-colors opacity-0 group-hover:opacity-100"
-                    title="Excluir"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => isGasto ? onEditGasto(item as any) : onEditReceita(item as any)}
+                      className="text-zinc-700 hover:text-blue-400 text-sm transition-colors opacity-0 group-hover:opacity-100"
+                      title="Editar"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => isGasto ? excluirGasto(item.id) : excluirReceita(item.id)}
+                      className="text-zinc-700 hover:text-red-400 text-sm transition-colors opacity-0 group-hover:opacity-100"
+                      title="Excluir"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               )
             })}

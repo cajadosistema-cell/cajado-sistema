@@ -386,9 +386,12 @@ function ModalCriarCartao({ onClose, onSave, categoriaDefault = 'pj' }: {
   )
 }
 
-export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar, onRefresh }: {
+export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar, onRefresh, onEditLancamento, onDeleteLancamento, onDeleteConta }: {
   contas: any[]; lancamentos: any[]; categorias: any[];
-  onImportar: () => void; onRefresh?: () => void
+  onImportar: () => void; onRefresh?: () => void;
+  onEditLancamento: (l: any) => void;
+  onDeleteLancamento: (id: string) => void;
+  onDeleteConta: (id: string) => void;
 }) {
   const cartoes = contas.filter(c => c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito')
   const [cartaoSel, setCartaoSel] = useState(cartoes[0]?.id ?? 'todos')
@@ -560,7 +563,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                   {lancFiltrados.map(l => {
                     const cartao = cartoes.find(c => c.id === l.conta_id)
                     return (
-                      <div key={l.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-black/20 border border-white/5 hover:bg-white/5 transition-colors">
+                      <div key={l.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-black/20 border border-white/5 hover:bg-white/5 transition-colors group">
                         <div className="flex items-center gap-2 min-w-0">
                           <BandeiraBadge bandeira={cartao?.bandeira} />
                           <div className="min-w-0">
@@ -568,9 +571,21 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                             <p className="text-[10px] text-fg-tertiary">{l.data_competencia} · {cartao?.nome_cartao || cartao?.nome}</p>
                           </div>
                         </div>
-                        <p className={`text-xs font-semibold shrink-0 ml-2 ${l.tipo === 'despesa' ? 'text-red-400' : 'text-emerald-400'}`}>
-                          {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
-                        </p>
+                        <div className="flex items-center gap-3 shrink-0 ml-2">
+                          <p className={`text-xs font-semibold ${l.tipo === 'despesa' ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => onEditLancamento(l)}
+                              className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 transition-opacity" title="Editar Lançamento">
+                              ✏️
+                            </button>
+                            <button onClick={() => onDeleteLancamento(l.id)}
+                              className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity" title="Excluir Lançamento">
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )
                   })}
@@ -634,11 +649,20 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                         <span>Vence dia {c.dia_vencimento || '—'}</span>
                       </div>
                     )}
-                    <button
-                      onClick={() => { setCartaoSel(c.id); setSubAba('lancamentos'); setModalLanc(true) }}
-                      className="w-full btn-ghost text-xs mt-1">
-                      + Lançar neste cartão
-                    </button>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button
+                        onClick={() => { setCartaoSel(c.id); setSubAba('lancamentos'); setModalLanc(true) }}
+                        className="flex-1 btn-ghost text-xs">
+                        + Lançar
+                      </button>
+                      <button
+                        onClick={() => onDeleteConta(c.id)}
+                        className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
+                        title="Excluir Cartão"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 </div>
               )

@@ -8,20 +8,21 @@ type Props = {
   userId: string
   onSave: () => void
   onClose: () => void
+  gastoEdit?: any
 }
 
-export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
+export function ModalNovoGasto({ userId, onSave, onClose, gastoEdit }: Props) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const today = new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
-    descricao: '',
-    valor: '',
-    categoria: 'outros',
-    forma_pagamento: 'pix',
-    data: today,
-    recorrente: false,
-    notas: '',
+    descricao: gastoEdit?.descricao ?? '',
+    valor: gastoEdit?.valor?.toString() ?? '',
+    categoria: gastoEdit?.categoria ?? 'outros',
+    forma_pagamento: gastoEdit?.forma_pagamento ?? 'pix',
+    data: gastoEdit?.data ?? today,
+    recorrente: gastoEdit?.recorrente ?? false,
+    notas: gastoEdit?.notas ?? '',
   })
 
   const set = (k: keyof typeof form, v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
@@ -37,7 +38,7 @@ export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
     const valor = parseFloat(form.valor.replace(',', '.'))
     if (!valor || valor <= 0) return
     setLoading(true)
-    await (supabase.from('gastos_pessoais') as any).insert({
+    const payload = {
       user_id: userId,
       descricao: form.descricao,
       valor,
@@ -46,7 +47,13 @@ export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
       data: form.data,
       recorrente: form.recorrente,
       notas: form.notas || null,
-    })
+    }
+
+    if (gastoEdit) {
+      await (supabase.from('gastos_pessoais') as any).update(payload).eq('id', gastoEdit.id)
+    } else {
+      await (supabase.from('gastos_pessoais') as any).insert(payload)
+    }
     setLoading(false)
     onSave()
     onClose()
@@ -57,8 +64,8 @@ export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
       <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-base font-semibold text-fg">Novo Gasto Pessoal</h2>
-            <p className="text-xs text-fg-tertiary mt-0.5">Categoria detectada automaticamente</p>
+            <h2 className="text-base font-semibold text-fg">{gastoEdit ? '✏️ Editar Gasto' : 'Novo Gasto Pessoal'}</h2>
+            {!gastoEdit && <p className="text-xs text-fg-tertiary mt-0.5">Categoria detectada automaticamente</p>}
           </div>
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
@@ -122,7 +129,7 @@ export function ModalNovoGasto({ userId, onSave, onClose }: Props) {
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Salvando...' : '💸 Registrar Gasto'}
+              {loading ? 'Salvando...' : gastoEdit ? 'Salvar Alterações' : '💸 Registrar Gasto'}
             </button>
           </div>
         </form>

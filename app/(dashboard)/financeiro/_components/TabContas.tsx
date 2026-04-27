@@ -167,10 +167,13 @@ function ModalLancamentoConta({ contas, categorias, onClose, onSave }: {
 }
 
 // ── TabContas principal ──────────────────────────────────────
-export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImportar, onValidar }: {
+export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImportar, onValidar, onEditLancamento, onDeleteLancamento, onDeleteConta }: {
   contas: Conta[]; lancamentos: Lancamento[]; categorias: Categoria[];
   onNovaConta: () => void; onImportar: () => void;
   onValidar: (id: string, desc: string) => void
+  onEditLancamento: (l: any) => void
+  onDeleteLancamento: (id: string) => void
+  onDeleteConta: (id: string) => void
 }) {
   const contasBancarias = contas.filter(c => ['corrente', 'poupanca', 'dinheiro', 'investimento'].includes(c.tipo))
   const [contaSel, setContaSel] = useState<string>('todas')
@@ -219,13 +222,26 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
           🏦 Todas ({contasBancarias.length})
         </button>
         {contasBancarias.map(c => (
-          <button key={c.id} onClick={() => setContaSel(c.id)}
-            className={cn('flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
-              contaSel === c.id ? 'border-white/20 text-white bg-white/10' : 'border-border-subtle text-fg-tertiary hover:text-fg')}>
-            <span className="w-2 h-2 rounded-full" style={{ background: c.cor || '#6b7280' }} />
-            {c.nome}
-            <span className="text-[9px] opacity-60">{formatCurrency(c.saldo_atual)}</span>
-          </button>
+          <div key={c.id} className="relative flex-shrink-0 group flex">
+            <button onClick={() => setContaSel(c.id)}
+              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
+                contaSel === c.id ? 'border-white/20 text-white bg-white/10' : 'border-border-subtle text-fg-tertiary hover:text-fg',
+                contaSel === c.id ? 'rounded-r-none border-r-0' : ''
+              )}>
+              <span className="w-2 h-2 rounded-full" style={{ background: c.cor || '#6b7280' }} />
+              {c.nome}
+              <span className="text-[9px] opacity-60">{formatCurrency(c.saldo_atual)}</span>
+            </button>
+            {contaSel === c.id && (
+              <button
+                onClick={() => onDeleteConta(c.id)}
+                className="flex items-center justify-center px-2 border border-l-0 border-white/20 rounded-r-xl bg-white/10 text-red-400 hover:text-white hover:bg-red-500 transition-colors"
+                title="Excluir Conta Bancária"
+              >
+                🗑️
+              </button>
+            )}
+          </div>
         ))}
       </div>
 
@@ -271,20 +287,32 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
                       <p className="text-[10px] text-fg-tertiary">{l.data_competencia} · {conta?.nome || '—'}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-3">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${l.status === 'validado' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-400'}`}>
-                      {l.status === 'validado' ? '✓ Validado' : '⏳ Pendente'}
-                    </span>
-                    <p className={`text-xs font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-blue-400'}`}>
-                      {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
-                    </p>
-                    {l.status !== 'validado' && (
-                      <button onClick={() => onValidar(l.id, l.descricao)}
-                        className="opacity-0 group-hover:opacity-100 text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-all">
-                        ✓
-                      </button>
-                    )}
-                  </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      <div className="text-right flex items-center gap-2">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${l.status === 'validado' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-400'}`}>
+                          {l.status === 'validado' ? '✓ Validado' : '⏳ Pendente'}
+                        </span>
+                        <p className={`text-xs font-semibold ${l.tipo === 'receita' ? 'text-emerald-400' : l.tipo === 'despesa' ? 'text-red-400' : 'text-blue-400'}`}>
+                          {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
+                        </p>
+                      </div>
+                      {l.status !== 'validado' && (
+                        <button onClick={() => onValidar(l.id, l.descricao)}
+                          className="opacity-0 group-hover:opacity-100 text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-all ml-1">
+                          ✓
+                        </button>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => onEditLancamento(l)}
+                          className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 transition-opacity ml-1" title="Editar Lançamento">
+                          ✏️
+                        </button>
+                        <button onClick={() => onDeleteLancamento(l.id)}
+                          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity ml-1" title="Excluir Lançamento">
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
                 </div>
               )
             })}
