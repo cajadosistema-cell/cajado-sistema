@@ -270,42 +270,37 @@ export function PWAInstallBanner() {
 }
 
 export function PWAInstallButton({ className }: { className?: string }) {
-  const [canInstall, setCanInstall] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
 
   useEffect(() => {
-    if (isInStandaloneMode()) return
-
-    const check = () => {
-      if ((window as any).deferredPrompt || isIOS()) {
-        setCanInstall(true)
-      }
-    }
-    
-    check()
-    window.addEventListener('beforeinstallprompt', check)
-    window.addEventListener('pwa-prompt-ready', check)
-    window.addEventListener('appinstalled', () => setCanInstall(false))
-    
-    return () => {
-      window.removeEventListener('beforeinstallprompt', check)
-      window.removeEventListener('pwa-prompt-ready', check)
+    if (isInStandaloneMode()) {
+      setIsStandalone(true)
     }
   }, [])
-
-  if (!canInstall) return null
 
   const handleInstall = async () => {
     if (isIOS()) {
       alert('Para instalar no iPhone:\n\n1. Toque no ícone Compartilhar (quadrado com seta para cima) na barra inferior do Safari.\n2. Role para baixo e selecione "Adicionar à Tela de Início".')
       return
     }
+    
     const promptEvent = (window as any).deferredPrompt
     if (promptEvent) {
-      await promptEvent.prompt()
-      const choice = await promptEvent.userChoice
-      if (choice.outcome === 'accepted') {
-        localStorage.setItem(INSTALLED_KEY, '1')
-        setCanInstall(false)
+      try {
+        await promptEvent.prompt()
+        const choice = await promptEvent.userChoice
+        if (choice.outcome === 'accepted') {
+          localStorage.setItem(INSTALLED_KEY, '1')
+        }
+      } catch (err) {
+        console.error('Erro ao instalar PWA:', err)
+      }
+    } else {
+      // Chrome escondeu o evento (cache ou já instalado)
+      if (isStandalone) {
+        alert('Você já está acessando pelo Aplicativo Instalado! ✅')
+      } else {
+        alert('O seu navegador não enviou o atalho automático.\n\nPara instalar manualmente no Android/PC:\nClique no Menu (3 pontinhos) no topo do seu navegador e escolha "Instalar Aplicativo" ou "Adicionar à Tela Inicial".')
       }
     }
   }
