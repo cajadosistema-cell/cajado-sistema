@@ -194,33 +194,41 @@ export function SecretariaFlutuante() {
   }
   // sessão = dia atual, agrupa mensagens por dia
   const sessaoId = new Date().toISOString().split('T')[0]
+  // Controle de microfone já autorizado
+  const micPermitidoRef = useRef(false)
 
   useEffect(() => {
     setPos({ x: window.innerWidth - 80, y: window.innerHeight - 150 })
     setIsClient(true)
+    // Verifica permissão de microfone salva
+    if (typeof window !== 'undefined') {
+      micPermitidoRef.current = localStorage.getItem('elena_mic_ok') === '1'
+    }
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       const uid = data.user.id
       setUserId(uid)
 
-      // Carrega histórico de conversas do banco
+      // Carrega apenas histórico DA SESSÃO DE HOJE (evita reabrir tarefas antigas)
       if (!historyLoadedRef.current) {
         historyLoadedRef.current = true
+        const hoje = new Date().toISOString().split('T')[0]
         const { data: hist } = await (supabase
           .from('elena_conversas') as any)
           .select('id, role, texto, acoes, created_at')
           .eq('user_id', uid)
-          .order('created_at', { ascending: false })
+          .gte('created_at', hoje + 'T00:00:00')
+          .order('created_at', { ascending: true })
           .limit(40)
         if (hist && hist.length > 0) {
-          const historico: Msg[] = (hist as any[]).reverse().map((r: any) => ({
+          const historico: Msg[] = (hist as any[]).map((r: any) => ({
             id: r.id,
             role: r.role as 'ai' | 'user',
             texto: r.texto,
             acoes: r.acoes ?? undefined,
           }))
-          setMensagens(prev => [
-            { id: '1', role: 'ai', texto: `Olá, chefe! 👋 Já carregamos ${hist.length} mensagens do seu histórico. Do que precisa hoje?` },
+          setMensagens([
+            { id: '1', role: 'ai', texto: 'Olá, chefe! 👋 Continuando de onde paramos hoje. Do que precisa agora?' },
             ...historico,
           ])
         }
@@ -660,11 +668,10 @@ export function SecretariaFlutuante() {
     }
   }, [input, loading, mensagens, userId, supabase, executarAcoesAuto, salvarHistorico])
 
-  // ── Microfone ─────────────────────────────────────────────
-  const handlePressMic = () => {
+  // ── Microfone (pede permissão apenas uma vez) ─────────────────
+  const iniciarReconhecimento = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) { alert('Use o Google Chrome para usar o microfone.'); return }
-    // Para qualquer reconhecimento anterior
     if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
     transcriptRef.current = ''
     setInput('')
@@ -675,7 +682,6 @@ export function SecretariaFlutuante() {
     r.interimResults = true
     r.onstart = () => setIsListening(true)
     r.onresult = (e: any) => {
-      // Acumula resultados finais + interim na ref (NÃO coloca no input para evitar "pedir confirmação")
       let finalText = ''
       let interimText = ''
       for (let i = 0; i < e.results.length; i++) {
@@ -687,9 +693,11 @@ export function SecretariaFlutuante() {
     r.onerror = (e: any) => {
       setIsListening(false)
       if (e.error === 'not-allowed') {
-        alert('Permissão de microfone negada. Clique no cadeado na barra de endereços e permita o uso do microfone.')
+        localStorage.removeItem('elena_mic_ok')
+        micPermitidoRef.current = false
+        alert('Permissão de microfone negada. Clique no cadeado na barra de endereços e permita o microfone.')
       } else if (e.error === 'audio-capture') {
-        alert('Nenhum microfone encontrado. Verifique se o microfone está conectado.')
+        alert('Nenhum microfone encontrado.')
       } else if (e.error !== 'no-speech') {
         console.error('Erro no microfone:', e.error)
       }
@@ -698,13 +706,31 @@ export function SecretariaFlutuante() {
     r.start()
   }
 
+  const handlePressMic = () => {
+    // Se já tem permissão salva, inicia direto
+    if (micPermitidoRef.current) {
+      iniciarReconhecimento()
+      return
+    }
+    // Solicita permissão uma única vez
+    navigator.mediaDevices?.getUserMedia({ audio: true })
+      .then(stream => {
+        stream.getTracks().forEach(t => t.stop()) // libera stream de teste
+        micPermitidoRef.current = true
+        localStorage.setItem('elena_mic_ok', '1')
+        iniciarReconhecimento()
+      })
+      .catch(() => {
+        alert('Permissão de microfone negada. Permita nas configurações do navegador.')
+      })
+  }
+
   const handleReleaseMic = () => {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch {}
       recognitionRef.current = null
     }
     setIsListening(false)
-    // Aguarda o último onresult disparar e envia direto
     setTimeout(() => {
       const text = transcriptRef.current.trim()
       transcriptRef.current = ''
@@ -714,11 +740,8 @@ export function SecretariaFlutuante() {
   }
 
   const toggleMic = () => {
-    if (isListening) {
-      handleReleaseMic()
-    } else {
-      handlePressMic()
-    }
+    if (isListening) handleReleaseMic()
+    else handlePressMic()
   }
 
 

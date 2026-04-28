@@ -6,6 +6,14 @@ import { createClient } from '@/lib/supabase/client'
 import { EmptyState } from '@/components/shared/ui'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
+function getAnoMes(d: string) { return d ? d.substring(0, 7) : '' }
+function labelMes(ym: string) {
+  if (!ym) return ''
+  const [y, m] = ym.split('-')
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+  return `${meses[parseInt(m)-1]}/${y}`
+}
+
 // ── Bandeiras ────────────────────────────────────────────────
 const BANDEIRAS = [
   { id: 'visa',       label: 'Visa',        emoji: '💳', cor: '#1a1f71' },
@@ -16,9 +24,64 @@ const BANDEIRAS = [
   { id: 'outras',     label: 'Outras',      emoji: '💳', cor: '#6b7280' },
 ]
 
+// ── Modal Limite Mensal ─────────────────────────────────────────
+function ModalLimiteMensal({ conta, onClose, onSave }: { conta: any; onClose: () => void; onSave: () => void }) {
+  const supabase = createClient()
+  const [limite, setLimite] = useState(String(conta.limite_gasto_mensal ?? ''))
+  const [loading, setLoading] = useState(false)
+  const handleSave = async () => {
+    setLoading(true)
+    await (supabase.from('contas') as any).update({ limite_gasto_mensal: parseFloat(limite) || null }).eq('id', conta.id)
+    setLoading(false); onSave(); onClose()
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+        <h2 className="text-sm font-bold text-fg">🎯 Limite Mensal — {conta.nome_cartao || conta.nome}</h2>
+        <p className="text-xs text-fg-tertiary">Defina o limite de gasto mensal. Alertas aparecem ao atingir 80% e 100%.</p>
+        <div>
+          <label className="label">Limite Mensal (R$)</label>
+          <input className="input mt-1 w-full" type="number" step="0.01" placeholder="Ex: 3000.00"
+            value={limite} onChange={e => setLimite(e.target.value)} />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handleSave} disabled={loading} className="btn-primary">
+            {loading ? 'Salvando...' : '✅ Definir'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Barra de progresso de gasto ─────────────────────────────────
+function GastoBar({ gasto, limite }: { gasto: number; limite: number | null }) {
+  if (!limite) return null
+  const pct = Math.min((gasto / limite) * 100, 100)
+  const cor = pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#10b981'
+  return (
+    <div className="space-y-1 mt-1">
+      <div className="flex justify-between text-[10px]">
+        <span className="text-fg-tertiary">Controle mensal</span>
+        <span style={{ color: cor }} className="font-bold">{pct.toFixed(0)}%</span>
+      </div>
+      <div className="w-full bg-muted rounded-full h-1.5">
+        <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: cor }} />
+      </div>
+      {pct >= 80 && (
+        <p className={cn('text-[10px] font-bold text-center py-0.5 rounded animate-pulse',
+          pct >= 100 ? 'text-red-400' : 'text-amber-400'
+        )}>{pct >= 100 ? '🚨 LIMITE ATINGIDO!' : '⚠️ Próximo do limite'}</p>
+      )}
+    </div>
+  )
+}
+
 const COLORS = ['#10b981', '#3b82f6', '#f5a623', '#8b5cf6', '#ec4899', '#f43f5e']
 
 function BandeiraBadge({ bandeira, size = 'sm' }: { bandeira?: string; size?: 'sm' | 'lg' }) {
+
   const b = BANDEIRAS.find(x => x.id === bandeira) ?? BANDEIRAS[BANDEIRAS.length - 1]
   const cls = size === 'lg'
     ? 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider'
@@ -397,9 +460,12 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
   const [cartaoSel, setCartaoSel] = useState(cartoes[0]?.id ?? 'todos')
   const [modalLanc, setModalLanc] = useState(false)
   const [modalCriar, setModalCriar] = useState(false)
+  const [modalLimite, setModalLimite] = useState<any>(null)
   const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro'>('lancamentos')
   const [busca, setBusca] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
+  const mesAtual = new Date().toISOString().substring(0, 7)
+  const [mesSel, setMesSel] = useState(mesAtual)
 
   if (cartoes.length === 0 && subAba === 'lancamentos') {
     // Mantém sub-abas visíveis mas mostra vazio dentro do lançamentos
@@ -407,8 +473,14 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
 
   const gastosTudo = lancamentos.filter(l =>
     cartoes.some(c => c.id === l.conta_id) &&
-    (cartaoSel === 'todos' || l.conta_id === cartaoSel)
+    (cartaoSel === 'todos' || l.conta_id === cartaoSel) &&
+    (mesSel ? getAnoMes(l.data_competencia) === mesSel : true)
   )
+  const mesesDisp = Array.from(new Set(
+    lancamentos.filter(l => cartoes.some(c => c.id === l.conta_id))
+      .map(l => getAnoMes(l.data_competencia))
+  )).sort().reverse()
+
   const despesas = gastosTudo.filter(l => l.tipo === 'despesa')
   const receitas = gastosTudo.filter(l => l.tipo === 'receita')
   const totalDespesas = despesas.reduce((a, l) => a + l.valor, 0)
@@ -430,10 +502,15 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
     return okTipo && okBusca
   })
 
+  // Gasto por cartão no mês
+  const gastoCartaoMes = (contaId: string) =>
+    lancamentos.filter(l => l.conta_id === contaId && l.tipo === 'despesa' && getAnoMes(l.data_competencia) === mesSel)
+      .reduce((a: number, l: any) => a + l.valor, 0)
+
   return (
     <div className="space-y-4 mt-4">
 
-      {/* Sub-abas internas — sempre visíveis */}
+      {/* Sub-abas internas */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1">
           {([
@@ -457,23 +534,18 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
         </div>
       </div>
 
-      {/* ── ABA LANÇAMENTOS ─────────────────────────────────── */}
+      {/* ── ABA LANÇAMENTOS */}
       {subAba === 'lancamentos' && (
         <div className="space-y-4">
           {cartoes.length === 0 ? (
             <div className="bg-surface border border-white/5 rounded-xl p-10 text-center">
               <div className="text-4xl mb-3">💳</div>
-              <h3 className="text-sm font-bold text-fg mb-2">Nenhum cartão cadastrado ainda</h3>
-              <p className="text-xs text-fg-tertiary mb-4">
-                Vá para a aba <strong className="text-amber-400">Cadastro de Cartões</strong> para adicionar seu primeiro cartão.
-              </p>
-              <button onClick={() => setSubAba('cadastro')} className="btn-primary text-xs">
-                💳 Ir para Cadastro
-              </button>
+              <h3 className="text-sm font-bold text-fg mb-2">Nenhum cartão cadastrado</h3>
+              <button onClick={() => setSubAba('cadastro')} className="btn-primary text-xs">💳 Ir para Cadastro</button>
             </div>
           ) : (
             <>
-          {/* Seletor de cartão */}
+          {/* Seletor de cartão visual — clicável */}
           <div className="flex gap-3 overflow-x-auto pb-1">
             <button onClick={() => setCartaoSel('todos')}
               className={cn('flex-shrink-0 px-4 py-2 rounded-xl text-xs font-semibold border transition-all',
@@ -489,7 +561,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
           {/* KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { label: 'Despesas', val: totalDespesas, color: 'text-red-400', bg: 'bg-red-500/10' },
+              { label: `Despesas (${labelMes(mesSel)})`, val: totalDespesas, color: 'text-red-400', bg: 'bg-red-500/10' },
               { label: 'Receitas/Estornos', val: totalReceitas, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
               { label: 'Saldo Fatura', val: totalReceitas - totalDespesas, color: (totalReceitas - totalDespesas) >= 0 ? 'text-emerald-400' : 'text-red-400', bg: 'bg-blue-500/10' },
             ].map(({ label, val, color, bg }) => (
@@ -500,9 +572,8 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
             ))}
           </div>
 
-          {/* Gráfico + Lista completa */}
+          {/* Gráfico + Lista */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {/* Gráfico de categorias */}
             <div className="bg-surface border border-white/5 rounded-xl p-4 md:col-span-2">
               <p className="text-xs text-fg-tertiary uppercase tracking-wider mb-3">Por Categoria</p>
               {dataCat.length === 0 ? (
@@ -512,8 +583,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                   <div className="h-[150px] w-[150px] flex-shrink-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={dataCat} cx="50%" cy="50%" innerRadius={45} outerRadius={70}
-                          paddingAngle={3} dataKey="value" stroke="none">
+                        <Pie data={dataCat} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value" stroke="none">
                           {dataCat.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                         </Pie>
                         <Tooltip formatter={(v: number) => formatCurrency(v)}
@@ -541,13 +611,17 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
               )}
             </div>
 
-            {/* Lista de lançamentos com filtro */}
             <div className="bg-surface border border-white/5 rounded-xl p-4 md:col-span-3">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs text-fg-tertiary uppercase tracking-wider">Lançamentos</p>
                 <span className="text-[10px] text-fg-disabled">{lancFiltrados.length} registro(s)</span>
               </div>
-              <div className="flex gap-2 mb-3">
+              {/* Filtros linha */}
+              <div className="flex gap-2 mb-3 flex-wrap">
+                <select className="input text-xs w-32" value={mesSel} onChange={e => setMesSel(e.target.value)}>
+                  {mesesDisp.length === 0 && <option value={mesAtual}>{labelMes(mesAtual)}</option>}
+                  {mesesDisp.map(m => <option key={m} value={m}>{labelMes(m)}</option>)}
+                </select>
                 <input className="input text-xs flex-1" placeholder="🔍 Buscar..."
                   value={busca} onChange={e => setBusca(e.target.value)} />
                 <select className="input text-xs w-28" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
@@ -576,14 +650,8 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                             {l.tipo === 'despesa' ? '-' : '+'}{formatCurrency(l.valor)}
                           </p>
                           <div className="flex items-center gap-1">
-                            <button onClick={() => onEditLancamento(l)}
-                              className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 transition-opacity" title="Editar Lançamento">
-                              ✏️
-                            </button>
-                            <button onClick={() => onDeleteLancamento(l.id)}
-                              className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity" title="Excluir Lançamento">
-                              🗑️
-                            </button>
+                            <button onClick={() => onEditLancamento(l)} className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 transition-opacity" title="Editar">✏️</button>
+                            <button onClick={() => onDeleteLancamento(l.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity" title="Excluir">🗑️</button>
                           </div>
                         </div>
                       </div>
@@ -598,16 +666,17 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
         </div>
       )}
 
-      {/* ── ABA CADASTRO ────────────────────────────────────── */}
+      {/* ── ABA CADASTRO */}
       {subAba === 'cadastro' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {cartoes.map(c => {
               const band = BANDEIRAS.find(b => b.id === c.bandeira) ?? BANDEIRAS[BANDEIRAS.length - 1]
               const gastos = lancamentos.filter(l => l.conta_id === c.id && l.tipo === 'despesa').reduce((a: number, l: any) => a + l.valor, 0)
+              const gastoMes = gastoCartaoMes(c.id)
               return (
-                <div key={c.id} className="bg-surface border border-white/5 rounded-2xl overflow-hidden">
-                  {/* Visual do cartão */}
+                <div key={c.id} className="bg-surface border border-white/5 rounded-2xl overflow-hidden cursor-pointer hover:border-white/10 transition-all"
+                  onClick={() => { setCartaoSel(c.id); setSubAba('lancamentos') }}>
                   <div className="h-24 relative flex flex-col justify-between p-3 overflow-hidden"
                     style={{ background: `linear-gradient(135deg, ${band.cor}cc, ${band.cor}66)` }}>
                     <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(45deg, white 0, white 1px, transparent 1px, transparent 10px)' }} />
@@ -622,27 +691,18 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                       <p className="text-white/60 text-[9px]">{band.label}</p>
                     </div>
                   </div>
-                  {/* Detalhes */}
                   <div className="p-3 space-y-1.5">
                     <div className="flex justify-between text-xs">
-                      <span className="text-fg-tertiary">Gasto no mês</span>
+                      <span className="text-fg-tertiary">Gasto total</span>
                       <span className="font-semibold text-red-400">{formatCurrency(gastos)}</span>
                     </div>
                     {c.limite && (
-                      <>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-fg-tertiary">Limite</span>
-                          <span className="font-semibold text-fg">{formatCurrency(c.limite)}</span>
-                        </div>
-                        <div className="w-full bg-muted rounded-full h-1.5 mt-1">
-                          <div className="h-1.5 rounded-full bg-red-500/70 transition-all"
-                            style={{ width: `${Math.min((gastos / c.limite) * 100, 100)}%` }} />
-                        </div>
-                        <p className="text-[9px] text-fg-disabled text-right">
-                          {((gastos / c.limite) * 100).toFixed(0)}% do limite usado
-                        </p>
-                      </>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-fg-tertiary">Limite crédito</span>
+                        <span className="font-semibold text-fg">{formatCurrency(c.limite)}</span>
+                      </div>
                     )}
+                    <GastoBar gasto={gastoMes} limite={c.limite_gasto_mensal ?? null} />
                     {(c.dia_fechamento || c.dia_vencimento) && (
                       <div className="flex justify-between text-[10px] text-fg-tertiary pt-1 border-t border-border-subtle">
                         <span>Fecha dia {c.dia_fechamento || '—'}</span>
@@ -650,24 +710,17 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                       </div>
                     )}
                     <div className="flex items-center gap-2 mt-1">
-                      <button
-                        onClick={() => { setCartaoSel(c.id); setSubAba('lancamentos'); setModalLanc(true) }}
-                        className="flex-1 btn-ghost text-xs">
-                        + Lançar
-                      </button>
-                      <button
-                        onClick={() => onDeleteConta(c.id)}
-                        className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
-                        title="Excluir Cartão"
-                      >
-                        🗑️
-                      </button>
+                      <button onClick={e => { e.stopPropagation(); setCartaoSel(c.id); setSubAba('lancamentos'); setModalLanc(true) }}
+                        className="flex-1 btn-ghost text-xs">+ Lançar</button>
+                      <button onClick={e => { e.stopPropagation(); setModalLimite(c) }}
+                        className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">🎯 Limite</button>
+                      <button onClick={e => { e.stopPropagation(); onDeleteConta(c.id) }}
+                        className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30" title="Excluir">🗑️</button>
                     </div>
                   </div>
                 </div>
               )
             })}
-            {/* Card para adicionar novo */}
             <button onClick={() => setModalCriar(true)}
               className="border-2 border-dashed border-border-subtle rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-fg-disabled hover:border-amber-500/40 hover:text-amber-400 transition-all min-h-[180px]">
               <span className="text-3xl">+</span>
@@ -678,9 +731,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
       )}
 
       {modalLanc && (
-        <ModalLancamentoCartao
-          cartoes={cartoes}
-          categorias={categorias}
+        <ModalLancamentoCartao cartoes={cartoes} categorias={categorias}
           cartaoInicial={cartaoSel !== 'todos' ? cartaoSel : cartoes[0]?.id}
           onClose={() => setModalLanc(false)}
           onSave={() => setModalLanc(false)}
@@ -692,6 +743,14 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
           onSave={() => { setModalCriar(false); onRefresh?.() }}
         />
       )}
+      {modalLimite && (
+        <ModalLimiteMensal
+          conta={modalLimite}
+          onClose={() => setModalLimite(null)}
+          onSave={() => { onRefresh?.() }}
+        />
+      )}
     </div>
   )
 }
+

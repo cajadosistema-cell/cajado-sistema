@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
@@ -8,6 +8,8 @@ import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import { TabImoveis } from './_components/TabImoveis'
 import { TabFinanciamentos } from './_components/TabFinanciamentos'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
+import { exportCSV, exportPDF, parseCSV } from '@/lib/export-utils'
+import { Download, Upload, FileText, X, AlertCircle, CheckCircle2, Pencil, Trash2 } from 'lucide-react'
 
 type ProjetoPatrimonio = {
   id: string
@@ -53,27 +55,144 @@ const MOCK_CUSTOS: CustoPatrimonio[] = [
   { id: '4', projeto_id: '2', descricao: 'Pneus Novos', valor: 2000, data: '2025-12-10', categoria: 'manutencao' },
 ]
 
-function ModalProjeto({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
-  const { insert, loading } = useSupabaseMutation('projetos_patrimonio')
+// ── Modal Importar CSV ────────────────────────────────────────────────────────
+function ModalImportarPatrimonio({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const { insert } = useSupabaseMutation('projetos_patrimonio')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<Record<string, string>[]>([])
+  const [status, setStatus] = useState<'idle' | 'preview' | 'importing' | 'done' | 'error'>('idle')
+  const [msg, setMsg] = useState('')
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const rows = parseCSV(ev.target?.result as string)
+      if (!rows.length) { setMsg('Arquivo vazio ou inválido'); setStatus('error'); return }
+      setPreview(rows.slice(0, 5))
+      setStatus('preview')
+    }
+    reader.readAsText(file, 'utf-8')
+  }
+
+  const handleImport = async () => {
+    setStatus('importing')
+    try {
+      const file = fileRef.current?.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = async ev => {
+        const rows = parseCSV(ev.target?.result as string)
+        let ok = 0
+        for (const r of rows) {
+          const vi = parseFloat(r.valor_investido_total || '0')
+          const vm = r.valor_mercado_atual ? parseFloat(r.valor_mercado_atual) : null
+          if (!r.titulo || isNaN(vi)) continue
+          await insert({
+            titulo: r.titulo,
+            tipo: (r.tipo || 'outro') as ProjetoPatrimonio['tipo'],
+            descricao: r.descricao || null,
+            valor_investido_total: vi,
+            valor_mercado_atual: vm,
+            roi_percentual: vm && vi > 0 ? ((vm - vi) / vi) * 100 : null,
+            data_aquisicao: r.data_aquisicao || null,
+            status: (r.status || 'ativo') as ProjetoPatrimonio['status'],
+          })
+          ok++
+        }
+        setMsg(`${ok} bem(ns) importado(s) com sucesso`)
+        setStatus('done')
+        onImported()
+      }
+      reader.readAsText(file, 'utf-8')
+    } catch { setMsg('Erro ao importar'); setStatus('error') }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-semibold text-fg">Importar Patrimônio (CSV)</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg"><X size={18} /></button>
+        </div>
+        <div className="bg-muted rounded-xl p-3 mb-4 text-xs text-fg-secondary space-y-1">
+          <p className="font-semibold text-fg">Colunas esperadas no CSV:</p>
+          <p className="font-mono text-[11px] text-fg-tertiary">titulo*, tipo, descricao, valor_investido_total*, valor_mercado_atual, data_aquisicao, status</p>
+          <button
+            onClick={() => exportCSV('modelo_patrimonio.csv',
+              ['titulo','tipo','descricao','valor_investido_total','valor_mercado_atual','data_aquisicao','status'],
+              [['Apartamento Centro','imovel','Imóvel para locação','350000','420000','2023-01-15','ativo'],
+               ['Gol 2022','veiculo','Carro empresa','65000','58000','2024-05-20','ativo']])}
+            className="text-amber-400 underline hover:text-amber-300 mt-1"
+          >Baixar modelo .csv</button>
+        </div>
+        <input ref={fileRef} type="file" accept=".csv,.txt" onChange={handleFile} className="input mb-4" />
+        {status === 'preview' && (
+          <div className="mb-4">
+            <p className="text-xs text-fg-tertiary mb-2">Prévia ({preview.length} linhas):</p>
+            <div className="overflow-x-auto rounded-lg border border-border-subtle">
+              <table className="w-full text-[11px]">
+                <thead><tr>{Object.keys(preview[0]).map(k => <th key={k} className="table-header">{k}</th>)}</tr></thead>
+                <tbody>{preview.map((r, i) => <tr key={i}>{Object.values(r).map((v, j) => <td key={j} className="table-cell">{v}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        {(status === 'done' || status === 'error') && (
+          <div className={cn('flex items-center gap-2 rounded-xl p-3 mb-4 text-sm', status === 'done' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}>
+            {status === 'done' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />} {msg}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn-secondary">Fechar</button>
+          {status === 'preview' && (
+            <button onClick={handleImport} className="btn-primary">
+              Importar {preview.length}+ bens
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ModalProjeto({
+  onClose, onSave, editando,
+}: {
+  onClose: () => void
+  onSave: () => void
+  editando?: ProjetoPatrimonio
+}) {
+  const { insert, update, loading } = useSupabaseMutation('projetos_patrimonio')
   const [form, setForm] = useState({
-    titulo: '', tipo: 'imovel' as ProjetoPatrimonio['tipo'],
-    descricao: '', valor_investido_total: '',
-    valor_mercado_atual: '', data_aquisicao: '',
+    titulo:              editando?.titulo              ?? '',
+    tipo:               (editando?.tipo               ?? 'imovel') as ProjetoPatrimonio['tipo'],
+    descricao:          editando?.descricao           ?? '',
+    valor_investido_total: editando?.valor_investido_total != null ? String(editando.valor_investido_total) : '',
+    valor_mercado_atual:   editando?.valor_mercado_atual  != null ? String(editando.valor_mercado_atual)  : '',
+    data_aquisicao:     editando?.data_aquisicao     ?? '',
+    status:            (editando?.status             ?? 'ativo') as ProjetoPatrimonio['status'],
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const vi = parseFloat(form.valor_investido_total)
     const vm = form.valor_mercado_atual ? parseFloat(form.valor_mercado_atual) : null
-    await insert({
+    const payload = {
       titulo: form.titulo, tipo: form.tipo,
       descricao: form.descricao || null,
       valor_investido_total: vi,
       valor_mercado_atual: vm,
       roi_percentual: vm && vi > 0 ? ((vm - vi) / vi) * 100 : null,
       data_aquisicao: form.data_aquisicao || null,
-      status: 'ativo',
-    })
+      status: form.status,
+    }
+    if (editando) {
+      await update(editando.id, payload)
+    } else {
+      await insert({ ...payload, status: 'ativo' })
+    }
     onSave(); onClose()
   }
 
@@ -81,7 +200,7 @@ function ModalProjeto({ onClose, onSave }: { onClose: () => void; onSave: () => 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-lg p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-fg">Novo Patrimônio</h2>
+          <h2 className="text-base font-semibold text-fg">{editando ? 'Editar Patrimônio' : 'Novo Patrimônio'}</h2>
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -126,10 +245,22 @@ function ModalProjeto({ onClose, onSave }: { onClose: () => void; onSave: () => 
                 onChange={e => setForm(f => ({ ...f, data_aquisicao: e.target.value }))} />
             </div>
           </div>
+          {editando && (
+            <div>
+              <label className="label">Status</label>
+              <select className="input mt-1" value={form.status}
+                onChange={e => setForm(f => ({ ...f, status: e.target.value as ProjetoPatrimonio['status'] }))}>
+                <option value="ativo">Ativo</option>
+                <option value="pausado">Pausado</option>
+                <option value="concluido">Concluidô</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Salvando...' : 'Adicionar patrimônio'}
+              {loading ? 'Salvando...' : editando ? 'Salvar alterações' : 'Adicionar patrimônio'}
             </button>
           </div>
         </form>
@@ -202,8 +333,17 @@ function ModalCusto({ projetoId, onClose, onSave }: { projetoId: string; onClose
 export default function PatrimonioClient() {
   const [tab, setTab] = useState<'geral' | 'imoveis' | 'financiamentos'>('geral')
   const [modal, setModal] = useState(false)
+  const [editandoProjeto, setEditandoProjeto] = useState<ProjetoPatrimonio | null>(null)
+  const [modalImport, setModalImport] = useState(false)
   const [modalCusto, setModalCusto] = useState<string | null>(null)
   const [projetoAberto, setProjetoAberto] = useState<string | null>(null)
+  const { remove } = useSupabaseMutation('projetos_patrimonio')
+
+  const handleDeleteProjeto = async (p: ProjetoPatrimonio) => {
+    if (!confirm(`Excluir "${p.titulo}"? Esta ação removerá o bem e todos os custos associados.`)) return
+    await remove(p.id)
+    refetch(); refetchCustos()
+  }
 
   const { data: projetosDB, refetch } = useSupabaseQuery<ProjetoPatrimonio>('projetos_patrimonio', {
     orderBy: { column: 'valor_investido_total', ascending: false },
@@ -218,13 +358,59 @@ export default function PatrimonioClient() {
 
   const totalInvestido = projetos.reduce((a, p) => a + p.valor_investido_total, 0)
   const totalMercado = projetos.reduce((a, p) => a + (p.valor_mercado_atual ?? p.valor_investido_total), 0)
-  const valorização = totalMercado - totalInvestido
+  const valorizacao = totalMercado - totalInvestido
   const totalCustos = custos.reduce((a, c) => a + c.valor, 0)
+
+  const handleExportCSV = () => {
+    exportCSV('patrimonio.csv',
+      ['Titulo','Tipo','Descricao','Valor Investido','Valor Mercado','ROI%','Data Aquisicao','Status'],
+      projetos.map(p => [
+        p.titulo, p.tipo, p.descricao ?? '',
+        p.valor_investido_total, p.valor_mercado_atual ?? '',
+        p.roi_percentual != null ? p.roi_percentual.toFixed(2) + '%' : '',
+        p.data_aquisicao ?? '', p.status,
+      ])
+    )
+  }
+
+  const handleExportPDF = () => {
+    exportPDF(
+      'patrimonio.pdf', 'Relatório de Patrimônio',
+      `Total investido: ${formatCurrency(totalInvestido)} · Mercado: ${formatCurrency(totalMercado)} · Valorização: ${formatCurrency(valorizacao)}`,
+      ['Bem', 'Tipo', 'Investido', 'Mercado', 'ROI', 'Aquisição', 'Status'],
+      projetos.map(p => [
+        p.titulo, p.tipo.toUpperCase(),
+        formatCurrency(p.valor_investido_total),
+        formatCurrency(p.valor_mercado_atual ?? p.valor_investido_total),
+        p.roi_percentual != null ? p.roi_percentual.toFixed(1) + '%' : '-',
+        p.data_aquisicao ? formatDate(p.data_aquisicao) : '-',
+        p.status,
+      ] as any),
+      [`Total custos acumulados: ${formatCurrency(totalCustos)}`]
+    )
+  }
 
   return (
     <>
       <PageHeader title="Patrimônio" subtitle="Imóveis · Veículos · Financiamentos · ROI">
-        {tab === 'geral' && <button onClick={() => setModal(true)} className="btn-primary text-xs h-8 px-3 whitespace-nowrap shrink-0">+ Patrimônio Genérico</button>}
+        <div className="flex items-center gap-2">
+          {tab === 'geral' && (
+            <>
+              <button onClick={() => setModalImport(true)} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                <Upload size={13} /> Importar
+              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={handleExportCSV} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                  <Download size={13} /> CSV
+                </button>
+                <button onClick={handleExportPDF} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                  <FileText size={13} /> PDF
+                </button>
+              </div>
+              <button onClick={() => setModal(true)} className="btn-primary text-xs h-8 px-3 whitespace-nowrap shrink-0">+ Patrimônio Genérico</button>
+            </>
+          )}
+        </div>
       </PageHeader>
 
       <AppPatraoTabs />
@@ -262,8 +448,8 @@ export default function PatrimonioClient() {
         </div>
         <div className="metric-card">
           <p className="metric-label">Valorização</p>
-          <p className={cn('metric-value', valorização >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-            {valorização >= 0 ? '+' : ''}{formatCurrency(valorização)}
+          <p className={cn('metric-value', valorizacao >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+            {valorizacao >= 0 ? '+' : ''}{formatCurrency(valorizacao)}
           </p>
         </div>
         <div className="metric-card">
@@ -299,13 +485,25 @@ export default function PatrimonioClient() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <div className="text-right">
                       <p className="text-xs text-fg-disabled">ROI</p>
                       <p className={cn('text-lg font-bold', roi >= 0 ? 'text-emerald-400' : 'text-red-400')}>
                         {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
                       </p>
                     </div>
+                    <button
+                      onClick={() => { setEditandoProjeto(p); setModal(true) }}
+                      className="p-1.5 rounded-lg hover:bg-blue-500/10 text-fg-disabled hover:text-blue-400 transition-colors"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProjeto(p)}
+                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-fg-disabled hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                     <button
                       onClick={() => setProjetoAberto(isOpen ? null : p.id)}
                       className="text-fg-disabled hover:text-fg-secondary transition-colors px-2 py-1"
@@ -363,7 +561,14 @@ export default function PatrimonioClient() {
       {tab === 'imoveis' && <TabImoveis />}
       {tab === 'financiamentos' && <TabFinanciamentos />}
 
-      {modal && <ModalProjeto onClose={() => setModal(false)} onSave={refetch} />}
+      {modal && (
+        <ModalProjeto
+          onClose={() => { setModal(false); setEditandoProjeto(null) }}
+          onSave={refetch}
+          editando={editandoProjeto ?? undefined}
+        />
+      )}
+      {modalImport && <ModalImportarPatrimonio onClose={() => setModalImport(false)} onImported={refetch} />}
       {modalCusto && (
         <ModalCusto
           projetoId={modalCusto}

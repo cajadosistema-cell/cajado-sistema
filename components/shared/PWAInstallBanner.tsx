@@ -194,6 +194,23 @@ function AndroidInstallBanner({
   )
 }
 
+// ── Helpers de persistência ───────────────────────────────────
+function isDismissed(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return false
+    const { ts } = JSON.parse(raw)
+    // Expira após 90 dias
+    return Date.now() - ts < 90 * 24 * 60 * 60 * 1000
+  } catch { return false }
+}
+function setDismissed() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ts: Date.now() }))
+}
+function isInstalled(): boolean {
+  return localStorage.getItem(INSTALLED_KEY) === '1'
+}
+
 // ── Componente principal ──────────────────────────────────────
 export function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
@@ -201,58 +218,85 @@ export function PWAInstallBanner() {
   const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
-    // Já instalado (standalone) ou usuário já dispensou/instalou antes
-    if (
-      isInStandaloneMode() ||
-      localStorage.getItem(STORAGE_KEY) === '1' ||
-      localStorage.getItem(INSTALLED_KEY) === '1'
-    ) return
+    // Migração: converter formato antigo ('1') para novo (JSON com timestamp)
+    try {
+      const old = localStorage.getItem(STORAGE_KEY)
+      if (old === '1') {
+        setDismissed() // reescreve com timestamp atual
+      }
+    } catch { /* ignorar */ }
 
-    if (isIOS()) {
-      // iOS: mostrar banner de instrução manual após 4s
-      const t = setTimeout(() => setMode('ios'), 4000)
-      return () => clearTimeout(t)
+    // 1. Já está rodando como PWA instalada → nunca mostra
+    if (isInStandaloneMode()) return
+
+    // 2. Usuário já dispensou (dentro de 90 dias) ou já instalou → não mostra
+    if (isDismissed() || isInstalled()) return
+
+    // 3. Verificar via API do browser se já está instalado (Chrome/Edge)
+    if ('getInstalledRelatedApps' in navigator) {
+      ;(navigator as any).getInstalledRelatedApps().then((apps: any[]) => {
+        if (apps && apps.length > 0) {
+          // PWA já instalada — marcar e sair
+          localStorage.setItem(INSTALLED_KEY, '1')
+          return
+        }
+        // Não instalada — prosseguir com o fluxo normal
+        initBannerFlow()
+      }).catch(() => initBannerFlow())
+    } else {
+      initBannerFlow()
     }
 
-    // Android / Desktop: aguardar beforeinstallprompt
-    const handler = (e: Event) => {
-      e.preventDefault()
-      ;(window as any).deferredPrompt = e
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
-      window.dispatchEvent(new Event('pwa-prompt-ready'))
-      setTimeout(() => setMode('android'), 3000)
-    }
-    const installedHandler = () => {
-      localStorage.setItem(INSTALLED_KEY, '1')
-      setMode('hidden')
-    }
-    window.addEventListener('beforeinstallprompt', handler)
-    window.addEventListener('appinstalled', installedHandler)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler)
-      window.removeEventListener('appinstalled', installedHandler)
+    function initBannerFlow() {
+      if (isIOS()) {
+        const t = setTimeout(() => setMode('ios'), 4000)
+        return () => clearTimeout(t)
+      }
+
+      // Android / Desktop — aguarda evento do browser
+      const handler = (e: Event) => {
+        e.preventDefault()
+        ;(window as any).deferredPrompt = e
+        setDeferredPrompt(e as BeforeInstallPromptEvent)
+        window.dispatchEvent(new Event('pwa-prompt-ready'))
+        // Espera 3s para não aparecer imediatamente ao abrir a página
+        setTimeout(() => {
+          // Re-checagem antes de exibir (pode ter dispensado em outra aba)
+          if (!isDismissed() && !isInstalled() && !isInStandaloneMode()) {
+            setMode('android')
+          }
+        }, 3000)
+      }
+      const installedHandler = () => {
+        localStorage.setItem(INSTALLED_KEY, '1')
+        setMode('hidden')
+      }
+      window.addEventListener('beforeinstallprompt', handler)
+      window.addEventListener('appinstalled', installedHandler)
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handler)
+        window.removeEventListener('appinstalled', installedHandler)
+      }
     }
   }, [])
 
   const handleDismiss = () => {
     setMode('hidden')
-    localStorage.setItem(STORAGE_KEY, '1')
+    setDismissed() // Persiste com timestamp — não reaparece por 90 dias
   }
 
   const handleInstall = async () => {
     if (!deferredPrompt) return
     setInstalling(true)
-    await deferredPrompt.prompt()
-    const choice = await deferredPrompt.userChoice
-    // Independente do resultado (accepted ou dismissed pelo browser nativo),
-    // marca como "visto" para não mostrar o banner novamente nesta sessão.
-    // O evento 'appinstalled' cuida de gravar INSTALLED_KEY se realmente instalou.
-    if (choice.outcome === 'accepted') {
-      localStorage.setItem(INSTALLED_KEY, '1')
-    } else {
-      // Usuário fechou o prompt nativo sem instalar — oculta por 7 dias
-      localStorage.setItem(STORAGE_KEY, '1')
-    }
+    try {
+      await deferredPrompt.prompt()
+      const choice = await deferredPrompt.userChoice
+      if (choice.outcome === 'accepted') {
+        localStorage.setItem(INSTALLED_KEY, '1')
+      } else {
+        setDismissed()
+      }
+    } catch { setDismissed() }
     setMode('hidden')
     setInstalling(false)
     setDeferredPrompt(null)

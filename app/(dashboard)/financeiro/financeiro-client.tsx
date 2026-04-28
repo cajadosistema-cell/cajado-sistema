@@ -13,6 +13,7 @@ import { TabContas } from './_components/TabContas'
 import { useToast } from '@/components/shared/toast'
 import { TabRegistros } from '../pf-pessoal/_components/tabs/TabRegistros'
 import { ModalImportarExtratoIA } from '@/components/shared/ModalImportarExtratoIA'
+import { PainelComparativoMes } from '@/components/shared/PainelComparativoMes'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Conta = {
@@ -593,7 +594,7 @@ export default function FinanceiroClient() {
     })
   }, [])
 
-  const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true } })
+  const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true, categoria: 'pj' } })
   const { data: categorias } = useSupabaseQuery<CategoriaFinanceira>('categorias_financeiras', { orderBy: { column: 'nome', ascending: true } })
   const { data: lancamentos, refetch: refetchLancamentos } = useSupabaseQuery<Lancamento>('lancamentos', {
     orderBy: { column: 'data_competencia', ascending: false },
@@ -671,6 +672,22 @@ export default function FinanceiroClient() {
         <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 print:hidden" title="Exportar para PDF ou Imprimir">🖨️ PDF / Imprimir</button>
         <button onClick={() => { setLancamentoEdit(null); setModalLancamento(true) }} className="btn-primary print:hidden" disabled={contas.length === 0}>+ Lançamento</button>
       </PageHeader>
+
+      {/* ── COMPARATIVO MENSAL PJ ─────────────────────────────── */}
+      <div className="mb-6">
+        <PainelComparativoMes
+          lancamentos={lancamentos.map(l => ({
+            data: l.data_competencia ?? '',
+            valor: l.valor,
+            tipo: l.tipo,
+          }))}
+          campoData="data"
+          campoTipo="tipo"
+          valorDespesa="despesa"
+          valorReceita="receita"
+          titulo="Comparativo Mensal PJ"
+        />
+      </div>
 
       {/* Tabs Menu Superior */}
       <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 w-fit mb-6">

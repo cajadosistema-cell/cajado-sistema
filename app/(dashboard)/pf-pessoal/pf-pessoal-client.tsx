@@ -20,6 +20,7 @@ import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { AlarmManager } from '@/components/shared/AlarmManager'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
+import { PainelComparativoMes } from '@/components/shared/PainelComparativoMes'
 
 type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda' | 'ideias' | 'registros' | 'cartoes'
 
@@ -139,6 +140,21 @@ export default function PfPessoalClient() {
             <p className={`text-[22px] font-bold ${k.color}`}>{k.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* ── COMPARATIVO MENSAL ──────────────────────────────── */}
+      <div className="mb-6">
+        <PainelComparativoMes
+          lancamentos={[
+            ...gastos.map(g   => ({ data: g.data, valor: g.valor, _tipo: 'gasto'   as const })),
+            ...receitas.map(r => ({ data: r.data, valor: r.valor, _tipo: 'receita' as const })),
+          ]}
+          campoData="data"
+          campoTipo="_tipo"
+          valorDespesa="gasto"
+          valorReceita="receita"
+          titulo="Comparativo Mensal PF"
+        />
       </div>
 
       {/* Tabs — scroll horizontal no mobile */}
