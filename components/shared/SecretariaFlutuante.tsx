@@ -8,7 +8,7 @@ import type { } from './ModalRelatorio'
 
 // ── Types ────────────────────────────────────────────────────
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
-interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string }
+interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string }
 interface AcaoIA {
   tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio'
   dados: Record<string, any>
@@ -34,7 +34,7 @@ function buildSystemPrompt(): string {
   const amanhaStr = `${amanha.getFullYear()}-${String(amanha.getMonth()+1).padStart(2,'0')}-${String(amanha.getDate()).padStart(2,'0')}`
 
   return `Você é a Elena, Secretária Executiva Premium do Sistema Cajado.
-Você pode REGISTRAR dados reais no sistema quando o chefe solicitar.
+Você trabalha diretamente para o Sr. Max. Você pode REGISTRAR dados reais no sistema quando o Sr. Max solicitar.
 
 ⚠️ DATA E HORA ATUAL: ${dataAtual} às ${horaAtual} (Horário de Brasília)
 ⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. Se o chefe pedir "daqui a X minutos", calcule somando a partir das ${horaAtual}.
@@ -100,13 +100,15 @@ Quando o chefe enviar uma imagem ou PDF, analise o conteúdo e:
 - CRONOGRAMA: quando pedir cronograma de cartões, monte uma tabela organizada com: Cartão | Vencimento | Valor estimado | Parcelas ativas — e gere um evento de agenda por cartão.
 
 REGRAS:
+- HISTÓRICO: O contexto pode conter mensagens de conversas passadas (marcadas com a data/hora). Responda e atue APENAS na solicitação mais recente. NÃO repita ações ou respostas de mensagens antigas, a menos que o Sr. Max mencione explicitamente.
+- TRATAMENTO: Trate sempre o usuário como "Sr. Max" de forma educada, prestativa e profissional.
 - PERGUNTE se o gasto é PESSOAL ou DA EMPRESA antes de registrar
 - Se faltarem dados essenciais, PERGUNTE antes de gerar o JSON
 - Para ocorrência: pergunte colaborador, tipo (erro/acerto/alerta/elogio), impacto (baixo/medio/alto), descrição
 - Responda SEMPRE em português brasileiro, tom profissional e conciso
 - Quando tiver todos os dados, inclua o bloco JSON e diga que vai registrar agora
 - Nas datas, SEMPRE use o ano ${anoAtual}
-- Se o chefe informar MÚLTIPLOS gastos de uma vez, gere UM bloco JSON separado para CADA gasto
+- Se o Sr. Max informar MÚLTIPLOS gastos de uma vez, gere UM bloco JSON separado para CADA gasto
 - FORMA DE PAGAMENTO: mapeie sempre para os valores válidos:
   * "cartão hiper", "hipercard", "cartão crédito", "crédito" → cartao_credito
   * "débito", "cartão débito" → cartao_debito
@@ -170,9 +172,9 @@ export function SecretariaFlutuante() {
   const dragRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0, distance: 0 })
   const [userId, setUserId] = useState('')
   const [colaboradores, setColaboradores] = useState<{id: string, nome: string}[]>([])
-  const [mensagens, setMensagens] = useState<Msg[]>([
-    { id: '1', role: 'ai', texto: 'Olá, chefe! 👋 Sou a **Elena**, sua Secretária Executiva.\n\nPosso **registrar gastos, receitas, agenda e ocorrências** direto no sistema.\n\nExemplos:\n• _"Gastei R$ 80 de gasolina no PIX"_\n• _"Agendar reunião amanhã às 14h"_\n• _"Abrir ocorrência de erro para o Pedro"_' }
-  ])
+  const initialGreeting: Msg = { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Sou a **Elena**, sua Secretária Executiva.\n\nPosso **registrar gastos, receitas, agenda e ocorrências** direto no sistema.\n\nExemplos:\n• _"Gastei R$ 80 de gasolina no PIX"_\n• _"Agendar reunião amanhã às 14h"_\n• _"Abrir ocorrência de erro para o Pedro"_' }
+  
+  const [mensagens, setMensagens] = useState<Msg[]>([initialGreeting])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
@@ -209,26 +211,27 @@ export function SecretariaFlutuante() {
       const uid = data.user.id
       setUserId(uid)
 
-      // Carrega apenas histórico DA SESSÃO DE HOJE (evita reabrir tarefas antigas)
+      // Carrega o histórico completo (comportamento estilo WhatsApp)
       if (!historyLoadedRef.current) {
         historyLoadedRef.current = true
-        const hoje = new Date().toISOString().split('T')[0]
         const { data: hist } = await (supabase
           .from('elena_conversas') as any)
           .select('id, role, texto, acoes, created_at')
           .eq('user_id', uid)
-          .gte('created_at', hoje + 'T00:00:00')
-          .order('created_at', { ascending: true })
+          .order('created_at', { ascending: false }) // Pega os mais recentes
           .limit(40)
+        
         if (hist && hist.length > 0) {
-          const historico: Msg[] = (hist as any[]).map((r: any) => ({
+          // Reverte para a ordem cronológica correta de exibição
+          const historico: Msg[] = (hist as any[]).reverse().map((r: any) => ({
             id: r.id,
             role: r.role as 'ai' | 'user',
             texto: r.texto,
             acoes: r.acoes ?? undefined,
+            created_at: r.created_at,
           }))
           setMensagens([
-            { id: '1', role: 'ai', texto: 'Olá, chefe! 👋 Continuando de onde paramos hoje. Do que precisa agora?' },
+            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Seu histórico de conversas está aqui. Do que precisa agora?' },
             ...historico,
           ])
         }
@@ -607,11 +610,14 @@ export function SecretariaFlutuante() {
     setAttachedFile(null)
 
     try {
-      // Contexto: usa todas as mensagens em memória (inclui histórico carregado do DB)
+      // Contexto: usa todas as mensagens em memória, formatadas com data para evitar confusão de tempo
       const contexto = mensagens
-        .filter(m => m.texto && m.texto !== '...')
-        .slice(-20)
-        .map(m => `${m.role === 'ai' ? 'Elena' : 'Chefe'}: ${m.texto.substring(0, 300)}`)
+        .filter(m => m.texto && m.texto !== '...' && m.texto !== initialGreeting.texto)
+        .slice(-20) // envia as últimas 20 interações para contexto
+        .map(m => {
+          const dtStr = m.created_at ? new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Agora'
+          return `[${dtStr}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto.substring(0, 300)}`
+        })
         .join('\n')
 
       // Monta o prompt incluindo texto do PDF se for arquivo de texto
@@ -744,6 +750,12 @@ export function SecretariaFlutuante() {
     else handlePressMic()
   }
 
+  const handleClearChat = () => {
+    if (!confirm('Deseja limpar a conversa e começar um novo assunto?')) return
+    setMensagens([initialGreeting])
+    // Opcional: Atualizar a historyLoadedRef para não recarregar do banco se o componente remontar
+    historyLoadedRef.current = true
+  }
 
   if (!isClient) return null
 
@@ -786,7 +798,10 @@ export function SecretariaFlutuante() {
                   <p className="text-[10px] text-amber-400">Secretária Executiva · Registros automáticos</p>
                 </div>
               </div>
-              <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-fg text-sm">✕</button>
+              <div className="flex gap-2 items-center">
+                <button onClick={handleClearChat} title="Limpar conversa e iniciar novo assunto" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-amber-400 hover:bg-amber-400/10 transition-colors text-xs">🧹</button>
+                <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-fg text-sm">✕</button>
+              </div>
             </div>
 
             {/* Chat */}
