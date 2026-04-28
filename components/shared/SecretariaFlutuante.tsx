@@ -10,7 +10,7 @@ import type { } from './ModalRelatorio'
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
 interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -171,6 +171,9 @@ export function SecretariaFlutuante() {
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0, distance: 0 })
   const [userId, setUserId] = useState('')
+  const [sessaoId, setSessaoId] = useState('')
+  const [showHistory, setShowHistory] = useState(false)
+  const [sessoesAnteriores, setSessoesAnteriores] = useState<{ sid: string, data: string, resumo: string }[]>([])
   const [colaboradores, setColaboradores] = useState<{id: string, nome: string}[]>([])
   const initialGreeting: Msg = { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Sou a **Elena**, sua Secretária Executiva.\n\nPosso **registrar gastos, receitas, agenda e ocorrências** direto no sistema.\n\nExemplos:\n• _"Gastei R$ 80 de gasolina no PIX"_\n• _"Agendar reunião amanhã às 14h"_\n• _"Abrir ocorrência de erro para o Pedro"_' }
   
@@ -194,8 +197,7 @@ export function SecretariaFlutuante() {
     attachedFileRef.current = f
     setAttachedFileState(f)
   }
-  // sessão = dia atual, agrupa mensagens por dia
-  const sessaoId = new Date().toISOString().split('T')[0]
+
   // Controle de microfone já autorizado
   const micPermitidoRef = useRef(false)
 
@@ -211,14 +213,21 @@ export function SecretariaFlutuante() {
       const uid = data.user.id
       setUserId(uid)
 
-      // Carrega o histórico completo (comportamento estilo WhatsApp)
+      // Carrega o histórico da ÚLTIMA sessão ou inicia uma nova
       if (!historyLoadedRef.current) {
         historyLoadedRef.current = true
+        
+        // Pega a última sessão
+        const { data: lastMsg } = await supabase.from('elena_conversas').select('sessao_id').eq('user_id', uid).order('created_at', { ascending: false }).limit(1)
+        const currentSessaoId = lastMsg && lastMsg.length > 0 ? lastMsg[0].sessao_id : Date.now().toString()
+        setSessaoId(currentSessaoId)
+        
         const { data: hist } = await (supabase
           .from('elena_conversas') as any)
           .select('id, role, texto, acoes, created_at')
           .eq('user_id', uid)
-          .order('created_at', { ascending: false }) // Pega os mais recentes
+          .eq('sessao_id', currentSessaoId)
+          .order('created_at', { ascending: false }) // Pega os mais recentes daquela sessão
           .limit(40)
         
         if (hist && hist.length > 0) {
@@ -231,7 +240,7 @@ export function SecretariaFlutuante() {
             created_at: r.created_at,
           }))
           setMensagens([
-            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Seu histórico de conversas está aqui. Do que precisa agora?' },
+            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Carreguei nossa última conversa. O que faremos agora?' },
             ...historico,
           ])
         }
@@ -245,6 +254,29 @@ export function SecretariaFlutuante() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensagens, isOpen])
+
+  // ── Sugestão Automática de Backup de Chat ─────────────────
+  useEffect(() => {
+    if (mensagens.length >= 40) {
+      const jaSugeriu = sessionStorage.getItem('elena_backup_suggested')
+      if (!jaSugeriu) {
+        sessionStorage.setItem('elena_backup_suggested', '1')
+        setTimeout(() => {
+          setMensagens(prev => [...prev, {
+            id: 'backup-suggest-' + Date.now(),
+            role: 'ai',
+            texto: 'Sr. Max, chegamos a 40 mensagens acumuladas! Gostaria que eu fizesse um backup completo do nosso histórico em um arquivo de texto e iniciasse uma conversa limpa para continuarmos?',
+            acoes: [{
+              tipo: 'backup_chat',
+              dados: {},
+              label: '💾 Baixar Backup (TXT)',
+              status: 'pending'
+            }]
+          }])
+        }, 1500)
+      }
+    }
+  }, [mensagens])
 
   // ── Drag ─────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -481,6 +513,27 @@ export function SecretariaFlutuante() {
         const dados = await buscarDadosRelatorio(supabase, uid, acao.dados.periodo || 'mes_atual')
         setRelatorioData(dados)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+      } else if (acao.tipo === 'backup_chat') {
+        // Gera o arquivo TXT
+        const textoBackup = mensagens
+          .filter(m => m.texto && m.texto !== '...')
+          .map(m => {
+            const data = m.created_at ? new Date(m.created_at).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')
+            return `[${data}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}:\n${m.texto}`
+          })
+          .join('\n\n----------------------------------------\n\n')
+        
+        const blob = new Blob([`=== BACKUP DA CONVERSA - ELENA ===\nGerado em: ${new Date().toLocaleString('pt-BR')}\n\n` + textoBackup], { type: 'text/plain;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `Backup_Conversa_Elena_${new Date().toISOString().split('T')[0]}.txt`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        
+        setAcaoStatus(msgId, acaoIdx, 'saved')
       }
     } catch (err: any) {
       setAcaoStatus(msgId, acaoIdx, 'error', err.message)
@@ -499,14 +552,14 @@ export function SecretariaFlutuante() {
   }, [salvarAcao])
 
   // ── Salvar mensagem no histórico do banco ─────────────────
-  const salvarHistorico = useCallback(async (uid: string, role: 'user' | 'ai', texto: string, acoes?: AcaoIA[]) => {
+  const salvarHistorico = useCallback(async (uid: string, role: 'user' | 'ai', texto: string, acoes?: AcaoIA[], currentSessao?: string) => {
     if (!uid || !texto || texto === '...') return
     await (supabase.from('elena_conversas') as any).insert({
       user_id: uid,
       role,
       texto,
       acoes: acoes && acoes.length > 0 ? acoes : null,
-      sessao_id: sessaoId,
+      sessao_id: currentSessao || sessaoId,
     })
   }, [supabase, sessaoId])
 
@@ -654,8 +707,9 @@ export function SecretariaFlutuante() {
 
       // Salva no histórico do banco
       if (uid) {
-        salvarHistorico(uid, 'user', userText)
-        salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined)
+        // Garantir que usa a sessão atual do state, mas por precaução, passamos no momento do envio
+        salvarHistorico(uid, 'user', userText, undefined, sessaoId)
+        salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined, sessaoId)
       }
 
       // Auto-save ações após 600ms
@@ -751,10 +805,53 @@ export function SecretariaFlutuante() {
   }
 
   const handleClearChat = () => {
-    if (!confirm('Deseja limpar a conversa e começar um novo assunto?')) return
+    if (!confirm('Deseja iniciar um NOVO assunto? O assunto atual ficará salvo no banco para consultas futuras.')) return
     setMensagens([initialGreeting])
-    // Opcional: Atualizar a historyLoadedRef para não recarregar do banco se o componente remontar
-    historyLoadedRef.current = true
+    setSessaoId(Date.now().toString())
+  }
+
+  const loadSessoes = async () => {
+    if (!userId) return
+    const { data } = await supabase.from('elena_conversas').select('sessao_id, created_at, texto, role').eq('user_id', userId).order('created_at', { ascending: false }).limit(200)
+    
+    const agrupado = new Map<string, { data: string, resumo: string }>()
+    if (data) {
+      // Varre de trás pra frente para pegar a primeira mensagem do usuário como título da sessão
+      const dataReversa = [...data].reverse()
+      dataReversa.forEach(m => {
+         if (!agrupado.has(m.sessao_id)) {
+           agrupado.set(m.sessao_id, { data: m.created_at, resumo: m.texto })
+         } else if (m.role === 'user' && (!agrupado.get(m.sessao_id)?.resumo || agrupado.get(m.sessao_id)!.resumo.includes('Olá, Sr. Max'))) {
+           agrupado.set(m.sessao_id, { data: m.created_at, resumo: m.texto })
+         }
+      })
+    }
+    const arraySessoes = Array.from(agrupado.entries()).map(([sid, info]) => ({ sid, ...info })).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+    setSessoesAnteriores(arraySessoes)
+    setShowHistory(true)
+  }
+
+  const loadSpecificSession = async (sid: string) => {
+    const { data: hist } = await (supabase
+      .from('elena_conversas') as any)
+      .select('id, role, texto, acoes, created_at')
+      .eq('user_id', userId)
+      .eq('sessao_id', sid)
+      .order('created_at', { ascending: false })
+      .limit(40)
+      
+    if (hist && hist.length > 0) {
+      const historico: Msg[] = (hist as any[]).reverse().map((r: any) => ({
+        id: r.id,
+        role: r.role as 'ai' | 'user',
+        texto: r.texto,
+        acoes: r.acoes ?? undefined,
+        created_at: r.created_at,
+      }))
+      setMensagens([{ id: '1', role: 'ai', texto: 'Histórico carregado! O que faremos com ele?' }, ...historico])
+      setSessaoId(sid)
+      setShowHistory(false)
+    }
   }
 
   if (!isClient) return null
@@ -791,21 +888,43 @@ export function SecretariaFlutuante() {
               <div className="flex items-center gap-2.5">
                 <img
                   src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop"
-                  alt="Elena" className="w-8 h-8 rounded-full object-cover border border-amber-400/40"
+                  alt="Elena" className="w-8 h-8 rounded-full object-cover border border-amber-400/40 cursor-pointer"
+                  onClick={() => setShowHistory(false)}
                 />
                 <div>
-                  <p className="text-sm font-bold text-fg">Elena</p>
+                  <p className="text-sm font-bold text-fg cursor-pointer" onClick={() => setShowHistory(false)}>Elena</p>
                   <p className="text-[10px] text-amber-400">Secretária Executiva · Registros automáticos</p>
                 </div>
               </div>
               <div className="flex gap-2 items-center">
-                <button onClick={handleClearChat} title="Limpar conversa e iniciar novo assunto" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-amber-400 hover:bg-amber-400/10 transition-colors text-xs">🧹</button>
-                <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-fg text-sm">✕</button>
+                <button onClick={loadSessoes} title="Ver conversas passadas" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-blue-400 hover:bg-blue-400/10 transition-colors text-xs">🗂️</button>
+                <button onClick={handleClearChat} title="Nova conversa (iniciar novo assunto)" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-emerald-400 hover:bg-emerald-400/10 transition-colors text-xs">✨</button>
+                <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-red-400 hover:bg-red-400/10 text-sm">✕</button>
               </div>
             </div>
 
-            {/* Chat */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
+            {/* View do Histórico de Conversas */}
+            {showHistory ? (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#0a0d16]">
+                <p className="text-xs font-semibold text-fg-secondary px-2 mb-3 uppercase tracking-wider">Histórico de Chats</p>
+                {sessoesAnteriores.map(s => (
+                  <button
+                    key={s.sid}
+                    onClick={() => loadSpecificSession(s.sid)}
+                    className={cn("w-full text-left p-3 rounded-xl border transition-all", s.sid === sessaoId ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-white/5 border-white/5 hover:border-white/10 hover:bg-white/10 text-fg")}
+                  >
+                    <p className="text-xs font-semibold truncate mb-1">{s.resumo.replace(/```json[\s\S]*?```/g, '').substring(0, 60) || 'Conversa sem título'}</p>
+                    <p className="text-[10px] text-fg-tertiary">{new Date(s.data).toLocaleString('pt-BR')}</p>
+                  </button>
+                ))}
+                {sessoesAnteriores.length === 0 && (
+                  <p className="text-xs text-fg-tertiary text-center py-10">Nenhuma conversa encontrada.</p>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Chat Normal */}
+                <div className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
               {mensagens.map(msg => {
                 const isAi = msg.role === 'ai'
                 return (
@@ -919,6 +1038,8 @@ export function SecretariaFlutuante() {
                 </button>
               </div>
             </div>
+            </>
+          )}
           </div>
         </div>
       )}
