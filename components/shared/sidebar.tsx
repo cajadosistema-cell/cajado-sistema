@@ -47,7 +47,6 @@ const navItems = [
     items: [
       { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal' },
       { href: '/expansao',          label: '🚀 Objetivos & OKRs'},
-      { href: '/gestao-pessoal',    label: '⏱️ Hábitos & Ponto' },
       { href: '/diario',            label: '📓 Diário de Bordo' },
     ],
   },
@@ -60,6 +59,7 @@ const navItems = [
       { href: '/patrimonio',    label: '🏠 Patrimônio'          },
       { href: '/investimentos', label: '📈 Investimentos'       },
       { href: '/trader',        label: '📊 Day Trader'          },
+      { href: '/gestao-pessoal',label: '👥 Equipe'              },
     ],
   },
   // ── ⚙️ Configurações ─────────────────────────────────────────

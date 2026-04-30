@@ -17,8 +17,7 @@ interface AcaoIA {
   errorMsg?: string
 }
 
-// IDs das contas e categorias padrão da empresa (obtidos do banco)
-const CONTA_PADRAO_ID = 'e1371ffd-6ada-485c-9a21-53da97fe31ac'     // Bradesco PJ
+// IDs fixos de categorias financeiras (não mudam)
 const CAT_DESPESA_ID  = 'd4f05276-7633-49b3-9d72-09fb0fa07fbe'     // Despesas Operacionais
 const CAT_RECEITA_ID  = '2774932e-75c8-4b7e-b88f-12a6f1a0744a'     // Receita Operacional
 
@@ -43,22 +42,24 @@ AÇÕES ESTRUTURADAS — inclua ao final da resposta:
 
 GASTO PESSOAL (pessoa física do chefe):
 \`\`\`json
-{"acao":"gasto","valor":50.00,"descricao":"Almoço","categoria":"alimentacao","forma_pagamento":"pix"}
+{"acao":"gasto","valor":50.00,"descricao":"Almoço","categoria":"alimentacao","forma_pagamento":"pix","conta_nome":""}
 \`\`\`
 
 RECEITA PESSOAL:
 \`\`\`json
-{"acao":"receita","valor":1500.00,"descricao":"Freelance","categoria":"pro_labore"}
+{"acao":"receita","valor":1500.00,"descricao":"Freelance","categoria":"pro_labore","conta_nome":""}
 \`\`\`
 
 GASTO DA EMPRESA (pessoa jurídica / Cajado):
 \`\`\`json
-{"acao":"gasto_empresa","valor":300.00,"descricao":"Aluguel escritório","categoria":"operacional"}
+{"acao":"gasto_empresa","valor":300.00,"descricao":"Aluguel escritório","categoria":"operacional","conta_nome":""}
 \`\`\`
+- O campo "conta_nome" é OPCIONAL. Preencha APENAS se o usuário mencionar um cartão ou conta específica (ex: "Visa", "C6", "Nubank", "Bradesco", "Caixa Físico", "cartão da esposa"). Se não mencionar, deixe vazio.
+- Exemplos de conta_nome: "visa", "mastercard", "c6", "nubank", "bradesco", "caixa", "cartão esposa"
 
 RECEITA DA EMPRESA:
 \`\`\`json
-{"acao":"receita_empresa","valor":5000.00,"descricao":"Serviço prestado","categoria":"servicos"}
+{"acao":"receita_empresa","valor":5000.00,"descricao":"Serviço prestado","categoria":"servicos","conta_nome":""}
 \`\`\`
 
 AGENDA / EVENTO:
@@ -83,13 +84,18 @@ CATEGORIAS para gastos pessoais: alimentacao, transporte, saude, lazer, educacao
 CATEGORIAS para receitas pessoais: pro_labore, freelance, investimentos, aluguel, vendas, outros
 CATEGORIAS para empresa: operacional, marketing, pessoal, infraestrutura, impostos, outros
 FORMAS DE PAGAMENTO: pix, cartao_debito, cartao_credito, dinheiro, transferencia
+- "cartão visa", "visa", "cartão hiper", "hipercard", "cartão crédito", "crédito", "cartão mastercard", "mastercard" → cartao_credito
+- "débito", "cartão débito" → cartao_debito
+- "pix", "transferência", "ted", "doc" → pix
+- "dinheiro", "espécie", "cash" → dinheiro
 
-IDEIA / PROJETO (pedido para guardar uma ideia):
+IDEIA / PROJETO (guardar uma ideia do chefe):
 \`\`\`json
-{"acao":"ideia","titulo":"App de rastreamento de treinos de bicicleta","descricao":"Ideia surgida pedalando: criar app que registra rota, cadência e evolução","categoria":"produto"}
+{"acao":"ideia","titulo":"<USE EXATAMENTE O TÍTULO/TEMA DA IDEIA QUE O CHEFE DISSE>","descricao":"<descrição completa da ideia>","categoria":"geral"}
 \`\`\`
-
-CATEGORIAS para ideias: negocio, produto, pessoal, financeiro, saude, criativo, geral
+- SEMPRE que o Sr. Max pedir "guarda essa ideia", "anota essa ideia", "salva essa ideia", "quero registrar uma ideia" → use acao=ideia com o texto EXATO que ele disse como título
+- NUNCA use título genérico como 'Ideia via Elena' — use sempre o conteúdo real
+- CATEGORIAS para ideias: negocio, produto, pessoal, financeiro, saude, criativo, geral
 
 ANÁLISE DE IMAGENS E PDFs:
 Quando o chefe enviar uma imagem ou PDF, analise o conteúdo e:
@@ -99,21 +105,21 @@ Quando o chefe enviar uma imagem ou PDF, analise o conteúdo e:
 - COMPROVANTE DE PAGAMENTO: registre como gasto ou receita conforme o documento.
 - CRONOGRAMA: quando pedir cronograma de cartões, monte uma tabela organizada com: Cartão | Vencimento | Valor estimado | Parcelas ativas — e gere um evento de agenda por cartão.
 
-REGRAS:
+REGRAS DE DECISÃO IMEDIATA — NÃO PERGUNTE se já tiver as informações:
+- Se o Sr. Max disser "lançar na PJ", "lança na empresa", "é da empresa", "é PJ" → use acao=gasto_empresa ou receita_empresa (NUNCA pergunte de novo)
+- Se disser "é pessoal", "é meu", "é PF" → use acao=gasto ou receita (NUNCA pergunte de novo)
+- Se já informou o valor, descrição e forma de pagamento → gere o JSON IMEDIATAMENTE, não pergunte mais nada
+- Se o Sr. Max informar MÚLTIPLOS gastos de uma vez → gere UM bloco JSON separado para CADA gasto
+
+REGRAS GERAIS:
 - HISTÓRICO: O contexto pode conter mensagens de conversas passadas (marcadas com a data/hora). Responda e atue APENAS na solicitação mais recente. NÃO repita ações ou respostas de mensagens antigas, a menos que o Sr. Max mencione explicitamente.
 - TRATAMENTO: Trate sempre o usuário como "Sr. Max" de forma educada, prestativa e profissional.
-- PERGUNTE se o gasto é PESSOAL ou DA EMPRESA antes de registrar
-- Se faltarem dados essenciais, PERGUNTE antes de gerar o JSON
+- Só PERGUNTE se o gasto é PESSOAL ou DA EMPRESA quando o usuário NÃO especificou
+- Se faltarem dados essenciais (valor, descrição), PERGUNTE antes de gerar o JSON
 - Para ocorrência: pergunte colaborador, tipo (erro/acerto/alerta/elogio), impacto (baixo/medio/alto), descrição
 - Responda SEMPRE em português brasileiro, tom profissional e conciso
 - Quando tiver todos os dados, inclua o bloco JSON e diga que vai registrar agora
 - Nas datas, SEMPRE use o ano ${anoAtual}
-- Se o Sr. Max informar MÚLTIPLOS gastos de uma vez, gere UM bloco JSON separado para CADA gasto
-- FORMA DE PAGAMENTO: mapeie sempre para os valores válidos:
-  * "cartão hiper", "hipercard", "cartão crédito", "crédito" → cartao_credito
-  * "débito", "cartão débito" → cartao_debito
-  * "pix", "transferência", "ted", "doc" → pix
-  * "dinheiro", "espécie", "cash" → dinheiro
 
 RELATÓRIO / RESUMO (quando o chefe pedir um relatório, resumo ou visão geral):
 \`\`\`json
@@ -133,13 +139,17 @@ function extrairAcoes(texto: string): AcaoIA[] {
     try {
       const d = JSON.parse(match[1].trim())
       if (d.acao === 'gasto') {
-        acoes.push({ tipo: 'gasto', dados: d, label: `💸 Gasto PF R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}`, status: 'pending' })
+        const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
+        acoes.push({ tipo: 'gasto', dados: d, label: `💸 Gasto PF R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
       } else if (d.acao === 'receita') {
-        acoes.push({ tipo: 'receita', dados: d, label: `💰 Receita PF R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}`, status: 'pending' })
+        const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
+        acoes.push({ tipo: 'receita', dados: d, label: `💰 Receita PF R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
       } else if (d.acao === 'gasto_empresa') {
-        acoes.push({ tipo: 'gasto_empresa', dados: d, label: `🏢💸 Despesa Empresa R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}`, status: 'pending' })
+        const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
+        acoes.push({ tipo: 'gasto_empresa', dados: d, label: `🏢💸 Despesa Empresa R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
       } else if (d.acao === 'receita_empresa') {
-        acoes.push({ tipo: 'receita_empresa', dados: d, label: `🏢💰 Receita Empresa R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}`, status: 'pending' })
+        const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
+        acoes.push({ tipo: 'receita_empresa', dados: d, label: `🏢💰 Receita Empresa R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
       } else if (d.acao === 'ideia') {
         acoes.push({ tipo: 'ideia', dados: d, label: `💡 Ideia: ${d.titulo}`, status: 'pending' })
       } else if (d.acao === 'agenda') {
@@ -175,6 +185,8 @@ export function SecretariaFlutuante() {
   const [showHistory, setShowHistory] = useState(false)
   const [sessoesAnteriores, setSessoesAnteriores] = useState<{ sid: string, data: string, resumo: string }[]>([])
   const [colaboradores, setColaboradores] = useState<{id: string, nome: string}[]>([])
+  // Cache da conta PJ padrão buscada dinamicamente
+  const contaPjIdRef = useRef<string | null>(null)
   const initialGreeting: Msg = { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Sou a **Elena**, sua Secretária Executiva.\n\nPosso **registrar gastos, receitas, agenda e ocorrências** direto no sistema.\n\nExemplos:\n• _"Gastei R$ 80 de gasolina no PIX"_\n• _"Agendar reunião amanhã às 14h"_\n• _"Abrir ocorrência de erro para o Pedro"_' }
   
   const [mensagens, setMensagens] = useState<Msg[]>([initialGreeting])
@@ -316,6 +328,42 @@ export function SecretariaFlutuante() {
     ))
   }
 
+  // Busca conta PJ por nome/bandeira mencionada pelo usuário, ou a primeira PJ ativa como fallback
+  const resolverContaPj = useCallback(async (contaNome?: string): Promise<{ id: string; nome: string }> => {
+    // Busca todas as contas PJ ativas
+    const { data: contas } = await (supabase.from('contas') as any)
+      .select('id, nome, bandeira, tipo')
+      .eq('categoria', 'pj')
+      .eq('ativo', true)
+      .order('created_at', { ascending: true })
+
+    if (!contas || contas.length === 0) return { id: '', nome: '' }
+
+    // Se o usuário especificou uma conta/cartão, tenta encontrar
+    if (contaNome && contaNome.trim()) {
+      const busca = contaNome.toLowerCase().trim()
+      // Tenta match por bandeira (visa, mastercard, elo, etc.)
+      const porBandeira = contas.find((c: any) => c.bandeira && c.bandeira.toLowerCase().includes(busca))
+      if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
+      // Tenta match por nome da conta (ex: 'C6 Bank PJ', 'Bradesco PJ', 'Nubank')
+      const porNome = contas.find((c: any) => {
+        const nome = (c.nome || '').toLowerCase()
+        return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
+      })
+      if (porNome) return { id: porNome.id, nome: porNome.nome }
+    }
+
+    // Fallback: primeira conta PJ (cacheia)
+    if (!contaPjIdRef.current) contaPjIdRef.current = contas[0].id
+    return { id: contas[0].id, nome: contas[0].nome }
+  }, [supabase])
+
+  // Mantém getContaPjId para compatibilidade
+  const getContaPjId = useCallback(async (): Promise<string> => {
+    const { id } = await resolverContaPj()
+    return id
+  }, [resolverContaPj])
+
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA, uid: string) => {
     try {
       if (acao.tipo === 'gasto') {
@@ -330,6 +378,12 @@ export function SecretariaFlutuante() {
 
         const formasPagValidas = ['pix','cartao_debito','cartao_credito','dinheiro','transferencia']
         const forma = formasPagValidas.includes(acao.dados.forma_pagamento) ? acao.dados.forma_pagamento : 'pix'
+        
+        let notasAdicionais = 'Registrado pela Elena'
+        if (acao.dados.conta_nome) {
+          notasAdicionais = `Cartão/Conta: ${acao.dados.conta_nome} | Registrado pela Elena`
+        }
+
         const { error } = await (supabase.from('gastos_pessoais') as any).insert({
           user_id: uid,
           descricao: acao.dados.descricao || 'Gasto via Elena',
@@ -338,7 +392,7 @@ export function SecretariaFlutuante() {
           forma_pagamento: forma,
           data: hoje,
           recorrente: false,
-          notas: 'Registrado pela Elena',
+          notas: notasAdicionais,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
@@ -352,6 +406,11 @@ export function SecretariaFlutuante() {
           throw new Error('⚠️ Duplicidade! Já existe uma receita com este exato valor hoje.')
         }
 
+        let notasAdicionais = 'Registrado pela Elena'
+        if (acao.dados.conta_nome) {
+          notasAdicionais = `Conta: ${acao.dados.conta_nome} | Registrado pela Elena`
+        }
+
         const { error } = await (supabase.from('receitas_pessoais') as any).insert({
           user_id: uid,
           descricao: acao.dados.descricao || 'Receita via Elena',
@@ -359,7 +418,7 @@ export function SecretariaFlutuante() {
           categoria: acao.dados.categoria || 'outros',
           data: hoje,
           recorrente: false,
-          notas: 'Registrado pela Elena',
+          notas: notasAdicionais,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
@@ -367,14 +426,18 @@ export function SecretariaFlutuante() {
       } else if (acao.tipo === 'gasto_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
         const valor = Number(acao.dados.valor) || 0
+        // Resolve a conta: usa o nome/bandeira mencionado ou fallback para primeira PJ
+        const { id: contaId, nome: contaNomeResolvido } = await resolverContaPj(acao.dados.conta_nome)
+        if (!contaId) throw new Error('Nenhuma conta PJ cadastrada. Cadastre uma conta PJ em Financeiro > Contas.')
         const { data: dups } = await supabase.from('lancamentos').select('id')
-          .eq('conta_id', CONTA_PADRAO_ID).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'despesa')
+          .eq('conta_id', contaId).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'despesa')
         if (dups && dups.length > 0 && !acao.dados.forcar) {
-          throw new Error('⚠️ Duplicidade! Já existe uma despesa PJ com este exato valor hoje.')
+          throw new Error(`⚠️ Duplicidade! Já existe uma despesa de R$ ${valor} na conta ${contaNomeResolvido} hoje.`)
         }
-
+        const formasPagValidas = ['pix','cartao_debito','cartao_credito','dinheiro','transferencia']
+        const formaPag = formasPagValidas.includes(acao.dados.forma_pagamento) ? acao.dados.forma_pagamento : 'pix'
         const { error } = await (supabase.from('lancamentos') as any).insert({
-          conta_id: CONTA_PADRAO_ID,
+          conta_id: contaId,
           descricao: acao.dados.descricao || 'Despesa via Elena',
           valor,
           tipo: 'despesa',
@@ -384,7 +447,7 @@ export function SecretariaFlutuante() {
           data_caixa: hoje,
           categoria_id: CAT_DESPESA_ID,
           created_by: uid,
-          observacoes: 'Registrado pela Elena',
+          observacoes: `Conta: ${contaNomeResolvido} | Pagamento: ${formaPag} | Registrado pela Elena`,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
@@ -392,14 +455,15 @@ export function SecretariaFlutuante() {
       } else if (acao.tipo === 'receita_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
         const valor = Number(acao.dados.valor) || 0
+        const { id: contaId, nome: contaNomeResolvido } = await resolverContaPj(acao.dados.conta_nome)
+        if (!contaId) throw new Error('Nenhuma conta PJ cadastrada. Cadastre uma conta PJ em Financeiro > Contas.')
         const { data: dups } = await supabase.from('lancamentos').select('id')
-          .eq('conta_id', CONTA_PADRAO_ID).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'receita')
+          .eq('conta_id', contaId).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'receita')
         if (dups && dups.length > 0 && !acao.dados.forcar) {
-          throw new Error('⚠️ Duplicidade! Já existe uma receita PJ com este exato valor hoje.')
+          throw new Error(`⚠️ Duplicidade! Já existe uma receita de R$ ${valor} na conta ${contaNomeResolvido} hoje.`)
         }
-
         const { error } = await (supabase.from('lancamentos') as any).insert({
-          conta_id: CONTA_PADRAO_ID,
+          conta_id: contaId,
           descricao: acao.dados.descricao || 'Receita via Elena',
           valor,
           tipo: 'receita',
@@ -409,7 +473,7 @@ export function SecretariaFlutuante() {
           data_caixa: hoje,
           categoria_id: CAT_RECEITA_ID,
           created_by: uid,
-          observacoes: 'Registrado pela Elena',
+          observacoes: `Conta: ${contaNomeResolvido} | Registrado pela Elena`,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
@@ -538,7 +602,7 @@ export function SecretariaFlutuante() {
     } catch (err: any) {
       setAcaoStatus(msgId, acaoIdx, 'error', err.message)
     }
-  }, [supabase, colaboradores])
+  }, [supabase, colaboradores, resolverContaPj, getContaPjId])
 
   const executarAcoesAuto = useCallback((msgId: string, acoes: AcaoIA[], uid: string) => {
     acoes.forEach((acao, idx) => {
@@ -767,8 +831,10 @@ export function SecretariaFlutuante() {
   }
 
   const handlePressMic = () => {
-    // Se já tem permissão salva, inicia direto
-    if (micPermitidoRef.current) {
+    // Sempre re-lê o localStorage antes de usar (garante persistência entre sessões)
+    const jaPermitido = typeof window !== 'undefined' && localStorage.getItem('elena_mic_ok') === '1'
+    micPermitidoRef.current = jaPermitido
+    if (jaPermitido) {
       iniciarReconhecimento()
       return
     }

@@ -35,26 +35,6 @@ const APP_PATRAO_MODULES = [
     text: 'text-violet-400',
     glow: 'shadow-violet-500/20',
   },
-  {
-    href: '/trader',
-    label: 'Day Trader',
-    labelMobile: 'Trader',
-    emoji: '⚡',
-    gradient: 'from-amber-500/20 to-orange-500/10',
-    border: 'border-amber-500/30',
-    text: 'text-amber-400',
-    glow: 'shadow-amber-500/20',
-  },
-  {
-    href: '/gestao-pessoal',
-    label: 'Equipe',
-    labelMobile: 'Equipe',
-    emoji: '👥',
-    gradient: 'from-rose-500/20 to-pink-500/10',
-    border: 'border-rose-500/30',
-    text: 'text-rose-400',
-    glow: 'shadow-rose-500/20',
-  },
 ]
 
 export function AppPatraoTabs() {

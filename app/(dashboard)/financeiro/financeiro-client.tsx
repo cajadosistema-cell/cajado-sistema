@@ -46,6 +46,8 @@ type Lancamento = {
   total_parcelas: number | null
   conciliado: boolean
   conta_id: string
+  categoria_id?: string | null
+  observacoes?: string | null
 }
 
 type CategoriaFinanceira = {
