@@ -738,7 +738,7 @@ function GuiaMeta({ webhookUrl, onClose }: { webhookUrl: string; onClose: () => 
 // ── Seção: WhatsApp ──────────────────────────────────────────────
 
 function SecaoWhatsApp() {
-  const [metodo, setMetodo] = useState<'qrcode' | 'oficial'>('qrcode')
+  const [metodo, setMetodo] = useState<'qrcode' | 'vincular' | 'oficial'>('vincular')
 
   // ── QR Code (Evolution API) ──
   const [nomeCanal, setNomeCanal] = useState('WhatsApp Principal')
@@ -748,6 +748,14 @@ function SecaoWhatsApp() {
   const [conectado, setConectado] = useState(false)
   const [error, setError] = useState('')
 
+  // ── Vincular Instância (Anti-Ban) ──
+  const [instanceNameInput, setInstanceNameInput] = useState('')
+  const [nomeVincular, setNomeVincular] = useState('WhatsApp Principal')
+  const [vinculando, setVinculando] = useState(false)
+  const [vinculado, setVinculado] = useState<{ instanceName: string; isConnected: boolean; linkConexao: string | null } | null>(null)
+  const [erroVincular, setErroVincular] = useState('')
+  const [pollingVincular, setPollingVincular] = useState(false)
+
   // ── API Oficial Meta ──
   const [apiForm, setApiForm] = useState({
     phoneNumberId: '',
@@ -756,41 +764,61 @@ function SecaoWhatsApp() {
     businessAccountId: '',
   })
   const [salvandoApi, setSalvandoApi] = useState(false)
-  const [apiSalva, setApiSalva] = useState(false)
   const [showGuia, setShowGuia] = useState(false)
 
   const webhookUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://seu-backend.railway.app'
 
   async function handleCriarInstancia() {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       const data = await apiPost('/canais/criar-instancia', { nome: nomeCanal })
       setCanal(data)
-      iniciarVerificacao(data.instanceName)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar instância')
-    } finally {
-      setLoading(false)
-    }
+      iniciarVerificacaoQR(data.instanceName)
+    } catch (err) { setError(err instanceof Error ? err.message : 'Erro ao criar instância') }
+    finally { setLoading(false) }
   }
 
-  function iniciarVerificacao(instanceName: string) {
+  function iniciarVerificacaoQR(instanceName: string) {
     setVerificando(true)
-    const interval = setInterval(async () => {
+    const iv = setInterval(async () => {
       try {
         const res = await apiGet(`/canais/${instanceName}/status`)
-        if (res && res.connected) {
-          clearInterval(interval)
-          setConectado(true)
-          setVerificando(false)
-        }
+        if (res?.connected) { clearInterval(iv); setConectado(true); setVerificando(false) }
       } catch {}
     }, 3000)
-    setTimeout(() => {
-      clearInterval(interval)
-      setVerificando(false)
-    }, 120000)
+    setTimeout(() => { clearInterval(iv); setVerificando(false) }, 120000)
+  }
+
+  async function handleVincular() {
+    if (!instanceNameInput.trim()) return
+    setVinculando(true); setErroVincular('')
+    try {
+      const res = await apiPost('/canais/vincular-instancia', {
+        instanceName: instanceNameInput.trim(),
+        nome: nomeVincular,
+      }) as any
+      if (res.ok) {
+        setVinculado(res)
+        if (!res.isConnected) iniciarPollingVincular(res.instanceName)
+      } else {
+        setErroVincular(res.erro || 'Erro ao vincular')
+      }
+    } catch (e: any) { setErroVincular(e?.message || 'Falha ao conectar com o servidor') }
+    finally { setVinculando(false) }
+  }
+
+  function iniciarPollingVincular(instanceName: string) {
+    setPollingVincular(true)
+    const iv = setInterval(async () => {
+      try {
+        const res = await apiGet(`/canais/${instanceName}/status`)
+        if (res?.connected) {
+          clearInterval(iv); setPollingVincular(false)
+          setVinculado(v => v ? { ...v, isConnected: true } : v)
+        }
+      } catch {}
+    }, 10000) // polling leve a cada 10s (anti-ban)
+    setTimeout(() => { clearInterval(iv); setPollingVincular(false) }, 300000)
   }
 
   const [apiConectada, setApiConectada] = useState<{ numero: string; nome: string } | null>(null)
@@ -798,19 +826,12 @@ function SecaoWhatsApp() {
 
   async function handleSalvarApiOficial() {
     if (!apiForm.phoneNumberId || !apiForm.accessToken || !apiForm.webhookVerifyToken) return
-    setSalvandoApi(true)
-    setApiErro('')
+    setSalvandoApi(true); setApiErro('')
     try {
       const res = await apiPost('/canais/configurar-oficial', apiForm) as any
-      if (res.ok) {
-        setApiConectada({ numero: res.numero, nome: res.nome_verificado || '' })
-        setApiSalva(true)
-      } else {
-        setApiErro(res.erro || 'Erro desconhecido')
-      }
-    } catch (e: any) {
-      setApiErro(e?.message || 'Falha ao conectar com o servidor')
-    }
+      if (res.ok) setApiConectada({ numero: res.numero, nome: res.nome_verificado || '' })
+      else setApiErro(res.erro || 'Erro desconhecido')
+    } catch (e: any) { setApiErro(e?.message || 'Falha ao conectar com o servidor') }
     setSalvandoApi(false)
   }
 
@@ -823,7 +844,26 @@ function SecaoWhatsApp() {
           <p className="text-xs text-fg-tertiary mt-0.5">Escolha como conectar seu número ao sistema</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
+          {/* Vincular Instância (Recomendado - Anti-Ban) */}
+          <button
+            onClick={() => setMetodo('vincular')}
+            className={`p-4 rounded-xl border-2 text-left transition-all ${
+              metodo === 'vincular'
+                ? 'border-emerald-500/60 bg-emerald-500/5'
+                : 'border-border-subtle bg-muted/30 hover:border-zinc-600'
+            }`}
+          >
+            <div className="text-2xl mb-2">🔗</div>
+            <p className="text-sm font-semibold text-fg">Vincular Instância</p>
+            <p className="text-xs text-fg-tertiary mt-1 leading-relaxed">
+              Cole o nome de uma instância já criada no Evolution Manager. Mais seguro, evita banimento.
+            </p>
+            <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              ✅ Anti-Ban
+            </span>
+          </button>
+
           <button
             onClick={() => setMetodo('qrcode')}
             className={`p-4 rounded-xl border-2 text-left transition-all ${
@@ -837,7 +877,7 @@ function SecaoWhatsApp() {
             <p className="text-xs text-fg-tertiary mt-1 leading-relaxed">
               Conecte qualquer número via Evolution API escaneando o QR Code. Mais simples, ideal para testes e uso imediato.
             </p>
-            <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
               Recomendado para começar
             </span>
           </button>
@@ -861,6 +901,76 @@ function SecaoWhatsApp() {
           </button>
         </div>
       </div>
+
+      {/* ── Vincular Instância (Anti-Ban) ── */}
+      {metodo === 'vincular' && (
+        <div className="card space-y-5">
+          <div>
+            <h3 className="text-sm font-semibold text-fg">🔗 Vincular Instância Já Criada</h3>
+            <p className="text-xs text-fg-tertiary mt-0.5">Fluxo anti-ban: crie a instância manualmente no Evolution Manager, depois cole o nome aqui.</p>
+          </div>
+          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-semibold text-emerald-400">🛡️ Por que este método é mais seguro?</p>
+            <div className="space-y-1 text-xs text-fg-secondary">
+              <p>1. Acesse o <strong className="text-fg">Evolution Manager</strong> e crie a instância manualmente</p>
+              <p>2. Escaneie o QR Code <strong className="text-fg">diretamente no Manager</strong> (nunca via API automatizada)</p>
+              <p>3. Aguarde a instância ficar com status <strong className="text-emerald-400">✅ open</strong></p>
+              <p>4. Cole o nome da instância abaixo — o sistema configura o webhook automaticamente</p>
+            </div>
+          </div>
+
+          {vinculado ? (
+            vinculado.isConnected ? (
+              <div className="flex flex-col items-center py-8 gap-3">
+                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                  <span className="text-3xl">✓</span>
+                </div>
+                <p className="text-emerald-400 font-semibold">Instância vinculada e conectada!</p>
+                <p className="text-xs text-fg-tertiary">Instância: <strong className="text-fg-secondary">{vinculado.instanceName}</strong></p>
+                <p className="text-xs text-fg-disabled">Webhook configurado. Mensagens serão recebidas automaticamente.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-2">
+                  <p className="text-xs font-semibold text-amber-400">⏳ Instância vinculada, aguardando conexão</p>
+                  <p className="text-xs text-fg-secondary">A instância <strong className="text-fg">{vinculado.instanceName}</strong> foi registrada, mas ainda não está conectada ao WhatsApp.</p>
+                  <p className="text-xs text-fg-tertiary">Escaneie o QR Code no Evolution Manager. O sistema verificará o status a cada 10 segundos.</p>
+                  {pollingVincular && (
+                    <p className="text-xs text-fg-disabled animate-pulse flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                      Verificando conexão...
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => { setVinculado(null); setInstanceNameInput(''); setErroVincular('') }} className="btn-secondary text-xs">
+                  ← Vincular outra instância
+                </button>
+              </div>
+            )
+          ) : (
+            <div className="bg-muted/50 rounded-lg p-4 space-y-3 max-w-sm">
+              <div>
+                <label className="label block mb-1">Nome do canal</label>
+                <input className="input text-xs w-full" value={nomeVincular} onChange={e => setNomeVincular(e.target.value)} placeholder="Ex: WhatsApp Vendas" />
+              </div>
+              <div>
+                <label className="label block mb-1">Nome da instância (Evolution Manager) *</label>
+                <input
+                  className="input text-xs w-full font-mono"
+                  value={instanceNameInput}
+                  onChange={e => setInstanceNameInput(e.target.value)}
+                  placeholder="Ex: botwhatsapp01, vp_cajado_123"
+                />
+                <p className="text-[10px] text-fg-disabled mt-1">Cole exatamente o nome exibido no painel do Evolution Manager</p>
+              </div>
+              {erroVincular && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded">{erroVincular}</p>}
+              <button onClick={handleVincular} disabled={vinculando || !instanceNameInput.trim()} className="btn-primary text-xs w-full">
+                {vinculando ? '⏳ Vinculando...' : '🔗 Vincular Instância'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── QR Code ── */}
       {metodo === 'qrcode' && (
