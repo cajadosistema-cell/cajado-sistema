@@ -860,16 +860,17 @@ export function SecretariaFlutuante() {
     r.interimResults = true
     r.onstart = () => setIsListening(true)
     r.onresult = (e: any) => {
-      let currentInterim = ''
-      let currentFinal = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const transcript = e.results[i][0].transcript
-        if (e.results[i].isFinal) currentFinal += transcript
-        else currentInterim += transcript
+      let finalTranscript = ''
+      let interim = ''
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript
+        } else {
+          interim += e.results[i][0].transcript
+        }
       }
-      const newTotal = transcriptRef.current + currentFinal
-      if (currentFinal) transcriptRef.current = newTotal
-      setInterimTranscript(newTotal + currentInterim)
+      transcriptRef.current = finalTranscript
+      setInterimTranscript(finalTranscript + interim)
     }
     r.onerror = (e: any) => {
       setIsListening(false)
