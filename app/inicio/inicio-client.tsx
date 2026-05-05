@@ -7,6 +7,8 @@ import { formatCurrency, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import DashboardPessoalClient from '@/app/(dashboard)/dashboard-pessoal/dashboard-pessoal-client'
 import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
+import { Sidebar } from '@/components/shared/sidebar'
+import { BottomNav } from '@/components/shared/bottom-nav'
 
 Chart.register(DoughnutController, LineController, BarController, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Filler)
 
@@ -467,10 +469,22 @@ export default function InicioClient() {
         ))}
       </div>
 
-      {/* ── Dashboard Pessoal ───────────────────────────────── */}
+      {/* ── Dashboard Pessoal ─────────────────────────────── */}
       {dashView === 'pessoal' && (
-        <div style={{ paddingTop: 56, minHeight: '100vh', background: '#080b14' }}>
-          <DashboardPessoalClient />
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: '#080b14', display: 'flex',
+          paddingTop: 56  /* espaço para o toggle Empresa/Pessoal */
+        }}>
+          {/* Sidebar — mesma do dashboard layout */}
+          <Sidebar />
+          {/* Conteúdo principal com scroll */}
+          <main style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+            <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '2rem 1.5rem 6rem' }}>
+              <DashboardPessoalClient />
+            </div>
+          </main>
+          <BottomNav />
         </div>
       )}
 
