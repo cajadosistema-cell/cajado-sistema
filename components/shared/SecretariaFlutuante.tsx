@@ -856,44 +856,47 @@ export function SecretariaFlutuante() {
     const r = new SR()
     recognitionRef.current = r
     r.lang = 'pt-BR'
-    r.continuous = true
-    r.interimResults = true
+    r.continuous = false       // para após o silêncio — evita duplicação
+    r.interimResults = true    // mostra texto em tempo real enquanto fala
+
     r.onstart = () => setIsListening(true)
+
     r.onresult = (e: any) => {
-      let finalTranscript = ''
+      let final = ''
       let interim = ''
       for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript
-        } else {
-          interim += e.results[i][0].transcript
-        }
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) final += t
+        else interim += t
       }
-      transcriptRef.current = finalTranscript
-      setInterimTranscript(finalTranscript + interim)
+      const display = (final + interim).trim()
+      transcriptRef.current = display
+      setInterimTranscript(display)
     }
+
     r.onerror = (e: any) => {
       setIsListening(false)
       setInterimTranscript('')
+      transcriptRef.current = ''
       if (e.error === 'not-allowed') {
         localStorage.removeItem('elena_mic_ok')
         micPermitidoRef.current = false
-        alert('Permissão de microfone negada. Clique no 🔒 cadeado na barra de endereços e permita o microfone.')
+        alert('Permissão de microfone negada. Clique no 🔒 cadeado e permita o microfone.')
       } else if (e.error === 'audio-capture') {
         alert('Nenhum microfone encontrado.')
       } else if (e.error !== 'no-speech') {
         console.error('Erro no microfone:', e.error)
       }
     }
+
     r.onend = () => {
       setIsListening(false)
-      const finalToSend = transcriptRef.current || interimTranscript
-      if (finalToSend.trim()) {
-        handleEnviar(finalToSend.trim())
-      }
+      const text = transcriptRef.current.trim()
+      if (text) handleEnviar(text)
       setInterimTranscript('')
       transcriptRef.current = ''
     }
+
     r.start()
   }
 
