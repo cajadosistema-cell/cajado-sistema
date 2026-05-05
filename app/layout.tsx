@@ -1,6 +1,12 @@
 import type { Metadata, Viewport } from 'next'
-import { GeistSans } from 'geist/font/sans'
-import { GeistMono } from 'geist/font/mono'
+import { Inter } from 'next/font/google'
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+  weight: ['300', '400', '500', '600'],
+})
 import { ThemeProvider } from '@/lib/theme-provider'
 import { RegisterServiceWorker } from './register-sw'
 import { PWAInstallBanner } from '@/components/shared/PWAInstallBanner'
@@ -55,7 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="pt-BR"
-      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      className={inter.variable}
       suppressHydrationWarning
     >
       <head>
@@ -82,7 +88,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="format-detection" content="telephone=no" />
       </head>
-      <body className="font-sans antialiased overscroll-none">
+      <body className={`${inter.className} antialiased overscroll-none`}>
         <ThemeProvider>
           <RegisterServiceWorker />
           <PWAInstallBanner />

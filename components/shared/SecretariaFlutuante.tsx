@@ -197,6 +197,7 @@ export function SecretariaFlutuante() {
   const attachedFileRef = useRef<AttachedFile | null>(null)
   const [processingFile, setProcessingFile] = useState(false)
   const [relatorioData, setRelatorioData] = useState<any>(null)
+  const [buscandoWeb, setBuscandoWeb] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
@@ -695,6 +696,41 @@ export function SecretariaFlutuante() {
   }, [])
 
 
+  // ── Busca Web (Perplexity Sonar) ──────────────────────────
+  // Palavras-chave que indicam necessidade de busca na internet
+  const KEYWORDS_WEB = [
+    'preço', 'preco', 'valor', 'quanto custa', 'custa', 'mercado', 'comparar', 'comparação',
+    'mais barato', 'melhor preço', 'promoção', 'oferta', 'cotação', 'cotacao',
+    'pesquisa', 'pesquise', 'busque', 'buscar', 'procure', 'procurar',
+    'notícia', 'noticia', 'novidade', 'atualidade', 'hoje', 'recente',
+    'dólar', 'euro', 'câmbio', 'cambio', 'inflação', 'inflacao', 'ipca', 'selic',
+    'concorrente', 'concorrência', 'mercado', 'tendência', 'tendencia',
+    'amazon', 'shopee', 'mercado livre', 'magalu', 'americanas', 'casas bahia',
+  ]
+
+  const precisaBuscarWeb = (texto: string): boolean => {
+    const t = texto.toLowerCase()
+    return KEYWORDS_WEB.some(kw => t.includes(kw))
+  }
+
+  const buscarWeb = async (query: string, contexto?: string): Promise<string | null> => {
+    try {
+      setBuscandoWeb(true)
+      const res = await fetch('/api/busca-web', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, contexto }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) return null
+      return data.resultado ?? null
+    } catch {
+      return null
+    } finally {
+      setBuscandoWeb(false)
+    }
+  }
+
   // ── Enviar ────────────────────────────────────────────────
   const handleEnviar = useCallback(async (textToSubmit?: string) => {
     if (isSendingRef.current) return
@@ -741,6 +777,22 @@ export function SecretariaFlutuante() {
       let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
         promptFinal = `${promptFinal}\n\n[CONTEÚDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
+      }
+
+      // Busca web automática se o usuário perguntar sobre preços/mercado
+      if (userText && precisaBuscarWeb(userText) && !fileSnap) {
+        // Atualiza o placeholder para mostrar que está buscando
+        setMensagens(prev => prev.map(m =>
+          m.id === aiMsgId ? { ...m, texto: '🌐 Buscando na internet...' } : m
+        ))
+        const resultadoWeb = await buscarWeb(userText, contexto)
+        if (resultadoWeb) {
+          promptFinal = `${promptFinal}\n\n---\n[RESULTADO DA BUSCA NA INTERNET - use estas informações para responder com dados reais e atualizados]:\n${resultadoWeb}\n---`
+        }
+        // Volta para o placeholder padrão
+        setMensagens(prev => prev.map(m =>
+          m.id === aiMsgId ? { ...m, texto: '...' } : m
+        ))
       }
 
       const body: Record<string, any> = {
@@ -830,25 +882,56 @@ export function SecretariaFlutuante() {
     r.start()
   }
 
-  const handlePressMic = () => {
-    // Sempre re-lê o localStorage antes de usar (garante persistência entre sessões)
-    const jaPermitido = typeof window !== 'undefined' && localStorage.getItem('elena_mic_ok') === '1'
-    micPermitidoRef.current = jaPermitido
-    if (jaPermitido) {
-      iniciarReconhecimento()
-      return
-    }
-    // Solicita permissão uma única vez
-    navigator.mediaDevices?.getUserMedia({ audio: true })
-      .then(stream => {
-        stream.getTracks().forEach(t => t.stop()) // libera stream de teste
-        micPermitidoRef.current = true
-        localStorage.setItem('elena_mic_ok', '1')
+  const handlePressMic = async () => {
+    // 1. Verifica via Permissions API se o microfone já foi autorizado
+    //    sem abrir nenhum popup — esse é o comportamento correto e persistente
+    if (navigator.permissions) {
+      try {
+        const status = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+        if (status.state === 'granted') {
+          // Permissão já concedida — vai direto, sem pedir de novo
+          micPermitidoRef.current = true
+          localStorage.setItem('elena_mic_ok', '1')
+          iniciarReconhecimento()
+          return
+        }
+        if (status.state === 'denied') {
+          alert('Permissão de microfone bloqueada. Clique no 🔒 cadeado na barra de endereços e permita o microfone.')
+          return
+        }
+        // state === 'prompt' → primeira vez, precisa pedir
+      } catch {
+        // Navegador não suporta Permissions API — tenta pelo localStorage
+        const jaPermitido = typeof window !== 'undefined' && localStorage.getItem('elena_mic_ok') === '1'
+        if (jaPermitido) {
+          micPermitidoRef.current = true
+          iniciarReconhecimento()
+          return
+        }
+      }
+    } else {
+      // Fallback: verifica localStorage (compatibilidade)
+      const jaPermitido = typeof window !== 'undefined' && localStorage.getItem('elena_mic_ok') === '1'
+      micPermitidoRef.current = jaPermitido
+      if (jaPermitido) {
         iniciarReconhecimento()
-      })
-      .catch(() => {
-        alert('Permissão de microfone negada. Permita nas configurações do navegador.')
-      })
+        return
+      }
+    }
+
+    // 2. Primeira vez: solicita permissão via getUserMedia
+    //    (browser mostrará o popup UMA ÚNICA VEZ — depois fica permanente)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach(t => t.stop()) // libera stream de teste imediatamente
+      micPermitidoRef.current = true
+      localStorage.setItem('elena_mic_ok', '1')
+      iniciarReconhecimento()
+    } catch {
+      localStorage.removeItem('elena_mic_ok')
+      micPermitidoRef.current = false
+      alert('Permissão de microfone negada. Permita nas configurações do navegador.')
+    }
   }
 
   const handleReleaseMic = () => {
@@ -1090,17 +1173,26 @@ export function SecretariaFlutuante() {
                 <input
                   type="text"
                   className="flex-1 bg-transparent border-0 focus:ring-0 text-xs text-fg placeholder-zinc-600 h-8"
-                  placeholder={isListening ? '\uD83C\uDF99\uFE0F Ouvindo... (Clique no microfone para enviar)' : attachedFile ? 'Descreva o que quer saber...' : 'Diga um comando para a Elena...'}
+                  placeholder={
+                    buscandoWeb ? '🌐 Buscando na internet...' :
+                    isListening ? '🎙️ Ouvindo... (Clique no microfone para enviar)' :
+                    attachedFile ? 'Descreva o que quer saber...' :
+                    'Diga um comando para a Elena...'
+                  }
                   value={isListening ? '' : input}
                   onChange={e => !isListening && setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !isListening && handleEnviar()}
                 />
                 <button
                   onClick={() => handleEnviar()}
-                  disabled={(!input.trim() && !attachedFile) || loading}
+                  disabled={(!input.trim() && !attachedFile) || loading || buscandoWeb}
                   className="w-8 h-8 rounded-lg bg-amber-500 hover:bg-amber-400 text-amber-950 flex items-center justify-center shrink-0 disabled:opacity-40 transition-colors"
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                  {buscandoWeb ? (
+                    <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/></svg>
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                  )}
                 </button>
               </div>
             </div>

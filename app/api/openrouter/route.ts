@@ -22,10 +22,10 @@ export async function POST(req: Request) {
     const system = systemInstruction
       || 'Você é um assistente IA especialista em negócios, finanças e tecnologia da Cajado Soluções. Responda sempre em português brasileiro.'
 
-    // Escolhe modelo: se tiver imagem usa GPT-4o (vision), senão usa o modelo solicitado ou mini
+    // Escolhe modelo: se tiver imagem usa GPT-4o (vision), senão usa Gemini 2.5 Flash
     const model = imageBase64
       ? 'openai/gpt-4o'
-      : (reqModel || 'openai/gpt-4o-mini')
+      : (reqModel || 'google/gemini-2.5-flash-preview')
 
     let messages: { role: string; content: any }[]
 
