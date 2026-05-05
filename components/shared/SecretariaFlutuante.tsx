@@ -860,16 +860,16 @@ export function SecretariaFlutuante() {
     r.interimResults = true
     r.onstart = () => setIsListening(true)
     r.onresult = (e: any) => {
-      let finalText = ''
-      let interimText = ''
-      for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript
-        else interimText += e.results[i][0].transcript
+      let currentInterim = ''
+      let currentFinal = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript
+        if (e.results[i].isFinal) currentFinal += transcript
+        else currentInterim += transcript
       }
-      const fullText = finalText + interimText
-      transcriptRef.current = fullText
-      // ✅ FIX 1: mostra o texto em tempo real no campo de entrada
-      setInterimTranscript(fullText)
+      const newTotal = transcriptRef.current + currentFinal
+      if (currentFinal) transcriptRef.current = newTotal
+      setInterimTranscript(newTotal + currentInterim)
     }
     r.onerror = (e: any) => {
       setIsListening(false)
@@ -884,15 +884,14 @@ export function SecretariaFlutuante() {
         console.error('Erro no microfone:', e.error)
       }
     }
-    // ✅ FIX 2: se o browser encerrar por timeout/silêncio, envia o texto capturado
     r.onend = () => {
       setIsListening(false)
-      setInterimTranscript('')
-      const text = transcriptRef.current.trim()
-      if (text) {
-        transcriptRef.current = ''
-        handleEnviar(text)
+      const finalToSend = transcriptRef.current || interimTranscript
+      if (finalToSend.trim()) {
+        handleEnviar(finalToSend.trim())
       }
+      setInterimTranscript('')
+      transcriptRef.current = ''
     }
     r.start()
   }
