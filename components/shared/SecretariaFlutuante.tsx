@@ -198,6 +198,7 @@ export function SecretariaFlutuante() {
   const [processingFile, setProcessingFile] = useState(false)
   const [relatorioData, setRelatorioData] = useState<any>(null)
   const [buscandoWeb, setBuscandoWeb] = useState(false)
+  const [interimTranscript, setInterimTranscript] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
@@ -851,6 +852,7 @@ export function SecretariaFlutuante() {
     if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
     transcriptRef.current = ''
     setInput('')
+    setInterimTranscript('')
     const r = new SR()
     recognitionRef.current = r
     r.lang = 'pt-BR'
@@ -864,21 +866,34 @@ export function SecretariaFlutuante() {
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript
         else interimText += e.results[i][0].transcript
       }
-      transcriptRef.current = finalText + interimText
+      const fullText = finalText + interimText
+      transcriptRef.current = fullText
+      // ✅ FIX 1: mostra o texto em tempo real no campo de entrada
+      setInterimTranscript(fullText)
     }
     r.onerror = (e: any) => {
       setIsListening(false)
+      setInterimTranscript('')
       if (e.error === 'not-allowed') {
         localStorage.removeItem('elena_mic_ok')
         micPermitidoRef.current = false
-        alert('Permissão de microfone negada. Clique no cadeado na barra de endereços e permita o microfone.')
+        alert('Permissão de microfone negada. Clique no 🔒 cadeado na barra de endereços e permita o microfone.')
       } else if (e.error === 'audio-capture') {
         alert('Nenhum microfone encontrado.')
       } else if (e.error !== 'no-speech') {
         console.error('Erro no microfone:', e.error)
       }
     }
-    r.onend = () => setIsListening(false)
+    // ✅ FIX 2: se o browser encerrar por timeout/silêncio, envia o texto capturado
+    r.onend = () => {
+      setIsListening(false)
+      setInterimTranscript('')
+      const text = transcriptRef.current.trim()
+      if (text) {
+        transcriptRef.current = ''
+        handleEnviar(text)
+      }
+    }
     r.start()
   }
 
@@ -935,17 +950,21 @@ export function SecretariaFlutuante() {
   }
 
   const handleReleaseMic = () => {
+    // Para o reconhecimento mas captura o texto ANTES do onend disparar
+    const textCapturado = transcriptRef.current.trim()
+    transcriptRef.current = ''
+    setInterimTranscript('')
     if (recognitionRef.current) {
+      // Remove onend temporariamente para evitar envio duplo
+      recognitionRef.current.onend = () => setIsListening(false)
       try { recognitionRef.current.stop() } catch {}
       recognitionRef.current = null
     }
     setIsListening(false)
-    setTimeout(() => {
-      const text = transcriptRef.current.trim()
-      transcriptRef.current = ''
-      setInput('')
-      if (text) handleEnviar(text)
-    }, 300)
+    setInput('')
+    if (textCapturado) {
+      setTimeout(() => handleEnviar(textCapturado), 150)
+    }
   }
 
   const toggleMic = () => {
@@ -1175,11 +1194,12 @@ export function SecretariaFlutuante() {
                   className="flex-1 bg-transparent border-0 focus:ring-0 text-xs text-fg placeholder-zinc-600 h-8"
                   placeholder={
                     buscandoWeb ? '🌐 Buscando na internet...' :
-                    isListening ? '🎙️ Ouvindo... (Clique no microfone para enviar)' :
+                    isListening ? '🎙️ Ouvindo... fale seu comando' :
                     attachedFile ? 'Descreva o que quer saber...' :
                     'Diga um comando para a Elena...'
                   }
-                  value={isListening ? '' : input}
+                  // ✅ FIX 3: mostra o texto capturado em tempo real
+                  value={isListening ? interimTranscript : input}
                   onChange={e => !isListening && setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !isListening && handleEnviar()}
                 />

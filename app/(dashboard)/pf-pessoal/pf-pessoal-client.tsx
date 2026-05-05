@@ -21,13 +21,15 @@ import { AlarmManager } from '@/components/shared/AlarmManager'
 import { ModalNovoGasto }   from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita } from './_components/modals/ModalNovaReceita'
 import { PainelComparativoMes } from '@/components/shared/PainelComparativoMes'
+import { PainelLimitesOrcamento } from '@/components/shared/LimitesOrcamento'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'previsao' | 'agenda' | 'ideias' | 'registros' | 'cartoes'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'agenda' | 'ideias' | 'registros' | 'cartoes'
 
 const TABS = [
   { id: 'resumo'       as TabId, label: 'Resumo',      emoji: '📊' },
   { id: 'lancamentos'  as TabId, label: 'Lançamentos', emoji: '📋' },
   { id: 'orcamentos'   as TabId, label: 'Orçamentos',  emoji: '🎯' },
+  { id: 'limites'      as TabId, label: 'Limites',      emoji: '📊' },
   { id: 'previsao'     as TabId, label: 'Previsão',    emoji: '🔮' },
   { id: 'agenda'       as TabId, label: 'Agenda',       emoji: '📅' },
   { id: 'ideias'       as TabId, label: 'Ideias',        emoji: '💡' },
@@ -201,6 +203,11 @@ export default function PfPessoalClient() {
           orcamentos={orcamentos}
           onUpdate={refetchOrcamentos}
         />
+      )}
+      {tab === 'limites' && (
+        <div className="card">
+          <PainelLimitesOrcamento tipo="pf" />
+        </div>
       )}
       {tab === 'previsao' && (
         <TabPrevisao

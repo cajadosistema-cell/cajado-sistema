@@ -2,6 +2,7 @@ import { Sidebar } from '@/components/shared/sidebar'
 import { BottomNav } from '@/components/shared/bottom-nav'
 import { ChatNotifications } from '@/components/shared/chat-notifications'
 import { ToastProvider } from '@/components/shared/toast'
+import { BudgetAlertBanner } from '@/components/shared/LimitesOrcamento'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,6 +17,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <BottomNav />
         {/* Notificações de chat — ativo em TODO o dashboard */}
         <ChatNotifications />
+        {/* Alerta de limites de orçamento — aparece uma vez por sessão */}
+        <BudgetAlertBanner />
       </div>
     </ToastProvider>
   )
