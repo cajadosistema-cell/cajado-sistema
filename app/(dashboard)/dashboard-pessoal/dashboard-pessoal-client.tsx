@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Legend,
@@ -212,6 +213,145 @@ function KpiCard({ label, value, sub, color, spark, href }: {
   return href ? <Link href={href}>{inner}</Link> : inner
 }
 
+// ── Widget de Orçamento no Dashboard ─────────────────────────
+function BudgetWidget({ gastosMes, cartoesPagamento }: {
+  gastosMes: Gasto[]
+  cartoesPagamento: { nome: string; total: number }[]
+}) {
+  const supabase = createClient()
+  const [limites, setLimites] = useState<any[]>([])
+  const loaded = useRef(false)
+
+  useEffect(() => {
+    if (loaded.current) return
+    loaded.current = true
+    const carregar = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await (supabase.from('limites_orcamento') as any)
+        .select('*').eq('user_id', user.id).eq('tipo', 'pf').eq('ativo', true)
+      if (!data || data.length === 0) return
+      const totalGasto = gastosMes.reduce((a: number, g: Gasto) => a + g.valor, 0)
+      setLimites(data.map((l: any) => ({
+        ...l,
+        gasto: totalGasto,
+        pct: l.limite_mensal > 0 ? Math.min((totalGasto / l.limite_mensal) * 100, 100) : 0,
+      })))
+    }
+    carregar()
+  }, [supabase, gastosMes])
+
+  // Top 6 categorias
+  const catData = Object.entries(
+    gastosMes.reduce((acc, g) => {
+      const k = g.categoria || 'outros'
+      acc[k] = (acc[k] || 0) + g.valor
+      return acc
+    }, {} as Record<string, number>)
+  ).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  const maxCat = catData[0]?.[1] || 1
+  const totalMes = gastosMes.reduce((a, g) => a + g.valor, 0)
+
+  if (limites.length === 0 && catData.length === 0 && cartoesPagamento.length === 0) return null
+
+  return (
+    <div className="bg-[#0d1522] border border-white/8 rounded-2xl p-4 hover:border-amber-500/30 transition-colors">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs text-fg-tertiary uppercase tracking-wider">📊 Orçamento &amp; Gastos do Mês</p>
+        <Link href="/pf-pessoal" className="text-[10px] text-fg-disabled hover:text-amber-400 transition-colors">
+          Gerenciar limites →
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Coluna 1: Limites configurados */}
+        {limites.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-[10px] font-semibold text-fg-secondary uppercase tracking-wider">🎯 Limites Mensais</p>
+            {limites.map((l: any) => {
+              const cor = l.pct >= 90 ? '#ef4444' : l.pct >= 70 ? '#f59e0b' : '#10b981'
+              return (
+                <div key={l.id}>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-[11px] text-fg-secondary">{l.nome}</span>
+                    <span className="text-[11px] font-bold" style={{ color: cor }}>{l.pct.toFixed(0)}%</span>
+                  </div>
+                  <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+                      style={{ width: `${l.pct}%`, background: `linear-gradient(90deg, ${cor}cc, ${cor})` }}
+                    />
+                    {l.pct >= 90 && <div className="absolute left-0 top-0 h-full w-full bg-red-500/20 animate-pulse rounded-full" />}
+                  </div>
+                  <div className="flex justify-between mt-0.5">
+                    <span className="text-[9px] text-fg-disabled">{formatCurrency(l.gasto)}</span>
+                    <span className="text-[9px] text-fg-disabled">de {formatCurrency(l.limite_mensal)}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Coluna 2: Por categoria */}
+        {catData.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-semibold text-fg-secondary uppercase tracking-wider">🏷️ Por Categoria</p>
+            {catData.map(([cat, val]) => {
+              const cor = CAT_CORES[cat] ?? '#71717a'
+              const pct = (val / maxCat) * 100
+              const share = totalMes > 0 ? ((val / totalMes) * 100).toFixed(0) : '0'
+              return (
+                <div key={cat}>
+                  <div className="flex justify-between mb-0.5">
+                    <span className="text-[11px] text-fg-secondary truncate max-w-[130px]">{CAT_LABEL[cat] ?? cat}</span>
+                    <span className="text-[11px] text-fg-tertiary shrink-0 ml-1">{share}% · {formatCurrency(val)}</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, background: cor }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Coluna 3: Por forma de pagamento */}
+        {cartoesPagamento.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-semibold text-fg-secondary uppercase tracking-wider">💳 Por Pagamento</p>
+            {cartoesPagamento.slice(0, 6).map(({ nome, total }) => {
+              const pct = (total / (cartoesPagamento[0]?.total || 1)) * 100
+              const share = totalMes > 0 ? ((total / totalMes) * 100).toFixed(0) : '0'
+              const cor = nome?.toLowerCase().includes('crédito') || nome?.toLowerCase().includes('credito') ? '#8b5cf6'
+                : nome?.toLowerCase().includes('pix') ? '#06b6d4'
+                : nome?.toLowerCase().includes('débito') || nome?.toLowerCase().includes('debito') ? '#3b82f6'
+                : '#f59e0b'
+              return (
+                <div key={nome}>
+                  <div className="flex justify-between mb-0.5">
+                    <span className="text-[11px] text-fg-secondary truncate max-w-[130px]">{nome || 'Outros'}</span>
+                    <span className="text-[11px] text-fg-tertiary shrink-0 ml-1">{share}% · {formatCurrency(total)}</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, background: cor }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Dashboard ────────────────────────────────────────────
 export default function DashboardPessoalClient() {
   const { data: gastos }   = useSupabaseQuery<Gasto>('gastos_pessoais',   { orderBy: { column: 'data', ascending: false } })
@@ -257,6 +397,15 @@ export default function DashboardPessoalClient() {
 
   const gastosAgrup  = groupBy(gastosMes)
   const receitasAgrup = groupBy(receitasMes)
+
+  // Gastos por forma de pagamento (cartões)
+  const cartoesPagamento = Object.entries(
+    gastosMes.reduce((acc, g) => {
+      const k = g.forma_pagamento || 'Não informado'
+      acc[k] = (acc[k] || 0) + g.valor
+      return acc
+    }, {} as Record<string, number>)
+  ).sort((a, b) => b[1] - a[1]).map(([nome, total]) => ({ nome, total }))
 
   const handleCatGasto = (cat: string) => {
     const grupo = gastosAgrup.find(g => g.cat === cat)
@@ -330,6 +479,9 @@ export default function DashboardPessoalClient() {
           onSliceClick={handleCatReceita}
         />
       </div>
+
+      {/* 📊 Widget de Orçamento: Limites + Categorias + Cartões */}
+      <BudgetWidget gastosMes={gastosMes} cartoesPagamento={cartoesPagamento} />
 
       {/* Fluxo mensal */}
       <MonthlyBarChart gastos={gastos} receitas={receitas} />
