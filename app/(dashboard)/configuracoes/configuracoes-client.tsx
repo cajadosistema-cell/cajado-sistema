@@ -101,7 +101,7 @@ function ModalFuncionario({ onClose, onSave }: { onClose: () => void; onSave: ()
               email: form.email,
               senha: form.senha,
               role: form.cargo === 'manager' ? 'admin' : 'atendente',
-              integration_key: 'fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb'
+              integration_key: process.env.NEXT_PUBLIC_INBOX_INTEGRATION_KEY || ''
             }),
           })
         } catch (e) {

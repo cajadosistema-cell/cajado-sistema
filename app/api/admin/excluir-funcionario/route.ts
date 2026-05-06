@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,19 +9,45 @@ const supabaseAdmin = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+type CookieToSet = { name: string; value: string; options?: Record<string, unknown> }
+
+async function getEmpresaId() {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(list: CookieToSet[]) {
+          try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options as any)) } catch {}
+        },
+      },
+    }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: perfil } = await supabase.from('perfis').select('empresa_id').eq('id', user.id).single()
+  return perfil?.empresa_id ?? null
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const empresa_id = await getEmpresaId()
+    if (!empresa_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
     const { id, email } = await req.json()
 
     if (!id || !email) {
       return NextResponse.json({ error: 'ID e email do usuário são obrigatórios.' }, { status: 400 })
     }
 
-    // 1. Buscar o user_id (FK auth.users) antes de deletar
+    // 1. Verifica se o funcionário pertence à empresa do admin
     const { data: func } = await supabaseAdmin
       .from('funcionarios')
       .select('id, user_id')
       .eq('id', id)
+      .eq('empresa_id', empresa_id)  // SEGURO: só deleta da própria empresa
       .single()
 
     // O auth user ID pode ser func.user_id (novo padrão) ou func.id (padrão antigo)
@@ -54,7 +82,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           email,
           action: 'delete',
-          integration_key: 'fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb'
+          integration_key: process.env.INBOX_INTEGRATION_KEY || ''
         }),
       })
     } catch {}
