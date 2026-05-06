@@ -14,6 +14,7 @@ import { useToast } from '@/components/shared/toast'
 import { TabRegistros } from '../pf-pessoal/_components/tabs/TabRegistros'
 import { ModalImportarExtratoIA } from '@/components/shared/ModalImportarExtratoIA'
 import { PainelComparativoMes } from '@/components/shared/PainelComparativoMes'
+import { VencimentosMes } from './_components/VencimentosMes'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Conta = {
@@ -712,6 +713,13 @@ export default function FinanceiroClient() {
           valorDespesa="despesa"
           valorReceita="receita"
           titulo="Comparativo Mensal PJ"
+        />
+      </div>
+
+      {/* ── VENCIMENTOS DO MÊS ─────────────────────────────────── */}
+      <div className="mb-6">
+        <VencimentosMes
+          onVerDetalhes={() => setView('registros')}
         />
       </div>
 
