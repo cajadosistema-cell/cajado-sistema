@@ -390,22 +390,7 @@ export default function InvestimentosClient() {
 
   return (
     <>
-      <PageHeader title="Investimentos" subtitle="Carteira · Ativos · Liquidez · Rentabilidade">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setModalImport(true)} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
-            <Upload size={13} /> Importar
-          </button>
-          <div className="flex items-center gap-1">
-            <button onClick={handleExportCSV} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <Download size={13} /> CSV
-            </button>
-            <button onClick={handleExportPDF} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 whitespace-nowrap shrink-0">
-              <FileText size={13} /> PDF
-            </button>
-          </div>
-          <button onClick={() => setModal(true)} className="btn-primary text-xs h-8 px-3 whitespace-nowrap shrink-0">+ Ativo</button>
-        </div>
-      </PageHeader>
+      <PageHeader title="Investimentos" subtitle="Carteira · Ativos · Liquidez · Rentabilidade" />
 
       <AppPatraoTabs />
 
@@ -471,18 +456,44 @@ export default function InvestimentosClient() {
         </div>
       )}
 
-      {/* Filtros — scroll horizontal no mobile */}
-      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-0.5 px-0.5 mb-4 pb-0.5">
-        {['todos', ...Object.keys(porTipo)].map(t => (
-          <button key={t} onClick={() => setFiltroTipo(t)}
-            className={cn('shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all uppercase',
-              filtroTipo === t
-                ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
-                : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary bg-page'
-            )}>
-            {t}
+      {/* Filtros por tipo — scroll horizontal no mobile */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+          {['todos', ...Object.keys(porTipo)].map(t => (
+            <button key={t} onClick={() => setFiltroTipo(t)}
+              className={cn('shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all uppercase',
+                filtroTipo === t
+                  ? 'bg-violet-500/20 text-violet-300 border-violet-500/40'
+                  : 'text-fg-tertiary border-border-subtle hover:text-fg-secondary bg-page'
+              )}>
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Ações contextuais por tipo */}
+        <div className="flex items-center gap-2 ml-3 shrink-0">
+          <button
+            onClick={() => setModalImport(true)}
+            className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5"
+            title={filtroTipo !== 'todos' ? `Importar ${filtroTipo.toUpperCase()} via CSV` : 'Importar ativos via CSV'}
+          >
+            <Upload size={12} />
+            {filtroTipo !== 'todos' ? `Importar ${TIPO_LABELS[filtroTipo] ?? filtroTipo}` : 'Importar'}
           </button>
-        ))}
+          <button onClick={handleExportCSV} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5">
+            <Download size={12} /> CSV
+          </button>
+          <button onClick={handleExportPDF} className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5">
+            <FileText size={12} /> PDF
+          </button>
+          <button
+            onClick={() => setModal(true)}
+            className="btn-primary text-xs h-8 px-3"
+          >
+            + {filtroTipo !== 'todos' ? (TIPO_LABELS[filtroTipo] ?? 'Ativo') : 'Ativo'}
+          </button>
+        </div>
       </div>
 
       {/* Tabela de ativos */}

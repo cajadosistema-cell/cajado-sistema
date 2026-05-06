@@ -671,9 +671,33 @@ export default function FinanceiroClient() {
         title="Financeiro"
         subtitle="Contas PF/PJ · Caixa · Conciliação · Previsão"
       >
+        {/* Botões contextuais que mudam por aba */}
+        {(view === 'contas' || view === 'cartoes') && (
+          <button
+            onClick={() => setModalImport(true)}
+            className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 print:hidden"
+          >
+            📥 {view === 'cartoes' ? 'Importar Extrato Cartão' : 'Importar Extrato'}
+          </button>
+        )}
+        {view === 'contas' && (
+          <button
+            onClick={() => setModalConta(true)}
+            className="btn-secondary text-xs h-8 px-3 print:hidden"
+          >
+            + Conta
+          </button>
+        )}
         <button onClick={() => window.print()} className="btn-secondary flex items-center gap-2 print:hidden" title="Exportar para PDF ou Imprimir">🖨️ PDF / Imprimir</button>
-        <button onClick={() => { setLancamentoEdit(null); setModalLancamento(true) }} className="btn-primary print:hidden" disabled={contas.length === 0}>+ Lançamento</button>
+        <button
+          onClick={() => { setLancamentoEdit(null); setModalLancamento(true) }}
+          className="btn-primary print:hidden"
+          disabled={contas.length === 0}
+        >
+          + {view === 'cartoes' ? 'Lançamento Cartão' : 'Lançamento'}
+        </button>
       </PageHeader>
+
 
       {/* ── COMPARATIVO MENSAL PJ ─────────────────────────────── */}
       <div className="mb-6">
