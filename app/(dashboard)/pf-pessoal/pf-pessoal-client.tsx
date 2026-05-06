@@ -23,6 +23,7 @@ import { ModalNovoGasto }         from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita }       from './_components/modals/ModalNovaReceita'
 import { PainelComparativoMes }   from '@/components/shared/PainelComparativoMes'
 import { PainelLimitesOrcamento } from '@/components/shared/LimitesOrcamento'
+import { VencimentosMesPF }       from './_components/VencimentosMesPF'
 
 type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros' | 'agenda' | 'ideias'
 
@@ -59,6 +60,7 @@ export default function PfPessoalClient() {
   const [tab, setTab] = useState<TabId>('resumo')
   const [modalGasto,   setModalGasto]   = useState(false)
   const [modalReceita, setModalReceita] = useState(false)
+  const [modalVencimentosPF, setModalVencimentosPF] = useState(false)
   const [gastoEdit,    setGastoEdit]    = useState<any>(null)
   const [receitaEdit,  setReceitaEdit]  = useState<any>(null)
   const [authUserId,   setAuthUserId]   = useState('')
@@ -92,6 +94,7 @@ export default function PfPessoalClient() {
   const renderHeaderActions = () => {
     if (tab === 'resumo' || tab === 'lancamentos') return (
       <>
+        <button onClick={() => setModalVencimentosPF(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">📋 Vencimentos</button>
         <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">+ Receita</button>
         <button onClick={() => setModalGasto(true)}   className="btn-primary   text-xs h-8 px-3 whitespace-nowrap">+ Gasto</button>
       </>
@@ -232,6 +235,14 @@ export default function PfPessoalClient() {
       <AlarmManager userId={authUserId} />
 
       {/* ── Modais ── */}
+      <VencimentosMesPF
+        isOpen={modalVencimentosPF}
+        onClose={() => setModalVencimentosPF(false)}
+        onVerDetalhes={() => {
+          setModalVencimentosPF(false)
+          setTab('lancamentos')
+        }}
+      />
       {modalGasto && (
         <ModalNovoGasto
           userId={authUserId} gastoEdit={gastoEdit}

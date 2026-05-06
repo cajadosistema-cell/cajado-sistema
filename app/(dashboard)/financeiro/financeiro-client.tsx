@@ -566,6 +566,7 @@ export default function FinanceiroClient() {
   const [lancamentoEdit, setLancamentoEdit] = useState<Lancamento | null>(null)
   const [modalConta, setModalConta] = useState(false)
   const [modalImport, setModalImport] = useState(false)
+  const [modalVencimentos, setModalVencimentos] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState('')
   const [busca, setBusca] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
@@ -674,12 +675,20 @@ export default function FinanceiroClient() {
       >
         {/* Botões contextuais que mudam por aba */}
         {(view === 'contas' || view === 'cartoes') && (
-          <button
-            onClick={() => setModalImport(true)}
-            className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 print:hidden"
-          >
-            📥 {view === 'cartoes' ? 'Importar Extrato Cartão' : 'Importar Extrato'}
-          </button>
+          <>
+            <button
+              onClick={() => setModalVencimentos(true)}
+              className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 print:hidden"
+            >
+              📋 Vencimentos
+            </button>
+            <button
+              onClick={() => setModalImport(true)}
+              className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 print:hidden"
+            >
+              📥 {view === 'cartoes' ? 'Importar Extrato Cartão' : 'Importar Extrato'}
+            </button>
+          </>
         )}
         {view === 'contas' && (
           <button
@@ -700,6 +709,16 @@ export default function FinanceiroClient() {
       </PageHeader>
 
 
+      {/* ── VENCIMENTOS DO MÊS (MODAL) ─────────────────────────────────── */}
+      <VencimentosMes
+        isOpen={modalVencimentos}
+        onClose={() => setModalVencimentos(false)}
+        onVerDetalhes={() => {
+          setModalVencimentos(false)
+          setView('registros')
+        }}
+      />
+
       {/* ── COMPARATIVO MENSAL PJ ─────────────────────────────── */}
       <div className="mb-6">
         <PainelComparativoMes
@@ -716,12 +735,7 @@ export default function FinanceiroClient() {
         />
       </div>
 
-      {/* ── VENCIMENTOS DO MÊS ─────────────────────────────────── */}
-      <div className="mb-6">
-        <VencimentosMes
-          onVerDetalhes={() => setView('registros')}
-        />
-      </div>
+
 
       {/* Tabs Menu Superior */}
       <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 w-fit mb-6">

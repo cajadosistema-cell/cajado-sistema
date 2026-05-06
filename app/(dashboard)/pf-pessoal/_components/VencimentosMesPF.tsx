@@ -1,23 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { ChevronDown, ChevronUp, ArrowRight, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
-
-// ── Tipagem isolada ────────────────────────────────────────────
-type Recorrencia = {
-  id: string
-  descricao: string
-  valor: number
-  dia_vencimento: number | null
-  frequencia: string
-  ativo: boolean
-  tipo: string
-}
+import { ArrowRight, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 
 // ── Helpers ────────────────────────────────────────────────────
-const LS_KEY = 'cajado_vencimentos_pagos'
+const LS_KEY = 'cajado_vencimentos_pagos_pf'
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -27,28 +16,25 @@ function getTodayDay() {
   return new Date().getDate()
 }
 
-function getStatusVencimento(dia: number | null): 'vencido' | 'urgente' | 'normal' {
-  if (!dia) return 'normal'
+function getStatusVencimento(dia: number): 'vencido' | 'urgente' | 'normal' {
   const hoje = getTodayDay()
   if (dia < hoje) return 'vencido'
   if (dia - hoje <= 3) return 'urgente'
   return 'normal'
 }
 
-// Lê os IDs pagos do localStorage para o mês atual
 function lerPagosMes(): Set<string> {
   try {
     const raw = localStorage.getItem(LS_KEY)
     if (!raw) return new Set()
     const obj = JSON.parse(raw)
-    const mesAtual = new Date().toISOString().substring(0, 7) // YYYY-MM
+    const mesAtual = new Date().toISOString().substring(0, 7)
     return new Set<string>(obj[mesAtual] ?? [])
   } catch {
     return new Set()
   }
 }
 
-// Salva IDs pagos no localStorage para o mês atual
 function salvarPagosMes(ids: Set<string>) {
   try {
     const raw = localStorage.getItem(LS_KEY)
@@ -56,13 +42,19 @@ function salvarPagosMes(ids: Set<string>) {
     const mesAtual = new Date().toISOString().substring(0, 7)
     obj[mesAtual] = [...ids]
     localStorage.setItem(LS_KEY, JSON.stringify(obj))
-  } catch {
-    // silencioso — localStorage pode estar indisponível (SSR)
-  }
+  } catch {}
+}
+
+// ── Tipagem Local ──────────────────────────────────────────────
+type GastoRecorrente = {
+  id: string // Usaremos a descricao como ID único
+  descricao: string
+  valor: number
+  dia_vencimento: number
 }
 
 // ── Componente ─────────────────────────────────────────────────
-export function VencimentosMes({ 
+export function VencimentosMesPF({ 
   isOpen, 
   onClose, 
   onVerDetalhes 
@@ -71,37 +63,61 @@ export function VencimentosMes({
   onClose: () => void
   onVerDetalhes?: () => void 
 }) {
-  const [recorrencias, setRecorrencias] = useState<Recorrencia[]>([])
+  const [recorrencias, setRecorrencias] = useState<GastoRecorrente[]>([])
   const [loading, setLoading] = useState(true)
   const [pagos, setPagos] = useState<Set<string>>(new Set())
 
-  // ── Query isolada — não toca em nenhuma query existente ──────
-  const fetchRecorrencias = useCallback(async () => {
-    setLoading(true)
-    try {
-      const supabase = createClient()
-      const { data, error } = await (supabase as any)
-        .from('recorrencias')
-        .select('id, descricao, valor, dia_vencimento, frequencia, ativo, tipo')
-        .eq('tipo', 'despesa')
-        .eq('ativo', true)
-        .order('dia_vencimento', { ascending: true })
-
-      if (!error && data) {
-        setRecorrencias(data as Recorrencia[])
-      }
-    } catch {
-      // falha silenciosa — widget não é crítico
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Hidrata o estado dos pagos do localStorage (client-only)
+  // Busca gastos recorrentes para montar as contas fixas
   useEffect(() => {
-    fetchRecorrencias()
+    if (!isOpen) return
+
+    const fetchPF = async () => {
+      setLoading(true)
+      try {
+        const supabase = createClient()
+        const { data: user } = await supabase.auth.getUser()
+        if (!user.user) return
+
+        // Pega os últimos 3 meses de gastos recorrentes para ter uma base sólida
+        const limite = new Date()
+        limite.setMonth(limite.getMonth() - 3)
+        
+        const { data, error } = await (supabase.from('gastos_pessoais') as any)
+          .select('descricao, valor, data')
+          .eq('user_id', user.user.id)
+          .eq('recorrente', true)
+          .gte('data', limite.toISOString().split('T')[0])
+          .order('data', { ascending: false }) // Os mais recentes primeiro
+
+        if (!error && data) {
+          // Extrai contas únicas por descrição (pegando o valor e dia do mais recente)
+          const map = new Map<string, GastoRecorrente>()
+          for (const row of data) {
+            const desc = row.descricao.trim()
+            const id = desc.toLowerCase() // ID baseado na descrição
+            if (!map.has(id)) {
+              // Extrai o dia da data (ex: '2023-10-15' -> 15)
+              const dia = parseInt(row.data.split('-')[2], 10) || 1
+              map.set(id, {
+                id,
+                descricao: desc,
+                valor: row.valor,
+                dia_vencimento: dia
+              })
+            }
+          }
+          
+          setRecorrencias(Array.from(map.values()).sort((a, b) => a.dia_vencimento - b.dia_vencimento))
+        }
+      } catch {
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPF()
     setPagos(lerPagosMes())
-  }, [fetchRecorrencias])
+  }, [isOpen])
 
   // ── Handlers ─────────────────────────────────────────────────
   const togglePago = (id: string) => {
@@ -116,19 +132,18 @@ export function VencimentosMes({
 
   // ── Métricas ─────────────────────────────────────────────────
   const totalMes = recorrencias.reduce((a, r) => a + r.valor, 0)
-  const totalPago = recorrencias
-    .filter(r => pagos.has(r.id))
-    .reduce((a, r) => a + r.valor, 0)
+  const totalPago = recorrencias.filter(r => pagos.has(r.id)).reduce((a, r) => a + r.valor, 0)
   const totalRestante = totalMes - totalPago
   const progresso = totalMes > 0 ? Math.round((totalPago / totalMes) * 100) : 0
 
-  // Ordena: não pagos primeiro (por dia), depois pagos
-  const ordenadas = [...recorrencias].sort((a, b) => {
-    const aPago = pagos.has(a.id)
-    const bPago = pagos.has(b.id)
-    if (aPago !== bPago) return aPago ? 1 : -1
-    return (a.dia_vencimento ?? 99) - (b.dia_vencimento ?? 99)
-  })
+  const ordenadas = useMemo(() => {
+    return [...recorrencias].sort((a, b) => {
+      const aPago = pagos.has(a.id)
+      const bPago = pagos.has(b.id)
+      if (aPago !== bPago) return aPago ? 1 : -1
+      return a.dia_vencimento - b.dia_vencimento
+    })
+  }, [recorrencias, pagos])
 
   // ── Render ───────────────────────────────────────────────────
   if (!isOpen) return null
@@ -143,10 +158,10 @@ export function VencimentosMes({
             <span className="text-xl">📋</span>
             <div className="text-left">
               <p className="text-sm font-bold text-fg uppercase tracking-wider">
-                Vencimentos do Mês
+                Vencimentos do Mês <span className="text-[10px] text-fg-tertiary ml-1 font-normal">(PF)</span>
               </p>
               <p className="text-[10px] text-fg-tertiary mt-0.5">
-                {recorrencias.length} conta(s) fixa(s) · {progresso}% quitado
+                {recorrencias.length} conta(s) fixa(s) identificadas · {progresso}% quitado
               </p>
             </div>
           </div>
@@ -208,9 +223,9 @@ export function VencimentosMes({
             </div>
           ) : recorrencias.length === 0 ? (
             <div className="text-center py-6">
-              <p className="text-xs text-fg-disabled">Nenhuma conta fixa cadastrada.</p>
-              <p className="text-[11px] text-fg-tertiary mt-1">
-                Cadastre despesas recorrentes para ver o controle aqui.
+              <p className="text-xs text-fg-disabled">Nenhum gasto recorrente identificado.</p>
+              <p className="text-[11px] text-fg-tertiary mt-1 px-4 leading-relaxed">
+                Ao registrar um novo gasto, marque a opção <strong>"Gasto recorrente (mensal)"</strong>. Ele aparecerá automaticamente aqui nos próximos meses.
               </p>
             </div>
           ) : (
@@ -257,13 +272,13 @@ export function VencimentosMes({
                         {r.descricao}
                       </p>
                       <p className="text-[10px] text-fg-disabled">
-                        {r.dia_vencimento ? `Vence dia ${r.dia_vencimento}` : 'Sem data'}
+                        Vence dia {r.dia_vencimento}
                         {status === 'vencido' && !isPago && (
                           <span className="text-red-400 ml-1">· Vencida!</span>
                         )}
                         {status === 'urgente' && !isPago && (
                           <span className="text-amber-400 ml-1">
-                            · Vence em {(r.dia_vencimento ?? 0) - getTodayDay()} dia(s)
+                            · Vence em {(r.dia_vencimento) - getTodayDay()} dia(s)
                           </span>
                         )}
                       </p>
@@ -289,14 +304,14 @@ export function VencimentosMes({
         {/* ── Rodapé ── */}
         <div className="px-5 py-4 border-t border-white/5 bg-page shrink-0 flex items-center justify-between">
           <p className="text-[10px] text-fg-tertiary">
-            💡 Clique nos itens para marcar como pago
+            💡 Extraído automaticamente dos gastos mensais
           </p>
           {onVerDetalhes && (
             <button
               onClick={() => { onClose(); onVerDetalhes(); }}
               className="flex items-center gap-1 text-[11px] text-violet-400 hover:text-violet-300 font-semibold transition-colors"
             >
-              Ver lançamentos <ArrowRight size={11} />
+              Lançamentos PF <ArrowRight size={11} />
             </button>
           )}
         </div>
