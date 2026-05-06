@@ -94,7 +94,7 @@ export default function PfPessoalClient() {
   const renderHeaderActions = () => {
     if (tab === 'resumo' || tab === 'lancamentos') return (
       <>
-        <button onClick={() => setModalVencimentosPF(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">📋 Vencimentos</button>
+        <button onClick={() => setModalVencimentosPF(true)} title="Ver agenda mensal de contas fixas" className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">📅 Contas do Mês</button>
         <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">+ Receita</button>
         <button onClick={() => setModalGasto(true)}   className="btn-primary   text-xs h-8 px-3 whitespace-nowrap">+ Gasto</button>
       </>

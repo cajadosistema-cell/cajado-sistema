@@ -678,9 +678,10 @@ export default function FinanceiroClient() {
           <>
             <button
               onClick={() => setModalVencimentos(true)}
+              title="Ver painel de contas fixas e vencimentos deste mês"
               className="btn-secondary text-xs h-8 px-3 flex items-center gap-1.5 print:hidden"
             >
-              📋 Vencimentos
+              📅 Contas do Mês
             </button>
             <button
               onClick={() => setModalImport(true)}
