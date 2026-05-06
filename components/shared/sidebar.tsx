@@ -8,17 +8,16 @@ import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/cajado/ThemeToggle'
 import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
-const navItems = [
-  // ── 💰 Financeiro da Empresa ─────────────────────────────────
+// ── 🏢 EMPRESA — visível para todos com permissão ─────────────
+const NAV_EMPRESA = [
   {
-    group: '💰 Financeiro PJ',
+    group: '💰 Financeiro',
     id: 'fin',
     items: [
-      { href: '/financeiro', label: '💳 Contas & Cartões'       },
+      { href: '/financeiro', label: '🏦 Contas & Caixa'         },
       { href: '/comissoes',  label: '🤝 Comissões & Parceiros'  },
     ],
   },
-  // ── 📦 Vendas & Comercial ────────────────────────────────────
   {
     group: '📦 Vendas & CRM',
     id: 'crm',
@@ -30,7 +29,6 @@ const navItems = [
       { href: '/seguranca-wa', label: '🛡️ Anti-Ban WA'         },
     ],
   },
-  // ── 🏢 Equipe & Operações ────────────────────────────────────
   {
     group: '🏢 Equipe & Operações',
     id: 'eqp',
@@ -40,29 +38,6 @@ const navItems = [
       { href: '/organizacao',  label: '✅ Tarefas & Projetos'   },
     ],
   },
-  // ── 🎯 Metas & Rotina Pessoal (admin) ────────────────────────
-  {
-    group: '🎯 Metas & Rotina',
-    id: 'meta',
-    items: [
-      { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal' },
-      { href: '/expansao',          label: '🚀 Objetivos & OKRs'},
-      { href: '/diario',            label: '📓 Diário de Bordo' },
-    ],
-  },
-  // ── 💎 Finanças Pessoais (admin) ─────────────────────────────
-  {
-    group: '💎 Finanças Pessoais',
-    id: 'pfin',
-    items: [
-      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'      },
-      { href: '/patrimonio',    label: '🏠 Patrimônio'          },
-      { href: '/investimentos', label: '📈 Investimentos'       },
-      { href: '/trader',        label: '📊 Day Trader'          },
-      { href: '/gestao-pessoal',label: '👥 Equipe'              },
-    ],
-  },
-  // ── ⚙️ Configurações ─────────────────────────────────────────
   {
     group: '⚙️ Configurações',
     id: 'cfg',
@@ -70,6 +45,30 @@ const navItems = [
       { href: '/configuracoes',   label: '🏢 Empresa & Equipe'  },
       { href: '/seguranca-geral', label: '🔒 Segurança & Logs'  },
       { href: '/manual',          label: '📖 Manual do Sistema' },
+    ],
+  },
+]
+
+// ── 👤 PESSOAL — visível apenas para admin ─────────────────────
+const NAV_PESSOAL = [
+  {
+    group: '🎯 Minha Rotina',
+    id: 'rotina',
+    items: [
+      { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal'  },
+      { href: '/expansao',          label: '🚀 Objetivos & OKRs' },
+      { href: '/diario',            label: '📓 Diário de Bordo'  },
+    ],
+  },
+  {
+    group: '💎 Finanças Pessoais',
+    id: 'pfin',
+    items: [
+      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'   },
+      { href: '/patrimonio',    label: '🏠 Patrimônio'        },
+      { href: '/investimentos', label: '📈 Investimentos'     },
+      { href: '/trader',        label: '📊 Day Trader'        },
+      { href: '/gestao-pessoal',label: '👥 Equipe Pessoal'   },
     ],
   },
 ]
@@ -113,14 +112,71 @@ export function Sidebar() {
     loadUser()
   }, [])
 
-  const filteredNavItems = navItems.map(group => ({
-    ...group,
-    items: group.items.filter(item => {
+  // Filtra por permissões — mantém a lógica existente
+  const filterGroup = (items: { href: string; label: string }[]) =>
+    items.filter(item => {
       if (isAdmin) return true
       const modName = item.href.replace('/', '')
       return permissoes.includes(modName)
     })
-  })).filter(group => group.items.length > 0)
+
+  const filteredEmpresa = NAV_EMPRESA
+    .map(g => ({ ...g, items: filterGroup(g.items) }))
+    .filter(g => g.items.length > 0)
+
+  const filteredPessoal = isAdmin
+    ? NAV_PESSOAL.map(g => ({ ...g, items: filterGroup(g.items) })).filter(g => g.items.length > 0)
+    : []
+
+  // Componente auxiliar para renderizar um grupo de navegação
+  const NavGroup = ({ group }: { group: typeof NAV_EMPRESA[0] }) => {
+    const isExpanded = expanded.includes(group.id)
+    const hasActiveChild = group.items.some(i => pathname === i.href || pathname.startsWith(i.href + '/'))
+    return (
+      <div className="mb-1">
+        <button
+          onClick={() => toggleGroup(group.id)}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors cursor-pointer text-left hover:bg-surface"
+        >
+          <span className={cn(
+            'text-[11px] font-bold uppercase tracking-wider',
+            hasActiveChild ? 'text-fg' : 'text-fg-tertiary'
+          )}>
+            {group.group}
+          </span>
+          <span className={cn('text-xs text-fg-tertiary transition-transform duration-200', isExpanded ? 'rotate-90' : '')}>
+            ▶
+          </span>
+        </button>
+
+        {isExpanded && (
+          <div className="mt-0.5 ml-1 pl-3 space-y-0.5 py-0.5"
+            style={{ borderLeft: '0.5px solid var(--border-subtle)' }}
+          >
+            {group.items.map(item => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all',
+                    isActive
+                      ? 'text-fg'
+                      : 'text-fg-secondary hover:text-fg hover:bg-surface'
+                  )}
+                  style={isActive ? { backgroundColor: 'var(--bg-surface)' } : {}}
+                >
+                  <span style={{ color: isActive ? 'var(--brand-gold)' : 'var(--text-tertiary)', fontSize: 12 }}>◈</span>
+                  {item.label}
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <aside className="hidden md:flex w-56 shrink-0 flex-col h-screen sticky top-0 z-40 border-r border-[0.5px]"
@@ -128,23 +184,21 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="px-4 py-5 border-b border-white/5 relative z-10">
-        {/* Linha dourada no topo — igual à produção */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#f5a623] to-transparent" />
         <div className="flex items-center justify-center px-1">
           <img src="/logo.png" alt="Cajado Soluções" className="h-8 w-auto object-contain drop-shadow-sm" />
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-2" style={{ scrollbarWidth: 'thin' }}>
+      <nav className="flex-1 overflow-y-auto py-3 px-2" style={{ scrollbarWidth: 'thin' }}>
+
         {/* Dashboard Inicial — só admin */}
         {isAdmin && (
           <Link
             href="/inicio"
             className={cn(
-              'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all mb-4',
-              pathname === '/inicio'
-                ? 'text-fg'
-                : 'text-fg-secondary hover:text-fg hover:bg-surface'
+              'flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all mb-3',
+              pathname === '/inicio' ? 'text-fg' : 'text-fg-secondary hover:text-fg hover:bg-surface'
             )}
             style={pathname === '/inicio' ? {
               backgroundColor: 'var(--bg-surface)',
@@ -157,61 +211,34 @@ export function Sidebar() {
           </Link>
         )}
 
-        <div className="space-y-1">
-          {filteredNavItems.map(group => {
-            const isExpanded = expanded.includes(group.id)
-            const hasActiveChild = group.items.some(i => pathname === i.href || pathname.startsWith(i.href + '/'))
-
-            return (
-              <div key={group.id} className="mb-2">
-                <button
-                  onClick={() => toggleGroup(group.id)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors cursor-pointer text-left hover:bg-surface"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={cn(
-                      'text-[11px] font-bold uppercase tracking-wider',
-                      hasActiveChild ? 'text-fg' : 'text-fg-tertiary'
-                    )}>
-                      {group.group}
-                    </span>
-                  </div>
-                  <span className={cn('text-xs text-fg-tertiary transition-transform duration-200', isExpanded ? 'rotate-90' : '')}>
-                    ▶
-                  </span>
-                </button>
-
-                {isExpanded && (
-                  <div className="mt-1 ml-1 pl-3 space-y-0.5 py-1"
-                    style={{ borderLeft: '0.5px solid var(--border-subtle)' }}
-                  >
-                    {group.items.map(item => {
-                      const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={cn(
-                            'flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all',
-                            isActive
-                              ? 'text-fg'
-                              : 'text-fg-secondary hover:text-fg hover:bg-surface'
-                          )}
-                          style={isActive ? {
-                            backgroundColor: 'var(--bg-surface)',
-                          } : {}}
-                        >
-                          <span style={{ color: isActive ? 'var(--brand-gold)' : 'var(--text-tertiary)', fontSize: 12 }}>◈</span>
-                          {item.label}
-                        </Link>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+        {/* ── 🏢 EMPRESA ─────────────────────────────────── */}
+        <div className="mb-1 px-3 pb-1">
+          <p className="text-[9px] font-black uppercase tracking-[0.15em] text-fg-disabled">
+            🏢 Empresa
+          </p>
         </div>
+        <div className="space-y-0.5 mb-3">
+          {filteredEmpresa.map(group => <NavGroup key={group.id} group={group} />)}
+        </div>
+
+        {/* ── 👤 PESSOAL — só para admin ─────────────────── */}
+        {filteredPessoal.length > 0 && (
+          <>
+            {/* Separador */}
+            <div className="mx-3 mb-3">
+              <div className="border-t border-white/8" />
+            </div>
+
+            <div className="mb-1 px-3 pb-1">
+              <p className="text-[9px] font-black uppercase tracking-[0.15em] text-fg-disabled">
+                👤 Pessoal
+              </p>
+            </div>
+            <div className="space-y-0.5">
+              {filteredPessoal.map(group => <NavGroup key={group.id} group={group} />)}
+            </div>
+          </>
+        )}
       </nav>
 
       {/* Footer */}
