@@ -96,10 +96,27 @@ ${texto.substring(0, 5000)}`,
       if (!res.ok || data.error) throw new Error(data.error || 'Erro na IA')
 
       // Extrai JSON da resposta
-      const raw = data.result ?? ''
-      const jsonMatch = raw.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error('IA não retornou um JSON válido')
-      const parsed = JSON.parse(jsonMatch[0])
+      let raw = data.result ?? ''
+      raw = raw.replace(/```json/gi, '').replace(/```/g, '').trim()
+      
+      let parsed;
+      try {
+        parsed = JSON.parse(raw)
+      } catch (e) {
+        // Tenta extrair apenas o bloco de JSON se houver lixo em volta
+        const match = raw.match(/(\{|\[)[\s\S]*(\}|\])/)
+        if (!match) throw new Error('IA não retornou um JSON válido')
+        try {
+          parsed = JSON.parse(match[0])
+        } catch (err) {
+          throw new Error('Falha ao processar a resposta da IA (JSON inválido)')
+        }
+      }
+
+      // Se a IA retornar uma lista de imóveis, pega o primeiro
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsed = parsed[0]
+      }
 
       setMsg('Salvando imóvel...')
       const { error } = await (supabase.from('imoveis') as any).insert({
