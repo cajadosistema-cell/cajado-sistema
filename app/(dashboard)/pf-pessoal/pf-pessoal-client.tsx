@@ -215,7 +215,7 @@ export default function PfPessoalClient() {
         />
       )}
       {tab === 'orcamentos' && (
-        <TabOrcamentos gastos={gastos} orcamentos={orcamentos} onUpdate={refetchOrcamentos} />
+        <TabOrcamentos userId={authUserId} gastos={gastos} orcamentos={orcamentos} onUpdate={refetchOrcamentos} />
       )}
       {tab === 'limites' && (
         <div className="card"><PainelLimitesOrcamento tipo="pf" /></div>

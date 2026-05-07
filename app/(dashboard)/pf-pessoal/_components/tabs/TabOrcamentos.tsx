@@ -6,12 +6,13 @@ import type { GastoPessoal, OrcamentoPessoal } from '../types'
 import { CATEGORIAS_GASTO, formatCurrency } from '../types'
 
 type Props = {
+  userId: string
   gastos: GastoPessoal[]
   orcamentos: OrcamentoPessoal[]
   onUpdate: () => void
 }
 
-export function TabOrcamentos({ gastos, orcamentos, onUpdate }: Props) {
+export function TabOrcamentos({ userId, gastos, orcamentos, onUpdate }: Props) {
   const supabase = createClient()
   const [editando, setEditando] = useState<string | null>(null)
   const [novoLimite, setNovoLimite] = useState('')
@@ -30,6 +31,7 @@ export function TabOrcamentos({ gastos, orcamentos, onUpdate }: Props) {
         .eq('id', existente.id)
     } else {
       await (supabase.from('orcamentos_pessoais') as any).insert({
+        user_id: userId,
         categoria,
         valor_limite: limite,
         mes_referencia: mesAtual,
