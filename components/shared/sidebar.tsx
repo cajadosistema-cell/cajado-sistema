@@ -9,51 +9,52 @@ import { ThemeToggle } from '@/components/cajado/ThemeToggle'
 import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
 // ── 🏢 EMPRESA — visível para todos com permissão ─────────────
-const NAV_EMPRESA = [
+const NAV_EMPRESA: Array<{
+  group: string; id: string; desktopOnly?: boolean
+  items: Array<{ href: string; label: string; desktopOnly?: boolean }>
+}> = [
   {
-    group: '💰 Financeiro',
-    id: 'fin',
+    group: '💰 Financeiro', id: 'fin',
     items: [
-      { href: '/financeiro', label: '🏦 Contas & Caixa'         },
-      { href: '/comissoes',  label: '🤝 Comissões & Parceiros'  },
+      { href: '/financeiro', label: '🏦 Contas & Caixa' },
+      { href: '/comissoes',  label: '🤝 Comissões & Parceiros', desktopOnly: true },
     ],
   },
   {
-    group: '📦 Vendas & CRM',
-    id: 'crm',
+    group: '📦 Vendas & CRM', id: 'crm',
     items: [
-      { href: '/inbox',        label: '💬 Inbox WhatsApp'       },
-      { href: '/cajado',       label: '🔀 Funil CRM'            },
-      { href: '/vendas',       label: '📋 Fechamentos & OS'     },
-      { href: '/pos-venda',    label: '🔁 Pós-venda'            },
-      { href: '/seguranca-wa', label: '🛡️ Anti-Ban WA'         },
+      { href: '/inbox',        label: '💬 Inbox WhatsApp' },
+      { href: '/cajado',       label: '🔀 Funil CRM',              desktopOnly: true },
+      { href: '/vendas',       label: '📋 Fechamentos & OS' },
+      { href: '/pos-venda',    label: '🔁 Pós-venda',              desktopOnly: true },
+      { href: '/seguranca-wa', label: '🛡️ Anti-Ban WA',           desktopOnly: true },
     ],
   },
   {
-    group: '🏢 Equipe & Operações',
-    id: 'eqp',
+    group: '🏢 Equipe & Operações', id: 'eqp',
     items: [
-      { href: '/comunicacao',  label: '🗨️ Chat da Equipe'      },
-      { href: '/inteligencia', label: '🧠 IA & Automações'      },
-      { href: '/organizacao',  label: '✅ Tarefas & Projetos'   },
+      { href: '/comunicacao',  label: '🗨️ Chat da Equipe' },
+      { href: '/inteligencia', label: '🧠 IA & Automações' },
+      { href: '/organizacao',  label: '✅ Tarefas & Projetos' },
     ],
   },
   {
-    group: '⚙️ Configurações',
-    id: 'cfg',
+    group: '⚙️ Configurações', id: 'cfg', desktopOnly: true,
     items: [
-      { href: '/configuracoes',   label: '🏢 Empresa & Equipe'  },
-      { href: '/seguranca-geral', label: '🔒 Segurança & Logs'  },
-      { href: '/manual',          label: '📖 Manual do Sistema' },
+      { href: '/configuracoes',   label: '🏢 Empresa & Equipe',  desktopOnly: true },
+      { href: '/seguranca-geral', label: '🔒 Segurança & Logs',  desktopOnly: true },
+      { href: '/manual',          label: '📖 Manual do Sistema', desktopOnly: true },
     ],
   },
 ]
 
 // ── 👤 PESSOAL — visível apenas para admin ─────────────────────
-const NAV_PESSOAL = [
+const NAV_PESSOAL: Array<{
+  group: string; id: string
+  items: Array<{ href: string; label: string }>
+}> = [
   {
-    group: '🎯 Minha Rotina',
-    id: 'rotina',
+    group: '🎯 Minha Rotina', id: 'rotina',
     items: [
       { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal'  },
       { href: '/expansao',          label: '🚀 Objetivos & OKRs' },
@@ -61,18 +62,25 @@ const NAV_PESSOAL = [
     ],
   },
   {
-    group: '💎 Finanças Pessoais',
-    id: 'pfin',
+    group: '💎 Finanças Pessoais', id: 'pfin',
     items: [
-      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'   },
-      { href: '/patrimonio',    label: '🏠 Patrimônio'        },
-      { href: '/investimentos', label: '📈 Investimentos'     },
-      { href: '/trader',        label: '📊 Day Trader'        },
-      { href: '/gestao-pessoal',label: '👥 Equipe Pessoal'   },
+      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'  },
+      { href: '/patrimonio',    label: '🏠 Patrimônio'       },
+      { href: '/investimentos', label: '📈 Investimentos'    },
+      { href: '/trader',        label: '📊 Day Trader'       },
+      { href: '/gestao-pessoal',label: '👥 Equipe Pessoal'  },
     ],
   },
 ]
 
+// ── 📱 BOTTOM NAV MOBILE — apenas itens essenciais ─────────────
+const BOTTOM_NAV = [
+  { href: '/inicio',     label: 'Início',     icon: '🏠' },
+  { href: '/inbox',      label: 'Inbox',      icon: '💬' },
+  { href: '/financeiro', label: 'Financeiro', icon: '💰' },
+  { href: '/vendas',     label: 'Vendas',     icon: '📋' },
+  { href: '/pf-pessoal', label: 'Pessoal',    icon: '👤' },
+]
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -319,5 +327,48 @@ function SidebarUser({ userData }: { userData: {nome: string, cargo: string, ema
         </div>
       )}
     </div>
+  )
+}
+
+// ── 📱 Bottom Navigation Bar — só aparece no mobile ────────────
+export function MobileBottomNav() {
+  const pathname = usePathname()
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 safe-area-bottom"
+      style={{
+        background: 'rgba(5, 7, 15, 0.92)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderTop: '0.5px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <div className="flex items-center justify-around px-1 py-1 pb-safe">
+        {BOTTOM_NAV.map(item => {
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-xl transition-all min-w-[56px]"
+              style={isActive ? {
+                backgroundColor: 'rgba(245,166,35,0.12)',
+              } : {}}
+            >
+              <span className="text-[20px] leading-none">{item.icon}</span>
+              <span className={cn(
+                'text-[9px] font-bold uppercase tracking-wider transition-colors',
+                isActive ? 'text-[#f5a623]' : 'text-fg-disabled'
+              )}>
+                {item.label}
+              </span>
+              {isActive && (
+                <span className="w-1 h-1 rounded-full bg-[#f5a623] absolute bottom-1.5" />
+              )}
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
   )
 }

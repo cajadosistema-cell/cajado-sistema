@@ -9,22 +9,25 @@ import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
 const mainItems = [
   { href: '/inicio',      label: 'Início',    icon: '⬡',  activeColor: 'text-amber-400'  },
-  { href: '/financeiro',  label: 'Cofre',     icon: '💰', activeColor: 'text-teal-400'   },
-  { href: '/inbox',       label: 'WhatsApp',  icon: '💬', activeColor: 'text-green-400'  },
-  { href: '/cajado',      label: 'CRM',       icon: '🤝', activeColor: 'text-amber-400'  },
-  { href: '/vendas',      label: 'Vendas',    icon: '📋', activeColor: 'text-emerald-400'},
+  { href: '/financeiro',  label: 'Contas',    icon: '💰', activeColor: 'text-teal-400'   },
+  { href: '/inbox',       label: 'Inbox',     icon: '💬', activeColor: 'text-green-400'  },
+  { href: '/vendas',      label: 'Fechamento',icon: '📋', activeColor: 'text-emerald-400'},
 ]
 
 const moreItems = [
+  // Equipe
   { href: '/comunicacao',  label: 'Chat Equipe',      icon: '🗨️' },
+  { href: '/inteligencia', label: 'IA & Auto',        icon: '🧠' },
+  { href: '/organizacao',  label: 'Tarefas',          icon: '✅' },
+  
+  // Pessoal
+  { href: '/dashboard-pessoal', label: 'Painel P.',   icon: '🏠' },
   { href: '/pf-pessoal',   label: 'Fin. Pessoal',     icon: '💎' },
   { href: '/diario',       label: 'Diário',           icon: '📓' },
-  { href: '/organizacao',  label: 'Tarefas',          icon: '✅' },
-  { href: '/inteligencia', label: 'IA',               icon: '🧠' },
-  { href: '/investimentos',label: 'Investimentos',    icon: '📈' },
   { href: '/patrimonio',   label: 'Patrimônio',       icon: '🏠' },
-  { href: '/pos-venda',    label: 'Pós-venda',        icon: '⭐' },
-  { href: '/configuracoes',label: 'Configurações',    icon: '⚙️' },
+  { href: '/investimentos',label: 'Investimentos',    icon: '📈' },
+  { href: '/trader',       label: 'Day Trader',       icon: '📊' },
+  { href: '/gestao-pessoal',label: 'Equipe Pess.',    icon: '👥' },
 ]
 
 function ThemeToggleMobile() {
