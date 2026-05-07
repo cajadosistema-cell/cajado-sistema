@@ -76,8 +76,13 @@ export default function PfPessoalClient() {
   const { data: orcamentos, refetch: refetchOrcamentos } = useSupabaseQuery<OrcamentoPessoal>('orcamentos_pessoais', { orderBy: { column: 'mes_referencia', ascending: false } })
   const { data: ativos          } = useSupabaseQuery<any>('ativos')
   const { data: patrimonioFisico} = useSupabaseQuery<any>('projetos_patrimonio')
-
   const refreshTudo = () => { refetchGastos(); refetchReceitas(); refetchOrcamentos() }
+
+  useEffect(() => {
+    const handleElenaLancamento = () => refreshTudo()
+    window.addEventListener('elena:lancamento-salvo', handleElenaLancamento)
+    return () => window.removeEventListener('elena:lancamento-salvo', handleElenaLancamento)
+  }, [refetchGastos, refetchReceitas, refetchOrcamentos])
 
   const mesAtual      = new Date().toISOString().slice(0, 7)
   const gastosMes     = gastos.filter(g  => g.data.startsWith(mesAtual))

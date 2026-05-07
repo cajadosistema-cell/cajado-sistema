@@ -398,6 +398,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'receita') {
         const hoje = new Date().toISOString().split('T')[0]
@@ -424,6 +425,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'gasto_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
