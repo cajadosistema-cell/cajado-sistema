@@ -29,6 +29,7 @@ const STATUS_CONFIG = {
 export function TabImoveis() {
   const supabase = createClient()
   const [showForm, setShowForm] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({
     titulo: '', endereco: '', tipo_imovel: 'residencial' as Imovel['tipo_imovel'],
     area_m2: '', quartos: '', vagas: '',
@@ -41,7 +42,7 @@ export function TabImoveis() {
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
-    await (supabase.from('imoveis') as any).insert({
+    const payload = {
       titulo: form.titulo,
       endereco: form.endereco || null,
       tipo_imovel: form.tipo_imovel,
@@ -51,10 +52,40 @@ export function TabImoveis() {
       valor_compra: form.valor_compra ? parseFloat(form.valor_compra) : null,
       valor_mercado: form.valor_mercado ? parseFloat(form.valor_mercado) : null,
       status: form.status,
-    })
+    }
+
+    if (editId) {
+      await (supabase.from('imoveis') as any).update(payload).eq('id', editId)
+    } else {
+      await (supabase.from('imoveis') as any).insert(payload)
+    }
+
     setShowForm(false)
+    setEditId(null)
     refetch()
     setForm({ titulo: '', endereco: '', tipo_imovel: 'residencial', area_m2: '', quartos: '', vagas: '', valor_compra: '', valor_mercado: '', status: 'disponivel' })
+  }
+
+  const handleExcluir = async (id: string, titulo: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o imóvel "${titulo}"?`)) return
+    await (supabase.from('imoveis') as any).delete().eq('id', id)
+    refetch()
+  }
+
+  const handleEdit = (imovel: Imovel) => {
+    setForm({
+      titulo: imovel.titulo,
+      endereco: imovel.endereco || '',
+      tipo_imovel: imovel.tipo_imovel,
+      area_m2: imovel.area_m2 ? String(imovel.area_m2) : '',
+      quartos: imovel.quartos ? String(imovel.quartos) : '',
+      vagas: imovel.vagas ? String(imovel.vagas) : '',
+      valor_compra: imovel.valor_compra ? String(imovel.valor_compra) : '',
+      valor_mercado: imovel.valor_mercado ? String(imovel.valor_mercado) : '',
+      status: imovel.status
+    })
+    setEditId(imovel.id)
+    setShowForm(true)
   }
 
   const mudarStatus = async (id: string, status: Imovel['status']) => {
@@ -66,7 +97,15 @@ export function TabImoveis() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-sm font-semibold text-fg">🏠 Carteira de Imóveis</h2>
-        <button onClick={() => setShowForm(s => !s)} className="btn-primary text-xs">
+        <button onClick={() => {
+          if (showForm) {
+            setShowForm(false)
+            setEditId(null)
+            setForm({ titulo: '', endereco: '', tipo_imovel: 'residencial', area_m2: '', quartos: '', vagas: '', valor_compra: '', valor_mercado: '', status: 'disponivel' })
+          } else {
+            setShowForm(true)
+          }
+        }} className="btn-primary text-xs">
           {showForm ? '✕ Cancelar' : '+ Cadastrar Imóvel'}
         </button>
       </div>
@@ -114,7 +153,9 @@ export function TabImoveis() {
             </div>
           </div>
           <div className="flex justify-end pt-2">
-            <button type="submit" className="btn-primary text-xs">Salvar Imóvel</button>
+            <button type="submit" className="btn-primary text-xs">
+              {editId ? 'Salvar Alterações' : 'Salvar Imóvel'}
+            </button>
           </div>
         </form>
       )}
@@ -130,10 +171,14 @@ export function TabImoveis() {
                   <h3 className="text-sm font-bold text-fg">{i.titulo}</h3>
                   <p className="text-xs text-fg-tertiary capitalize">{i.tipo_imovel}</p>
                 </div>
-                <select className={cn("text-[10px] px-2 py-1 rounded-full border bg-page outline-none", STATUS_CONFIG[i.status].color)}
-                  value={i.status} onChange={e => mudarStatus(i.id, e.target.value as Imovel['status'])}>
-                  {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
+                <div className="flex gap-2 items-center">
+                  <select className={cn("text-[10px] px-2 py-1 rounded-full border bg-page outline-none", STATUS_CONFIG[i.status].color)}
+                    value={i.status} onChange={e => mudarStatus(i.id, e.target.value as Imovel['status'])}>
+                    {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                  <button onClick={() => handleEdit(i)} className="text-fg-tertiary hover:text-blue-400 transition-colors" title="Editar Imóvel">✏️</button>
+                  <button onClick={() => handleExcluir(i.id, i.titulo)} className="text-fg-tertiary hover:text-red-400 transition-colors" title="Excluir Imóvel">🗑️</button>
+                </div>
               </div>
 
               {i.endereco && <p className="text-[10px] text-fg-secondary mb-4 line-clamp-1">📍 {i.endereco}</p>}

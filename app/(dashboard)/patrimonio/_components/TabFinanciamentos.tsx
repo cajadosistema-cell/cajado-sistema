@@ -21,6 +21,7 @@ type Financiamento = {
 export function TabFinanciamentos() {
   const supabase = createClient()
   const [showForm, setShowForm] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({
     banco: '', valor_financiado: '', taxa_juros: '', prazo_meses: '',
     parcelas_pagas: '0', valor_parcela: '', vencimento_dia: ''
@@ -32,18 +33,46 @@ export function TabFinanciamentos() {
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
-    await (supabase.from('financiamentos') as any).insert({
+    const payload = {
       banco: form.banco,
       valor_financiado: form.valor_financiado ? parseFloat(form.valor_financiado) : null,
       taxa_juros: form.taxa_juros ? parseFloat(form.taxa_juros) : null,
       prazo_meses: form.prazo_meses ? parseInt(form.prazo_meses) : null,
-      parcelas_pagas: parseInt(form.parcelas_pagas),
+      parcelas_pagas: parseInt(form.parcelas_pagas) || 0,
       valor_parcela: form.valor_parcela ? parseFloat(form.valor_parcela) : null,
       vencimento_dia: form.vencimento_dia ? parseInt(form.vencimento_dia) : null,
-    })
+    }
+
+    if (editId) {
+      await (supabase.from('financiamentos') as any).update(payload).eq('id', editId)
+    } else {
+      await (supabase.from('financiamentos') as any).insert(payload)
+    }
+
     setShowForm(false)
+    setEditId(null)
     refetch()
     setForm({ banco: '', valor_financiado: '', taxa_juros: '', prazo_meses: '', parcelas_pagas: '0', valor_parcela: '', vencimento_dia: '' })
+  }
+
+  const handleExcluir = async (id: string, banco: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o financiamento do banco "${banco}"?`)) return
+    await (supabase.from('financiamentos') as any).delete().eq('id', id)
+    refetch()
+  }
+
+  const handleEdit = (financiamento: Financiamento) => {
+    setForm({
+      banco: financiamento.banco,
+      valor_financiado: financiamento.valor_financiado ? String(financiamento.valor_financiado) : '',
+      taxa_juros: financiamento.taxa_juros ? String(financiamento.taxa_juros) : '',
+      prazo_meses: financiamento.prazo_meses ? String(financiamento.prazo_meses) : '',
+      parcelas_pagas: String(financiamento.parcelas_pagas),
+      valor_parcela: financiamento.valor_parcela ? String(financiamento.valor_parcela) : '',
+      vencimento_dia: financiamento.vencimento_dia ? String(financiamento.vencimento_dia) : '',
+    })
+    setEditId(financiamento.id)
+    setShowForm(true)
   }
 
   const addParcelaPaga = async (f: Financiamento) => {
@@ -76,7 +105,15 @@ export function TabFinanciamentos() {
 
       <div className="flex justify-between items-center mt-6">
         <h2 className="text-sm font-semibold text-fg">🏦 Contratos Ativos</h2>
-        <button onClick={() => setShowForm(s => !s)} className="btn-primary text-xs">
+        <button onClick={() => {
+          if (showForm) {
+            setShowForm(false)
+            setEditId(null)
+            setForm({ banco: '', valor_financiado: '', taxa_juros: '', prazo_meses: '', parcelas_pagas: '0', valor_parcela: '', vencimento_dia: '' })
+          } else {
+            setShowForm(true)
+          }
+        }} className="btn-primary text-xs">
           {showForm ? '✕ Cancelar' : '+ Novo Financiamento'}
         </button>
       </div>
@@ -100,7 +137,9 @@ export function TabFinanciamentos() {
             <div><label className="label">Parcelas Pagas (Início)</label><input type="number" className="input mt-1" value={form.parcelas_pagas} onChange={e => setForm(f => ({...f, parcelas_pagas: e.target.value}))} /></div>
           </div>
           <div className="flex justify-end pt-2">
-            <button type="submit" className="btn-primary text-xs">Salvar Financiamento</button>
+            <button type="submit" className="btn-primary text-xs">
+              {editId ? 'Salvar Alterações' : 'Salvar Financiamento'}
+            </button>
           </div>
         </form>
       )}
@@ -118,7 +157,11 @@ export function TabFinanciamentos() {
                     <h3 className="text-sm font-bold text-fg flex items-center gap-2">🏦 {f.banco}</h3>
                     {f.vencimento_dia && <p className="text-xs text-fg-tertiary mt-0.5">Vence dia {f.vencimento_dia}</p>}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end">
+                    <div className="flex gap-2 mb-1">
+                      <button onClick={() => handleEdit(f)} className="text-fg-tertiary hover:text-blue-400 transition-colors" title="Editar">✏️</button>
+                      <button onClick={() => handleExcluir(f.id, f.banco)} className="text-fg-tertiary hover:text-red-400 transition-colors" title="Excluir">🗑️</button>
+                    </div>
                     <p className="text-xs text-fg-tertiary uppercase tracking-widest">Valor Parcela</p>
                     <p className="text-lg font-bold text-red-400">{f.valor_parcela ? formatCurrency(f.valor_parcela) : '—'}</p>
                   </div>
