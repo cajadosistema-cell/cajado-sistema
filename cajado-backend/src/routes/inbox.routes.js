@@ -136,16 +136,23 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
   res.json([...lista, ...listaVivi]);
 });
 
-router.get("/inbox/conversas/:numero", async (req, res) => {
+router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
+  const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
+  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.empresa_id === ADMIN_DEFAULT.empresa_id || req.user.empresa_id === "empresa-padrao";
   const numero = req.params.numero;
   if (supabase) {
-    const { data } = await supabase.from("whatsapp_conversas").select("dados").eq("numero", numero).single();
+    let query = supabase.from("whatsapp_conversas").select("dados, empresa_id").eq("numero", numero);
+    if (!isSuperAdmin) query = query.eq("empresa_id", req.user.empresa_id);
+    const { data } = await query.single();
     if (data && data.dados) {
       data.dados.empresa_id = data.dados.empresa_id || "empresa-padrao";
       const current = conversas.get(numero);
       if (!current || !current.mensagens || (data.dados.mensagens && data.dados.mensagens.length >= current.mensagens.length)) {
         conversas.set(numero, data.dados);
       }
+    } else if (!isSuperAdmin) {
+      // Conversa não pertence a esta empresa
+      return res.status(403).json({ erro: "Acesso negado a esta conversa" });
     }
   }
 
@@ -180,6 +187,10 @@ router.get("/inbox/conversas/:numero", async (req, res) => {
 
   const conv = conversas.get(numero);
   if (!conv) return res.json({ mensagens: [], botOn: true });
+  // Verificar empresa_id na memória também
+  if (!isSuperAdmin && conv.empresa_id && conv.empresa_id !== "empresa-padrao" && conv.empresa_id !== req.user.empresa_id) {
+    return res.status(403).json({ erro: "Acesso negado a esta conversa" });
+  }
   
   if (conv.unread > 0) {
     conv.unread = 0;
@@ -191,7 +202,7 @@ router.get("/inbox/conversas/:numero", async (req, res) => {
   res.json({ ...conv, botOn: !botPausado.has(numero) });
 });
 
-router.post("/inbox/enviar", async (req, res) => {
+router.post("/inbox/enviar", authMiddleware, async (req, res) => {
   const { numero, texto, interna } = req.body;
   if (!numero || !texto) return res.status(400).json({ erro: "numero e texto obrigatórios" });
   try {
@@ -257,7 +268,7 @@ router.post("/inbox/enviar-midia", async (req, res) => {
   }
 });
 
-router.post("/inbox/bot/:numero", async (req, res) => {
+router.post("/inbox/bot/:numero", authMiddleware, async (req, res) => {
   const { numero } = req.params;
   const { pausar } = req.body;
   if (pausar) {
@@ -278,7 +289,7 @@ router.get("/inbox/bot/:numero/status", (req, res) => {
   res.json({ botOn: !botPausado.has(req.params.numero) });
 });
 
-router.patch("/inbox/conversas/:numero/etiqueta", async (req, res) => {
+router.patch("/inbox/conversas/:numero/etiqueta", authMiddleware, async (req, res) => {
   const { numero } = req.params;
   if (conversas.has(numero)) {
     const conv = conversas.get(numero);
@@ -288,7 +299,7 @@ router.patch("/inbox/conversas/:numero/etiqueta", async (req, res) => {
   res.json({ ok: true });
 });
 
-router.patch("/inbox/conversas/:numero/setor", async (req, res) => {
+router.patch("/inbox/conversas/:numero/setor", authMiddleware, async (req, res) => {
   const { numero } = req.params;
   if (conversas.has(numero)) {
     const conv = conversas.get(numero);
