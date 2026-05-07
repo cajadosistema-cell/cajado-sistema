@@ -63,60 +63,64 @@ function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImpo
     setStatus('loading')
     setMsg('Analisando documento com IA...')
     try {
+      // Detecta CSV por ponto-e-vírgula
+      const linhas = texto.split('\n').filter(l => l.trim())
+      const isCSV = texto.includes(';') && linhas.length > 1
+      const header = linhas[0] || ''
+      const dadosSample = linhas.slice(1, 4).join('\n')
+
+      const promptCSV = `Este é um relatório CSV de financiamento imobiliário separado por ponto-e-vírgula (;).
+Colunas: ${header}
+Dados (primeiras 3 linhas):
+${dadosSample}
+
+Extraia os dados do PRIMEIRO imóvel e retorne APENAS o JSON abaixo sem texto adicional, sem markdown:
+{"titulo":"construtora + unidade","construtora":"empresa","unidade":"cod","endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":0,"valor_total_contrato":0,"valor_parcela":0,"parcelas_total":0,"parcelas_pagas":0,"indexador":"REAL","data_aquisicao":"YYYY-MM-DD","status":"disponivel"}`
+
+      const promptDoc = `Analise este documento de imóvel. Retorne APENAS JSON válido sem markdown:
+{"titulo":"nome","construtora":null,"unidade":null,"endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":null,"valor_total_contrato":null,"valor_parcela":null,"parcelas_total":null,"parcelas_pagas":0,"indexador":null,"data_aquisicao":null,"status":"disponivel"}
+
+Documento: ${texto.substring(0, 4000)}`
+
       const res = await fetch('/api/openrouter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Analise este documento de imóvel e extraia os dados em JSON. Retorne APENAS o JSON, sem texto extra:
-{
-  "titulo": "nome ou apelido do imóvel",
-  "construtora": "nome da construtora/incorporadora ou null",
-  "unidade": "unidade/apartamento ex: BL29-APT06 ou null",
-  "endereco": "endereço completo ou null",
-  "tipo_imovel": "residencial|comercial|terreno|galpao",
-  "area_m2": número ou null,
-  "quartos": número ou null,
-  "valor_compra": valor total do contrato como número ou null,
-  "valor_total_contrato": valor total do contrato como número ou null,
-  "valor_parcela": valor da parcela mensal como número ou null,
-  "parcelas_total": total de parcelas como número ou null,
-  "parcelas_pagas": parcelas já pagas como número ou 0,
-  "indexador": "INCC-M|IPCA|IGP-M|REAL|null",
-  "data_aquisicao": "YYYY-MM-DD ou null",
-  "status": "disponivel|alugado|em_reforma|vendido"
-}
-
-Documento:
-${texto.substring(0, 5000)}`,
+          prompt: isCSV ? promptCSV : promptDoc,
           context: '',
-          systemInstruction: 'Você é um extrator de dados de documentos imobiliários. Retorne SOMENTE JSON válido, sem markdown, sem explicações.'
+          systemInstruction: 'Retorne APENAS o objeto JSON puro. Sem texto antes, sem texto depois, sem markdown, sem explicação.'
         }),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'Erro na IA')
 
-      // Extrai JSON da resposta
-      let raw = data.result ?? ''
-      raw = raw.replace(/```json/gi, '').replace(/```/g, '').trim()
-      
-      let parsed;
-      try {
-        parsed = JSON.parse(raw)
-      } catch (e) {
-        // Tenta extrair apenas o bloco de JSON se houver lixo em volta
-        const match = raw.match(/(\{|\[)[\s\S]*(\}|\])/)
-        if (!match) throw new Error('IA não retornou um JSON válido')
-        try {
-          parsed = JSON.parse(match[0])
-        } catch (err) {
-          throw new Error('Falha ao processar a resposta da IA (JSON inválido)')
+      // Extrai JSON da resposta — 3 tentativas
+      let raw = (data.result ?? '').trim()
+      raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+      console.log('[TabImoveis] IA raw (500):', raw.substring(0, 500))
+
+      let parsed: any = null
+      // T1: parse direto
+      try { parsed = JSON.parse(raw) } catch (_) {}
+      // T2: extrai { ... } usando indexOf
+      if (!parsed) {
+        const s = raw.indexOf('{')
+        const e = raw.lastIndexOf('}')
+        if (s !== -1 && e > s) try { parsed = JSON.parse(raw.substring(s, e + 1)) } catch (_) {}
+      }
+      // T3: extrai [ ... ]
+      if (!parsed) {
+        const s = raw.indexOf('[')
+        const e = raw.lastIndexOf(']')
+        if (s !== -1 && e > s) {
+          try {
+            const arr = JSON.parse(raw.substring(s, e + 1))
+            if (Array.isArray(arr) && arr.length > 0) parsed = arr[0]
+          } catch (_) {}
         }
       }
-
-      // Se a IA retornar uma lista de imóveis, pega o primeiro
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        parsed = parsed[0]
-      }
+      if (!parsed) throw new Error('IA retornou formato inválido. Tente colar apenas as primeiras linhas do documento.')
+      if (Array.isArray(parsed)) parsed = parsed[0]
 
       setMsg('Salvando imóvel...')
       const { error } = await (supabase.from('imoveis') as any).insert({
