@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import { TabImoveis } from './_components/TabImoveis'
+import { TabVeiculos } from './_components/TabVeiculos'
 import { TabFinanciamentos } from './_components/TabFinanciamentos'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { exportCSV, exportPDF, parseCSV } from '@/lib/export-utils'
@@ -729,6 +730,7 @@ export default function PatrimonioClient() {
       )}
 
       {tab === 'imoveis' && <TabImoveis />}
+      {tab === 'veiculos' && <TabVeiculos />}
       {tab === 'financiamentos' && <TabFinanciamentos />}
 
       {modal && (
