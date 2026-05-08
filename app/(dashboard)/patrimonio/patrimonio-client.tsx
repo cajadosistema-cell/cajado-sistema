@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
@@ -66,11 +67,17 @@ function ModalImportarPatrimonio({
   onImported: () => void
   tipoFixo?: ProjetoPatrimonio['tipo']
 }) {
+  const supabase = createClient()
   const { insert } = useSupabaseMutation('projetos_patrimonio')
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<Record<string, string>[]>([])
   const [status, setStatus] = useState<'idle' | 'preview' | 'importing' | 'done' | 'error'>('idle')
   const [msg, setMsg] = useState('')
+  const [isSaldoDevedor, setIsSaldoDevedor] = useState(false)
+
+  // Detecta se o CSV é do formato Saldo Devedor da construtora
+  const detectSaldoDevedor = (rows: Record<string, string>[]) =>
+    rows.length > 0 && ('Unidade' in rows[0] || 'Valor_Total_Contrato' in rows[0] || 'Divisao_Obra' in rows[0])
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -79,10 +86,21 @@ function ModalImportarPatrimonio({
     reader.onload = ev => {
       const rows = parseCSV(ev.target?.result as string)
       if (!rows.length) { setMsg('Arquivo vazio ou inválido'); setStatus('error'); return }
-      setPreview(rows.slice(0, 5))
+      const isSD = detectSaldoDevedor(rows)
+      setIsSaldoDevedor(isSD)
+      setPreview(rows.slice(0, 3))
       setStatus('preview')
+      if (isSD) setMsg(`📋 Formato Saldo Devedor detectado — ${rows.length} parcelas serão agrupadas por Unidade`)
     }
     reader.readAsText(file, 'utf-8')
+  }
+
+  // Converte data DD/MM/YYYY para YYYY-MM-DD
+  const toISO = (d: string) => {
+    if (!d) return null
+    const [dd, mm, yyyy] = d.split('/')
+    if (!yyyy) return null
+    return `${yyyy}-${mm?.padStart(2,'0')}-${dd?.padStart(2,'0')}`
   }
 
   const handleImport = async () => {
@@ -94,23 +112,75 @@ function ModalImportarPatrimonio({
       reader.onload = async ev => {
         const rows = parseCSV(ev.target?.result as string)
         let ok = 0
-        for (const r of rows) {
-          const vi = parseFloat(r.valor_investido_total || '0')
-          const vm = r.valor_mercado_atual ? parseFloat(r.valor_mercado_atual) : null
-          if (!r.titulo || isNaN(vi)) continue
-          await insert({
-            titulo: r.titulo,
-            tipo: tipoFixo ?? (r.tipo || 'outro') as ProjetoPatrimonio['tipo'],
-            descricao: r.descricao || null,
-            valor_investido_total: vi,
-            valor_mercado_atual: vm,
-            roi_percentual: vm && vi > 0 ? ((vm - vi) / vi) * 100 : null,
-            data_aquisicao: r.data_aquisicao || null,
-            status: (r.status || 'ativo') as ProjetoPatrimonio['status'],
-          })
-          ok++
+
+        if (detectSaldoDevedor(rows)) {
+          // ── Modo Saldo Devedor → importa para tabela `imoveis` ──
+          const { data: userData } = await supabase.auth.getUser()
+          let empresaId: string | null = null
+          if (userData.user) {
+            const { data: perf } = await supabase.from('perfis').select('empresa_id').eq('id', userData.user.id).single()
+            empresaId = perf?.empresa_id || null
+          }
+
+          // Agrupa por Unidade (cada unidade = 1 imóvel)
+          const grupos: Record<string, Record<string, string>[]> = {}
+          for (const r of rows) {
+            const key = r.Unidade || r.unidade || 'SEM_UNIDADE'
+            if (!grupos[key]) grupos[key] = []
+            grupos[key].push(r)
+          }
+
+          for (const [unidade, parcelas] of Object.entries(grupos)) {
+            const first = parcelas[0]
+            const pagas = parcelas.filter(p => (p.Status || p.status || '').toUpperCase() === 'PAGO').length
+            const ultimaParcela = parcelas[parcelas.length - 1]
+            const valParcela = parseFloat(ultimaParcela.Valor_Original || ultimaParcela.valor_original || '0') || null
+            const valContrato = parseFloat(first.Valor_Total_Contrato || first.valor_total_contrato || '0') || null
+            const indexador = first.Indexador || first.indexador || null
+            const dataAquis = toISO(first.Data_Emissao || first.data_emissao || '')
+            const construtora = first.Empresa || first.empresa || null
+            const titulo = construtora ? `${construtora} — ${unidade}` : unidade
+
+            const { error } = await (supabase.from('imoveis') as any).insert({
+              empresa_id: empresaId,
+              titulo,
+              construtora,
+              unidade,
+              tipo_imovel: 'residencial',
+              valor_compra: valContrato,
+              valor_total_contrato: valContrato,
+              valor_parcela: valParcela,
+              parcelas_total: parcelas.length,
+              parcelas_pagas: pagas,
+              indexador: indexador !== 'null' ? indexador : null,
+              data_aquisicao: dataAquis,
+              status: 'disponivel',
+            })
+            if (!error) ok++
+            else console.error('[ImportSaldoDevedor]', unidade, error.message)
+          }
+          setMsg(`✅ ${ok} imóvel(is) importado(s) para sua carteira!`)
+        } else {
+          // ── Modo padrão → importa para projetos_patrimonio ──
+          for (const r of rows) {
+            const vi = parseFloat(r.valor_investido_total || '0')
+            const vm = r.valor_mercado_atual ? parseFloat(r.valor_mercado_atual) : null
+            if (!r.titulo || isNaN(vi)) continue
+            await insert({
+              titulo: r.titulo,
+              tipo: tipoFixo ?? (r.tipo || 'outro') as ProjetoPatrimonio['tipo'],
+              descricao: r.descricao || null,
+              valor_investido_total: vi,
+              valor_mercado_atual: vm,
+              roi_percentual: vm && vi > 0 ? ((vm - vi) / vi) * 100 : null,
+              data_aquisicao: r.data_aquisicao || null,
+              status: (r.status || 'ativo') as ProjetoPatrimonio['status'],
+            })
+            ok++
+          }
+          setMsg(`${ok} bem(ns) importado(s) com sucesso`)
         }
-        setMsg(`${ok} bem(ns) importado(s) com sucesso`)
+
         setStatus('done')
         onImported()
       }

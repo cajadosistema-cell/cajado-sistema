@@ -19,9 +19,12 @@ export function exportCSV(filename: string, headers: string[], rows: (string | n
 export function parseCSV(text: string): Record<string, string>[] {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(Boolean)
   if (lines.length < 2) return []
-  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+  // Auto-detecta separador: ponto-e-vírgula tem prioridade se houver mais ; que ,
+  const firstLine = lines[0]
+  const sep = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ','
+  const headers = firstLine.split(sep).map(h => h.replace(/^"|"$/g, '').trim())
   return lines.slice(1).map(line => {
-    const vals = line.split(',').map(v => v.replace(/^"|"$/g, '').trim())
+    const vals = line.split(sep).map(v => v.replace(/^"|"$/g, '').trim())
     return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? '']))
   })
 }
