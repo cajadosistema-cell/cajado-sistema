@@ -27,6 +27,7 @@ type Imovel = {
   data_aquisicao: string | null
   dia_vencimento: number | null
   categoria_financeira: string | null
+  taxa_juros_anual: number | null
 }
 
 const STATUS_CONFIG = {
@@ -42,7 +43,122 @@ const FORM_INICIAL = {
   status: 'disponivel' as Imovel['status'], construtora: '', unidade: '',
   valor_total_contrato: '', valor_parcela: '', parcelas_total: '',
   parcelas_pagas: '0', indexador: '', data_aquisicao: '',
-  dia_vencimento: '', categoria_financeira: 'Financiamento Imobiliário'
+  dia_vencimento: '', categoria_financeira: 'Financiamento Imobiliário',
+  taxa_juros_anual: '',
+}
+
+// ── Modal Análise de Quitação ────────────────────────────────
+function ModalAnalisarQuitacao({ item, onClose }: {
+  item: { titulo: string; valor_parcela: number | null; parcelas_total: number | null; parcelas_pagas: number | null; taxa_juros_anual: number | null; indexador?: string | null }
+  onClose: () => void
+}) {
+  const [cdi, setCdi] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Busca CDI atual via API pública do Banco Central
+  useState(() => {
+    fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados/ultimos/1?formato=json')
+      .then(r => r.json())
+      .then(d => { setCdi(parseFloat(d[0]?.valor ?? '10.5')); setLoading(false) })
+      .catch(() => { setCdi(10.5); setLoading(false) }) // fallback CDI 10.5%
+  })
+
+  const pt = item.parcelas_total ?? 0
+  const pp = item.parcelas_pagas ?? 0
+  const faltam = pt - pp
+  const valParc = item.valor_parcela ?? 0
+  const saldoApprox = faltam * valParc
+  const taxa = item.taxa_juros_anual
+  const jurosEstimados = taxa ? saldoApprox - (saldoApprox / (1 + taxa / 100)) : null
+
+  const recomendacao = () => {
+    if (!taxa || !cdi) return null
+    if (taxa > cdi) return {
+      icone: '🟢', cor: 'text-emerald-400',
+      texto: `Sua taxa (${taxa}% a.a.) está acima do CDI atual (${cdi.toFixed(2)}% a.a.). Vale a pena quitar antecipado!`,
+      acao: 'Quitar o quanto antes — você paga mais de juros do que ganharia investindo.'
+    }
+    return {
+      icone: '🟡', cor: 'text-amber-400',
+      texto: `Sua taxa (${taxa}% a.a.) está abaixo do CDI atual (${cdi.toFixed(2)}% a.a.).`,
+      acao: 'Pode valer mais investir o dinheiro da quitação do que pagar antecipado.'
+    }
+  }
+
+  const rec = recomendacao()
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-5">
+          <div>
+            <h2 className="text-base font-semibold text-fg">📈 Análise de Quitação</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">{item.titulo}</p>
+          </div>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">📦 Parcelas restantes</p>
+              <p className="text-lg font-bold text-fg">{faltam}</p>
+            </div>
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">💰 Saldo estimado</p>
+              <p className="text-lg font-bold text-red-400">
+                {faltam > 0 && valParc > 0 ? `R$ ${saldoApprox.toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '—'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">🏦 CDI Atual (BACEN)</p>
+              <p className="text-lg font-bold text-blue-400">
+                {loading ? '⏳...' : `${cdi?.toFixed(2)}% a.a.`}
+              </p>
+            </div>
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">📊 Taxa Financiamento</p>
+              <p className="text-lg font-bold text-amber-400">
+                {taxa ? `${taxa}% a.a.` : 'Não informado'}
+              </p>
+            </div>
+          </div>
+
+          {jurosEstimados && jurosEstimados > 0 && (
+            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">🔥 Juros estimados ainda a pagar</p>
+              <p className="text-sm font-bold text-red-400">
+                R$ {jurosEstimados.toLocaleString('pt-BR', {minimumFractionDigits:2})}
+              </p>
+              <p className="text-[10px] text-fg-disabled mt-1">Cálculo aproximado baseado na taxa anual e saldo devedor estimado</p>
+            </div>
+          )}
+
+          {item.indexador && (
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">
+              <p>📌 Indexador: <strong>{item.indexador}</strong> — o valor das parcelas pode variar mensalmente.</p>
+            </div>
+          )}
+
+          {rec ? (
+            <div className={`rounded-xl p-4 border ${ rec.icone === '🟢' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+              <p className={`text-sm font-bold mb-1 ${rec.cor}`}>{rec.icone} {rec.texto}</p>
+              <p className="text-xs text-fg-secondary">{rec.acao}</p>
+            </div>
+          ) : !taxa ? (
+            <div className="bg-muted rounded-xl p-3 text-xs text-fg-tertiary">
+              ⚠️ Taxa de juros não informada. Edite o item e preencha a taxa para obter a análise completa.
+            </div>
+          ) : null}
+        </div>
+
+        <button onClick={onClose} className="btn-secondary w-full mt-5">Fechar</button>
+      </div>
+    </div>
+  )
 }
 
 // ── Modal Lançar Parcela no Financeiro ────────────────────────────
@@ -226,10 +342,10 @@ Dados (primeiras 3 linhas):
 ${dadosSample}
 
 Extraia os dados do PRIMEIRO imóvel e retorne APENAS o JSON abaixo sem texto adicional, sem markdown:
-{"titulo":"construtora + unidade","construtora":"empresa","unidade":"cod","endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":0,"valor_total_contrato":0,"valor_parcela":0,"parcelas_total":0,"parcelas_pagas":0,"indexador":"REAL","data_aquisicao":"YYYY-MM-DD","status":"disponivel"}`
+{"titulo":"construtora + unidade","construtora":"empresa","unidade":"cod","endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":0,"valor_total_contrato":0,"valor_parcela":0,"parcelas_total":0,"parcelas_pagas":0,"indexador":"REAL","taxa_juros_anual":null,"data_aquisicao":"YYYY-MM-DD","status":"disponivel"}`
 
       const promptDoc = `Analise este documento de imóvel. Retorne APENAS JSON válido sem markdown:
-{"titulo":"nome","construtora":null,"unidade":null,"endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":null,"valor_total_contrato":null,"valor_parcela":null,"parcelas_total":null,"parcelas_pagas":0,"indexador":null,"data_aquisicao":null,"status":"disponivel"}
+{"titulo":"nome","construtora":null,"unidade":null,"endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":null,"valor_total_contrato":null,"valor_parcela":null,"parcelas_total":null,"parcelas_pagas":0,"indexador":null,"taxa_juros_anual":null,"data_aquisicao":null,"status":"disponivel"}
 
 Documento: ${texto.substring(0, 4000)}`
 
@@ -301,7 +417,9 @@ Documento: ${texto.substring(0, 4000)}`
         parcelas_total: parsed.parcelas_total || null,
         parcelas_pagas: parsed.parcelas_pagas || 0,
         indexador: parsed.indexador || null,
-        data_aquisicao: parsed.data_aquisicao || null,
+        taxa_juros_anual: parsed.taxa_juros_anual || null,
+        dia_vencimento: parsed.dia_vencimento || null,
+        categoria_financeira: parsed.categoria_financeira || null,
       })
       if (error) throw new Error(error.message)
 
@@ -365,13 +483,14 @@ Documento: ${texto.substring(0, 4000)}`
   )
 }
 
-// ── Componente principal ────────────────────────────────────────
+// ── Componente principal ──────────────────────────────────
 export function TabImoveis() {
   const supabase = createClient()
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [showImportIA, setShowImportIA] = useState(false)
   const [imovelLancar, setImovelLancar] = useState<Imovel | null>(null)
+  const [imovelAnalisar, setImovelAnalisar] = useState<Imovel | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
   const { data: imoveis, refetch } = useSupabaseQuery<Imovel>('imoveis', {
@@ -400,6 +519,7 @@ export function TabImoveis() {
       data_aquisicao: form.data_aquisicao || null,
       dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
       categoria_financeira: form.categoria_financeira || null,
+      taxa_juros_anual: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
     }
     
     if (editId) {
@@ -438,6 +558,7 @@ export function TabImoveis() {
       indexador: im.indexador || '', data_aquisicao: im.data_aquisicao || '',
       dia_vencimento: im.dia_vencimento ? String(im.dia_vencimento) : '',
       categoria_financeira: im.categoria_financeira || 'Financiamento Imobiliário',
+      taxa_juros_anual: im.taxa_juros_anual ? String(im.taxa_juros_anual) : '',
     })
     setEditId(im.id); setShowForm(true)
   }
@@ -635,14 +756,25 @@ export function TabImoveis() {
                         </div>
                       )}
                     </div>
-                    {/* Botão lançar parcela */}
-                    {prog < 100 && (
+                    {/* Juros e botões */}
+                    <div className="flex gap-2 mt-1">
+                      {prog < 100 && (
+                        <button
+                          onClick={() => setImovelLancar(im)}
+                          className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                        >
+                          💳 Lançar Parcela {pp + 1}/{pt}
+                        </button>
+                      )}
                       <button
-                        onClick={() => setImovelLancar(im)}
-                        className="w-full mt-1 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-1.5"
+                        onClick={() => setImovelAnalisar(im)}
+                        className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                       >
-                        💳 Lançar Parcela {pp + 1}/{pt} no Financeiro
+                        📈 Analisar Quitação
                       </button>
+                    </div>
+                    {im.taxa_juros_anual && (
+                      <p className="text-[10px] text-fg-disabled mt-1.5">📊 Taxa: {im.taxa_juros_anual}% a.a.</p>
                     )}
                   </div>
                 )}
@@ -673,6 +805,9 @@ export function TabImoveis() {
           onClose={() => setImovelLancar(null)}
           onLancado={refetch}
         />
+      )}
+      {imovelAnalisar && (
+        <ModalAnalisarQuitacao item={imovelAnalisar} onClose={() => setImovelAnalisar(null)} />
       )}
     </div>
   )

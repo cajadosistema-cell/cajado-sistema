@@ -26,6 +26,7 @@ type Veiculo = {
   parcelas_total: number | null
   parcelas_pagas: number | null
   vencimento_dia: number | null
+  taxa_juros_anual: number | null
   status: 'ativo' | 'vendido' | 'sinistro' | 'em_manutencao'
 }
 
@@ -89,6 +90,7 @@ function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImpo
   "valor_parcela": valor da parcela mensal como número ou null,
   "parcelas_total": total de parcelas como número ou null,
   "parcelas_pagas": parcelas já pagas como número ou 0,
+  "taxa_juros_anual": taxa anual como número ou null,
   "vencimento_dia": dia do vencimento 1-31 ou null,
   "status": "ativo|vendido|sinistro|em_manutencao"
 }
@@ -127,6 +129,7 @@ ${texto.substring(0, 5000)}`,
         parcelas_total: parsed.parcelas_total || null,
         parcelas_pagas: parsed.parcelas_pagas || 0,
         vencimento_dia: parsed.vencimento_dia || null,
+        taxa_juros_anual: parsed.taxa_juros_anual || null,
         status: parsed.status || 'ativo',
       })
       if (error) throw new Error(error.message)
@@ -191,12 +194,96 @@ ${texto.substring(0, 5000)}`,
   )
 }
 
+// ── Modal Análise de Quitação (reutilizável) ─────────────────
+function ModalAnalisarQuitacao({ item, onClose }: {
+  item: { titulo: string; valor_parcela: number | null; parcelas_total: number | null; parcelas_pagas: number | null; taxa_juros_anual: number | null }
+  onClose: () => void
+}) {
+  const [cdi, setCdi] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  useState(() => {
+    fetch('https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados/ultimos/1?formato=json')
+      .then(r => r.json())
+      .then(d => { setCdi(parseFloat(d[0]?.valor ?? '10.5')); setLoading(false) })
+      .catch(() => { setCdi(10.5); setLoading(false) })
+  })
+  const pt = item.parcelas_total ?? 0
+  const pp = item.parcelas_pagas ?? 0
+  const faltam = pt - pp
+  const valParc = item.valor_parcela ?? 0
+  const saldoApprox = faltam * valParc
+  const taxa = item.taxa_juros_anual
+  const jurosEstimados = taxa && saldoApprox > 0 ? saldoApprox - (saldoApprox / (1 + taxa / 100)) : null
+  const rec = !taxa || !cdi ? null : taxa > cdi
+    ? { ok: true, texto: `Taxa (${taxa}% a.a.) acima do CDI (${cdi.toFixed(2)}% a.a.). Vale quitar antecipado!`, acao: 'Você paga mais de juros do que ganharia investindo.' }
+    : { ok: false, texto: `Taxa (${taxa}% a.a.) abaixo do CDI (${cdi.toFixed(2)}% a.a.).`, acao: 'Pode valer mais investir o dinheiro e continuar pagando as parcelas.' }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-5">
+          <div>
+            <h2 className="text-base font-semibold text-fg">📈 Análise de Quitação</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">{item.titulo}</p>
+          </div>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">📦 Parcelas restantes</p>
+              <p className="text-xl font-bold text-fg">{faltam}</p>
+            </div>
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">💰 Saldo estimado</p>
+              <p className="text-xl font-bold text-red-400">
+                {saldoApprox > 0 ? `R$ ${saldoApprox.toLocaleString('pt-BR', {minimumFractionDigits:2})}` : '—'}
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">🏦 CDI Atual (BACEN)</p>
+              <p className="text-xl font-bold text-blue-400">{loading ? '⏳' : `${cdi?.toFixed(2)}% a.a.`}</p>
+            </div>
+            <div className="bg-surface border border-border-subtle rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">📊 Taxa Financiamento</p>
+              <p className="text-xl font-bold text-amber-400">{taxa ? `${taxa}% a.a.` : '—'}</p>
+            </div>
+          </div>
+          {jurosEstimados && jurosEstimados > 0 && (
+            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+              <p className="text-[10px] text-fg-disabled uppercase">🔥 Juros estimados restantes</p>
+              <p className="text-sm font-bold text-red-400">R$ {jurosEstimados.toLocaleString('pt-BR', {minimumFractionDigits:2})}</p>
+              <p className="text-[10px] text-fg-disabled mt-1">Estimativa aproximada baseada na taxa anual</p>
+            </div>
+          )}
+          {rec ? (
+            <div className={`rounded-xl p-4 border ${rec.ok ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+              <p className={`text-sm font-bold mb-1 ${rec.ok ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {rec.ok ? '🟢' : '🟡'} {rec.texto}
+              </p>
+              <p className="text-xs text-fg-secondary">{rec.acao}</p>
+            </div>
+          ) : !taxa ? (
+            <div className="bg-muted rounded-xl p-3 text-xs text-fg-tertiary">
+              ⚠️ Taxa de juros não informada. Edite o veículo e preencha a taxa para análise completa.
+            </div>
+          ) : null}
+        </div>
+        <button onClick={onClose} className="btn-secondary w-full mt-5">Fechar</button>
+      </div>
+    </div>
+  )
+}
+
 // ── Componente principal ────────────────────────────────────────
 export function TabVeiculos() {
   const supabase = createClient()
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [showImportIA, setShowImportIA] = useState(false)
+  const [veiculoAnalisar, setVeiculoAnalisar] = useState<Veiculo | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
   const { data: veiculos, refetch } = useSupabaseQuery<Veiculo>('veiculos', {
@@ -425,6 +512,15 @@ export function TabVeiculos() {
                         </div>
                       )}
                     </div>
+                    {v.taxa_juros_anual && (
+                      <p className="text-[10px] text-fg-disabled mt-1">📊 Taxa: {v.taxa_juros_anual}% a.a.</p>
+                    )}
+                    <button
+                      onClick={() => setVeiculoAnalisar(v)}
+                      className="w-full mt-2 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                    >
+                      📈 Analisar Quitação
+                    </button>
                   </div>
                 )}
 
@@ -446,6 +542,18 @@ export function TabVeiculos() {
 
       {showImportIA && (
         <ModalImportarIA onClose={() => setShowImportIA(false)} onImportado={refetch} />
+      )}
+      {veiculoAnalisar && (
+        <ModalAnalisarQuitacao
+          item={{
+            titulo: veiculoAnalisar.titulo,
+            valor_parcela: veiculoAnalisar.valor_parcela,
+            parcelas_total: veiculoAnalisar.parcelas_total,
+            parcelas_pagas: veiculoAnalisar.parcelas_pagas,
+            taxa_juros_anual: veiculoAnalisar.taxa_juros_anual,
+          }}
+          onClose={() => setVeiculoAnalisar(null)}
+        />
       )}
     </div>
   )
