@@ -369,6 +369,11 @@ function ModalLancamento({
 }) {
   const { insert, update, loading } = useSupabaseMutation('lancamentos')
   const today = new Date().toISOString().split('T')[0]
+  // Separa cartões de crédito e contas normais
+  const cartoes = contas.filter(c => c.tipo === 'cartao_credito')
+  const contasNormais = contas.filter(c => c.tipo !== 'cartao_credito')
+
+  const [forma, setForma] = useState<'dinheiro'|'pix'|'debito'|'credito'>('dinheiro')
   const [form, setForm] = useState({
     conta_id: lancamentoEdit?.conta_id ?? contas[0]?.id ?? '',
     descricao: lancamentoEdit?.descricao ?? '',
@@ -381,6 +386,16 @@ function ModalLancamento({
     observacoes: '',
     taxa_cartao: '0',
   })
+
+  // Quando muda forma de pagamento, pre-seleciona conta adequada
+  const handleForma = (f: typeof forma) => {
+    setForma(f)
+    if (f === 'credito' && cartoes.length > 0) {
+      setForm(prev => ({ ...prev, conta_id: cartoes[0].id }))
+    } else if (f !== 'credito' && contasNormais.length > 0) {
+      setForm(prev => ({ ...prev, conta_id: contasNormais[0].id }))
+    }
+  }
 
   const categoriasFiltradas = categorias.filter(c => c.tipo === form.tipo)
 
@@ -457,6 +472,7 @@ function ModalLancamento({
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg-secondary text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Tipo */}
           <div className="grid grid-cols-4 gap-1 bg-muted/50 p-1 rounded-lg">
             {(['despesa', 'receita', 'investimento', 'transferencia'] as const).map(t => (
               <button key={t} type="button"
@@ -473,6 +489,53 @@ function ModalLancamento({
               </button>
             ))}
           </div>
+
+          {/* Forma de Pagamento */}
+          {form.tipo === 'despesa' && (
+            <div>
+              <label className="label">Forma de Pagamento</label>
+              <div className="grid grid-cols-4 gap-1.5 mt-1">
+                {([
+                  { id: 'dinheiro', label: '💵 Dinheiro' },
+                  { id: 'pix',      label: '📱 Pix' },
+                  { id: 'debito',   label: '💳 Débito' },
+                  { id: 'credito',  label: '💎 Crédito' },
+                ] as const).map(f => (
+                  <button key={f.id} type="button" onClick={() => handleForma(f.id)}
+                    className={cn(
+                      'py-2 rounded-xl text-[11px] font-semibold border transition-all',
+                      forma === f.id
+                        ? f.id === 'credito'
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                          : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                        : 'text-fg-tertiary border-border-subtle hover:border-border'
+                    )}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              {/* Seletor de cartão quando crédito */}
+              {forma === 'credito' && (
+                <div className="mt-2">
+                  {cartoes.length === 0 ? (
+                    <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
+                      ⚠️ Nenhum cartão cadastrado. Vá em Financeiro → Contas → + Conta (Tipo: Cartão de Crédito).
+                    </p>
+                  ) : (
+                    <select className="input" value={form.conta_id}
+                      onChange={e => setForm(f => ({ ...f, conta_id: e.target.value }))}>
+                      {cartoes.map(c => (
+                        <option key={c.id} value={c.id}>
+                          💳 {c.nome_cartao || c.nome}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="label">Descrição *</label>
             <input className="input mt-1" required value={form.descricao}
@@ -525,16 +588,32 @@ function ModalLancamento({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Conta *</label>
-              <select className="input mt-1" required value={form.conta_id}
-                onChange={e => setForm(f => ({ ...f, conta_id: e.target.value }))}>
-                {contas.map(c => (
-                  <option key={c.id} value={c.id}>{c.nome} ({c.categoria.toUpperCase()})</option>
-                ))}
-              </select>
+
+          {/* Conta — só mostra se não for crédito (crédito já selecionado acima) */}
+          {forma !== 'credito' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Conta *</label>
+                <select className="input mt-1" required value={form.conta_id}
+                  onChange={e => setForm(f => ({ ...f, conta_id: e.target.value }))}>
+                  {contasNormais.map(c => (
+                    <option key={c.id} value={c.id}>{c.nome} ({c.categoria.toUpperCase()})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Categoria</label>
+                <select className="input mt-1" value={form.categoria_id}
+                  onChange={e => setForm(f => ({ ...f, categoria_id: e.target.value }))}>
+                  <option value="">Sem categoria</option>
+                  {categoriasFiltradas.map(c => (
+                    <option key={c.id} value={c.id}>{c.nome}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+          )}
+          {forma === 'credito' && (
             <div>
               <label className="label">Categoria</label>
               <select className="input mt-1" value={form.categoria_id}
@@ -545,7 +624,8 @@ function ModalLancamento({
                 ))}
               </select>
             </div>
-          </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" className="btn-primary" disabled={loading}>
@@ -561,7 +641,7 @@ function ModalLancamento({
 // ── Client Component ────────────────────────────────────────────
 
 export default function FinanceiroClient() {
-  const [view, setView] = useState<'contas' | 'cartoes' | 'resumo' | 'registros'>('contas')
+  const [view, setView] = useState<'contas' | 'lancamentos' | 'cartoes' | 'resumo' | 'registros'>('contas')
   const [modalLancamento, setModalLancamento] = useState(false)
   const [lancamentoEdit, setLancamentoEdit] = useState<Lancamento | null>(null)
   const [modalConta, setModalConta] = useState(false)
@@ -739,15 +819,16 @@ export default function FinanceiroClient() {
 
 
       {/* Tabs Menu Superior */}
-      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 w-fit mb-6">
+      <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1 w-fit mb-6 overflow-x-auto">
         {([
-          { id: 'contas',     label: '🏦 Contas'     },
-          { id: 'cartoes',    label: '💳 Cartões'  },
-          { id: 'resumo',     label: '📊 Resumo'     },
-          { id: 'registros',  label: '🗂️ Registros' },
+          { id: 'contas',       label: '🏦 Contas'      },
+          { id: 'lancamentos',  label: '📝 Lançamentos' },
+          { id: 'cartoes',      label: '💳 Cartões'    },
+          { id: 'resumo',       label: '📊 Resumo'      },
+          { id: 'registros',    label: '🗂️ Registros'  },
         ] as const).map(tab => (
-          <button key={tab.id} onClick={() => setView(tab.id)}
-            className={cn('px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
+          <button key={tab.id} onClick={() => setView(tab.id as any)}
+            className={cn('shrink-0 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors',
               view === tab.id ? 'bg-muted text-fg' : 'text-fg-tertiary hover:text-fg-secondary'
             )}>
             {tab.label}
@@ -770,6 +851,104 @@ export default function FinanceiroClient() {
         />
       )}
 
+      {/* ── ABA LANÇAMENTOS (split: avulsos | fixos+parcelas) ── */}
+      {view === 'lancamentos' && (() => {
+        const mes = new Date().toISOString().substring(0, 7)
+        const doMes = lancamentos.filter(l => l.data_competencia?.startsWith(mes) && l.tipo === 'despesa')
+        const avulsos = doMes.filter(l => !l.total_parcelas || l.total_parcelas <= 1)
+        const fixosParcelados = lancamentos.filter(l =>
+          l.tipo === 'despesa' && (l.total_parcelas && l.total_parcelas > 1)
+        ).slice(0, 50)
+        const totalAvulsos = avulsos.reduce((s, l) => s + l.valor, 0)
+        const totalFixos   = fixosParcelados.reduce((s, l) => s + l.valor, 0)
+        const getNomeConta = (id: string) => contas.find(c => c.id === id)?.nome || '—'
+        const rowCls = 'flex items-center justify-between py-2 px-3 rounded-xl hover:bg-muted/50 transition-colors group'
+        const valCls = (l: Lancamento) => l.status === 'validado' ? 'text-fg-disabled line-through' : 'text-red-400 font-semibold'
+        return (
+          <div className="space-y-4">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-page border border-border-subtle rounded-xl p-4">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💸 Avulsos do Mês</p>
+                <p className="text-2xl font-bold text-red-400">{formatCurrency(totalAvulsos)}</p>
+                <p className="text-xs text-fg-disabled mt-0.5">{avulsos.length} lançamento(s)</p>
+              </div>
+              <div className="bg-page border border-border-subtle rounded-xl p-4">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">🔁 Fixos & Parcelados</p>
+                <p className="text-2xl font-bold text-amber-400">{formatCurrency(totalFixos)}</p>
+                <p className="text-xs text-fg-disabled mt-0.5">{fixosParcelados.length} lançamento(s)</p>
+              </div>
+            </div>
+            {/* Split columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Coluna: avulsos do mês */}
+              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-red-500/5">
+                  <h3 className="text-sm font-semibold text-fg">💸 Gastos do Mês</h3>
+                  <span className="text-xs text-fg-tertiary">{new Date().toLocaleString('pt-BR',{month:'long',year:'numeric'})}</span>
+                </div>
+                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
+                  {avulsos.length === 0
+                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto avulso este mês.</p>
+                    : avulsos.map(l => (
+                      <div key={l.id} className={rowCls}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-fg truncate">{l.descricao}</p>
+                          <p className="text-[10px] text-fg-disabled">{getNomeConta(l.conta_id)} · {formatDate(l.data_competencia)}</p>
+                        </div>
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className={`text-xs ${valCls(l)}`}>{formatCurrency(l.valor)}</span>
+                          {l.status !== 'validado' && (
+                            <button onClick={() => validarLancamento(l.id, l.descricao)}
+                              className="hidden group-hover:block text-[10px] text-emerald-400 hover:text-emerald-300">✓</button>
+                          )}
+                          <button onClick={() => handleDeleteLancamento(l.id)}
+                            className="hidden group-hover:block text-[10px] text-fg-disabled hover:text-red-400 md:block">✕</button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+              {/* Coluna: fixos + parcelados */}
+              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
+                  <h3 className="text-sm font-semibold text-fg">🔁 Fixos & Parcelados</h3>
+                  <span className="text-xs text-fg-tertiary">Todos os meses</span>
+                </div>
+                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
+                  {fixosParcelados.length === 0
+                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo ou parcelado.</p>
+                    : fixosParcelados.map(l => (
+                      <div key={l.id} className={rowCls}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-fg truncate">{l.descricao}</p>
+                          <div className="flex gap-2 items-center">
+                            <p className="text-[10px] text-fg-disabled">{getNomeConta(l.conta_id)}</p>
+                            {l.total_parcelas && l.total_parcelas > 1 && (
+                              <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded-full">
+                                {l.parcela_atual}/{l.total_parcelas}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className={`text-xs ${valCls(l)}`}>{formatCurrency(l.valor)}</span>
+                          {l.status !== 'validado' && (
+                            <button onClick={() => validarLancamento(l.id, l.descricao)}
+                              className="hidden group-hover:block text-[10px] text-emerald-400 hover:text-emerald-300">✓</button>
+                          )}
+                          <button onClick={() => handleDeleteLancamento(l.id)}
+                            className="hidden group-hover:block text-[10px] text-fg-disabled hover:text-red-400 md:block">✕</button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── ABA CARTÕES ─────────────────────────────────────── */}
       {view === 'cartoes' && (
         <TabCartoesSeparado
@@ -783,6 +962,7 @@ export default function FinanceiroClient() {
           onDeleteConta={handleDeleteConta}
         />
       )}
+
 
       {/* ── ABA REGISTROS ────────────────────────────────── */}
       {view === 'registros' && (
