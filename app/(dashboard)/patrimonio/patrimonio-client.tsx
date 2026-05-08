@@ -115,12 +115,9 @@ function ModalImportarPatrimonio({
 
         if (detectSaldoDevedor(rows)) {
           // ── Modo Saldo Devedor → importa para tabela `imoveis` ──
+          // empresa_id em imoveis referencia perfis.id (user id), não empresas.id
           const { data: userData } = await supabase.auth.getUser()
-          let empresaId: string | null = null
-          if (userData.user) {
-            const { data: perf } = await supabase.from('perfis').select('empresa_id').eq('id', userData.user.id).single()
-            empresaId = perf?.empresa_id || null
-          }
+          const userId = userData.user?.id ?? null
 
           // Agrupa por Unidade (cada unidade = 1 imóvel)
           const grupos: Record<string, Record<string, string>[]> = {}
@@ -142,7 +139,7 @@ function ModalImportarPatrimonio({
             const titulo = construtora ? `${construtora} — ${unidade}` : unidade
 
             const { error } = await (supabase.from('imoveis') as any).insert({
-              empresa_id: empresaId,
+              empresa_id: userId,
               titulo,
               construtora,
               unidade,

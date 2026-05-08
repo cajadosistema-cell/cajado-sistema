@@ -122,17 +122,13 @@ Documento: ${texto.substring(0, 4000)}`
       if (!parsed) throw new Error('IA retornou formato inválido. Tente colar apenas as primeiras linhas do documento.')
       if (Array.isArray(parsed)) parsed = parsed[0]
 
-      // Busca empresa_id do usuário logado (fallback de segurança)
+      // empresa_id na tabela imoveis referencia perfis.id (ID do usuário logado)
       const { data: userData } = await supabase.auth.getUser()
-      let empresaId = null
-      if (userData.user) {
-        const { data: perf } = await supabase.from('perfis').select('empresa_id').eq('id', userData.user.id).single()
-        empresaId = perf?.empresa_id || null
-      }
+      const userId = userData.user?.id ?? null
 
       setMsg('Salvando imóvel...')
       const { error } = await (supabase.from('imoveis') as any).insert({
-        empresa_id: empresaId,
+        empresa_id: userId,
         titulo: parsed.titulo || 'Imóvel importado',
         endereco: parsed.endereco || null,
         tipo_imovel: parsed.tipo_imovel || 'residencial',
@@ -250,11 +246,9 @@ export function TabImoveis() {
     if (editId) {
       await (supabase.from('imoveis') as any).update(payload).eq('id', editId)
     } else {
+      // empresa_id referencia perfis.id (user id) nesta tabela
       const { data: userData } = await supabase.auth.getUser()
-      if (userData.user) {
-        const { data: perf } = await supabase.from('perfis').select('empresa_id').eq('id', userData.user.id).single()
-        if (perf?.empresa_id) payload.empresa_id = perf.empresa_id
-      }
+      if (userData.user?.id) payload.empresa_id = userData.user.id
       await (supabase.from('imoveis') as any).insert(payload)
     }
     setShowForm(false); setEditId(null); refetch(); setForm(FORM_INICIAL)
