@@ -579,9 +579,9 @@ export default function VendasClient() {
         title="Vendas / OS"
         subtitle="Ordens de serviço · Vendas · Orçamentos · Produtos · Clientes"
       >
-        <button onClick={() => document.getElementById('catalogo-produtos')?.scrollIntoView({behavior:'smooth'})} className="btn-ghost text-xs">Produtos</button>
-        <button onClick={() => setModalClientes(true)} className="btn-ghost text-xs">Clientes</button>
-        <button onClick={() => setModalProduto(true)} className="btn-secondary text-xs">+ Produto</button>
+        <button onClick={() => document.getElementById('catalogo-produtos')?.scrollIntoView({behavior:'smooth'})} className="btn-ghost text-xs hidden md:inline-flex">Produtos</button>
+        <button onClick={() => setModalClientes(true)} className="btn-ghost text-xs hidden md:inline-flex">Clientes</button>
+        <button onClick={() => setModalProduto(true)} className="btn-secondary text-xs hidden md:inline-flex">+ Produto</button>
         <button onClick={() => setModalOS(true)} className="btn-primary">+ Nova OS / Venda</button>
       </PageHeader>
 
@@ -599,7 +599,7 @@ export default function VendasClient() {
         <div className="card lg:col-span-2 flex flex-col min-h-[400px]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Vendas e OS</h2>
-            <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               <select className="input w-auto text-xs py-1 px-2" value={tipoFiltro} onChange={e => setTipoFiltro(e.target.value)}>
                 <option value="">Todos os tipos</option>
                 <option value="os">Ordem de Serviço</option>
@@ -832,7 +832,7 @@ export default function VendasClient() {
         <div id="catalogo-produtos" className="card lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <h2 className="section-title mb-0">Catálogo de produtos e serviços</h2>
-            <div className="flex gap-2 text-fg flex-wrap">
+            <div className="hidden md:flex gap-2 text-fg flex-wrap">
               <select className="input w-auto text-xs py-1 px-2">
                 <option>Todos</option>
                 <option>Produto</option>

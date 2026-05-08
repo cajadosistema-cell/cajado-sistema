@@ -201,15 +201,15 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
 
   return (
     <div className="space-y-5 mt-4">
-      {/* Header */}
+      {/* Header — botões de importar e nova conta ficam só no desktop */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-fg">Contas Bancárias</h2>
           <p className="text-xs text-fg-tertiary">Corrente · Poupança · Caixa · Importar extrato</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={onImportar} className="btn-secondary text-xs">📥 Importar Extrato</button>
-          <button onClick={onNovaConta} className="btn-ghost text-xs">+ Conta</button>
+          <button onClick={onImportar} className="btn-secondary text-xs hidden md:flex">📥 Importar Extrato</button>
+          <button onClick={onNovaConta} className="btn-ghost text-xs hidden md:flex">+ Conta</button>
           <button onClick={() => setModalLanc(true)} className="btn-primary text-xs">+ Lançamento</button>
         </div>
       </div>
@@ -235,7 +235,7 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
             {contaSel === c.id && (
               <button
                 onClick={() => onDeleteConta(c.id)}
-                className="flex items-center justify-center px-2 border border-l-0 border-white/20 rounded-r-xl bg-white/10 text-red-400 hover:text-white hover:bg-red-500 transition-colors"
+                className="hidden md:flex items-center justify-center px-2 border border-l-0 border-white/20 rounded-r-xl bg-white/10 text-red-400 hover:text-white hover:bg-red-500 transition-colors"
                 title="Excluir Conta Bancária"
               >
                 🗑️
@@ -259,9 +259,8 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
         ))}
       </div>
 
-      {/* Filtros e lista */}
-      <div className="bg-surface border border-white/5 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {/* Filtros — só desktop */}
+        <div className="hidden md:flex items-center gap-2 mb-3 flex-wrap">
           <input className="input text-xs flex-1 min-w-[140px]" placeholder="🔍 Buscar lançamento..."
             value={busca} onChange={e => setBusca(e.target.value)} />
           <select className="input text-xs w-36" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
@@ -302,7 +301,7 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
                           ✓
                         </button>
                       )}
-                      <div className="flex items-center gap-1">
+                      <div className="hidden md:flex items-center gap-1">
                         <button onClick={() => onEditLancamento(l)}
                           className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-300 transition-opacity ml-1" title="Editar Lançamento">
                           ✏️
