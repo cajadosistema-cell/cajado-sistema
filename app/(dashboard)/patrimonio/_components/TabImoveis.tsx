@@ -122,13 +122,18 @@ Documento: ${texto.substring(0, 4000)}`
       if (!parsed) throw new Error('IA retornou formato inválido. Tente colar apenas as primeiras linhas do documento.')
       if (Array.isArray(parsed)) parsed = parsed[0]
 
-      // empresa_id na tabela imoveis referencia perfis.id (ID do usuário logado)
+      // empresa_id deve ser o UUID da empresa (perfis.empresa_id), exigido pela RLS
       const { data: userData } = await supabase.auth.getUser()
-      const userId = userData.user?.id ?? null
+      let empresaId: string | null = null
+      if (userData.user) {
+        const { data: perf } = await supabase
+          .from('perfis').select('empresa_id').eq('id', userData.user.id).single()
+        empresaId = perf?.empresa_id ?? null
+      }
 
       setMsg('Salvando imóvel...')
       const { error } = await (supabase.from('imoveis') as any).insert({
-        empresa_id: userId,
+        empresa_id: empresaId,
         titulo: parsed.titulo || 'Imóvel importado',
         endereco: parsed.endereco || null,
         tipo_imovel: parsed.tipo_imovel || 'residencial',
@@ -246,9 +251,13 @@ export function TabImoveis() {
     if (editId) {
       await (supabase.from('imoveis') as any).update(payload).eq('id', editId)
     } else {
-      // empresa_id referencia perfis.id (user id) nesta tabela
+      // empresa_id = UUID da empresa (exigido pela RLS policy)
       const { data: userData } = await supabase.auth.getUser()
-      if (userData.user?.id) payload.empresa_id = userData.user.id
+      if (userData.user) {
+        const { data: perf } = await supabase
+          .from('perfis').select('empresa_id').eq('id', userData.user.id).single()
+        if (perf?.empresa_id) payload.empresa_id = perf.empresa_id
+      }
       await (supabase.from('imoveis') as any).insert(payload)
     }
     setShowForm(false); setEditId(null); refetch(); setForm(FORM_INICIAL)

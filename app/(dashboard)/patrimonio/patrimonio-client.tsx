@@ -115,9 +115,14 @@ function ModalImportarPatrimonio({
 
         if (detectSaldoDevedor(rows)) {
           // ── Modo Saldo Devedor → importa para tabela `imoveis` ──
-          // empresa_id em imoveis referencia perfis.id (user id), não empresas.id
+          // empresa_id = UUID da empresa (exigido pela RLS)
           const { data: userData } = await supabase.auth.getUser()
-          const userId = userData.user?.id ?? null
+          let userId: string | null = null
+          if (userData.user) {
+            const { data: perf } = await supabase
+              .from('perfis').select('empresa_id').eq('id', userData.user.id).single()
+            userId = perf?.empresa_id ?? null
+          }
 
           // Agrupa por Unidade (cada unidade = 1 imóvel)
           const grupos: Record<string, Record<string, string>[]> = {}
