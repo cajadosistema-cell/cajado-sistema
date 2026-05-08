@@ -507,9 +507,32 @@ export default function PatrimonioClient() {
   const { data: custosDB, refetch: refetchCustos } = useSupabaseQuery<CustoPatrimonio>('custos_patrimonio', {
     orderBy: { column: 'data', ascending: false },
   })
+  // Busca imóveis da tabela dedicada para exibir na Visão Geral
+  const { data: imoveisDB } = useSupabaseQuery<any>('imoveis', {
+    orderBy: { column: 'criado_em', ascending: false },
+  } as any)
+
+  // Converte imóveis para o formato ProjetoPatrimonio para exibição na Visão Geral
+  const imoveisComoProjetoGeral: ProjetoPatrimonio[] = imoveisDB.map((im: any) => ({
+    id: im.id,
+    titulo: im.titulo,
+    tipo: 'imovel' as const,
+    descricao: [im.construtora, im.unidade, im.endereco].filter(Boolean).join(' · ') || null,
+    valor_investido_total: im.valor_compra || im.valor_total_contrato || 0,
+    valor_mercado_atual: im.valor_mercado || null,
+    roi_percentual: im.valor_mercado && (im.valor_compra || im.valor_total_contrato) > 0
+      ? ((im.valor_mercado - (im.valor_compra || im.valor_total_contrato)) / (im.valor_compra || im.valor_total_contrato)) * 100
+      : null,
+    data_aquisicao: im.data_aquisicao || null,
+    status: 'ativo' as const,
+    parcelas_total: im.parcelas_total ?? null,
+    parcelas_pagas: im.parcelas_pagas ?? null,
+  }))
 
   // Fallback para exibir na tela caso banco esteja vazio
-  const projetos = projetosDB.length > 0 ? projetosDB : MOCK_PROJETOS
+  const projetosBase = projetosDB.length > 0 ? projetosDB : MOCK_PROJETOS
+  // Combina projetos_patrimonio + imoveis para Visão Geral
+  const projetos = [...projetosBase, ...imoveisComoProjetoGeral]
   const custos = custosDB.length > 0 ? custosDB : MOCK_CUSTOS
 
   // Filtra projetos por aba (veiculos e outros filtram dentro do tab Geral)
