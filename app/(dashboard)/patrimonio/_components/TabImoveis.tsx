@@ -25,6 +25,8 @@ type Imovel = {
   parcelas_pagas: number | null
   indexador: string | null
   data_aquisicao: string | null
+  dia_vencimento: number | null
+  categoria_financeira: string | null
 }
 
 const STATUS_CONFIG = {
@@ -39,7 +41,156 @@ const FORM_INICIAL = {
   area_m2: '', quartos: '', vagas: '', valor_compra: '', valor_mercado: '',
   status: 'disponivel' as Imovel['status'], construtora: '', unidade: '',
   valor_total_contrato: '', valor_parcela: '', parcelas_total: '',
-  parcelas_pagas: '0', indexador: '', data_aquisicao: ''
+  parcelas_pagas: '0', indexador: '', data_aquisicao: '',
+  dia_vencimento: '', categoria_financeira: 'Financiamento Imobiliário'
+}
+
+// ── Modal Lançar Parcela no Financeiro ────────────────────────────
+function ModalLancarParcela({ imovel, onClose, onLancado }: {
+  imovel: Imovel
+  onClose: () => void
+  onLancado: () => void
+}) {
+  const supabase = createClient()
+  const [contas, setContas] = useState<{id:string;nome:string;tipo:string}[]>([])
+  const hoje = new Date()
+  const diaVenc = imovel.dia_vencimento || 10
+  const dataVenc = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc)
+  const dataVencStr = dataVenc.toISOString().split('T')[0]
+  const proxParcela = (imovel.parcelas_pagas ?? 0) + 1
+
+  const [form, setForm] = useState({
+    conta_id: '',
+    valor: String(imovel.valor_parcela || ''),
+    descricao: `Parcela ${proxParcela}/${imovel.parcelas_total ?? '?'} – ${imovel.titulo}`,
+    data_competencia: dataVencStr,
+    categoria_financeira: imovel.categoria_financeira || 'Financiamento Imobiliário',
+  })
+  const [status, setStatus] = useState<'idle'|'loading'|'ok'|'erro'>('idle')
+  const [msg, setMsg] = useState('')
+
+  useState(() => {
+    supabase.from('contas').select('id,nome,tipo').then(({ data }) => {
+      if (data) setContas(data as any)
+    })
+  })
+
+  const handleLancar = async () => {
+    if (!form.conta_id) { setMsg('❗ Selecione uma conta'); return }
+    setStatus('loading')
+    try {
+      // 1. Busca ou cria categoria
+      let catId: string | null = null
+      const { data: cats } = await supabase
+        .from('categorias_financeiras')
+        .select('id').eq('nome', form.categoria_financeira).maybeSingle()
+      if (cats?.id) {
+        catId = cats.id
+      } else {
+        const { data: novaCat } = await (supabase.from('categorias_financeiras') as any)
+          .insert({ nome: form.categoria_financeira, tipo: 'despesa', cor: '#F59E0B' })
+          .select('id').single()
+        catId = novaCat?.id ?? null
+      }
+
+      // 2. Cria o lançamento
+      const { error } = await (supabase.from('lancamentos') as any).insert({
+        conta_id: form.conta_id,
+        descricao: form.descricao,
+        valor: parseFloat(form.valor),
+        tipo: 'despesa',
+        regime: 'competencia',
+        status: 'pendente',
+        data_competencia: form.data_competencia,
+        categoria_id: catId,
+        parcela_atual: proxParcela,
+        total_parcelas: imovel.parcelas_total,
+        observacoes: `Imóvel: ${imovel.titulo} | Indexador: ${imovel.indexador || '-'}`,
+      })
+      if (error) throw new Error(error.message)
+
+      // 3. Incrementa parcelas_pagas
+      await (supabase.from('imoveis') as any)
+        .update({ parcelas_pagas: proxParcela })
+        .eq('id', imovel.id)
+
+      setStatus('ok')
+      setMsg(`✅ Parcela ${proxParcela} lançada no Financeiro!`)
+      setTimeout(() => { onLancado(); onClose() }, 1500)
+    } catch (err: any) {
+      setStatus('erro')
+      setMsg(`❌ ${err.message}`)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-5">
+          <div>
+            <h2 className="text-base font-semibold text-fg">💳 Lançar Parcela no Financeiro</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">{imovel.titulo}</p>
+          </div>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 text-xs text-blue-300">
+            <p>📊 Parcela <strong>{proxParcela}/{imovel.parcelas_total ?? '?'}</strong> &nbsp;·&nbsp; Vencimento: <strong>dia {diaVenc}</strong></p>
+            {imovel.indexador && <p className="mt-1">📌 Indexador: {imovel.indexador}</p>}
+          </div>
+
+          <div>
+            <label className="label">Valor da parcela (R$)</label>
+            <input type="number" step="0.01" className="input mt-1" value={form.valor}
+              onChange={e => setForm(f => ({...f, valor: e.target.value}))} />
+          </div>
+
+          <div>
+            <label className="label">Data de vencimento</label>
+            <input type="date" className="input mt-1" value={form.data_competencia}
+              onChange={e => setForm(f => ({...f, data_competencia: e.target.value}))} />
+          </div>
+
+          <div>
+            <label className="label">Conta para débito *</label>
+            <select className="input mt-1" value={form.conta_id}
+              onChange={e => setForm(f => ({...f, conta_id: e.target.value}))}>
+              <option value="">Selecione a conta...</option>
+              {contas.map(c => <option key={c.id} value={c.id}>{c.nome} ({c.tipo})</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Categoria financeira</label>
+            <input className="input mt-1" value={form.categoria_financeira}
+              onChange={e => setForm(f => ({...f, categoria_financeira: e.target.value}))} />
+          </div>
+
+          <div>
+            <label className="label">Descrição do lançamento</label>
+            <input className="input mt-1" value={form.descricao}
+              onChange={e => setForm(f => ({...f, descricao: e.target.value}))} />
+          </div>
+        </div>
+
+        {msg && (
+          <div className={cn('rounded-xl p-3 mt-4 text-sm',
+            status==='ok' ? 'bg-emerald-500/10 text-emerald-400' :
+            status==='erro' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400')}>
+            {status==='loading' && <span className="animate-pulse">⏳ </span>}{msg}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handleLancar} disabled={status==='loading'} className="btn-primary">
+            {status==='loading' ? '⏳ Lançando...' : '💳 Confirmar Lançamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Modal de Importação via IA ──────────────────────────────────
@@ -220,6 +371,7 @@ export function TabImoveis() {
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [showImportIA, setShowImportIA] = useState(false)
+  const [imovelLancar, setImovelLancar] = useState<Imovel | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
   const { data: imoveis, refetch } = useSupabaseQuery<Imovel>('imoveis', {
@@ -246,6 +398,8 @@ export function TabImoveis() {
       parcelas_pagas: form.parcelas_pagas ? parseInt(form.parcelas_pagas) : 0,
       indexador: form.indexador || null,
       data_aquisicao: form.data_aquisicao || null,
+      dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
+      categoria_financeira: form.categoria_financeira || null,
     }
     
     if (editId) {
@@ -281,7 +435,9 @@ export function TabImoveis() {
       valor_parcela: im.valor_parcela ? String(im.valor_parcela) : '',
       parcelas_total: im.parcelas_total ? String(im.parcelas_total) : '',
       parcelas_pagas: im.parcelas_pagas ? String(im.parcelas_pagas) : '0',
-      indexador: im.indexador || '', data_aquisicao: im.data_aquisicao || ''
+      indexador: im.indexador || '', data_aquisicao: im.data_aquisicao || '',
+      dia_vencimento: im.dia_vencimento ? String(im.dia_vencimento) : '',
+      categoria_financeira: im.categoria_financeira || 'Financiamento Imobiliário',
     })
     setEditId(im.id); setShowForm(true)
   }
@@ -375,6 +531,21 @@ export function TabImoveis() {
               </select>
             </div>
           </div>
+          {/* Vencimento e Categoria (novos campos) */}
+          <p className="text-[10px] text-fg-tertiary uppercase tracking-widest pt-1 border-t border-border-subtle">📅 Lançamento Automático de Parcela</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Dia do vencimento (1–31)</label>
+              <input type="number" min="1" max="31" className="input mt-1" value={form.dia_vencimento}
+                placeholder="Ex: 10" onChange={e => setForm(f => ({...f, dia_vencimento: e.target.value}))} />
+            </div>
+            <div>
+              <label className="label">Categoria financeira</label>
+              <input className="input mt-1" value={form.categoria_financeira}
+                placeholder="Ex: Financiamento Imobiliário"
+                onChange={e => setForm(f => ({...f, categoria_financeira: e.target.value}))} />
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="label">Data de Aquisição</label><input type="date" className="input mt-1" value={form.data_aquisicao} onChange={e => setForm(f => ({...f, data_aquisicao: e.target.value}))} /></div>
             <div>
@@ -447,11 +618,14 @@ export function TabImoveis() {
                       <div className="h-full rounded-full transition-all duration-700"
                         style={{ width: `${prog}%`, background: prog >= 90 ? '#10b981' : prog >= 50 ? '#3b82f6' : '#f59e0b' }} />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 mb-2">
                       {im.valor_parcela && (
                         <div>
                           <p className="text-[9px] text-fg-disabled uppercase">Parcela mensal</p>
                           <p className="text-xs font-bold text-amber-400">{formatCurrency(im.valor_parcela)}</p>
+                          {im.dia_vencimento && (
+                            <p className="text-[9px] text-fg-disabled mt-0.5">📅 Vence dia {im.dia_vencimento}</p>
+                          )}
                         </div>
                       )}
                       {saldoDevedor !== null && (
@@ -461,6 +635,15 @@ export function TabImoveis() {
                         </div>
                       )}
                     </div>
+                    {/* Botão lançar parcela */}
+                    {prog < 100 && (
+                      <button
+                        onClick={() => setImovelLancar(im)}
+                        className="w-full mt-1 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        💳 Lançar Parcela {pp + 1}/{pt} no Financeiro
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -483,6 +666,13 @@ export function TabImoveis() {
 
       {showImportIA && (
         <ModalImportarIA onClose={() => setShowImportIA(false)} onImportado={refetch} />
+      )}
+      {imovelLancar && (
+        <ModalLancarParcela
+          imovel={imovelLancar}
+          onClose={() => setImovelLancar(null)}
+          onLancado={refetch}
+        />
       )}
     </div>
   )
