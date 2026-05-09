@@ -81,17 +81,38 @@ async function bootstrap() {
     console.log(`[Boot] ${configs.length} configurações carregadas.`);
   }
 
-  // 4. Carrega canais (mapeamento instance_name → empresa_id) — via fetch nativo
-  const canais = await sbFetch("canais", "select=*");
-  if (canais.length > 0) {
+  // 4. Carrega canais com CREDENCIAIS COMPLETAS (multi-tenant)
+  // Após restart, api_key e evolution_url são restaurados do banco
+  const carregarCanais = async () => {
+    const canais = await sbFetch("canais", "select=*");
+    let count = 0;
     canais.forEach(c => {
-      const idx = c.tipo === "evolution" ? c.dados_conexao?.instance_name : c.dados_conexao?.phone_number_id;
-      if (idx) canaisMemoria.set(idx, c.empresa_id);
+      if (c.tipo === "evolution") {
+        const idx = c.dados_conexao?.instance_name;
+        if (idx) {
+          canaisMemoria.set(idx, {
+            empresa_id:    c.empresa_id,
+            api_key:       c.dados_conexao?.api_key       || null,
+            evolution_url: c.dados_conexao?.evolution_url || null,
+          });
+          count++;
+        }
+      } else if (c.tipo === "cloud_api") {
+        const idx = c.dados_conexao?.phone_number_id;
+        if (idx) {
+          canaisMemoria.set(idx, c.empresa_id); // backward compat
+          count++;
+        }
+      }
     });
-    console.log(`[Boot] ${canais.length} canais carregados.`);
-  }
+    console.log(`[Boot] ${count} canais carregados (com credenciais).`);
+    return count;
+  };
 
-  // 5. Carrega times padrão da memória (já populados em memory.js com os defaults)
+  await carregarCanais();
+
+  // Reload periódico de canais a cada 5 min (pega novos canais sem redeploy)
+  setInterval(carregarCanais, 5 * 60 * 1000);
 
   console.log("[Boot] ✅ Bootstrap completo.");
 }
