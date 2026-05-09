@@ -10,12 +10,19 @@ require("dotenv").config();
 
 const app = express();
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://cajado-sistema.vercel.app',
-    // Permite qualquer preview URL da Vercel para este projeto
-    /^https:\/\/cajado-sistema.*\.vercel\.app$/
-  ],
+  origin: (origin, callback) => {
+    // Permite requisições sem origin (ex: curl, Postman, mobile)
+    if (!origin) return callback(null, true);
+    const allowed = [
+      /^https?:\/\/localhost(:\d+)?$/,
+      /^https:\/\/cajado-sistema.*\.vercel\.app$/,
+      /^https:\/\/.*\.railway\.app$/,
+      /^https:\/\/.*\.up\.railway\.app$/,
+    ];
+    if (allowed.some(r => r.test(origin))) return callback(null, true);
+    console.warn(`[CORS] Bloqueado: ${origin}`);
+    callback(new Error(`CORS: origem não permitida: ${origin}`));
+  },
   credentials: true
 }));
 app.use(express.json({ limit: "10mb" }));
