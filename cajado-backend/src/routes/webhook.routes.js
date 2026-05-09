@@ -206,7 +206,7 @@ router.post(["/evolution", "/"], async (req, res) => {
        const ctx = `O bot está pausado para este cliente (${nomeParaInbox}) que aguarda atendimento humano. Ele enviou: ${messageText}`;
        envioAoCliente = await chamarOpenRouter([], ctx, promptEspera);
        
-       await enviarWhatsApp(number, envioAoCliente, instanceName);
+       await enviarWhatsApp(number, envioAoCliente, instanceName, messageId);
        const msgBotErr = { id: `bot-${Date.now()}`, tipo: "bot", texto: envioAoCliente, numero: number, timestamp: new Date().toISOString() };
        await registrarNaConversa(number, msgBotErr, nomeParaInbox, null, empresa_id, instanceName);
        return;
@@ -266,7 +266,7 @@ router.post(["/evolution", "/"], async (req, res) => {
       }
     }
 
-    await enviarWhatsApp(number, envioAoCliente, instanceName);
+    await enviarWhatsApp(number, envioAoCliente, instanceName, messageId);
     console.log(`[Bot → ${number}]: ${envioAoCliente}`);
 
     const msgBot = { id: `bot-${Date.now()}`, tipo: "bot", texto: envioAoCliente, numero: number, timestamp: new Date().toISOString() };
