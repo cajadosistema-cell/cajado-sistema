@@ -510,16 +510,20 @@ export default function InboxClient() {
     if (!conversa || !numeroAtivo) return
     const botEstaAtivo = conversa.botOn !== false
 
-    if (botEstaAtivo) {
-      await toggleBot(numeroAtivo, true)
-      await humanouAssumiu(numeroAtivo, 'Atendente')
-    } else {
-      await reativarBot(numeroAtivo)
-      await toggleBot(numeroAtivo, false)
+    try {
+      if (botEstaAtivo) {
+        await toggleBot(numeroAtivo, true)
+        await humanouAssumiu(numeroAtivo, 'Atendente')
+      } else {
+        await reativarBot(numeroAtivo)
+        await toggleBot(numeroAtivo, false)
+      }
+      await refetch()
+      await refetchConversa()
+    } catch (err) {
+      console.error('[inbox] Erro ao alternar bot:', err)
+      alert('Erro ao alternar bot. Verifique sua conexão e tente novamente.')
     }
-
-    await refetch()
-    await refetchConversa()
   }
 
   return (

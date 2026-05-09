@@ -62,7 +62,7 @@ function getToken(): string | null {
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const token = getToken()
+  const token = await ensureInboxToken()
   const res = await fetch(`${API}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -71,7 +71,7 @@ async function apiGet<T>(path: string): Promise<T> {
 }
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const token = getToken()
+  const token = await ensureInboxToken()
   const res = await fetch(`${API}${path}`, {
     method: 'POST',
     headers: {
@@ -85,7 +85,7 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  const token = getToken()
+  const token = await ensureInboxToken()
   const res = await fetch(`${API}${path}`, {
     method: 'PATCH',
     headers: {
