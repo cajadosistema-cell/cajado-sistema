@@ -2,7 +2,7 @@ require("dotenv").config();
 
 module.exports = {
   PORT: process.env.PORT || 3000,
-  EVOLUTION_URL: process.env.API_URL || "https://evolution-api-production-2ae1.up.railway.app",
+  EVOLUTION_URL: process.env.API_URL || "https://evolution-api-production-ed09.up.railway.app",
   EVOLUTION_KEY: process.env.API_KEY,
   INSTANCE: process.env.INSTANCE || "botwhatsapp01",
   OPENROUTER_KEY: process.env.OPENROUTER_API_KEY,
