@@ -259,6 +259,8 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
         ))}
       </div>
 
+      {/* Filtros e lista */}
+      <div className="bg-surface border border-white/5 rounded-xl p-4">
         {/* Filtros — só desktop */}
         <div className="hidden md:flex items-center gap-2 mb-3 flex-wrap">
           <input className="input text-xs flex-1 min-w-[140px]" placeholder="🔍 Buscar lançamento..."
@@ -324,6 +326,7 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
           </div>
         )}
       </div>
+
 
       {modalLanc && (
         <ModalLancamentoConta
