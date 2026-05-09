@@ -73,13 +73,14 @@ const NAV_PESSOAL: Array<{
   },
 ]
 
-// ── 📱 BOTTOM NAV MOBILE — apenas itens essenciais ─────────────
+// ── 📱 BOTTOM NAV MOBILE — itens aprovados pelo cliente ─────────
 const BOTTOM_NAV = [
-  { href: '/inicio',     label: 'Início',     icon: '🏠' },
-  { href: '/inbox',      label: 'Inbox',      icon: '💬' },
-  { href: '/financeiro', label: 'Financeiro', icon: '💰' },
-  { href: '/vendas',     label: 'Vendas',     icon: '📋' },
-  { href: '/pf-pessoal', label: 'Pessoal',    icon: '👤' },
+  { href: '/inicio',      label: 'Início',   icon: '🏠' },
+  { href: '/inbox',       label: 'Inbox',    icon: '💬' },
+  { href: '/financeiro',  label: 'Finanças', icon: '💰' },
+  { href: '/vendas',      label: 'Vendas',   icon: '📋' },
+  { href: '/comunicacao', label: 'Equipe',   icon: '👥' },
+  { href: '/pf-pessoal',  label: 'Pessoal',  icon: '👤' },
 ]
 
 export function Sidebar() {
@@ -355,9 +356,9 @@ export function MobileBottomNav() {
                 backgroundColor: 'rgba(245,166,35,0.12)',
               } : {}}
             >
-              <span className="text-[20px] leading-none">{item.icon}</span>
+              <span className="text-[18px] leading-none">{item.icon}</span>
               <span className={cn(
-                'text-[9px] font-bold uppercase tracking-wider transition-colors',
+                'text-[8px] font-bold uppercase tracking-wider transition-colors',
                 isActive ? 'text-[#f5a623]' : 'text-fg-disabled'
               )}>
                 {item.label}
