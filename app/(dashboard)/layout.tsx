@@ -4,6 +4,7 @@ import { ChatNotifications } from '@/components/shared/chat-notifications'
 import { ToastProvider } from '@/components/shared/toast'
 import { BudgetAlertBanner } from '@/components/shared/LimitesOrcamento'
 import { HelpButton } from '@/components/shared/help-button'
+import { DashboardLayoutClient } from '@/components/shared/dashboard-layout-client'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,9 +12,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-screen pb-20 md:pb-0">
         <Sidebar />
         <main className="flex-1 min-w-0 overflow-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-6 md:py-8">
+          <DashboardLayoutClient>
             {children}
-          </div>
+          </DashboardLayoutClient>
         </main>
         <BottomNav />
         {/* Notificações de chat — ativo em TODO o dashboard */}

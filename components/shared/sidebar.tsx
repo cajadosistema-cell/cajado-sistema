@@ -193,6 +193,9 @@ export function Sidebar() {
     )
   }
 
+  // Inbox usa layout full-screen — sidebar oculta para liberar 100% da largura
+  if (pathname.startsWith('/inbox')) return null
+
   return (
     <aside className="hidden md:flex w-56 shrink-0 flex-col h-screen sticky top-0 z-40 border-r border-[0.5px]"
       style={{ backgroundColor: 'var(--bg-sidebar)', borderColor: 'var(--border-subtle)' }}

@@ -432,6 +432,7 @@ export default function InboxClient() {
   const [texto, setTexto] = useState('')
   const [nota, setNota] = useState(false)
   const [filtro, setFiltro] = useState('')
+  const [etiquetaFiltro, setEtiquetaFiltro] = useState<string>('todos')
   const [enviando, setEnviando] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [showSnippets, setShowSnippets] = useState(false)
@@ -482,11 +483,21 @@ export default function InboxClient() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [conversa?.mensagens?.length])
 
-  const conversasFiltradas = conversas.filter(c =>
-    c.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
-    c.numero?.includes(filtro) ||
-    c.etiqueta?.includes(filtro.toLowerCase())
-  )
+  const conversasFiltradas = conversas.filter(c => {
+    const matchFiltro = c.nome?.toLowerCase().includes(filtro.toLowerCase()) ||
+      c.numero?.includes(filtro) ||
+      c.etiqueta?.includes(filtro.toLowerCase())
+    const matchEtiqueta = etiquetaFiltro === 'todos' || c.etiqueta === etiquetaFiltro
+    return matchFiltro && matchEtiqueta
+  })
+
+  const TABS = [
+    { id: 'todos',    label: 'Todos' },
+    { id: 'novo',     label: 'Novo Lead' },
+    { id: 'proposta', label: 'Em Proposta' },
+    { id: 'retomar',  label: 'Retomar' },
+    { id: 'cliente',  label: 'Cliente' },
+  ]
 
   async function handleEnviar() {
     if (!texto.trim() || !numeroAtivo || enviando) return
@@ -527,8 +538,8 @@ export default function InboxClient() {
   }
 
   return (
-    // dvh (dynamic viewport height) para iOS com barra do Safari
-    <div className="flex h-[calc(100dvh-88px)] sm:h-[calc(100dvh-100px)] -mx-4 md:-mx-6 -mt-4 md:-mt-6 overflow-hidden">
+    // Tela cheia — sidebar oculta no inbox
+    <div className="flex h-screen overflow-hidden bg-[#05070a]">
 
       {/* ── Coluna 1: Lista de conversas ──────────────────────── */}
       <div className={cn("shrink-0 border-r border-border-subtle flex-col bg-[#05070a]", (numeroAtivo || showConfig) ? "hidden md:flex md:w-80" : "flex w-full md:w-80")}>
@@ -575,7 +586,7 @@ export default function InboxClient() {
             </div>
           </div>
 
-          {/* Campo de busca com botão X para limpar */}
+          {/* Campo de busca */}
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-tertiary text-sm pointer-events-none">🔍</span>
             <input
@@ -592,6 +603,29 @@ export default function InboxClient() {
                 ✕
               </button>
             )}
+          </div>
+
+          {/* Abas de filtro por etiqueta */}
+          <div className="flex gap-1 mt-2.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setEtiquetaFiltro(tab.id)}
+                className={cn(
+                  'shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all border',
+                  etiquetaFiltro === tab.id
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                    : 'bg-transparent border-border-subtle text-fg-tertiary hover:text-fg hover:border-border'
+                )}
+              >
+                {tab.label}
+                {tab.id !== 'todos' && (
+                  <span className="ml-1 opacity-60">
+                    {conversas.filter(c => c.etiqueta === tab.id).length || ''}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
