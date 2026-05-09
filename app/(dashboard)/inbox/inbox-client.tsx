@@ -437,6 +437,9 @@ export default function InboxClient() {
   const [showConfig, setShowConfig] = useState(false)
   const [showSnippets, setShowSnippets] = useState(false)
   const [prevUnread, setPrevUnread] = useState(0)
+  const [abaAtiva, setAbaAtiva] = useState<'info' | 'historico'>('info')
+  const [notaAtendente, setNotaAtendente] = useState('')
+  const [salvandoNota, setSalvandoNota] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -535,6 +538,35 @@ export default function InboxClient() {
       console.error('[inbox] Erro ao alternar bot:', err)
       alert('Erro ao alternar bot. Verifique sua conexão e tente novamente.')
     }
+  }
+
+  async function handleSalvarNota() {
+    if (!notaAtendente.trim() || !numeroAtivo) return
+    setSalvandoNota(true)
+    try {
+      await enviarNota(numeroAtivo, notaAtendente)
+      setNotaAtendente('')
+      await refetchConversa()
+    } finally {
+      setSalvandoNota(false)
+    }
+  }
+
+  async function handleAssumirConversa() {
+    if (!numeroAtivo) return
+    try {
+      await toggleBot(numeroAtivo, true)
+      await humanouAssumiu(numeroAtivo, 'Atendente')
+      await refetch()
+      await refetchConversa()
+    } catch (err) {
+      console.error('[inbox] Erro ao assumir:', err)
+    }
+  }
+
+  const ETIQUETA_LABELS: Record<string, string> = {
+    novo: 'Novo Lead', proposta: 'Em Proposta', cliente: 'Cliente Ativo',
+    aguardando: 'Aguardando', retomar: 'Retomar', perdido: 'Perdido',
   }
 
   return (
@@ -857,22 +889,135 @@ export default function InboxClient() {
             )}
           </div>
 
-          {/* ── Coluna 3: Painel CRM dinâmico ────────────────────── */}
-          <div className="hidden lg:block w-72 shrink-0 border-l border-border-subtle overflow-y-auto bg-[#05070a]">
-            <div className="p-4 border-b border-border-subtle bg-page/50">
-              <p className="text-[10px] font-bold text-fg-tertiary uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                CRM Cajado
-              </p>
-            </div>
-            {numeroAtivo ? (
-              <PainelCRM numero={numeroAtivo} nome={conversas.find(c => c.numero === numeroAtivo)?.nome} />
-            ) : (
-              <div className="p-6 text-center">
-                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center mx-auto mb-3 opacity-50">
-                  🎯
+          {/* ── Coluna 3: Painel Atendimento estilo VisioPro ── */}
+          <div className="hidden lg:flex flex-col w-72 shrink-0 border-l border-border-subtle bg-[#07090f]">
+
+            {/* Contact header */}
+            <div className="p-4 border-b border-border-subtle flex-shrink-0">
+              {numeroAtivo && conversa ? (
+                <div className="flex items-start gap-3">
+                  <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-bold ring-1', conversa.botOn !== false ? 'bg-emerald-500/20 text-emerald-400 ring-emerald-500/30' : 'bg-amber-500/20 text-amber-400 ring-amber-500/30')}>
+                    {conversa.nome?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-fg truncate">{conversa.nome || '—'}</p>
+                    <p className="text-[10px] text-fg-tertiary font-mono truncate">{numeroAtivo}</p>
+                    <span className={cn('mt-1 inline-block text-[10px] font-bold px-2 py-0.5 rounded-full', etiquetaColors[conversa.etiqueta || 'novo'] || 'bg-blue-500/15 text-blue-400')}>
+                      {ETIQUETA_LABELS[conversa.etiqueta || ''] || 'Novo Lead'}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-xs text-fg-disabled leading-relaxed">Selecione um chat para ver o lead no CRM — altere o status do funil e registre atividades sem sair do Inbox.</p>
+              ) : (
+                <p className="text-[10px] font-bold text-fg-tertiary uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  CRM Cajado
+                </p>
+              )}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-border-subtle flex-shrink-0">
+              {(['info', 'historico'] as const).map(aba => (
+                <button key={aba} onClick={() => setAbaAtiva(aba)}
+                  className={cn('flex-1 py-2 text-xs font-semibold transition-colors', abaAtiva === aba ? 'text-emerald-400 border-b-2 border-emerald-500' : 'text-fg-tertiary hover:text-fg')}
+                >
+                  {aba === 'info' ? 'Info' : 'Histórico'}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {abaAtiva === 'info' && numeroAtivo && conversa ? (
+                <div className="p-4 space-y-4">
+                  {/* Etiqueta */}
+                  <div>
+                    <label className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1.5 block">Etiqueta</label>
+                    <select value={conversa.etiqueta || 'novo'} onChange={async e => { await mudarEtiqueta(numeroAtivo, e.target.value); await refetch() }}
+                      className="w-full text-xs py-1.5 px-2.5 bg-muted border border-border-subtle rounded-lg text-fg outline-none cursor-pointer">
+                      <option value="novo">Novo Lead</option>
+                      <option value="proposta">Em Proposta</option>
+                      <option value="cliente">Cliente Ativo</option>
+                      <option value="aguardando">Aguardando</option>
+                      <option value="retomar">Retomar</option>
+                      <option value="perdido">Perdido</option>
+                    </select>
+                  </div>
+                  {/* Setor */}
+                  <div>
+                    <label className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1.5 block">Setor</label>
+                    <select value={conversa.setor || ''} onChange={async e => { await mudarSetor(numeroAtivo, e.target.value); await refetch() }}
+                      className="w-full text-xs py-1.5 px-2.5 bg-muted border border-border-subtle rounded-lg text-fg outline-none cursor-pointer">
+                      <option value="">Pendente / Sem Setor</option>
+                      <option value="vendas">Vendas</option>
+                      <option value="suporte">Suporte</option>
+                      <option value="financeiro">Financeiro</option>
+                      <option value="cursos">Cursos</option>
+                      <option value="reciclagem">Reciclagem CNH</option>
+                      <option value="mopp">MOPP</option>
+                      <option value="transporte_escolar">Transp. Escolar</option>
+                    </select>
+                  </div>
+                  {/* Bot toggle */}
+                  <div className="flex items-center justify-between py-1">
+                    <div>
+                      <p className="text-xs font-semibold text-fg-secondary">Bot IA</p>
+                      <p className="text-[10px] text-fg-tertiary">{conversa.botOn !== false ? 'Ativo' : 'Pausado'}</p>
+                    </div>
+                    <button onClick={handleToggleBot} className={cn('relative w-10 h-5 rounded-full transition-all duration-300', conversa.botOn !== false ? 'bg-emerald-500' : 'bg-zinc-700')}>
+                      <span className={cn('absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300', conversa.botOn !== false ? 'translate-x-5' : 'translate-x-0.5')} />
+                    </button>
+                  </div>
+                  {/* Responsável */}
+                  <div>
+                    <label className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1 block">Responsável</label>
+                    <p className="text-xs text-fg-secondary">{(conversa as any).assumido_nome || '— Sem atendente'}</p>
+                  </div>
+                  {/* Canal */}
+                  <div>
+                    <label className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1 block">Canal</label>
+                    <p className="text-xs text-fg-secondary">💬 WhatsApp{(conversa as any).instanceName ? ` (${(conversa as any).instanceName})` : ''}</p>
+                  </div>
+                  <div className="border-t border-border-subtle" />
+                  {/* Notas Internas */}
+                  <div>
+                    <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-2">Notas Internas</p>
+                    <textarea placeholder="Adicionar nota sobre este cliente..." value={notaAtendente} onChange={e => setNotaAtendente(e.target.value)} rows={3}
+                      className="w-full text-xs py-2 px-3 bg-muted border border-border-subtle rounded-lg text-fg placeholder:text-fg-disabled resize-none outline-none focus:border-emerald-500/50 transition-colors" />
+                    <button onClick={handleSalvarNota} disabled={!notaAtendente.trim() || salvandoNota}
+                      className="mt-2 w-full py-1.5 text-xs font-semibold bg-muted hover:bg-surface-hover border border-border-subtle rounded-lg text-fg-secondary hover:text-fg transition-colors disabled:opacity-40">
+                      {salvandoNota ? 'Salvando...' : '💾 Salvar nota'}
+                    </button>
+                  </div>
+                </div>
+              ) : abaAtiva === 'historico' && numeroAtivo ? (
+                <PainelCRM numero={numeroAtivo} nome={conversas.find(c => c.numero === numeroAtivo)?.nome} />
+              ) : (
+                <div className="p-6 text-center">
+                  <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center mx-auto mb-3 opacity-50">🎯</div>
+                  <p className="text-xs text-fg-disabled leading-relaxed">Selecione um chat para ver o lead no CRM.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Ações Rápidas */}
+            {numeroAtivo && (
+              <div className="p-3 space-y-2 border-t border-border-subtle flex-shrink-0">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">Ações Rápidas</p>
+                <button onClick={handleAssumirConversa}
+                  className="w-full py-2 text-xs font-bold rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all hover:border-emerald-500/50">
+                  ✋ Assumir conversa
+                </button>
+                <button
+                  onClick={async () => { const s = prompt('Setor destino: (vendas, suporte, financeiro, cursos, reciclagem, mopp)'); if (s) { await mudarSetor(numeroAtivo, s); await refetch() } }}
+                  className="w-full py-2 text-xs font-bold rounded-lg bg-muted hover:bg-surface-hover text-fg-secondary border border-border-subtle transition-all">
+                  → Transferir setor
+                </button>
+                <button
+                  onClick={async () => { await mudarEtiqueta(numeroAtivo, 'perdido'); await refetch(); setNumeroAtivo(null) }}
+                  className="w-full py-1.5 text-[10px] font-semibold rounded-lg text-fg-tertiary hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-colors">
+                  ✕ Arquivar
+                </button>
               </div>
             )}
           </div>
