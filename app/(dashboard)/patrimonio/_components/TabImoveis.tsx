@@ -371,21 +371,29 @@ ${dadosSample}
 Extraia os dados do PRIMEIRO imóvel e retorne APENAS o JSON abaixo sem texto adicional, sem markdown:
 {"titulo":"construtora + unidade","construtora":"empresa","unidade":"cod","endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":0,"valor_total_contrato":0,"valor_parcela":0,"parcelas_total":0,"parcelas_pagas":0,"indexador":"REAL","taxa_juros_anual":null,"data_aquisicao":"YYYY-MM-DD","status":"disponivel"}`
 
+      // Para PDFs longos: envia o início (cabeçalho + primeiras parcelas) E o final (resumo/totais)
+      const textoInicio = texto.substring(0, 12000)
+      const textoFinal = texto.length > 14000 ? texto.substring(texto.length - 3000) : ''
+      const textoParaIA = textoFinal
+        ? `=== INÍCIO DO DOCUMENTO ===\n${textoInicio}\n\n=== FINAL DO DOCUMENTO (resumo/totais) ===\n${textoFinal}`
+        : textoInicio
+
       const promptDoc = `Você está analisando um documento "Saldo Devedor Presente" de financiamento imobiliário brasileiro.
 O documento pode conter MÚLTIPLOS contratos/imóveis. Se houver mais de um, escolha o imóvel com MAIS parcelas futuras a vencer (o contrato ativo principal).
 
 REGRAS CRÍTICAS para extração:
-1. "parcelas_pagas" = conte as linhas da tabela que possuem datas NO PASSADO (já vencidas e pagas)
-2. "parcelas_total" = conte o TOTAL de linhas da tabela de parcelas (pagas + a vencer)
-3. "valor_parcela" = valor da parcela mensal (campo "Valor Original" ou "Valor Atualizado" de uma linha típica)
-4. "valor_total_contrato" = campo "Valor total do contrato" ou soma total
-5. "titulo" = nome da empresa construtora + unidade (ex: "GMS SPE LTDA — S01-Q05-LT14")
-6. "indexador" = campo Indexador (ex: REAL, INCC-M, IGP-M, TR, IPCA)
-7. "status" = use APENAS uma destas palavras exatas: disponivel, alugado, vendido, em_reforma
-8. "tipo_imovel" = use APENAS: residencial, comercial, terreno, galpao
+1. "parcelas_total" = PRIORIDADE: use o campo "Ano próximo" ou "Total parcelas" ou conte o número de parcela mais alto visível na tabela. NÃO conte apenas as linhas visíveis.
+2. "parcelas_pagas" = procure na seção "VALORES PAGOS" — conte quantas linhas existem, ou use "Total parcelas pagas" se existir no resumo
+3. Se o documento tiver seção "=== FINAL DO DOCUMENTO ===" com totalizadores, USE esses valores para parcelas_total e parcelas_pagas
+4. "valor_parcela" = valor da parcela mensal (campo "Valor Original" ou "Valor Atualizado" de uma linha típica)
+5. "valor_total_contrato" = campo "Valor total do contrato"
+6. "titulo" = nome da empresa construtora + unidade (ex: "GMS SPE LTDA — S01-Q05-LT14")
+7. "indexador" = campo Indexador (ex: REAL, INCC-M, IGP-M, TR, IPCA)
+8. "status" = use APENAS uma destas palavras exatas: disponivel, alugado, vendido, em_reforma
+9. "tipo_imovel" = use APENAS: residencial, comercial, terreno, galpao
 
-Documento (${texto.length} chars total — primeiros 12000):
-${texto.substring(0, 12000)}
+Documento (${texto.length} chars totais):
+${textoParaIA}
 
 Retorne APENAS JSON válido sem markdown:
 {"titulo":"empresa + unidade","construtora":"nome empresa","unidade":"cod","endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":null,"valor_total_contrato":null,"valor_parcela":null,"parcelas_total":null,"parcelas_pagas":0,"indexador":null,"taxa_juros_anual":null,"data_aquisicao":null,"status":"disponivel"}`
