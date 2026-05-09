@@ -571,12 +571,15 @@ export default function InboxClient() {
   async function handleAssumirConversa() {
     if (!numeroAtivo) return
     try {
+      console.log('Assumindo conversa:', numeroAtivo)
       await toggleBot(numeroAtivo, true)
       await humanouAssumiu(numeroAtivo, 'Atendente')
       await refetch()
       await refetchConversa()
-    } catch (err) {
+      console.log('Conversa assumida com sucesso!')
+    } catch (err: any) {
       console.error('[inbox] Erro ao assumir:', err)
+      alert('Erro ao assumir: ' + (err.message || 'Erro desconhecido'))
     }
   }
 
