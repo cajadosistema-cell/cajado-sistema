@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { PushNotificationButton } from '@/components/shared/push-notification-button'
 import { ThemeToggle } from '@/components/cajado/ThemeToggle'
 import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
@@ -323,7 +324,16 @@ function SidebarUser({ userData }: { userData: {nome: string, cargo: string, ema
               </div>
             </div>
 
-            <div className="p-6 bg-surface/30 border-t border-border-subtle mt-4 flex gap-3">
+            <div className="px-6 pb-4 mt-2">
+              <div className="p-3 bg-surface border border-border-subtle rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-fg-tertiary uppercase tracking-wider font-bold block">🔔 Alertas Mobile</span>
+                  <span className="text-xs text-fg-secondary">Notificações no celular</span>
+                </div>
+                <PushNotificationButton />
+              </div>
+            </div>
+            <div className="p-6 bg-surface/30 border-t border-border-subtle mt-2 flex gap-3">
               <button onClick={() => setModalOpen(false)} className="btn-secondary flex-1 py-2">Voltar</button>
               <button onClick={handleLogout} className="btn-primary bg-red-600/90 hover:bg-red-500 border-red-600/50 flex-1 py-2 shadow-lg shadow-red-500/20 text-white">Sair do Sistema</button>
             </div>
