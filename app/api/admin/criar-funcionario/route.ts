@@ -3,11 +3,14 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+// Lazy init: só cria o client quando a rota é chamada (não no build)
+function getAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 type CookieToSet = { name: string; value: string; options?: Record<string, unknown> }
 
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Criar o usuário no Supabase Auth (usando service_role)
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: authData, error: authError } = await getAdmin().auth.admin.createUser({
       email,
       password: senha,
       email_confirm: true, // Confirmar o email automaticamente (sem precisar de verificação)
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Inserir na tabela 'funcionarios' com as permissões + empresa_id
-    const { error: dbError } = await supabaseAdmin
+    const { error: dbError } = await getAdmin()
       .from('funcionarios')
       .insert({
         user_id: userId,
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
 
     if (dbError) {
       // Rollback: remover o usuário do Auth se falhar o insert na tabela
-      await supabaseAdmin.auth.admin.deleteUser(userId)
+      await getAdmin().auth.admin.deleteUser(userId)
       return NextResponse.json({ error: `Erro ao salvar perfil: ${dbError.message}` }, { status: 500 })
     }
 

@@ -3,11 +3,14 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+// Lazy init: só cria o client quando a rota é chamada (não no build)
+function getAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 type CookieToSet = { name: string; value: string; options?: Record<string, unknown> }
 
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Verifica se o funcionário pertence à empresa do admin
-    const { data: func } = await supabaseAdmin
+    const { data: func } = await getAdmin()
       .from('funcionarios')
       .select('id, user_id')
       .eq('id', id)
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest) {
     const authUserId = (func as any)?.user_id ?? id
 
     // 2. Remover da tabela funcionarios
-    const { error: dbError } = await supabaseAdmin
+    const { error: dbError } = await getAdmin()
       .from('funcionarios')
       .delete()
       .eq('id', id)
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Remover do Supabase Auth
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(authUserId)
+    const { error: authError } = await getAdmin().auth.admin.deleteUser(authUserId)
 
     if (authError && !authError.message.toLowerCase().includes('not found')) {
       return NextResponse.json(

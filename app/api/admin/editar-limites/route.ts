@@ -3,11 +3,14 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+// Lazy init: só cria o client quando a rota é chamada (não no build)
+function getAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 type CookieToSet = { name: string; value: string; options?: Record<string, unknown> }
 
@@ -42,7 +45,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Filtra pelo empresa_id do admin — impede editar funcionários de outra empresa
-    const { error: dbError } = await supabaseAdmin
+    const { error: dbError } = await getAdmin()
       .from('funcionarios')
       .update({ permissoes: permissoes || [] })
       .eq('id', id)
