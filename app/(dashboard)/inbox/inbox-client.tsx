@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import {
@@ -577,9 +578,21 @@ export default function InboxClient() {
       <div className={cn("shrink-0 border-r border-border-subtle flex-col bg-[#05070a]", (numeroAtivo || showConfig) ? "hidden md:flex md:w-80" : "flex w-full md:w-80")}>
         <div className="px-3 pt-3 pb-2 border-b border-border-subtle flex-shrink-0">
           <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-semibold text-fg font-display">
-              Inbox <span className="text-emerald-400 font-normal">WhatsApp</span>
-            </h2>
+            <div className="flex items-center gap-2">
+              {/* Botão voltar ao sistema */}
+              <Link
+                href="/inicio"
+                className="flex items-center justify-center w-7 h-7 rounded-lg bg-muted/60 border border-border-subtle text-fg-tertiary hover:text-fg hover:bg-surface-hover transition-all"
+                title="Voltar ao sistema"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <path d="m15 18-6-6 6-6"/>
+                </svg>
+              </Link>
+              <h2 className="text-sm font-semibold text-fg font-display">
+                Inbox <span className="text-emerald-400 font-normal">WhatsApp</span>
+              </h2>
+            </div>
             <div className="flex items-center gap-2">
               {totalUnread > 0 && (
                 <span className="bg-emerald-500 text-zinc-950 text-[10px] font-bold px-2 py-0.5 rounded-full">
