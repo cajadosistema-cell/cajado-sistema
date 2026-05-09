@@ -2,15 +2,17 @@ import { NextResponse } from 'next/server'
 import webPush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 
-webPush.setVapidDetails(
-  process.env.VAPID_CONTACT!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
-
 // Envia push para um ou mais usuários destinatários
 export async function POST(req: Request) {
   try {
+    if (process.env.VAPID_CONTACT && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+      webPush.setVapidDetails(
+        process.env.VAPID_CONTACT,
+        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+      )
+    }
+
     const { destinatarioId, remetenteNome, texto, url } = await req.json()
 
     if (!destinatarioId) {
