@@ -175,6 +175,22 @@ router.post("/vincular-instancia", authMiddleware, async (req, res) => {
       }
     }
 
+    // 1b. Aplica anti-ban settings (independente do webhook)
+    try {
+      await evo("POST", `/settings/set/${instanceName}`, {
+        rejectCall: true,
+        msgCall: "Não realizamos atendimentos por chamada. Envie uma mensagem de texto! 😊",
+        groupsIgnore: true,
+        alwaysOnline: false,
+        readMessages: false,
+        readStatus: false,
+        syncFullHistory: false,
+      }, instCreds);
+      console.log(`[CANAIS] ✅ Anti-ban aplicado em ${instanceName}`);
+    } catch (e) {
+      console.warn(`[CANAIS] ⚠️ Anti-ban não aplicado em ${instanceName}:`, e.message);
+    }
+
     // 2. Verifica o estado REAL da instância antes de salvar
     let isConnected = false;
     try {
