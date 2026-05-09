@@ -425,18 +425,33 @@ Documento: ${texto.substring(0, 4000)}`
         empresaId = perf?.empresa_id ?? null
       }
 
+      // Sanitiza campos com CHECK CONSTRAINT — IA pode retornar valores fora do padrão
+      const STATUS_VALIDOS = ['disponivel', 'alugado', 'vendido', 'em_obra', 'quitado', 'financiado']
+      const TIPO_VALIDOS   = ['residencial', 'comercial', 'terreno', 'galpao']
+
+      const sanitizeStatus = (v: string | null | undefined): string => {
+        if (!v) return 'disponivel'
+        const norm = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+        return STATUS_VALIDOS.find(s => norm.includes(s)) ?? 'disponivel'
+      }
+      const sanitizeTipo = (v: string | null | undefined): string => {
+        if (!v) return 'residencial'
+        const norm = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+        return TIPO_VALIDOS.find(t => norm.includes(t)) ?? 'residencial'
+      }
+
       setMsg('Salvando imóvel...')
       const { error } = await (supabase.from('imoveis') as any).insert({
         empresa_id: empresaId,
         titulo: parsed.titulo || 'Imóvel importado',
         endereco: parsed.endereco || null,
-        tipo_imovel: parsed.tipo_imovel || 'residencial',
+        tipo_imovel: sanitizeTipo(parsed.tipo_imovel),
         area_m2: parsed.area_m2 || null,
         quartos: parsed.quartos || null,
         vagas: null,
         valor_compra: parsed.valor_compra || parsed.valor_total_contrato || null,
         valor_mercado: null,
-        status: parsed.status || 'disponivel',
+        status: sanitizeStatus(parsed.status),
         construtora: parsed.construtora || null,
         unidade: parsed.unidade || null,
         valor_total_contrato: parsed.valor_total_contrato || null,
