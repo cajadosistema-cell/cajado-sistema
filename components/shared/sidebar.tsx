@@ -8,43 +8,44 @@ import { createClient } from '@/lib/supabase/client'
 import { PushNotificationButton } from '@/components/shared/push-notification-button'
 import { ThemeToggle } from '@/components/cajado/ThemeToggle'
 import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
+import { Tooltip } from '@/components/shared/tooltip'
 
 // ── 🏢 EMPRESA — visível para todos com permissão ─────────────
 const NAV_EMPRESA: Array<{
   group: string; id: string; desktopOnly?: boolean
-  items: Array<{ href: string; label: string; desktopOnly?: boolean }>
+  items: Array<{ href: string; label: string; tooltip?: string; desktopOnly?: boolean }>
 }> = [
   {
     group: '💰 Financeiro', id: 'fin',
     items: [
-      { href: '/financeiro', label: '🏦 Contas & Caixa' },
-      { href: '/comissoes',  label: '🤝 Comissões & Parceiros', desktopOnly: true },
+      { href: '/financeiro', label: '🏦 Contas & Caixa',            tooltip: 'Lançamentos, extratos e saldos de todas as contas bancárias.' },
+      { href: '/comissoes',  label: '🤝 Comissões & Parceiros',      tooltip: 'Calcule e acompanhe comissões de parceiros e consultores.', desktopOnly: true },
     ],
   },
   {
     group: '📦 Vendas & CRM', id: 'crm',
     items: [
-      { href: '/inbox',        label: '💬 Inbox WhatsApp' },
-      { href: '/cajado',       label: '🔀 Funil CRM',              desktopOnly: true },
-      { href: '/vendas',       label: '📋 Fechamentos & OS' },
-      { href: '/pos-venda',    label: '🔁 Pós-venda',              desktopOnly: true },
-      { href: '/seguranca-wa', label: '🛡️ Anti-Ban WA',           desktopOnly: true },
+      { href: '/inbox',        label: '💬 Inbox WhatsApp',           tooltip: 'Atenda clientes via WhatsApp com IA integrada.' },
+      { href: '/cajado',       label: '🔀 Funil CRM',                tooltip: 'Visualize e mova leads pelo funil de vendas.', desktopOnly: true },
+      { href: '/vendas',       label: '📋 Fechamentos & OS',         tooltip: 'Registre e gerencie contratos e ordens de serviço.' },
+      { href: '/pos-venda',    label: '🔁 Pós-venda',                tooltip: 'Acompanhe satisfação e retenção pós-venda.', desktopOnly: true },
+      { href: '/seguranca-wa', label: '🛡️ Anti-Ban WA',             tooltip: 'Configurações de segurança para evitar banimentos no WhatsApp.', desktopOnly: true },
     ],
   },
   {
     group: '🏢 Equipe & Operações', id: 'eqp',
     items: [
-      { href: '/comunicacao',  label: '🗨️ Chat da Equipe' },
-      { href: '/inteligencia', label: '🧠 IA & Automações' },
-      { href: '/organizacao',  label: '✅ Tarefas & Projetos' },
+      { href: '/comunicacao',  label: '🗨️ Chat da Equipe',           tooltip: 'Canal de comunicação interna com toda a equipe.' },
+      { href: '/inteligencia', label: '🧠 IA & Automações',           tooltip: 'Configure e monitore automações e respostas da IA Elena.' },
+      { href: '/organizacao',  label: '✅ Tarefas & Projetos',        tooltip: 'Gerencie tarefas, projetos e prazos da equipe.' },
     ],
   },
   {
     group: '⚙️ Configurações', id: 'cfg', desktopOnly: true,
     items: [
-      { href: '/configuracoes',   label: '🏢 Empresa & Equipe',  desktopOnly: true },
-      { href: '/seguranca-geral', label: '🔒 Segurança & Logs',  desktopOnly: true },
-      { href: '/manual',          label: '📖 Manual do Sistema', desktopOnly: true },
+      { href: '/configuracoes',   label: '🏢 Empresa & Equipe',      tooltip: 'Cadastre empresa, permissões e membros da equipe.', desktopOnly: true },
+      { href: '/seguranca-geral', label: '🔒 Segurança & Logs',      tooltip: 'Logs de acesso, autenticação e controle de segurança.', desktopOnly: true },
+      { href: '/manual',          label: '📖 Manual do Sistema',     tooltip: 'Documentação completa e guia de uso do sistema.', desktopOnly: true },
     ],
   },
 ]
@@ -52,26 +53,26 @@ const NAV_EMPRESA: Array<{
 // ── 👤 PESSOAL — visível apenas para admin ─────────────────────
 const NAV_PESSOAL: Array<{
   group: string; id: string
-  items: Array<{ href: string; label: string }>
+  items: Array<{ href: string; label: string; tooltip?: string }>
 }> = [
   {
     group: '🎯 Minha Rotina', id: 'rotina',
     items: [
-      { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal'  },
-      { href: '/expansao',          label: '🚀 Objetivos & OKRs' },
-      { href: '/diario',            label: '📓 Diário de Bordo'  },
+      { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal',    tooltip: 'Visão geral dos seus KPIs, metas e agenda do dia.' },
+      { href: '/expansao',          label: '🚀 Objetivos & OKRs',  tooltip: 'Defina e acompanhe metas pessoais e profissionais.' },
+      { href: '/diario',            label: '📓 Diário de Bordo',    tooltip: 'Registre reflexões, decisões e marcos pessoais.' },
     ],
   },
   {
-    group: '💎 Finanças Pessoais', id: 'pfin',
+    group: '💸 Finanças Pessoais', id: 'pfin',
     items: [
-      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'   },
-      { href: '/patrimonio',    label: '🏠 Patrimônio'        },
-      { href: '/investimentos', label: '📈 Investimentos'     },
-      { href: '/trader',        label: '📊 Day Trader'        },
-      { href: '/gestao-pessoal',label: '👥 Equipe Pessoal'   },
-      { href: '/cofre',         label: '🔐 Cofre de Senhas'  },
-      { href: '/perfis',        label: '🧠 Perfis Comportamentais' },
+      { href: '/pf-pessoal',    label: '💵 Lançamentos PF',         tooltip: 'Controle receitas e despesas pessoais separadas da empresa.' },
+      { href: '/patrimonio',    label: '🏠 Patrimônio',              tooltip: 'Imóveis, veículos e bens — acompanhe valorizações e financiamentos.' },
+      { href: '/investimentos', label: '📈 Investimentos',           tooltip: 'Carteira de ações, fundos e renda fixa com rentabilidade.' },
+      { href: '/trader',        label: '📊 Day Trader',              tooltip: 'Diário de operações de day trade com análise de desempenho.' },
+      { href: '/gestao-pessoal',label: '👥 Equipe Pessoal',         tooltip: 'Gerencie colaboradores e equipe pessoal (doméstica, motorista etc).' },
+      { href: '/cofre',         label: '🔐 Cofre de Senhas',        tooltip: 'Senhas criptografadas com AES-256. Só você tem acesso.' },
+      { href: '/perfis',        label: '🧠 Perfis Comportamentais', tooltip: 'Descubra seu perfil DISC e temperamento pessoal.' },
       { href: '/diario',        label: '📓 Diário Pessoal'   },
     ],
   },
@@ -169,20 +170,21 @@ export function Sidebar() {
             {group.items.map(item => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all',
-                    isActive
-                      ? 'text-fg'
-                      : 'text-fg-secondary hover:text-fg hover:bg-surface'
-                  )}
-                  style={isActive ? { backgroundColor: 'var(--bg-surface)' } : {}}
-                >
-                  <span style={{ color: isActive ? 'var(--brand-gold)' : 'var(--text-tertiary)', fontSize: 12 }}>◈</span>
-                  {item.label}
-                </Link>
+                <Tooltip key={item.href} content={(item as any).tooltip || ''} side="right" delay={500}>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all w-full',
+                      isActive
+                        ? 'text-fg'
+                        : 'text-fg-secondary hover:text-fg hover:bg-surface'
+                    )}
+                    style={isActive ? { backgroundColor: 'var(--bg-surface)' } : {}}
+                  >
+                    <span style={{ color: isActive ? 'var(--brand-gold)' : 'var(--text-tertiary)', fontSize: 12 }}>◈</span>
+                    {item.label}
+                  </Link>
+                </Tooltip>
               )
             })}
           </div>
