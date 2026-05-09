@@ -479,6 +479,14 @@ Retorne APENAS JSON válido sem markdown:
     try {
       const STATUS_VALIDOS = ['disponivel', 'alugado', 'vendido', 'em_reforma', 'em_obra', 'quitado', 'financiado']
       const TIPO_VALIDOS   = ['residencial', 'comercial', 'terreno', 'galpao']
+      // Converte data brasileira dd/mm/yyyy para ISO yyyy-mm-dd (exigido pelo PostgreSQL)
+      const parseDateBR = (v: string | null | undefined): string | null => {
+        if (!v) return null
+        const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`
+        // Já está em ISO ou outro formato — retorna como está se parecer uma data válida
+        return v.match(/^\d{4}-\d{2}-\d{2}$/) ? v : null
+      }
       const sanitizeStatus = (v: string) => {
         const norm = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
         if (norm.includes('quitad') || norm.includes('liquidado')) return 'disponivel'
@@ -504,7 +512,7 @@ Retorne APENAS JSON válido sem markdown:
         parcelas_total: parseInt(String(preview.parcelas_total)) || null,
         parcelas_pagas: parseInt(String(preview.parcelas_pagas)) || 0,
         indexador: preview.indexador || null,
-        data_aquisicao: preview.data_aquisicao || null,
+        data_aquisicao: parseDateBR(preview.data_aquisicao),
         status: sanitizeStatus(preview.status || 'disponivel'),
         area_m2: null, quartos: null, vagas: null, valor_mercado: null,
         taxa_juros_anual: null, dia_vencimento: null, categoria_financeira: null,
