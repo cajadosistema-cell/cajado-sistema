@@ -10,6 +10,22 @@ function getToken() {
   return typeof window !== 'undefined' ? localStorage.getItem('cajado_inbox_token') : null
 }
 
+// Auto-login: obtém token do backend via endpoint server-side (sem expor credenciais)
+async function ensureToken(): Promise<string | null> {
+  const existing = getToken()
+  if (existing) return existing
+  try {
+    const res = await fetch('/api/inbox-token')
+    if (!res.ok) return null
+    const data = await res.json()
+    if (data.token) {
+      localStorage.setItem('cajado_inbox_token', data.token)
+      return data.token
+    }
+  } catch {}
+  return null
+}
+
 async function apiGet(path: string) {
   const res = await fetch(`${API}${path}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -795,6 +811,12 @@ function SecaoWhatsApp() {
     if (!instanceNameInput.trim()) return
     setVinculando(true); setErroVincular('')
     try {
+      // Auto-login: garante que o token do backend está disponível
+      const token = await ensureToken()
+      if (!token) {
+        setErroVincular('Não foi possível autenticar no servidor. Verifique as configurações.')
+        return
+      }
       const res = await apiPost('/canais/vincular-instancia', {
         instanceName: instanceNameInput.trim(),
         nome: nomeVincular,
