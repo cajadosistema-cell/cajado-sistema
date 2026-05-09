@@ -69,6 +69,7 @@ const NAV_PESSOAL: Array<{
       { href: '/investimentos', label: '📈 Investimentos'    },
       { href: '/trader',        label: '📊 Day Trader'       },
       { href: '/gestao-pessoal',label: '👥 Equipe Pessoal'  },
+      { href: '/cofre',         label: '🔐 Cofre de Senhas' },
     ],
   },
 ]
