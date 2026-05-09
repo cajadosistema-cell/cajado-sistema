@@ -182,29 +182,27 @@ export default function DiarioEstrategicoClient() {
     setLoadingAnalise(true)
     setAnaliseIA('')
     try {
-      const resumo = entradas.slice(0, 30).map(e =>
-        `[${e.tipo}][${e.categoria}][humor:${e.humor||'?'}] ${e.titulo ? e.titulo + ': ' : ''}${e.texto.slice(0, 200)}`
-      ).join('
----
-')
+      const linhas = entradas.slice(0, 30).map(e =>
+        `[${e.tipo}][${e.categoria}][humor:${e.humor || '?'}] ${e.titulo ? e.titulo + ': ' : ''}${e.texto.slice(0, 200)}`
+      )
+      const resumo = linhas.join('\n---\n')
       const { data: { user } } = await supabase.auth.getUser()
+      const prompt = [
+        'Analise meu diário pessoal. Identifique:',
+        '1. Padrões de comportamento (positivos e negativos)',
+        '2. Tendências de humor ao longo do tempo',
+        '3. Categorias mais frequentes e o que isso revela',
+        '4. Pontos de crescimento pessoal percebidos',
+        '5. 3 sugestões práticas para desenvolvimento',
+        '6. Uma palavra de encorajamento espiritual',
+        '',
+        'Entradas do diário:',
+        resumo,
+      ].join('\n')
       const resp = await fetch('/api/elena/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.id,
-          message: `Analise meu diário pessoal. Identifique:
-1. Padrões de comportamento (positivos e negativos)
-2. Tendências de humor ao longo do tempo
-3. Categorias mais frequentes e o que isso revela
-4. Pontos de crescimento pessoal percebidos
-5. 3 sugestões práticas para desenvolvimento
-6. Uma palavra de encoraja mentou espiritual
-
-Entradas do diário:
-${resumo}`,
-          contexto: 'diario'
-        })
+        body: JSON.stringify({ userId: user?.id, message: prompt, contexto: 'diario' }),
       })
       if (resp.ok) {
         const d = await resp.json()
