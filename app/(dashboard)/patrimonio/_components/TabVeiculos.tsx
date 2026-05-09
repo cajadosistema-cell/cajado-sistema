@@ -51,16 +51,28 @@ const FORM_INICIAL = {
 function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImportado: () => void }) {
   const supabase = createClient()
   const [texto, setTexto] = useState('')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'erro'>('idle')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'preview' | 'saving' | 'ok' | 'erro'>('idle')
   const [msg, setMsg] = useState('')
+  const [preview, setPreview] = useState<any>(null)
+  const [empresaId, setEmpresaId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => setTexto(ev.target?.result as string ?? '')
-    reader.readAsText(file, 'utf-8')
+    if (file.name.endsWith('.pdf')) {
+      setMsg('Extraindo texto do PDF...')
+      const fd = new FormData(); fd.append('file', file)
+      const res = await fetch('/api/parse-pdf', { method: 'POST', body: fd })
+      const d = await res.json()
+      if (d.error) { setMsg(`❌ ${d.error}`); return }
+      setTexto(d.text || '')
+      setMsg('')
+    } else {
+      const reader = new FileReader()
+      reader.onload = ev => setTexto(ev.target?.result as string ?? '')
+      reader.readAsText(file, 'utf-8')
+    }
   }
 
   const handleImportar = async () => {
@@ -72,123 +84,192 @@ function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImpo
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Analise este documento de veículo e extraia os dados em JSON. Retorne APENAS o JSON, sem texto extra:
+          prompt: `Analise este documento de veículo/financiamento automotivo. Retorne APENAS JSON válido:
 {
-  "titulo": "nome resumido ex: HB20 2023 Prata",
-  "marca": "marca do carro ex: Hyundai",
-  "modelo": "modelo ex: HB20",
-  "ano_fabricacao": número do ano ou null,
-  "ano_modelo": número do ano modelo ou null,
-  "placa": "placa ex: ABC1D23 ou null",
-  "cor": "cor do veículo ou null",
+  "titulo": "ex: HB20 2023 Prata",
+  "marca": null, "modelo": null,
+  "ano_fabricacao": null, "ano_modelo": null,
+  "placa": null, "cor": null,
   "combustivel": "flex|gasolina|etanol|diesel|eletrico|hibrido",
-  "km_atual": quilometragem atual como número ou null,
-  "valor_compra": valor de compra como número ou null,
-  "valor_mercado": valor de mercado atual como número ou null,
-  "financiado": true ou false,
-  "banco_financiador": "nome do banco ou null",
-  "valor_total_financiado": valor total financiado como número ou null,
-  "valor_parcela": valor da parcela mensal como número ou null,
-  "parcelas_total": total de parcelas como número ou null,
-  "parcelas_pagas": parcelas já pagas como número ou 0,
-  "taxa_juros_anual": taxa anual como número ou null,
-  "vencimento_dia": dia do vencimento 1-31 ou null,
+  "km_atual": null,
+  "valor_compra": null, "valor_mercado": null,
+  "financiado": false,
+  "banco_financiador": null,
+  "valor_total_financiado": null,
+  "valor_parcela": null,
+  "parcelas_total": null, "parcelas_pagas": 0,
+  "taxa_juros_anual": null,
+  "vencimento_dia": null,
   "status": "ativo|vendido|sinistro|em_manutencao"
 }
-
-Documento:
-${texto.substring(0, 5000)}`,
+Documento: ${texto.substring(0, 8000)}`,
           context: '',
-          systemInstruction: 'Você é um extrator de dados de documentos de veículos e financiamentos automotivos. Retorne SOMENTE JSON válido, sem markdown, sem explicações.'
+          systemInstruction: 'Retorne APENAS JSON puro. Sem texto antes, sem texto depois, sem markdown.'
         }),
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || 'Erro na IA')
-
-      const raw = data.result ?? ''
+      let raw = (data.result ?? '').trim().replace(/```json\s*/gi, '').replace(/```\s*/g, '')
       const jsonMatch = raw.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error('IA não retornou um JSON válido')
+      if (!jsonMatch) throw new Error('IA não retornou JSON válido')
       const parsed = JSON.parse(jsonMatch[0])
 
-      setMsg('Salvando veículo...')
-      const { error } = await (supabase.from('veiculos') as any).insert({
+      const { data: ud } = await supabase.auth.getUser()
+      let empId: string | null = null
+      if (ud.user) {
+        const { data: perf } = await supabase.from('perfis').select('empresa_id').eq('id', ud.user.id).single()
+        empId = perf?.empresa_id ?? null
+      }
+      setEmpresaId(empId)
+      setPreview({
         titulo: parsed.titulo || 'Veículo importado',
-        marca: parsed.marca || null,
-        modelo: parsed.modelo || null,
-        ano_fabricacao: parsed.ano_fabricacao || null,
-        ano_modelo: parsed.ano_modelo || null,
-        placa: parsed.placa || null,
-        cor: parsed.cor || null,
+        marca: parsed.marca || '', modelo: parsed.modelo || '',
+        ano_fabricacao: parsed.ano_fabricacao || '', ano_modelo: parsed.ano_modelo || '',
+        placa: parsed.placa || '', cor: parsed.cor || '',
         combustivel: parsed.combustivel || 'flex',
-        km_atual: parsed.km_atual || null,
-        valor_compra: parsed.valor_compra || null,
-        valor_mercado: parsed.valor_mercado || null,
+        valor_compra: parsed.valor_compra || '',
+        valor_total_financiado: parsed.valor_total_financiado || '',
+        valor_parcela: parsed.valor_parcela || '',
+        parcelas_total: parsed.parcelas_total || '',
+        parcelas_pagas: parsed.parcelas_pagas ?? 0,
+        banco_financiador: parsed.banco_financiador || '',
+        taxa_juros_anual: parsed.taxa_juros_anual || '',
         financiado: parsed.financiado ?? false,
-        banco_financiador: parsed.banco_financiador || null,
-        valor_total_financiado: parsed.valor_total_financiado || null,
-        valor_parcela: parsed.valor_parcela || null,
-        parcelas_total: parsed.parcelas_total || null,
-        parcelas_pagas: parsed.parcelas_pagas || 0,
-        vencimento_dia: parsed.vencimento_dia || null,
-        taxa_juros_anual: parsed.taxa_juros_anual || null,
         status: parsed.status || 'ativo',
       })
-      if (error) throw new Error(error.message)
+      setStatus('preview'); setMsg('')
+    } catch (err: any) { setStatus('erro'); setMsg(`❌ Erro: ${err.message}`) }
+  }
 
-      setStatus('ok')
-      setMsg(`✅ Veículo "${parsed.titulo}" importado com sucesso!`)
+  const handleSalvar = async () => {
+    if (!preview) return
+    setStatus('saving'); setMsg('Salvando...')
+    try {
+      const STATUS_OK = ['ativo','vendido','sinistro','em_manutencao']
+      const st = STATUS_OK.includes(preview.status) ? preview.status : 'ativo'
+      const { error } = await (supabase.from('veiculos') as any).insert({
+        empresa_id: empresaId,
+        titulo: preview.titulo || 'Veículo importado',
+        marca: preview.marca || null, modelo: preview.modelo || null,
+        ano_fabricacao: parseInt(preview.ano_fabricacao) || null,
+        ano_modelo: parseInt(preview.ano_modelo) || null,
+        placa: preview.placa || null, cor: preview.cor || null,
+        combustivel: preview.combustivel || 'flex',
+        valor_compra: parseFloat(preview.valor_compra) || null,
+        valor_mercado: null,
+        financiado: preview.financiado ?? false,
+        banco_financiador: preview.banco_financiador || null,
+        valor_total_financiado: parseFloat(preview.valor_total_financiado) || null,
+        valor_parcela: parseFloat(preview.valor_parcela) || null,
+        parcelas_total: parseInt(preview.parcelas_total) || null,
+        parcelas_pagas: parseInt(preview.parcelas_pagas) || 0,
+        taxa_juros_anual: parseFloat(preview.taxa_juros_anual) || null,
+        vencimento_dia: null, km_atual: null, status: st,
+      })
+      if (error) throw new Error(error.message)
+      setStatus('ok'); setMsg(`✅ "${preview.titulo}" importado!`)
       setTimeout(() => { onImportado(); onClose() }, 1500)
-    } catch (err: any) {
-      setStatus('erro')
-      setMsg(`❌ Erro: ${err.message}`)
-    }
+    } catch (err: any) { setStatus('erro'); setMsg(`❌ Erro: ${err.message}`) }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-xl p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
           <div>
             <h2 className="text-base font-semibold text-fg">🤖 Importar Veículo via IA</h2>
-            <p className="text-xs text-fg-tertiary mt-0.5">Cole o texto do documento ou contrato de financiamento</p>
+            <p className="text-xs text-fg-tertiary mt-0.5">
+              {status === 'preview' ? '✅ Revise os dados antes de salvar' : 'Cole o texto ou selecione um arquivo'}
+            </p>
           </div>
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
         </div>
 
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300 space-y-1">
-          <p className="font-semibold">📄 Formatos aceitos:</p>
-          <p>• Contrato de financiamento do banco (texto copiado)</p>
-          <p>• CSV com dados do veículo e parcelas</p>
-          <p>• Qualquer texto com: modelo, placa, valor financiado, parcelas</p>
-        </div>
+        {status !== 'preview' && (
+          <>
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300 space-y-1">
+              <p className="font-semibold">📄 Formatos aceitos:</p>
+              <p>• PDF do contrato de financiamento do banco</p>
+              <p>• CSV com dados do veículo e parcelas</p>
+              <p>• Qualquer texto com: modelo, placa, valor financiado, parcelas</p>
+            </div>
+            <textarea className="input w-full h-36 text-xs font-mono resize-none mb-3"
+              placeholder="Cole aqui o conteúdo do documento..." value={texto}
+              onChange={e => setTexto(e.target.value)} />
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs text-fg-tertiary">ou</span>
+              <input ref={fileRef} type="file" accept=".csv,.txt,.pdf" onChange={handleFile} className="hidden" />
+              <button onClick={() => fileRef.current?.click()} className="btn-secondary text-xs">
+                📂 Selecionar arquivo (PDF, CSV, TXT)
+              </button>
+              {texto && <span className="text-xs text-emerald-400">✓ {texto.length} chars</span>}
+            </div>
+          </>
+        )}
 
-        <textarea
-          className="input w-full h-36 text-xs font-mono resize-none mb-3"
-          placeholder="Cole aqui o conteúdo do documento do veículo..."
-          value={texto}
-          onChange={e => setTexto(e.target.value)}
-        />
-
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-xs text-fg-tertiary">ou</span>
-          <input ref={fileRef} type="file" accept=".csv,.txt" onChange={handleFile} className="hidden" />
-          <button onClick={() => fileRef.current?.click()} className="btn-secondary text-xs">
-            📂 Selecionar arquivo
-          </button>
-          {texto && <span className="text-xs text-emerald-400">✓ {texto.length} caracteres</span>}
-        </div>
-
-        {msg && (
-          <div className={cn('rounded-xl p-3 mb-4 text-sm', status === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : status === 'erro' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400')}>
-            {status === 'loading' && <span className="animate-pulse">⏳ </span>}{msg}
+        {status === 'preview' && preview && (
+          <div className="space-y-3">
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 text-xs text-emerald-300 mb-2">
+              🎯 Verifique e corrija os dados abaixo antes de salvar.
+            </div>
+            <div>
+              <label className="label text-[10px]">Título</label>
+              <input className="input mt-1 text-xs" value={preview.titulo}
+                onChange={e => setPreview((p: any) => ({ ...p, titulo: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="label text-[10px]">Marca</label>
+                <input className="input mt-1 text-xs" value={preview.marca}
+                  onChange={e => setPreview((p: any) => ({ ...p, marca: e.target.value }))} /></div>
+              <div><label className="label text-[10px]">Modelo</label>
+                <input className="input mt-1 text-xs" value={preview.modelo}
+                  onChange={e => setPreview((p: any) => ({ ...p, modelo: e.target.value }))} /></div>
+              <div><label className="label text-[10px]">Placa</label>
+                <input className="input mt-1 text-xs" value={preview.placa}
+                  onChange={e => setPreview((p: any) => ({ ...p, placa: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="label text-[10px]">Banco</label>
+                <input className="input mt-1 text-xs" value={preview.banco_financiador}
+                  onChange={e => setPreview((p: any) => ({ ...p, banco_financiador: e.target.value }))} /></div>
+              <div><label className="label text-[10px]">Total Financiado</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.valor_total_financiado}
+                  onChange={e => setPreview((p: any) => ({ ...p, valor_total_financiado: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="label text-[10px]">✅ Pagas</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.parcelas_pagas}
+                  onChange={e => setPreview((p: any) => ({ ...p, parcelas_pagas: e.target.value }))} /></div>
+              <div><label className="label text-[10px]">📦 Total</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.parcelas_total}
+                  onChange={e => setPreview((p: any) => ({ ...p, parcelas_total: e.target.value }))} /></div>
+              <div><label className="label text-[10px]">Parcela Mensal</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.valor_parcela}
+                  onChange={e => setPreview((p: any) => ({ ...p, valor_parcela: e.target.value }))} /></div>
+            </div>
           </div>
         )}
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={handleImportar} disabled={!texto.trim() || status === 'loading'} className="btn-primary">
-            {status === 'loading' ? '⏳ Processando...' : '🤖 Importar com IA'}
-          </button>
+        {msg && (
+          <div className={cn('rounded-xl p-3 mt-3 text-sm', status === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : status === 'erro' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400')}>
+            {(status === 'loading' || status === 'saving') && <span className="animate-pulse">⏳ </span>}{msg}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-4">
+          {status === 'preview' ? (
+            <>
+              <button onClick={() => { setStatus('idle'); setPreview(null) }} className="btn-secondary">← Voltar</button>
+              <button onClick={handleSalvar} className="btn-primary">💾 Confirmar e Salvar</button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose} className="btn-secondary">Cancelar</button>
+              <button onClick={handleImportar} disabled={!texto.trim() || status === 'loading'} className="btn-primary">
+                {status === 'loading' ? '⏳ Processando...' : '🤖 Analisar com IA'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -519,16 +600,44 @@ export function TabVeiculos() {
 
                 {/* Financiamento */}
                 {v.financiado && pt > 0 && (
-                  <div className="mb-3 p-3 rounded-lg bg-surface border border-border-subtle">
-                    <div className="flex justify-between text-[10px] text-fg-tertiary mb-1.5">
-                      <span>🏦 {v.banco_financiador || 'Financiamento'}</span>
-                      <span className="font-semibold text-fg">{pp}/{pt} parcelas · {prog}%</span>
+                  <div className="mb-3 rounded-xl bg-surface border border-border-subtle overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+                      <span className="text-[9px] font-semibold text-fg-disabled uppercase tracking-widest">
+                        🏦 {v.banco_financiador || 'Financiamento Auto'}
+                      </span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
-                      <div className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${prog}%`, background: prog >= 90 ? '#10b981' : prog >= 50 ? '#3b82f6' : '#f59e0b' }} />
+                    {/* KPI boxes */}
+                    <div className="grid grid-cols-4 gap-1.5 px-3 pb-2">
+                      <div className="rounded-lg p-2 bg-emerald-500/10 border border-emerald-500/20 text-center">
+                        <p className="text-[9px] text-emerald-300 uppercase font-semibold">Pagas</p>
+                        <p className="text-base font-bold text-emerald-400">{pp}</p>
+                      </div>
+                      <div className="rounded-lg p-2 bg-surface border border-border-subtle text-center">
+                        <p className="text-[9px] text-fg-tertiary uppercase font-semibold">Total</p>
+                        <p className="text-base font-bold text-fg">{pt}</p>
+                      </div>
+                      <div className="rounded-lg p-2 bg-amber-500/10 border border-amber-500/20 text-center">
+                        <p className="text-[9px] text-amber-300 uppercase font-semibold">Faltam</p>
+                        <p className="text-base font-bold text-amber-400">{pt - pp}</p>
+                      </div>
+                      <div className="rounded-lg p-2 bg-blue-500/10 border border-blue-500/20 text-center">
+                        <p className="text-[9px] text-blue-300 uppercase font-semibold">% Pago</p>
+                        <p className="text-base font-bold text-blue-400">{prog}%</p>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Barra de progresso */}
+                    <div className="px-3 pb-1">
+                      <div className="flex justify-between text-[9px] text-fg-disabled mb-1">
+                        <span>{pp} parcelas pagas</span>
+                        <span>{prog}% concluído</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700"
+                          style={{ width: `${prog}%`, background: prog >= 90 ? '#10b981' : prog >= 50 ? '#3b82f6' : '#f59e0b' }} />
+                      </div>
+                    </div>
+                    {/* Valores */}
+                    <div className="grid grid-cols-2 gap-2 px-3 pt-2 pb-2.5">
                       {v.valor_parcela && (
                         <div>
                           <p className="text-[9px] text-fg-disabled uppercase">Parcela mensal{v.vencimento_dia ? ` · dia ${v.vencimento_dia}` : ''}</p>
@@ -543,16 +652,15 @@ export function TabVeiculos() {
                       )}
                     </div>
                     {v.taxa_juros_anual && (
-                      <p className="text-[10px] text-fg-disabled mt-1">📊 Taxa: {v.taxa_juros_anual}% a.a.</p>
+                      <p className="text-[10px] text-fg-disabled px-3 pb-2">📊 Taxa: {v.taxa_juros_anual}% a.a.</p>
                     )}
-                    <button
-                      onClick={() => setVeiculoAnalisar(v)}
-                      className="w-full mt-2 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                    >
+                    <button onClick={() => setVeiculoAnalisar(v)}
+                      className="w-full py-2 rounded-b-xl text-[11px] font-semibold bg-emerald-500/10 border-t border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
                       📈 Analisar Quitação
                     </button>
                   </div>
                 )}
+
 
                 <div className="pt-3 border-t border-border-subtle/80 grid grid-cols-2 gap-2">
                   <div>
