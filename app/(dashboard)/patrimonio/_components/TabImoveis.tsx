@@ -321,6 +321,32 @@ function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImpo
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf'
+
+    if (isPDF) {
+      // PDF é binário — precisa extrair texto no servidor
+      setStatus('loading')
+      setMsg('Extraindo texto do PDF...')
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/parse-pdf', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (!res.ok || data.error) throw new Error(data.error || 'Erro ao ler PDF')
+        const textoExtraido = (data.text ?? data.texto ?? '').trim()
+        if (!textoExtraido) throw new Error('PDF sem texto extraível. Tente copiar e colar o conteúdo.')
+        setTexto(textoExtraido)
+        setStatus('idle')
+        setMsg(`✅ PDF lido: ${textoExtraido.length} caracteres extraídos. Clique em "Importar com IA".`)
+      } catch (err: any) {
+        setStatus('erro')
+        setMsg(`❌ ${err.message}`)
+      }
+      return
+    }
+
+    // CSV / TXT — lê normalmente como texto
     const reader = new FileReader()
     reader.onload = ev => setTexto(ev.target?.result as string ?? '')
     reader.readAsText(file, 'utf-8')
@@ -460,9 +486,9 @@ Documento: ${texto.substring(0, 4000)}`
 
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs text-fg-tertiary">ou</span>
-          <input ref={fileRef} type="file" accept=".csv,.txt" onChange={handleFile} className="hidden" />
+          <input ref={fileRef} type="file" accept=".csv,.txt,.pdf" onChange={handleFile} className="hidden" />
           <button onClick={() => fileRef.current?.click()} className="btn-secondary text-xs">
-            📂 Selecionar arquivo
+            📂 Selecionar arquivo (PDF, CSV, TXT)
           </button>
           {texto && <span className="text-xs text-emerald-400">✓ {texto.length} caracteres</span>}
         </div>
