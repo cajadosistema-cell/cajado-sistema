@@ -498,7 +498,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
   const [modalCriar, setModalCriar] = useState(false)
   const [modalLimite, setModalLimite] = useState<any>(null)
   const [modalFatura, setModalFatura] = useState<any>(null)
-  const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro'>('lancamentos')
+  const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro' | 'parcelas'>('lancamentos')
   const [busca, setBusca] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const mesAtual = new Date().toISOString().substring(0, 7)
@@ -544,6 +544,23 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
     lancamentos.filter(l => l.conta_id === contaId && l.tipo === 'despesa' && getAnoMes(l.data_competencia) === mesSel)
       .reduce((a: number, l: any) => a + l.valor, 0)
 
+  // Parcelas futuras — agrupa por mês a partir do mês atual
+  const parcelasFuturas = lancamentos.filter(l =>
+    cartoes.some(c => c.id === l.conta_id) &&
+    (cartaoSel === 'todos' || l.conta_id === cartaoSel) &&
+    l.total_parcelas > 1 &&
+    l.data_competencia >= mesAtual
+  ).sort((a, b) => a.data_competencia.localeCompare(b.data_competencia))
+
+  // Agrupa parcelas por mês
+  const parcelasPorMes: Record<string, typeof lancamentos> = {}
+  parcelasFuturas.forEach(l => {
+    const m = getAnoMes(l.data_competencia)
+    if (!parcelasPorMes[m]) parcelasPorMes[m] = []
+    parcelasPorMes[m].push(l)
+  })
+  const mesesParcelas = Object.keys(parcelasPorMes).sort()
+
   return (
     <div className="space-y-4 mt-4">
 
@@ -552,6 +569,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
         <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1">
           {([
             { id: 'lancamentos', label: '💸 Lançamentos' },
+            { id: 'parcelas',    label: `📅 Parcelas (${parcelasFuturas.length})` },
             { id: 'cadastro',    label: '💳 Cadastro de Cartões' },
           ] as const).map(tab => (
             <button key={tab.id} onClick={() => setSubAba(tab.id)}
@@ -730,6 +748,106 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
             </div>
           </div>
             </>
+          )}
+        </div>
+      )}
+      {/* ── ABA PARCELAS */}
+      {subAba === 'parcelas' && (
+        <div className="space-y-4">
+          {/* Seletor de cartão */}
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            <button onClick={() => setCartaoSel('todos')}
+              className={cn('flex-shrink-0 px-4 py-2 rounded-xl text-xs font-semibold border transition-all',
+                cartaoSel === 'todos' ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'border-border-subtle text-fg-tertiary hover:text-fg'
+              )}>
+              🗂️ Todos
+            </button>
+            {cartoes.map(c => (
+              <CardVisual key={c.id} conta={c} selected={cartaoSel === c.id} onClick={() => setCartaoSel(c.id)} />
+            ))}
+          </div>
+
+          {parcelasFuturas.length === 0 ? (
+            <div className="bg-surface border border-white/5 rounded-xl p-12 text-center">
+              <span className="text-4xl block mb-3">📅</span>
+              <p className="text-sm font-semibold text-fg mb-1">Nenhuma parcela futura</p>
+              <p className="text-xs text-fg-tertiary">Lance uma compra parcelada para acompanhá-la aqui mês a mês.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* KPI total geral */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                  <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">Total de parcelas</p>
+                  <p className="text-xl font-bold text-red-400">{parcelasFuturas.length}</p>
+                </div>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                  <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">Compromisso total</p>
+                  <p className="text-xl font-bold text-amber-400">
+                    {formatCurrency(parcelasFuturas.reduce((a, l) => a + l.valor, 0))}
+                  </p>
+                </div>
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                  <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">Meses com parcelas</p>
+                  <p className="text-xl font-bold text-blue-400">{mesesParcelas.length}</p>
+                </div>
+              </div>
+
+              {/* Timeline por mês */}
+              {mesesParcelas.map((mes, mIdx) => {
+                const itens = parcelasPorMes[mes]
+                const totalMes = itens.reduce((a, l) => a + l.valor, 0)
+                const isAtual = mes === mesAtual
+                return (
+                  <div key={mes} className={cn(
+                    'bg-surface border rounded-2xl overflow-hidden',
+                    isAtual ? 'border-amber-500/30' : 'border-white/5'
+                  )}>
+                    {/* Header do mês */}
+                    <div className={cn(
+                      'flex items-center justify-between px-4 py-3 border-b border-white/5',
+                      isAtual ? 'bg-amber-500/10' : 'bg-muted/20'
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-fg">{labelMes(mes)}</span>
+                        {isAtual && <span className="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold uppercase">Mês atual</span>}
+                        {mIdx === 1 && !isAtual && <span className="text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded font-bold uppercase">Próximo mês</span>}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-bold text-red-400">{formatCurrency(totalMes)}</p>
+                        <p className="text-[9px] text-fg-disabled">{itens.length} parcela(s)</p>
+                      </div>
+                    </div>
+                    {/* Itens */}
+                    <div className="divide-y divide-white/5">
+                      {itens.map(l => {
+                        const cartao = cartoes.find(c => c.id === l.conta_id)
+                        const pct = l.total_parcelas > 1 ? Math.round(((l.parcela_atual - 1) / l.total_parcelas) * 100) : 0
+                        return (
+                          <div key={l.id} className="flex items-center gap-3 px-4 py-3">
+                            <BandeiraBadge bandeira={cartao?.bandeira} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-fg truncate">{l.descricao}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="flex-1 bg-muted rounded-full h-1 max-w-[80px]">
+                                  <div className="h-1 rounded-full bg-amber-500/70" style={{ width: `${pct}%` }} />
+                                </div>
+                                <p className="text-[9px] text-fg-disabled">
+                                  {l.parcela_atual}/{l.total_parcelas} parcelas
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-xs font-semibold text-red-400 shrink-0">
+                              -{formatCurrency(l.valor)}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}
