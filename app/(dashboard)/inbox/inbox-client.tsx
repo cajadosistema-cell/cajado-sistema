@@ -101,33 +101,41 @@ function ConversaItem({
     <button
       onClick={onClick}
       className={cn(
-        'w-full text-left px-3 py-3.5 border-b border-border-subtle/60 transition-colors active:bg-surface-hover/40',
-        ativa ? 'bg-muted' : 'hover:bg-surface-hover/50'
+        'w-full text-left px-3 py-3 border-b transition-all duration-200 relative group',
+        ativa
+          ? 'bg-gradient-to-r from-emerald-500/8 to-transparent border-border-subtle/40'
+          : 'hover:bg-white/[0.03] border-border-subtle/40'
       )}
     >
-      <div className="flex items-center gap-3">
-        {/* Avatar 48px — tamanho WhatsApp */}
-        <div className={cn(
-          'w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-base font-bold ring-2',
-          conv.botOn !== false
-            ? 'bg-emerald-500/20 text-emerald-400 ring-emerald-500/30'
-            : 'bg-amber-500/20 text-amber-400 ring-amber-500/30'
-        )}>
+      {/* Barra lateral esquerda — item ativo */}
+      {ativa && (
+        <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-gradient-to-b from-emerald-400 to-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+      )}
+      <div className="flex items-center gap-3 pl-1">
+        {/* Avatar com gradiente e glow */}
+        <div
+          className={cn(
+            'w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-md',
+            conv.botOn !== false
+              ? 'bg-gradient-to-br from-emerald-500/30 to-emerald-700/20 text-emerald-300 ring-1 ring-emerald-500/40 shadow-emerald-500/10'
+              : 'bg-gradient-to-br from-amber-500/30 to-amber-700/20 text-amber-300 ring-1 ring-amber-500/40 shadow-amber-500/10'
+          )}
+        >
           {conv.nome?.[0]?.toUpperCase() || '#'}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
-            <p className="text-sm font-semibold text-fg truncate">{conv.nome}</p>
-            <span className="text-[10px] text-fg-disabled shrink-0">{conv.ultimoHorario}</span>
+            <p className={cn('text-sm font-semibold truncate', ativa ? 'text-white' : 'text-fg')}>{conv.nome}</p>
+            <span className="text-[10px] text-fg-disabled/70 shrink-0">{conv.ultimoHorario}</span>
           </div>
           <div className="flex items-center justify-between gap-1 mt-0.5">
-            <p className="text-xs text-fg-tertiary truncate flex-1">{conv.ultimaMensagem}</p>
-            {conv.unread > 0 ? (
-              <span className="w-5 h-5 rounded-full bg-emerald-500 text-zinc-950 text-[10px] font-bold flex items-center justify-center shrink-0">
+            <p className="text-xs text-fg-disabled truncate flex-1">{conv.ultimaMensagem}</p>
+            {conv.unread > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-zinc-950 text-[9px] font-black flex items-center justify-center shrink-0 shadow-sm shadow-emerald-500/30">
                 {conv.unread > 9 ? '9+' : conv.unread}
               </span>
-            ) : null}
+            )}
           </div>
           {/* Etiqueta + status bot */}
           <div className="flex items-center gap-1.5 mt-1">
@@ -137,10 +145,13 @@ function ConversaItem({
               </span>
             )}
             {conv.setor && (
-              <span className="text-[9px] text-fg-disabled">{conv.setor}</span>
+              <span className="text-[9px] text-fg-disabled/60 bg-white/5 px-1.5 py-0.5 rounded-full">{conv.setor}</span>
             )}
             {!conv.botOn && (
-              <span className="text-[9px] text-amber-400 font-semibold">● humano</span>
+              <span className="text-[9px] text-amber-400 font-semibold flex items-center gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.8)]" />
+                humano
+              </span>
             )}
           </div>
         </div>
@@ -153,41 +164,45 @@ function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: strin
   const isEnviada = msg.tipo === 'enviada' || msg.tipo === 'bot'
   const isInterna = msg.tipo === 'interna'
   const isAudio = msg.texto.toLowerCase().includes('[áudio]') || msg.texto.toLowerCase().includes('audio') || msg.tipo === 'audio'
-  
-  const transcricaoUI = msg.transcricao || (isAudio && !isEnviada ? "Transcrevendo áudio..." : null)
+
+  const transcricaoUI = msg.transcricao || (isAudio && !isEnviada ? 'Transcrevendo áudio...' : null)
 
   return (
-    <div className={cn('flex mb-1.5', isEnviada ? 'justify-end' : isInterna ? 'justify-center' : 'justify-start')}>
+    <div className={cn('flex mb-2', isEnviada ? 'justify-end' : isInterna ? 'justify-center' : 'justify-start')}>
       <div
         className={cn(
-          // Mobile: 85vw de largura máxima; Desktop: 70%
-          'max-w-[85vw] md:max-w-[70%] px-3 py-2 rounded-xl text-sm',
+          'max-w-[85vw] md:max-w-[72%] px-3.5 py-2.5 text-sm leading-relaxed',
           isInterna
-            ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300 italic text-xs max-w-full w-full text-center rounded-lg'
+            ? 'bg-amber-500/10 border border-amber-500/25 text-amber-200/90 italic text-xs w-full text-center rounded-xl backdrop-blur-sm'
             : isEnviada
-            ? 'bg-surface-hover text-fg rounded-br-sm'
-            : 'bg-muted text-fg rounded-bl-sm'
+            ? 'rounded-2xl rounded-br-md text-white shadow-lg'
+            : 'bg-white/[0.06] border border-white/10 text-fg rounded-2xl rounded-bl-md shadow-sm backdrop-blur-sm'
         )}
+        style={isEnviada && !isInterna ? {
+          background: 'linear-gradient(135deg, rgba(16,185,129,0.85) 0%, rgba(5,150,105,0.9) 100%)',
+          boxShadow: '0 4px 16px rgba(16,185,129,0.25), inset 0 1px 0 rgba(255,255,255,0.15)',
+        } : undefined}
       >
-        {isInterna && <span className="text-amber-500 mr-1">📝</span>}
+        {isInterna && <span className="text-amber-400 mr-1">📝</span>}
         <span style={{ whiteSpace: 'pre-wrap' }}>{msg.texto}</span>
-        
-        {/* Bloco de Transcrição de Áudio */}
+
+        {/* Transcrição de áudio */}
         {transcricaoUI && (
-          <div className="mt-2 text-xs bg-page/50 p-2 rounded border border-border-subtle/50">
-            <p className="text-[10px] text-fg-tertiary font-bold mb-0.5">✨ Transcrição de Áudio</p>
-            <p className="text-fg-secondary italic">"{transcricaoUI}"</p>
+          <div className="mt-2 text-xs bg-black/20 px-2.5 py-2 rounded-xl border border-white/10 backdrop-blur-sm">
+            <p className="text-[10px] text-white/60 font-bold mb-0.5">✨ Transcrição</p>
+            <p className="italic opacity-80">"{transcricaoUI}"</p>
           </div>
         )}
 
-        {/* Horário + checkmarks */}
-        <div className={cn('flex items-center gap-1 mt-1', isEnviada ? 'justify-end' : isInterna ? 'justify-center' : 'justify-start')}>
-          <span className="text-[10px] opacity-50">
+        {/* Horário + ticks */}
+        <div className={cn('flex items-center gap-1 mt-1.5', isEnviada ? 'justify-end' : isInterna ? 'justify-center' : 'justify-start')}>
+          <span className={cn('text-[10px]', isEnviada ? 'text-white/60' : 'text-fg-disabled/60')}>
             {new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           </span>
           {isEnviada && !isInterna && (
-            // ✓✓ azul para mensagens entregues (quando tivermos status real, passaríamos lida=true)
-            <span className="text-[10px] text-fg-tertiary leading-none">✓✓</span>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 11" className="w-3.5 h-3.5 text-white/60" fill="currentColor">
+              <path d="M11.071.653a.75.75 0 0 1 .047 1.06L5.36 8.06a.75.75 0 0 1-1.08.02L1.43 5.23a.75.75 0 1 1 1.06-1.06l2.27 2.27 5.25-5.74a.75.75 0 0 1 1.061-.047ZM14.57.653a.75.75 0 0 1 .047 1.06l-5.758 6.347a.75.75 0 0 1-1.08.02l-.72-.72a.75.75 0 1 1 1.06-1.06l.19.19 5.2-5.79a.75.75 0 0 1 1.06-.047Z"/>
+            </svg>
           )}
         </div>
       </div>
@@ -631,11 +646,11 @@ export default function InboxClient() {
             </div>
           </div>
 
-          {/* Campo de busca */}
+          {/* Campo de busca premium */}
           <div className="relative">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-tertiary text-sm pointer-events-none">🔍</span>
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-tertiary/60 text-xs pointer-events-none">🔍</span>
             <input
-              className="w-full text-xs py-2 pl-7 pr-8 bg-page border border-border-subtle rounded-lg text-fg placeholder:text-fg-disabled focus:outline-none focus:border-emerald-500/50 transition-colors"
+              className="w-full text-xs py-2 pl-7 pr-8 bg-white/[0.04] border border-white/10 rounded-xl text-fg placeholder:text-fg-disabled/50 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.06] focus:shadow-[0_0_0_1px_rgba(16,185,129,0.2)] transition-all"
               placeholder="Buscar nome, número ou ticket..."
               value={filtro}
               onChange={e => setFiltro(e.target.value)}
@@ -643,29 +658,29 @@ export default function InboxClient() {
             {filtro && (
               <button
                 onClick={() => setFiltro('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-surface-hover text-fg-secondary hover:bg-zinc-600 hover:text-fg flex items-center justify-center transition-colors text-xs font-bold"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white/10 text-fg-secondary hover:bg-white/20 hover:text-fg flex items-center justify-center transition-colors text-xs font-bold"
               >
                 ✕
               </button>
             )}
           </div>
 
-          {/* Abas de filtro por etiqueta */}
+          {/* Abas de filtro premium */}
           <div className="flex gap-1 mt-2.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
             {TABS.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setEtiquetaFiltro(tab.id)}
                 className={cn(
-                  'shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all border',
+                  'shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full transition-all duration-200 border',
                   etiquetaFiltro === tab.id
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                    : 'bg-transparent border-border-subtle text-fg-tertiary hover:text-fg hover:border-border'
+                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                    : 'bg-white/[0.03] border-white/10 text-fg-disabled hover:text-fg-secondary hover:bg-white/[0.05]'
                 )}
               >
                 {tab.label}
                 {tab.id !== 'todos' && (
-                  <span className="ml-1 opacity-60">
+                  <span className={cn('ml-1', etiquetaFiltro === tab.id ? 'opacity-80' : 'opacity-40')}>
                     {conversas.filter(c => c.etiqueta === tab.id).length || ''}
                   </span>
                 )}
