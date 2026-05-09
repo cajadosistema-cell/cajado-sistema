@@ -996,7 +996,7 @@ export default function InboxClient() {
                       <p className="text-[10px] text-fg-tertiary">{conversa.botOn !== false ? 'Ativo' : 'Pausado'}</p>
                     </div>
                     <button onClick={handleToggleBot} className={cn('relative w-10 h-5 rounded-full transition-all duration-300', conversa.botOn !== false ? 'bg-emerald-500' : 'bg-zinc-700')}>
-                      <span className={cn('absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300', conversa.botOn !== false ? 'translate-x-5' : 'translate-x-0.5')} />
+                      <span className={cn('absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-300', conversa.botOn !== false ? 'translate-x-[20px]' : 'translate-x-0')} />
                     </button>
                   </div>
                   {/* Responsável */}
@@ -1040,7 +1040,7 @@ export default function InboxClient() {
                   ✋ Assumir conversa
                 </button>
                 <button
-                  onClick={async () => { const s = prompt('Setor destino: (vendas, suporte, financeiro, cursos, reciclagem, mopp)'); if (s) { await mudarSetor(numeroAtivo, s); await refetch() } }}
+                  onClick={async () => { const s = prompt('Setor destino: (vendas, suporte, financeiro, cursos, reciclagem, mopp)'); if (s) { await mudarSetor(numeroAtivo, s); await refetch(); await refetchConversa(); } }}
                   className="w-full py-2 text-xs font-bold rounded-lg bg-muted hover:bg-surface-hover text-fg-secondary border border-border-subtle transition-all">
                   → Transferir setor
                 </button>
