@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from 'react'
 
-const API = process.env.NEXT_PUBLIC_INBOX_API_URL
-  ? (process.env.NEXT_PUBLIC_INBOX_API_URL.startsWith('http')
-      ? process.env.NEXT_PUBLIC_INBOX_API_URL
-      : `https://${process.env.NEXT_PUBLIC_INBOX_API_URL}`)
-  : 'https://visiopro-unified01-production.up.railway.app'
+// Usa proxy relativo do Next.js — evita CORS e problema de variável no build
+// O next.config.mjs tem rewrite: /inbox-proxy/* → backend
+const API = '/inbox-proxy'
 
 function getToken() {
   return typeof window !== 'undefined' ? localStorage.getItem('cajado_inbox_token') : null

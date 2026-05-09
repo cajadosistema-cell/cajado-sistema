@@ -16,8 +16,20 @@ const nextConfig = {
         'localhost:3000',
         '*.railway.app',
         '*.up.railway.app',
+        '*.cajadosolucoes.com.br',
       ],
     },
+  },
+
+  // Proxy para o backend Express — elimina CORS e problema de variável no build
+  async rewrites() {
+    const backendUrl = process.env.INBOX_BACKEND_URL || 'http://localhost:3001'
+    return [
+      {
+        source: '/inbox-proxy/:path*',
+        destination: `${backendUrl}/:path*`,
+      },
+    ]
   },
 
   typescript: {

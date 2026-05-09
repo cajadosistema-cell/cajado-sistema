@@ -2,12 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-// Backend local do Cajado (porta 3001). Em produção, troque pela URL do Railway do Cajado.
-const API = process.env.NEXT_PUBLIC_INBOX_API_URL
-  ? (process.env.NEXT_PUBLIC_INBOX_API_URL.startsWith('http')
-      ? process.env.NEXT_PUBLIC_INBOX_API_URL
-      : `https://${process.env.NEXT_PUBLIC_INBOX_API_URL}`)
-  : 'http://localhost:3001'
+// Usa proxy relativo do Next.js (rewrite em next.config.mjs) — sem CORS, sem variável de build
+const API = '/inbox-proxy'
 const INBOX_TOKEN_KEY = 'cajado_inbox_token'
 
 // ── Tipos ──────────────────────────────────────────────────────
