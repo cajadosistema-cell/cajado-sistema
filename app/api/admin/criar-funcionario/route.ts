@@ -18,9 +18,8 @@ async function getSessionEmpresa() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(list: CookieToSet[]) {
-          try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options as any)) } catch {}
+        get(name: string) {
+          return cookieStore.get(name)?.value
         },
       },
     }
