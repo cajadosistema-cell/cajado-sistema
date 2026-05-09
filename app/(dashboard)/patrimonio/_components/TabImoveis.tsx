@@ -314,8 +314,10 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
 function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImportado: () => void }) {
   const supabase = createClient()
   const [texto, setTexto] = useState('')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'erro'>('idle')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'preview' | 'saving' | 'ok' | 'erro'>('idle')
   const [msg, setMsg] = useState('')
+  const [preview, setPreview] = useState<any>(null)
+  const [empresaId, setEmpresaId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -440,60 +442,76 @@ Retorne APENAS JSON válido sem markdown:
 
       // empresa_id deve ser o UUID da empresa (perfis.empresa_id), exigido pela RLS
       const { data: userData } = await supabase.auth.getUser()
-      let empresaId: string | null = null
+      let empId: string | null = null
       if (userData.user) {
         const { data: perf } = await supabase
           .from('perfis').select('empresa_id').eq('id', userData.user.id).single()
-        empresaId = perf?.empresa_id ?? null
+        empId = perf?.empresa_id ?? null
       }
+      setEmpresaId(empId)
 
-      // Sanitiza campos com CHECK CONSTRAINT — usa apenas valores conhecidos do banco
-      const STATUS_VALIDOS = ['disponivel', 'alugado', 'vendido', 'em_reforma']
+      // Mostra preview para o usuário confirmar/corrigir antes de salvar
+      setPreview({
+        titulo: parsed.titulo || 'Imóvel importado',
+        construtora: parsed.construtora || '',
+        unidade: parsed.unidade || '',
+        tipo_imovel: parsed.tipo_imovel || 'residencial',
+        valor_total_contrato: parsed.valor_total_contrato || parsed.valor_compra || '',
+        valor_parcela: parsed.valor_parcela || '',
+        parcelas_total: parsed.parcelas_total || '',
+        parcelas_pagas: parsed.parcelas_pagas ?? 0,
+        indexador: parsed.indexador || '',
+        data_aquisicao: parsed.data_aquisicao || '',
+        status: parsed.status || 'disponivel',
+      })
+      setStatus('preview')
+      setMsg('')
+    } catch (err: any) {
+      setStatus('erro')
+      setMsg(`❌ Erro: ${err.message}`)
+    }
+  }
+
+  const handleSalvarPreview = async () => {
+    if (!preview) return
+    setStatus('saving')
+    setMsg('Salvando imóvel...')
+    try {
+      const STATUS_VALIDOS = ['disponivel', 'alugado', 'vendido', 'em_reforma', 'em_obra', 'quitado', 'financiado']
       const TIPO_VALIDOS   = ['residencial', 'comercial', 'terreno', 'galpao']
-
-      const sanitizeStatus = (v: string | null | undefined): string => {
-        if (!v) return 'disponivel'
+      const sanitizeStatus = (v: string) => {
         const norm = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-        // Mapeamento explícito de variações comuns
-        if (norm.includes('quitad') || norm.includes('pago') || norm.includes('liquidado')) return 'disponivel'
-        if (norm.includes('alugad') || norm.includes('locad')) return 'alugado'
-        if (norm.includes('vendid') || norm.includes('alienad')) return 'vendido'
-        if (norm.includes('reforma') || norm.includes('obra') || norm.includes('constru') || norm.includes('incorpora') || norm.includes('financiad')) return 'em_reforma'
+        if (norm.includes('quitad') || norm.includes('liquidado')) return 'disponivel'
+        if (norm.includes('alugad')) return 'alugado'
+        if (norm.includes('vendid')) return 'vendido'
+        if (norm.includes('reforma') || norm.includes('obra') || norm.includes('financiad') || norm.includes('incorpora')) return 'em_reforma'
         return STATUS_VALIDOS.find(s => norm === s) ?? 'disponivel'
       }
-      const sanitizeTipo = (v: string | null | undefined): string => {
-        if (!v) return 'residencial'
+      const sanitizeTipo = (v: string) => {
         const norm = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
         return TIPO_VALIDOS.find(t => norm.includes(t)) ?? 'residencial'
       }
 
-      setMsg('Salvando imóvel...')
       const { error } = await (supabase.from('imoveis') as any).insert({
         empresa_id: empresaId,
-        titulo: parsed.titulo || 'Imóvel importado',
-        endereco: parsed.endereco || null,
-        tipo_imovel: sanitizeTipo(parsed.tipo_imovel),
-        area_m2: parsed.area_m2 || null,
-        quartos: parsed.quartos || null,
-        vagas: null,
-        valor_compra: parsed.valor_compra || parsed.valor_total_contrato || null,
-        valor_mercado: null,
-        status: sanitizeStatus(parsed.status),
-        construtora: parsed.construtora || null,
-        unidade: parsed.unidade || null,
-        valor_total_contrato: parsed.valor_total_contrato || null,
-        valor_parcela: parsed.valor_parcela || null,
-        parcelas_total: parsed.parcelas_total || null,
-        parcelas_pagas: parsed.parcelas_pagas || 0,
-        indexador: parsed.indexador || null,
-        taxa_juros_anual: parsed.taxa_juros_anual || null,
-        dia_vencimento: parsed.dia_vencimento || null,
-        categoria_financeira: parsed.categoria_financeira || null,
+        titulo: preview.titulo || 'Imóvel importado',
+        construtora: preview.construtora || null,
+        unidade: preview.unidade || null,
+        tipo_imovel: sanitizeTipo(preview.tipo_imovel || 'residencial'),
+        valor_compra: parseFloat(String(preview.valor_total_contrato)) || null,
+        valor_total_contrato: parseFloat(String(preview.valor_total_contrato)) || null,
+        valor_parcela: parseFloat(String(preview.valor_parcela)) || null,
+        parcelas_total: parseInt(String(preview.parcelas_total)) || null,
+        parcelas_pagas: parseInt(String(preview.parcelas_pagas)) || 0,
+        indexador: preview.indexador || null,
+        data_aquisicao: preview.data_aquisicao || null,
+        status: sanitizeStatus(preview.status || 'disponivel'),
+        area_m2: null, quartos: null, vagas: null, valor_mercado: null,
+        taxa_juros_anual: null, dia_vencimento: null, categoria_financeira: null,
       })
       if (error) throw new Error(error.message)
-
       setStatus('ok')
-      setMsg(`✅ Imóvel "${parsed.titulo}" importado com sucesso!`)
+      setMsg(`✅ Imóvel "${preview.titulo}" importado com sucesso!`)
       setTimeout(() => { onImportado(); onClose() }, 1500)
     } catch (err: any) {
       setStatus('erro')
@@ -503,49 +521,120 @@ Retorne APENAS JSON válido sem markdown:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-xl p-6 shadow-2xl">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
           <div>
             <h2 className="text-base font-semibold text-fg">🤖 Importar Imóvel via IA</h2>
-            <p className="text-xs text-fg-tertiary mt-0.5">Cole o texto do documento ou selecione um arquivo CSV/TXT</p>
+            <p className="text-xs text-fg-tertiary mt-0.5">
+              {status === 'preview' ? '✅ IA extraiu os dados — revise e confirme' : 'Cole o texto do documento ou selecione um arquivo'}
+            </p>
           </div>
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
         </div>
 
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300 space-y-1">
-          <p className="font-semibold">📄 Formatos aceitos:</p>
-          <p>• Copie e cole o texto do PDF "Saldo Devedor Presente"</p>
-          <p>• Arquivo CSV com dados do imóvel</p>
-          <p>• Qualquer texto com: nome, valor do contrato, parcelas, construtora</p>
-        </div>
+        {/* PASSO 1: Input do documento */}
+        {status !== 'preview' && (
+          <>
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300 space-y-1">
+              <p className="font-semibold">📄 Formatos aceitos:</p>
+              <p>• Copie e cole o texto do PDF "Saldo Devedor Presente"</p>
+              <p>• Arquivo CSV com dados do imóvel</p>
+              <p>• Qualquer texto com: nome, valor do contrato, parcelas, construtora</p>
+            </div>
+            <textarea
+              className="input w-full h-36 text-xs font-mono resize-none mb-3"
+              placeholder="Cole aqui o conteúdo do documento do imóvel..."
+              value={texto}
+              onChange={e => setTexto(e.target.value)}
+            />
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs text-fg-tertiary">ou</span>
+              <input ref={fileRef} type="file" accept=".csv,.txt,.pdf" onChange={handleFile} className="hidden" />
+              <button onClick={() => fileRef.current?.click()} className="btn-secondary text-xs">
+                📂 Selecionar arquivo (PDF, CSV, TXT)
+              </button>
+              {texto && <span className="text-xs text-emerald-400">✓ {texto.length} caracteres</span>}
+            </div>
+          </>
+        )}
 
-        <textarea
-          className="input w-full h-36 text-xs font-mono resize-none mb-3"
-          placeholder="Cole aqui o conteúdo do documento do imóvel..."
-          value={texto}
-          onChange={e => setTexto(e.target.value)}
-        />
-
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-xs text-fg-tertiary">ou</span>
-          <input ref={fileRef} type="file" accept=".csv,.txt,.pdf" onChange={handleFile} className="hidden" />
-          <button onClick={() => fileRef.current?.click()} className="btn-secondary text-xs">
-            📂 Selecionar arquivo (PDF, CSV, TXT)
-          </button>
-          {texto && <span className="text-xs text-emerald-400">✓ {texto.length} caracteres</span>}
-        </div>
-
-        {msg && (
-          <div className={cn('rounded-xl p-3 mb-4 text-sm', status === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : status === 'erro' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400')}>
-            {status === 'loading' && <span className="animate-pulse">⏳ </span>}{msg}
+        {/* PASSO 2: Preview/edição dos dados extraídos */}
+        {status === 'preview' && preview && (
+          <div className="space-y-3">
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 text-xs text-emerald-300 mb-2">
+              🎯 Verifique os dados abaixo. Corrija se necessário antes de salvar.
+            </div>
+            <div>
+              <label className="label text-[10px]">Título</label>
+              <input className="input mt-1 text-xs" value={preview.titulo}
+                onChange={e => setPreview((p: any) => ({ ...p, titulo: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label text-[10px]">Construtora</label>
+                <input className="input mt-1 text-xs" value={preview.construtora}
+                  onChange={e => setPreview((p: any) => ({ ...p, construtora: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label text-[10px]">Unidade</label>
+                <input className="input mt-1 text-xs" value={preview.unidade}
+                  onChange={e => setPreview((p: any) => ({ ...p, unidade: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="label text-[10px]">Valor Total Contrato</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.valor_total_contrato}
+                  onChange={e => setPreview((p: any) => ({ ...p, valor_total_contrato: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label text-[10px]">Parcela Mensal</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.valor_parcela}
+                  onChange={e => setPreview((p: any) => ({ ...p, valor_parcela: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="label text-[10px]">✅ Pagas</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.parcelas_pagas}
+                  onChange={e => setPreview((p: any) => ({ ...p, parcelas_pagas: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label text-[10px]">📦 Total</label>
+                <input className="input mt-1 text-xs" type="number" value={preview.parcelas_total}
+                  onChange={e => setPreview((p: any) => ({ ...p, parcelas_total: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label text-[10px]">Indexador</label>
+                <input className="input mt-1 text-xs" value={preview.indexador}
+                  onChange={e => setPreview((p: any) => ({ ...p, indexador: e.target.value }))} />
+              </div>
+            </div>
           </div>
         )}
 
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={handleImportar} disabled={!texto.trim() || status === 'loading'} className="btn-primary">
-            {status === 'loading' ? '⏳ Processando...' : '🤖 Importar com IA'}
-          </button>
+        {msg && (
+          <div className={cn('rounded-xl p-3 mt-3 text-sm', status === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : status === 'erro' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400')}>
+            {(status === 'loading' || status === 'saving') && <span className="animate-pulse">⏳ </span>}{msg}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-4">
+          {status === 'preview' ? (
+            <>
+              <button onClick={() => { setStatus('idle'); setPreview(null) }} className="btn-secondary">← Voltar</button>
+              <button onClick={handleSalvarPreview} disabled={status === 'saving' as any} className="btn-primary">
+                💾 Confirmar e Salvar
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose} className="btn-secondary">Cancelar</button>
+              <button onClick={handleImportar} disabled={!texto.trim() || status === 'loading'} className="btn-primary">
+                {status === 'loading' ? '⏳ Processando...' : '🤖 Analisar com IA'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
