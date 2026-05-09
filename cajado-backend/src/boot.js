@@ -71,9 +71,13 @@ async function bootstrap() {
   await loadConversasDb();
 
   // 3. Carrega configurações (prompts customizados por empresa) — via fetch nativo
+  // CHAVE: empresa_id + chave (nome do campo, ex: "prompt_sistema") para bater com getPrompt()
   const configs = await sbFetch("configuracoes", "select=*");
   if (configs.length > 0) {
-    configs.forEach(c => configMemoria.set(`${c.empresa_id}_${c.id}`, c.valor));
+    configs.forEach(c => {
+      const chave = c.chave || c.key || c.nome || c.id;
+      configMemoria.set(`${c.empresa_id}_${chave}`, c.valor);
+    });
     console.log(`[Boot] ${configs.length} configurações carregadas.`);
   }
 

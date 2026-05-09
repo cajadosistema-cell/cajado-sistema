@@ -9,7 +9,16 @@ const { registrarNaConversa } = require("../services/conversation.service");
 const { enviarWhatsApp } = require("../services/evolution.service");
 const { authMiddleware } = require("../middlewares/auth");
 
-router.post("/inbox/webhook", async (req, res) => {
+// Verifica token secreto do Evolution API (simples, sem JWT)
+const webhookSecret = (req, res, next) => {
+  const secret = req.headers["x-webhook-secret"] || req.headers["apikey"];
+  if (secret && secret === EVOLUTION_KEY) return next();
+  // Aceita também sem token (Evolution API nem sempre envia), mas loga aviso
+  console.warn("[INBOX-WEBHOOK] Requisição sem secret recebida de:", req.ip);
+  next();
+};
+
+router.post("/inbox/webhook", webhookSecret, async (req, res) => {
   res.sendStatus(200);
   const data = req.body;
   if (data?.event?.toLowerCase() !== "messages.upsert") return;
@@ -29,7 +38,7 @@ router.post("/inbox/webhook", async (req, res) => {
   console.log(`[INBOX] ${nome}: ${texto}`);
 });
 
-router.post("/inbox/mensagem", async (req, res) => {
+router.post("/inbox/mensagem", authMiddleware, async (req, res) => {
   const { numero, texto, tipo, nome, setor } = req.body;
   if (!numero || !texto) return res.status(400).json({ erro: "numero e texto obrigatórios" });
   const mensagem = { id: Date.now().toString(), tipo: tipo || "bot", texto, numero, timestamp: new Date().toISOString() };
@@ -240,7 +249,7 @@ router.post("/inbox/enviar", authMiddleware, async (req, res) => {
 });
 
 // ─── ENVIAR MÍDIA ─────────────────────────────────────────────────────────
-router.post("/inbox/enviar-midia", async (req, res) => {
+router.post("/inbox/enviar-midia", authMiddleware, async (req, res) => {
   const { numero, base64, mimetype, filename, tipo } = req.body;
   if (!numero || !base64) return res.status(400).json({ erro: "numero e base64 obrigatórios" });
   try {

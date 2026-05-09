@@ -24,10 +24,10 @@ const ADMIN_DEFAULT = {
 usuariosMemoria.set(ADMIN_DEFAULT.email, ADMIN_DEFAULT);
 
 [
-  { id: "vendas", nome: "Vendas", descricao: "Equipe comercial, fechamento de propostas e novos negócios", palavras_chave: "comprar, preco, orcamento, venda, comercial", cor: "#3b82f6", emoji: "💼", ativo: true },
-  { id: "suporte", nome: "Suporte", descricao: "Atendimento técnico, dúvidas de uso e auxílio em problemas", palavras_chave: "duvida, erro, ajuda, suporte, tecnico", cor: "#10b981", emoji: "🛠️", ativo: true },
-  { id: "financeiro", nome: "Financeiro", descricao: "Setor para tratar de pagamentos, boletos, NF e pendências", palavras_chave: "pagamento, boleto, nf, nota fiscal, financeiro, dinheiro", cor: "#f59e0b", emoji: "💰", ativo: true },
-  { id: "marketing", nome: "Marketing", descricao: "Gestão de campanhas, parcerias e afiliados", palavras_chave: "campanha, parceria, marketing, afiliado", cor: "#8b5cf6", emoji: "📊", ativo: true }
+  { id: "financeiro",   nome: "Financeiro",          descricao: "Controle de lançamentos, fluxo de caixa, contas e relatórios financeiros",         palavras_chave: "financeiro, lancamento, conta, caixa, pagamento, boleto, relatorio, dre",                             cor: "#f59e0b", emoji: "💰", ativo: true },
+  { id: "contabilidade",nome: "Assessoria Contábil",  descricao: "Contabilidade, imposto, nota fiscal, declarações e regularização fiscal",          palavras_chave: "contabilidade, imposto, nf, nota fiscal, ir, simples nacional, cnpj, abertura empresa, mei",             cor: "#3b82f6", emoji: "📊", ativo: true },
+  { id: "juridico",     nome: "Jurídico",             descricao: "Contratos, assessoria jurídica, compliance, trabalhista e societário",             palavras_chave: "juridico, contrato, trabalhista, rescisao, processo, advogado, compliance, socio, estatuto",            cor: "#8b5cf6", emoji: "⚖️", ativo: true },
+  { id: "suporte",      nome: "Suporte",              descricao: "Ajuda com o sistema, dúvidas de uso, erros e atendimento técnico",                  palavras_chave: "duvida, erro, ajuda, suporte, tecnico, sistema, cadastro, acesso, senha, bug",                         cor: "#10b981", emoji: "🛠️", ativo: true },
 ].forEach(t => timesMemoria.set(t.id, t));
 
 const MAX_HISTORY = 12;

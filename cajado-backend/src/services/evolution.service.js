@@ -355,35 +355,4 @@ module.exports = {
   getStatusInstancia,
   deletarInstanciaEvolution,
   listarInstancias,
-  const r = await evoCall("GET", `/instance/connect/${instanceName}`);
-  return r.data?.base64 || r.data?.qrcode?.base64 || null;
-}
-
-/** Retorna o status de conexão de uma instância */
-async function getStatusInstancia(instanceName) {
-  const r = await evoCall("GET", `/instance/connectionState/${instanceName}`);
-  const state = r.data?.instance?.state || r.data?.state || "unknown";
-  return { state, connected: state === "open" };
-}
-
-/** Deleta uma instância */
-async function deletarInstanciaEvolution(instanceName) {
-  await evoCall("DELETE", `/instance/delete/${instanceName}`).catch(() => {});
-}
-
-/** Lista todas as instâncias */
-async function listarInstancias() {
-  const resp = await evoCall("GET", "/instance/fetchInstances");
-  return resp.data;
-}
-
-module.exports = {
-  enviarWhatsApp,
-  enviarMetaCloudAPI,
-  criarInstanciaEvolution,
-  configurarAntiBan,
-  getQrCode,
-  getStatusInstancia,
-  deletarInstanciaEvolution,
-  listarInstancias,
 };

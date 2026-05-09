@@ -48,14 +48,13 @@ router.post("/oficial", async (req, res) => {
             const number = messageData.from;
             const messageText = messageData.text?.body;
             const nomeCliente = contato?.profile?.name || number;
+            const phoneNumberId = metadata?.phone_number_id;
             
             const messageId = messageData.id;
-            if (processedMessages.has(messageId)) return;
+            if (processedMessages.has(messageId)) continue;
             
             const convAtual = conversas.get(number);
-            if (convAtual && convAtual.mensagens && convAtual.mensagens.some(m => m.id === messageId)) {
-              return;
-            }
+            if (convAtual?.mensagens?.some(m => m.id === messageId)) continue;
 
             processedMessages.add(messageId);
             if (processedMessages.size > 1000) {
@@ -65,10 +64,10 @@ router.post("/oficial", async (req, res) => {
 
             if (!conversationHistory.has(number)) {
               let rebuild = [];
-              if (convAtual && convAtual.mensagens) {
+              if (convAtual?.mensagens) {
                 convAtual.mensagens.forEach(m => {
                   if (m.tipo !== "interna" && m.id !== messageId) {
-                    let role = (m.tipo === "enviada" || m.tipo === "bot") ? "model" : "user";
+                    const role = (m.tipo === "enviada" || m.tipo === "bot") ? "model" : "user";
                     rebuild.push({ role, parts: [{ text: m.texto }] });
                   }
                 });
@@ -77,15 +76,72 @@ router.post("/oficial", async (req, res) => {
             }
             const history = conversationHistory.get(number);
             
-            const empresaId = canaisMemoria.get(metadata?.phone_number_id) || ADMIN_DEFAULT.empresa_id;
-            
+            const empresaId = canaisMemoria.get(phoneNumberId) || ADMIN_DEFAULT.empresa_id;
             console.log(`[WABA Oficial][${empresaId}][${number}]: ${messageText}`);
             
-            const msgRecebida = { id: messageData.id, tipo: "recebida", texto: messageText, numero: number, timestamp: new Date().toISOString() };
+            // 1. Registra a mensagem recebida
+            const msgRecebida = { id: messageId, tipo: "recebida", texto: messageText, numero: number, timestamp: new Date().toISOString() };
             const convRec = await registrarNaConversa(number, msgRecebida, nomeCliente, null, empresaId);
             convRec.unread = (convRec.unread || 0) + 1;
             convRec.canal = "oficial";
-            convRec.phone_number_id = metadata?.phone_number_id;
+            convRec.phone_number_id = phoneNumberId;
+
+            // 2. Aciona o bot para responder (mesmo fluxo do Evolution)
+            try {
+              // Se bot pausado ou humano ativo
+              if (botPausado.has(number) || convRec.botOn === false) {
+                const promptEspera = getPrompt(empresaId, "prompt_espera", WAITING_PROMPT);
+                const ctx = `O bot está pausado para este cliente (${nomeCliente}) que aguarda atendimento humano. Ele enviou: ${messageText}`;
+                const envioAoCliente = await chamarOpenRouter([], ctx, promptEspera);
+                await enviarWhatsApp(number, envioAoCliente, phoneNumberId, messageId);
+                const msgBot = { id: `bot-${Date.now()}`, tipo: "bot", texto: envioAoCliente, numero: number, timestamp: new Date().toISOString() };
+                await registrarNaConversa(number, msgBot, nomeCliente, null, empresaId);
+                continue;
+              }
+
+              // Fluxo normal do bot
+              const timesDb = await listarTimes();
+              const timesAtivos = timesDb.filter(t => t.ativo !== false && (t.empresa_id === empresaId || !t.empresa_id));
+              const nomesTimes = timesAtivos.map(t => t.nome).join(" | ");
+              const descricaoTimes = timesAtivos.map(t => `- ${t.nome}: ${t.descricao} (relacionado a: ${t.palavras_chave})`).join("\n");
+              
+              const customSystem = getPrompt(empresaId, "prompt_sistema", SYSTEM_PROMPT);
+              const PROMPT_DINAMICO = customSystem
+                .replace("[TIMES_DISPONIVEIS]", descricaoTimes)
+                .replace("[NOMES_TIMES]", nomesTimes);
+
+              const resposta = await chamarOpenRouter(history, messageText, PROMPT_DINAMICO);
+
+              let envioAoCliente = resposta;
+              let setorParaInbox = null;
+              let nomeParaInbox = nomeCliente;
+
+              if (resposta.includes("#TRANSFERIR")) {
+                const resumo = resposta.replace("#TRANSFERIR", "").trim();
+                const setor  = resumo.match(/Setor:\s*([^\n]+)/i)?.[1]?.trim() || "geral";
+                const nome   = resumo.match(/Nome:\s*([^\n]+)/i)?.[1]?.trim() || nomeCliente;
+                const pedido = resumo.match(/Pedido:\s*([^\n]+)/i)?.[1]?.trim() || "";
+                nomeParaInbox = nome;
+                setorParaInbox = setor;
+                clientesTransferidos.set(number, { setor, nome, pedido, timestamp: Date.now(), respondidoPorHumano: false });
+                const hour = new Date().getHours();
+                const saudacao = hour < 12 ? "bom dia" : hour < 18 ? "boa tarde" : "boa noite";
+                const pedidoLimpo = resumo.replace(/Setor:[^\n]+\n?/i, "").replace(/Nome:[^\n]+\n?/i, "").trim();
+                envioAoCliente = `Tudo certo, ${nome}. Já anotei essas informações.\n\nResumo: ${pedidoLimpo}\n\nUm especialista do time de ${setor} vai assumir o atendimento por aqui em breve. Tenha um ótimo ${saudacao}.`;
+                conversationHistory.set(number, []);
+              } else {
+                history.push({ role: "user", parts: [{ text: messageText }] });
+                history.push({ role: "model", parts: [{ text: resposta }] });
+                if (history.length > MAX_HISTORY * 2) history.splice(0, 2);
+              }
+
+              await enviarWhatsApp(number, envioAoCliente, phoneNumberId, messageId);
+              const msgBot = { id: `bot-${Date.now()}`, tipo: "bot", texto: envioAoCliente, numero: number, timestamp: new Date().toISOString() };
+              await registrarNaConversa(number, msgBot, nomeParaInbox, setorParaInbox, empresaId);
+              console.log(`[WABA Bot → ${number}]: ${envioAoCliente.substring(0, 80)}...`);
+            } catch (botErr) {
+              console.error(`[WABA Bot Erro ${number}]:`, botErr.message);
+            }
           }
         }
       }
