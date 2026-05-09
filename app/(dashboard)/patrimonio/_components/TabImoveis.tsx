@@ -800,34 +800,82 @@ export function TabImoveis() {
 
                 {/* Parcelamento */}
                 {pt > 0 && (
-                  <div className="mb-3 p-3 rounded-lg bg-surface border border-border-subtle">
-                    <div className="flex justify-between text-[10px] text-fg-tertiary mb-1.5">
-                      <span>📦 Parcelamento {im.indexador ? `· ${im.indexador}` : ''}</span>
-                      <span className="font-semibold text-fg">{pp}/{pt} parcelas · {prog}%</span>
+                  <div className="mb-3 p-3 rounded-xl bg-surface border border-border-subtle space-y-3">
+                    {/* Título do bloco */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-fg-tertiary uppercase tracking-wider">
+                        📦 Parcelamento {im.indexador ? `· ${im.indexador}` : ''}
+                      </span>
+                      {im.taxa_juros_anual && (
+                        <span className="text-[10px] text-fg-disabled">📊 {im.taxa_juros_anual}% a.a.</span>
+                      )}
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden mb-2">
-                      <div className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${prog}%`, background: prog >= 90 ? '#10b981' : prog >= 50 ? '#3b82f6' : '#f59e0b' }} />
+
+                    {/* KPIs de parcelas — 4 caixas */}
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 text-center">
+                        <p className="text-[9px] text-emerald-400 uppercase font-semibold">✅ Pagas</p>
+                        <p className="text-base font-bold text-emerald-400">{pp}</p>
+                      </div>
+                      <div className="bg-surface border border-border-subtle rounded-lg p-2 text-center">
+                        <p className="text-[9px] text-fg-tertiary uppercase font-semibold">Total</p>
+                        <p className="text-base font-bold text-fg">{pt}</p>
+                      </div>
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 text-center">
+                        <p className="text-[9px] text-amber-400 uppercase font-semibold">⏳ Faltam</p>
+                        <p className="text-base font-bold text-amber-400">{pt - pp}</p>
+                      </div>
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-center">
+                        <p className="text-[9px] text-blue-400 uppercase font-semibold">% Pago</p>
+                        <p className="text-base font-bold text-blue-400">{prog}%</p>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 mb-2">
+
+                    {/* Barra de progresso */}
+                    <div>
+                      <div className="flex justify-between text-[10px] text-fg-tertiary mb-1">
+                        <span>{pp} parcela{pp !== 1 ? 's' : ''} paga{pp !== 1 ? 's' : ''}</span>
+                        <span className="font-semibold" style={{ color: prog >= 90 ? '#10b981' : prog >= 50 ? '#3b82f6' : '#f59e0b' }}>
+                          {prog}% concluído
+                        </span>
+                      </div>
+                      <div className="h-3 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-700"
+                          style={{
+                            width: `${prog}%`,
+                            background: prog >= 90
+                              ? 'linear-gradient(90deg, #10b981, #34d399)'
+                              : prog >= 50
+                              ? 'linear-gradient(90deg, #3b82f6, #60a5fa)'
+                              : 'linear-gradient(90deg, #f59e0b, #fbbf24)'
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[9px] text-fg-disabled mt-0.5">
+                        <span>Parcela {pp + 1 <= pt ? pp + 1 : pt}/{pt}</span>
+                        {im.dia_vencimento && <span>Vence dia {im.dia_vencimento}</span>}
+                      </div>
+                    </div>
+
+                    {/* Valores: parcela mensal + saldo restante */}
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border-subtle/60">
                       {im.valor_parcela && (
                         <div>
                           <p className="text-[9px] text-fg-disabled uppercase">Parcela mensal</p>
                           <p className="text-xs font-bold text-amber-400">{formatCurrency(im.valor_parcela)}</p>
-                          {im.dia_vencimento && (
-                            <p className="text-[9px] text-fg-disabled mt-0.5">📅 Vence dia {im.dia_vencimento}</p>
-                          )}
                         </div>
                       )}
                       {saldoDevedor !== null && (
                         <div>
-                          <p className="text-[9px] text-fg-disabled uppercase">Saldo devedor est.</p>
+                          <p className="text-[9px] text-fg-disabled uppercase">Saldo restante est.</p>
                           <p className="text-xs font-bold text-red-400">{formatCurrency(saldoDevedor)}</p>
                         </div>
                       )}
                     </div>
-                    {/* Juros e botões */}
-                    <div className="flex gap-2 mt-1">
+
+                    {/* Botões de ação */}
+                    <div className="flex gap-2">
                       {prog < 100 && (
                         <button
                           onClick={() => setImovelLancar(im)}
@@ -843,9 +891,6 @@ export function TabImoveis() {
                         📈 Analisar Quitação
                       </button>
                     </div>
-                    {im.taxa_juros_anual && (
-                      <p className="text-[10px] text-fg-disabled mt-1.5">📊 Taxa: {im.taxa_juros_anual}% a.a.</p>
-                    )}
                   </div>
                 )}
 
