@@ -55,6 +55,37 @@ function ModalLimiteMensal({ conta, onClose, onSave }: { conta: any; onClose: ()
   )
 }
 
+// ── Modal Fatura Prevista ────────────────────────────────────────
+function ModalFaturaPrevista({ conta, onClose, onSave }: { conta: any; onClose: () => void; onSave: () => void }) {
+  const supabase = createClient()
+  const [valor, setValor] = useState(String(conta.fatura_prevista ?? ''))
+  const [loading, setLoading] = useState(false)
+  const handleSave = async () => {
+    setLoading(true)
+    await (supabase.from('contas') as any).update({ fatura_prevista: parseFloat(valor) || null }).eq('id', conta.id)
+    setLoading(false); onSave(); onClose()
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+        <h2 className="text-sm font-bold text-fg">📊 Fatura Prevista — {conta.nome_cartao || conta.nome}</h2>
+        <p className="text-xs text-fg-tertiary">Insira o valor que você espera pagar na fatura antes do fechamento. O sistema confrontará com os lançamentos reais.</p>
+        <div>
+          <label className="label">Valor da Fatura Prevista (R$)</label>
+          <input className="input mt-1 w-full" type="number" step="0.01" placeholder="Ex: 2500.00"
+            value={valor} onChange={e => setValor(e.target.value)} />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handleSave} disabled={loading} className="btn-primary">
+            {loading ? 'Salvando...' : '✅ Definir'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Barra de progresso de gasto ─────────────────────────────────
 function GastoBar({ gasto, limite }: { gasto: number; limite: number | null }) {
   if (!limite) return null
@@ -311,6 +342,9 @@ function ModalCriarCartao({ onClose, onSave, categoriaDefault = 'pj' }: {
     bandeira: 'visa',
     categoria: categoriaDefault as 'pj' | 'pf',
     tipo: 'cartao_credito' as 'cartao_credito' | 'cartao_debito',
+    limite_credito: '',
+    dia_fechamento: '',
+    dia_vencimento: '',
   })
   const band = BANDEIRAS.find(b => b.id === form.bandeira) ?? BANDEIRAS[0]
 
@@ -331,6 +365,9 @@ function ModalCriarCartao({ onClose, onSave, categoriaDefault = 'pj' }: {
       saldo_atual: 0,
       ativo: true,
       cor: band.cor,
+      limite_credito: parseFloat(form.limite_credito) || null,
+      dia_fechamento: parseInt(form.dia_fechamento) || null,
+      dia_vencimento: parseInt(form.dia_vencimento) || null,
     })
 
     if (!err1) {
@@ -413,22 +450,21 @@ function ModalCriarCartao({ onClose, onSave, categoriaDefault = 'pj' }: {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="label">Tipo</label>
-              <select className="input mt-1" value={form.tipo}
-                onChange={e => setForm(f => ({ ...f, tipo: e.target.value as any }))}>
-                <option value="cartao_credito">Crédito</option>
-                <option value="cartao_debito">Débito</option>
-              </select>
+              <label className="label">Limite Crédito (R$)</label>
+              <input className="input mt-1" type="number" step="100" placeholder="Ex: 5000"
+                value={form.limite_credito} onChange={e => setForm(f => ({ ...f, limite_credito: e.target.value }))} />
             </div>
             <div>
-              <label className="label">Classificação</label>
-              <select className="input mt-1" value={form.categoria}
-                onChange={e => setForm(f => ({ ...f, categoria: e.target.value as any }))}>
-                <option value="pj">🏢 PJ (Empresa)</option>
-                <option value="pf">👤 PF (Pessoal)</option>
-              </select>
+              <label className="label">Dia Fechamento</label>
+              <input className="input mt-1" type="number" min="1" max="31" placeholder="Ex: 10"
+                value={form.dia_fechamento} onChange={e => setForm(f => ({ ...f, dia_fechamento: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Dia Vencimento</label>
+              <input className="input mt-1" type="number" min="1" max="31" placeholder="Ex: 17"
+                value={form.dia_vencimento} onChange={e => setForm(f => ({ ...f, dia_vencimento: e.target.value }))} />
             </div>
           </div>
 
@@ -461,6 +497,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
   const [modalLanc, setModalLanc] = useState(false)
   const [modalCriar, setModalCriar] = useState(false)
   const [modalLimite, setModalLimite] = useState<any>(null)
+  const [modalFatura, setModalFatura] = useState<any>(null)
   const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro'>('lancamentos')
   const [busca, setBusca] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
@@ -559,7 +596,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             {[
               { label: `Despesas (${labelMes(mesSel)})`, val: totalDespesas, color: 'text-red-400', bg: 'bg-red-500/10' },
               { label: 'Receitas/Estornos', val: totalReceitas, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
@@ -570,6 +607,37 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                 <p className={`text-lg sm:text-xl font-bold ${color}`}>{formatCurrency(val)}</p>
               </div>
             ))}
+            {/* Confronto Fatura Prevista */}
+            {cartaoSel !== 'todos' && (() => {
+              const cartao = cartoes.find(c => c.id === cartaoSel)
+              const prev = cartao?.fatura_prevista
+              if (!prev) return (
+                <div className="bg-muted/30 border border-border-subtle rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+                  <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">📊 Fatura Prevista</p>
+                  <button onClick={() => setModalFatura(cartao)}
+                    className="text-xs text-amber-400 hover:text-amber-300 text-left">
+                    + Definir valor previsto
+                  </button>
+                </div>
+              )
+              const diff = totalDespesas - prev
+              const pct = Math.min((totalDespesas / prev) * 100, 999)
+              return (
+                <div className={`border rounded-xl p-3 sm:p-4 ${diff > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+                  <div className="flex justify-between items-start">
+                    <p className="text-[10px] text-fg-tertiary uppercase tracking-wider">📊 Fatura Prevista</p>
+                    <button onClick={() => setModalFatura(cartao)} className="text-[9px] text-fg-disabled hover:text-fg">✏️</button>
+                  </div>
+                  <p className="text-lg font-bold text-fg mt-1">{formatCurrency(prev)}</p>
+                  <p className={`text-xs font-semibold mt-0.5 ${diff > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {diff > 0 ? `⚠️ +${formatCurrency(diff)} acima` : `✅ ${formatCurrency(Math.abs(diff))} abaixo`}
+                  </p>
+                  <div className="mt-1.5 w-full bg-muted rounded-full h-1">
+                    <div className="h-1 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: diff > 0 ? '#ef4444' : '#10b981' }} />
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Gráfico + Lista */}
@@ -714,6 +782,8 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                         className="flex-1 btn-ghost text-xs">+ Lançar</button>
                       <button onClick={e => { e.stopPropagation(); setModalLimite(c) }}
                         className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">🎯 Limite</button>
+                      <button onClick={e => { e.stopPropagation(); setModalFatura(c) }}
+                        className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">📊 Fatura</button>
                       <button onClick={e => { e.stopPropagation(); onDeleteConta(c.id) }}
                         className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30" title="Excluir">🗑️</button>
                     </div>
@@ -741,6 +811,13 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
         <ModalCriarCartao
           onClose={() => setModalCriar(false)}
           onSave={() => { setModalCriar(false); onRefresh?.() }}
+        />
+      )}
+      {modalFatura && (
+        <ModalFaturaPrevista
+          conta={modalFatura}
+          onClose={() => setModalFatura(null)}
+          onSave={() => { onRefresh?.() }}
         />
       )}
       {modalLimite && (
