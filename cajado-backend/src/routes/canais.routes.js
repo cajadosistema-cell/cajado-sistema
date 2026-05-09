@@ -15,16 +15,38 @@ const RAILWAY_URL = process.env.RAILWAY_PUBLIC_DOMAIN
 // Helper: aguarda N ms
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper: chamada ao Evolution com timeout
-const evo = (method, path, data = null) => {
+// Helper: chamada ao Evolution com timeout — suporta credenciais por instância
+const evo = (method, path, data = null, opts = {}) => {
+  const url  = opts.evolution_url || EVOLUTION_URL;
+  const key  = opts.api_key       || EVOLUTION_KEY;
   const config = {
     method,
-    url: `${EVOLUTION_URL}${path}`,
-    headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" },
+    url: `${url}${path}`,
+    headers: { apikey: key, "Content-Type": "application/json" },
     timeout: 15000,
   };
   if (data) config.data = data;
   return axios(config);
+};
+
+// Helper: obtém as credenciais Evolution de um canal pelo nome da instância
+const getInstCreds = async (instanceName, empresa_id) => {
+  if (!supabase) return {};
+  try {
+    const { data } = await supabase
+      .from("canais")
+      .select("dados_conexao")
+      .eq("empresa_id", empresa_id)
+      .eq("dados_conexao->>instance_name", instanceName)
+      .single();
+    if (data?.dados_conexao) {
+      return {
+        api_key:       data.dados_conexao.api_key       || null,
+        evolution_url: data.dados_conexao.evolution_url || null,
+      };
+    }
+  } catch {}
+  return {};
 };
 
 // ─── CRIAR INSTÂNCIA AUTO ─────────────────────────────────────────────────────
@@ -121,9 +143,14 @@ router.post("/criar-instancia", authMiddleware, async (req, res) => {
 router.post("/vincular-instancia", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin") return res.status(403).json({ erro: "Apenas admins" });
 
-  const { instanceName, nome } = req.body;
+  const { instanceName, nome, api_key, evolution_url } = req.body;
   if (!instanceName) return res.status(400).json({ erro: "Nome da instância é obrigatório" });
 
+  // Credenciais: usa as fornecidas pelo cliente OU cai para o padrão global
+  const instCreds = {
+    api_key:       api_key       || null,
+    evolution_url: evolution_url || null,
+  };
   const webhookUrl = `${RAILWAY_URL}/webhook/evolution`;
 
   try {
@@ -138,7 +165,7 @@ router.post("/vincular-instancia", authMiddleware, async (req, res) => {
             webhookByEvents: false,
             events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
           }
-        });
+        }, instCreds);
         webhookOk = true;
         console.log(`[CANAIS] Webhook configurado para instância manual ${instanceName}`);
         break;
@@ -151,7 +178,7 @@ router.post("/vincular-instancia", authMiddleware, async (req, res) => {
     // 2. Verifica o estado REAL da instância antes de salvar
     let isConnected = false;
     try {
-      const stateRes = await evo("GET", `/instance/connectionState/${instanceName}`);
+      const stateRes = await evo("GET", `/instance/connectionState/${instanceName}`, null, instCreds);
       const state = stateRes.data?.instance?.state || stateRes.data?.state || "unknown";
       isConnected = state === "open";
       console.log(`[CANAIS] Estado real de ${instanceName}: ${state} (conectado=${isConnected})`);
@@ -159,7 +186,7 @@ router.post("/vincular-instancia", authMiddleware, async (req, res) => {
       console.warn(`[CANAIS] Não foi possível verificar estado de ${instanceName}:`, e.message);
     }
 
-    // 3. Salva com status real
+    // 3. Salva com status real + credenciais da instância
     const novoCanal = {
       empresa_id: req.user.empresa_id,
       nome: nome || instanceName,
@@ -170,6 +197,9 @@ router.post("/vincular-instancia", authMiddleware, async (req, res) => {
         webhook_url: webhookUrl,
         webhook_ok: webhookOk,
         ativo: isConnected,
+        // Credenciais por instância (multi-tenant)
+        ...(instCreds.api_key       && { api_key:       instCreds.api_key }),
+        ...(instCreds.evolution_url && { evolution_url: instCreds.evolution_url }),
       }
     };
 
@@ -326,12 +356,13 @@ router.get("/:instanceName/qrcode", authMiddleware, async (req, res) => {
 router.get("/:instanceName/status", authMiddleware, async (req, res) => {
   const { instanceName } = req.params;
   try {
-    const r = await evo("GET", `/instance/connectionState/${instanceName}`);
+    // Busca credenciais específicas da instância (multi-tenant)
+    const instCreds = await getInstCreds(instanceName, req.user.empresa_id);
+    const r = await evo("GET", `/instance/connectionState/${instanceName}`, null, instCreds);
     const state = r.data?.instance?.state || r.data?.state || "unknown";
     const connected = state === "open";
 
     if (connected && supabase) {
-      // Busca o canal e atualiza o campo `ativo` dentro do JSONB
       const { data: canal } = await supabase.from("canais")
         .select("id, dados_conexao")
         .eq("empresa_id", req.user.empresa_id)

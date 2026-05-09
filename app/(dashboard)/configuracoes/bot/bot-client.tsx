@@ -769,10 +769,13 @@ function SecaoWhatsApp() {
   // ── Vincular Instância (Anti-Ban) ──
   const [instanceNameInput, setInstanceNameInput] = useState('')
   const [nomeVincular, setNomeVincular] = useState('WhatsApp Principal')
+  const [apiKeyInput, setApiKeyInput] = useState('') // chave por instância (multi-tenant)
+  const [evolutionUrlInput, setEvolutionUrlInput] = useState('') // URL opcional por instância
   const [vinculando, setVinculando] = useState(false)
   const [vinculado, setVinculado] = useState<{ instanceName: string; isConnected: boolean; linkConexao: string | null } | null>(null)
   const [erroVincular, setErroVincular] = useState('')
   const [pollingVincular, setPollingVincular] = useState(false)
+  const [showAdvancedVincular, setShowAdvancedVincular] = useState(false)
 
   // ── API Oficial Meta ──
   const [apiForm, setApiForm] = useState({
@@ -820,6 +823,8 @@ function SecaoWhatsApp() {
       const res = await apiPost('/canais/vincular-instancia', {
         instanceName: instanceNameInput.trim(),
         nome: nomeVincular,
+        ...(apiKeyInput.trim()       && { api_key:       apiKeyInput.trim() }),
+        ...(evolutionUrlInput.trim() && { evolution_url: evolutionUrlInput.trim() }),
       }) as any
       if (res.ok) {
         setVinculado(res)
@@ -987,6 +992,42 @@ function SecaoWhatsApp() {
                 />
                 <p className="text-[10px] text-fg-disabled mt-1">Cole exatamente o nome exibido no painel do Evolution Manager</p>
               </div>
+
+              {/* Configurações avançadas (API Key por instância) */}
+              <button
+                type="button"
+                onClick={() => setShowAdvancedVincular(v => !v)}
+                className="text-[10px] text-fg-disabled hover:text-fg-secondary transition-colors flex items-center gap-1"
+              >
+                {showAdvancedVincular ? '▼' : '▶'} Configurações avançadas (multi-tenant)
+              </button>
+
+              {showAdvancedVincular && (
+                <div className="space-y-3 border-t border-border-subtle pt-3">
+                  <div>
+                    <label className="label block mb-1">API Key da instância <span className="text-fg-disabled">(opcional)</span></label>
+                    <input
+                      className="input text-xs w-full font-mono"
+                      value={apiKeyInput}
+                      onChange={e => setApiKeyInput(e.target.value)}
+                      placeholder="Chave específica desta instância"
+                      type="password"
+                    />
+                    <p className="text-[10px] text-fg-disabled mt-1">Necessário se cada cliente usa uma API Key própria no Evolution Manager</p>
+                  </div>
+                  <div>
+                    <label className="label block mb-1">URL da Evolution API <span className="text-fg-disabled">(opcional)</span></label>
+                    <input
+                      className="input text-xs w-full font-mono"
+                      value={evolutionUrlInput}
+                      onChange={e => setEvolutionUrlInput(e.target.value)}
+                      placeholder="https://evolution-api-xxx.up.railway.app"
+                    />
+                    <p className="text-[10px] text-fg-disabled mt-1">Preencha se esta instância está em um servidor Evolution diferente</p>
+                  </div>
+                </div>
+              )}
+
               {erroVincular && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded">{erroVincular}</p>}
               <button onClick={handleVincular} disabled={vinculando || !instanceNameInput.trim()} className="btn-primary text-xs w-full">
                 {vinculando ? '⏳ Vinculando...' : '🔗 Vincular Instância'}
