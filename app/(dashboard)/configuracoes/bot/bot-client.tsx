@@ -992,41 +992,31 @@ function SecaoWhatsApp() {
                 />
                 <p className="text-[10px] text-fg-disabled mt-1">Cole exatamente o nome exibido no painel do Evolution Manager</p>
               </div>
-
-              {/* Configurações avançadas (API Key por instância) */}
-              <button
-                type="button"
-                onClick={() => setShowAdvancedVincular(v => !v)}
-                className="text-[10px] text-fg-disabled hover:text-fg-secondary transition-colors flex items-center gap-1"
-              >
-                {showAdvancedVincular ? '▼' : '▶'} Configurações avançadas (multi-tenant)
-              </button>
-
-              {showAdvancedVincular && (
-                <div className="space-y-3 border-t border-border-subtle pt-3">
-                  <div>
-                    <label className="label block mb-1">API Key da instância <span className="text-fg-disabled">(opcional)</span></label>
-                    <input
-                      className="input text-xs w-full font-mono"
-                      value={apiKeyInput}
-                      onChange={e => setApiKeyInput(e.target.value)}
-                      placeholder="Chave específica desta instância"
-                      type="password"
-                    />
-                    <p className="text-[10px] text-fg-disabled mt-1">Necessário se cada cliente usa uma API Key própria no Evolution Manager</p>
-                  </div>
-                  <div>
-                    <label className="label block mb-1">URL da Evolution API <span className="text-fg-disabled">(opcional)</span></label>
-                    <input
-                      className="input text-xs w-full font-mono"
-                      value={evolutionUrlInput}
-                      onChange={e => setEvolutionUrlInput(e.target.value)}
-                      placeholder="https://evolution-api-xxx.up.railway.app"
-                    />
-                    <p className="text-[10px] text-fg-disabled mt-1">Preencha se esta instância está em um servidor Evolution diferente</p>
-                  </div>
-                </div>
-              )}
+              <div>
+                <label className="label block mb-1">
+                  API Key da instância
+                  <span className="text-fg-disabled font-normal ml-1">(necessária se cada instância tem chave própria)</span>
+                </label>
+                <input
+                  className="input text-xs w-full font-mono"
+                  value={apiKeyInput}
+                  onChange={e => setApiKeyInput(e.target.value)}
+                  placeholder="Cole aqui a API Key da instância no Evolution Manager"
+                  type="password"
+                />
+              </div>
+              <div>
+                <label className="label block mb-1">
+                  URL da Evolution API
+                  <span className="text-fg-disabled font-normal ml-1">(opcional — só se for diferente do padrão)</span>
+                </label>
+                <input
+                  className="input text-xs w-full font-mono"
+                  value={evolutionUrlInput}
+                  onChange={e => setEvolutionUrlInput(e.target.value)}
+                  placeholder="https://evolution-api-xxx.up.railway.app"
+                />
+              </div>
 
               {erroVincular && <p className="text-xs text-red-400 bg-red-400/10 px-3 py-2 rounded">{erroVincular}</p>}
               <button onClick={handleVincular} disabled={vinculando || !instanceNameInput.trim()} className="btn-primary text-xs w-full">
