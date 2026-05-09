@@ -83,14 +83,22 @@ interface Time {
 
 function SecaoPrompt() {
   const [prompt, setPrompt] = useState('')
-  const [form, setForm] = useState({ nomeBot: '', nomeEmpresa: '', descricao: '', tom: 'Amigável e consultivo' })
+  const [form, setForm] = useState({
+    nomeBot: 'Ana',
+    nomeEmpresa: 'Cajado Soluções',
+    descricao: 'Escola de formação e capacitação de condutores profissionais homologada pelo SENATRAN. Cursos: Reciclagem CNH, MOPP (Movimentação de Produtos Perigosos), Transporte Escolar, Capacitação CTP (Transporte de Passageiros), Renovação de Certificados. Atendemos motoristas profissionais e empresas que precisam regularizar seus motoristas. Turmas regulares abertas frequentemente.',
+    tom: 'Amigável e consultivo',
+  })
   const [gerando, setGerando] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
-    apiGet('/configuracoes').then(data => {
-      setPrompt(data.system_prompt || '')
+    apiGet('/configuracoes').then((data: Record<string, string>) => {
+      // A resposta é um Map serializado: chaves no formato "<empresa_id>_prompt_sistema"
+      // Busca qualquer chave que termine em _prompt_sistema
+      const promptKey = Object.keys(data).find(k => k.endsWith('_prompt_sistema'))
+      if (promptKey) setPrompt(data[promptKey])
     })
   }, [])
 
@@ -105,7 +113,7 @@ function SecaoPrompt() {
 
   async function handleSalvar() {
     setSalvando(true)
-    await apiPost('/configuracoes', { system_prompt: prompt })
+    await apiPost('/configuracoes', { prompt_sistema: prompt })
     setMsg('Salvo com sucesso!')
     setSalvando(false)
     setTimeout(() => setMsg(''), 3000)
