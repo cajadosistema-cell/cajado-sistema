@@ -118,6 +118,64 @@ router.post("/login", async (req, res) => {
   res.json({ token, usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, role: usuario.role, setor: usuario.setor, empresa_id: usuario.empresa_id } });
 });
 
+// ─── TROCA DE TOKEN SUPABASE → BACKEND JWT ────────────────────────────────
+// Aceita um JWT do Supabase e emite um JWT do backend inbox sem precisar de senha
+router.post("/supabase-exchange", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ erro: "Token Supabase necessário" });
+  }
+  const supabaseToken = authHeader.split(" ")[1];
+
+  try {
+    // 1. Valida o token com o Supabase
+    const r = await fetch(`${SB_URL()}/auth/v1/user`, {
+      headers: { apikey: SB_KEY(), Authorization: `Bearer ${supabaseToken}` }
+    });
+    if (!r.ok) return res.status(401).json({ erro: "Token Supabase inválido" });
+    const sbUser = await r.json();
+    const email = (sbUser.email || "").trim().toLowerCase();
+    if (!email) return res.status(401).json({ erro: "E-mail não encontrado no token Supabase" });
+
+    // 2. Busca o usuário no backend (memória → Supabase)
+    let usuario = usuariosMemoria.get(email);
+    if (!usuario) {
+      const { data } = await sbGet("usuarios", `email=eq.${encodeURIComponent(email)}&select=*`);
+      if (data?.id) { usuariosMemoria.set(email, data); usuario = data; }
+    }
+
+    // 3. Se não existe, cria automaticamente como admin (primeira vez do dono do sistema)
+    if (!usuario) {
+      const { data: emp } = await sbGet("empresas", "select=id&limit=1");
+      const empresa_id = emp?.id || "empresa-padrao";
+      usuario = {
+        id: sbUser.id,
+        nome: sbUser.user_metadata?.full_name || sbUser.user_metadata?.nome || email.split("@")[0],
+        email,
+        role: "admin",
+        setor: "todos",
+        ativo: true,
+        empresa_id
+      };
+      usuariosMemoria.set(email, usuario);
+      console.log(`[SUPABASE-EXCHANGE] ✅ Usuário ${email} criado automaticamente como admin`);
+    }
+
+    if (!usuario.ativo) return res.status(401).json({ erro: "Usuário desativado" });
+
+    const token = jwt.sign(
+      { id: usuario.id, nome: usuario.nome, email: usuario.email, role: usuario.role, setor: usuario.setor, empresa_id: usuario.empresa_id || "vazia" },
+      JWT_SECRET, { expiresIn: "7d" }
+    );
+    console.log(`[SUPABASE-EXCHANGE] ✅ Token emitido para ${email}`);
+    res.json({ token, usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, role: usuario.role, empresa_id: usuario.empresa_id } });
+  } catch (err) {
+    console.error("[SUPABASE-EXCHANGE] Erro:", err.message);
+    res.status(500).json({ erro: "Erro ao validar token Supabase" });
+  }
+});
+
+
 // ─── REGISTER ─────────────────────────────────────────────────────────────
 router.post("/register", async (req, res) => {
   let { nome, email, senha, empresaNome } = req.body;
