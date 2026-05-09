@@ -210,8 +210,12 @@ router.post("/vincular-instancia", authMiddleware, async (req, res) => {
       else canalId = data?.id;
     }
 
-    // 4. Registra na memória
-    canaisMemoria.set(instanceName, req.user.empresa_id);
+    // 4. Registra na memória com credenciais completas (multi-tenant)
+    canaisMemoria.set(instanceName, {
+      empresa_id: req.user.empresa_id,
+      api_key:       instCreds.api_key       || null,
+      evolution_url: instCreds.evolution_url || null,
+    });
 
     // 5. Monta link de conexão (caso ainda precise escanear QR)
     const linkConexao = canalId ? `${RAILWAY_URL}/conectar/${canalId}` : null;

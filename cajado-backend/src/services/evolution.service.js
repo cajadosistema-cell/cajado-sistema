@@ -15,12 +15,14 @@ const sleep = (ms) => {
 /** Delay leve para simular "pausa de leitura" antes de começar a digitar */
 const sleepLeitura = () => sleep(800 + Math.random() * 1200); // 0.8s a 2s
 
-/** Helper base para chamar a Evolution API com timeout */
-const evoCall = (method, path, data = null, timeoutMs = 15000) => {
+/** Helper base para chamar a Evolution API com timeout e credenciais opcionais por instância */
+const evoCall = (method, path, data = null, timeoutMs = 15000, creds = {}) => {
+  const url = creds.evolution_url || EVOLUTION_URL;
+  const key = creds.api_key       || EVOLUTION_KEY;
   const config = {
     method,
-    url: `${EVOLUTION_URL}${path}`,
-    headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" },
+    url: `${url}${path}`,
+    headers: { apikey: key, "Content-Type": "application/json" },
     timeout: timeoutMs,
   };
   if (data) config.data = data;
@@ -77,14 +79,14 @@ function fragmentarMensagem(texto, maxLen = 500) {
  * Simula "composing" (digitando) antes de enviar — anti-ban comportamento humano.
  * ~30ms por char, limitado entre 1.5s e 6s.
  */
-async function simularDigitacao(instance, number, textoTamanho) {
+async function simularDigitacao(instance, number, textoTamanho, creds = {}) {
   try {
     const delayMs = Math.min(Math.max(textoTamanho * 30, 1500), 6000);
     await evoCall("POST", `/chat/sendPresence/${instance}`, {
       number: `${number}@s.whatsapp.net`,
       presence: "composing",
       delay: delayMs,
-    });
+    }, 15000, creds);
     await sleep(delayMs);
   } catch {
     await sleep(2000); // fallback silencioso
@@ -95,13 +97,13 @@ async function simularDigitacao(instance, number, textoTamanho) {
  * Para de "digitar" — envia presence "paused" após enviar cada bloco.
  * Faz o WhatsApp exibir que o bot parou de escrever (mais natural).
  */
-async function pararDigitacao(instance, number) {
+async function pararDigitacao(instance, number, creds = {}) {
   try {
     await evoCall("POST", `/chat/sendPresence/${instance}`, {
       number: `${number}@s.whatsapp.net`,
       presence: "paused",
       delay: 0,
-    });
+    }, 15000, creds);
   } catch {
     // silencioso
   }
@@ -111,11 +113,11 @@ async function pararDigitacao(instance, number) {
  * Marca o chat como lido após receber mensagem do cliente.
  * Comportamento humano: leu antes de responder.
  */
-async function marcarComoLido(instance, number, messageId) {
+async function marcarComoLido(instance, number, messageId, creds = {}) {
   try {
     await evoCall("POST", `/chat/markMessageAsRead/${instance}`, {
       readMessages: [{ remoteJid: `${number}@s.whatsapp.net`, fromMe: false, id: messageId }],
-    });
+    }, 15000, creds);
   } catch {
     // silencioso — não é crítico
   }
@@ -181,7 +183,7 @@ async function configurarAntiBan(instanceName) {
  * @param {string} targetInstance - Nome da instância Evolution OU phone_number_id da Meta
  * @param {string} [messageId] - ID da mensagem recebida (para marcar como lido)
  */
-async function enviarWhatsApp(number, text, targetInstance, messageId = null) {
+async function enviarWhatsApp(number, text, targetInstance, messageId = null, creds = {}) {
   const instance = targetInstance || process.env.INSTANCE || "botwhatsapp01";
 
   // Detecta canal Meta Cloud API (phone_number_id é numérico longo)
@@ -190,9 +192,21 @@ async function enviarWhatsApp(number, text, targetInstance, messageId = null) {
     return enviarMetaCloudAPI(number, text, instance);
   }
 
+  // Se não vieram creds explícitas, busca do canaisMemoria (multi-tenant)
+  if (!creds.api_key && !creds.evolution_url) {
+    const { canaisMemoria } = require("../config/memory");
+    const canalInfo = canaisMemoria.get(instance);
+    if (canalInfo && typeof canalInfo === "object" && canalInfo.api_key) {
+      creds = { api_key: canalInfo.api_key, evolution_url: canalInfo.evolution_url };
+    }
+  }
+
+  const credsLog = creds.api_key ? `[chave-instância]` : `[chave-global]`;
+  console.log(`[EVO-SEND] ${instance} ${credsLog} → ${number}`);
+
   // Marca como lido ANTES de começar a responder (comportamento humano)
   if (messageId) {
-    await marcarComoLido(instance, number, messageId);
+    await marcarComoLido(instance, number, messageId, creds);
     await sleepLeitura(); // pausa de "leitura" (800ms a 2s)
   }
 
@@ -202,7 +216,7 @@ async function enviarWhatsApp(number, text, targetInstance, messageId = null) {
     const bloco = blocos[i];
 
     // 1. Simula digitação proporcional ao tamanho do bloco
-    await simularDigitacao(instance, number, bloco.length);
+    await simularDigitacao(instance, number, bloco.length, creds);
 
     // 2. Envia com retry exponencial + jitter
     let enviado = false;
@@ -211,9 +225,8 @@ async function enviarWhatsApp(number, text, targetInstance, messageId = null) {
         await evoCall("POST", `/message/sendText/${instance}`, {
           number,
           text: bloco,
-          // Opções adicionais anti-detecção:
-          delay: Math.floor(500 + Math.random() * 500), // delay interno Evolution 0.5-1s
-        });
+          delay: Math.floor(500 + Math.random() * 500),
+        }, 15000, creds);
         enviado = true;
         console.log(`[EVO] ✅ Bloco ${i + 1}/${blocos.length} → ${number} (${bloco.length} chars)`);
         break;
@@ -230,11 +243,11 @@ async function enviarWhatsApp(number, text, targetInstance, messageId = null) {
     }
 
     // 3. Para a animação de digitação
-    await pararDigitacao(instance, number);
+    await pararDigitacao(instance, number, creds);
 
-    // 4. Delay humanizado entre blocos (mais longo que antes: 2-5s)
+    // 4. Delay humanizado entre blocos
     if (i < blocos.length - 1) {
-      const entreBloco = 2000 + Math.random() * 3000; // 2s a 5s
+      const entreBloco = 2000 + Math.random() * 3000;
       await sleep(entreBloco);
     }
   }

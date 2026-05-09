@@ -184,7 +184,9 @@ router.post(["/evolution", "/"], async (req, res) => {
 
   const nomeCliente = messageData.pushName || number;
   const instanceName = data.instance || INSTANCE;
-  const empresa_id = canaisMemoria.get(instanceName) || ADMIN_DEFAULT.empresa_id;
+  const canalInfo   = canaisMemoria.get(instanceName);
+  const empresa_id  = (canalInfo && typeof canalInfo === "object" ? canalInfo.empresa_id : canalInfo) || ADMIN_DEFAULT.empresa_id;
+  const instCreds   = (canalInfo && typeof canalInfo === "object") ? { api_key: canalInfo.api_key, evolution_url: canalInfo.evolution_url } : {};
 
   if (messageData.key.fromMe) {
     if (!messageText) return;
@@ -262,7 +264,7 @@ router.post(["/evolution", "/"], async (req, res) => {
        const ctx = `O bot está pausado para este cliente (${nomeParaInbox}) que aguarda atendimento humano. Ele enviou: ${messageText}`;
        envioAoCliente = await chamarOpenRouter([], ctx, promptEspera);
        
-       await enviarWhatsApp(number, envioAoCliente, instanceName, messageId);
+       await enviarWhatsApp(number, envioAoCliente, instanceName, messageId, instCreds);
        const msgBotErr = { id: `bot-${Date.now()}`, tipo: "bot", texto: envioAoCliente, numero: number, timestamp: new Date().toISOString() };
        await registrarNaConversa(number, msgBotErr, nomeParaInbox, null, empresa_id, instanceName);
        return;
@@ -322,7 +324,7 @@ router.post(["/evolution", "/"], async (req, res) => {
       }
     }
 
-    await enviarWhatsApp(number, envioAoCliente, instanceName, messageId);
+    await enviarWhatsApp(number, envioAoCliente, instanceName, messageId, instCreds);
     console.log(`[Bot → ${number}]: ${envioAoCliente}`);
 
     const msgBot = { id: `bot-${Date.now()}`, tipo: "bot", texto: envioAoCliente, numero: number, timestamp: new Date().toISOString() };
