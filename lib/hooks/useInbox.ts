@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 // Usa proxy relativo do Next.js (rewrite em next.config.mjs) — sem CORS, sem variável de build
-const API = '/inbox-proxy'
+const API = '/api/inbox-proxy'
 const INBOX_TOKEN_KEY = 'cajado_inbox_token'
 
 // ── Tipos ──────────────────────────────────────────────────────

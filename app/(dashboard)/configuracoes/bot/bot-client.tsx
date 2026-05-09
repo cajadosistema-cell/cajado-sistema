@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 
-// Usa proxy relativo do Next.js — evita CORS e problema de variável no build
-// O next.config.mjs tem rewrite: /inbox-proxy/* → backend
-const API = '/inbox-proxy'
+// Usa proxy relativo do Next.js — sem CORS, sem variável de build
+// O Next.js serve API routes sob /api/inbox-proxy/*
+const API = '/api/inbox-proxy'
 
 function getToken() {
   return typeof window !== 'undefined' ? localStorage.getItem('cajado_inbox_token') : null
