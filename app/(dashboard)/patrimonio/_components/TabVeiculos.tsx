@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn } from '@/lib/utils'
+import { exportCSV } from '@/lib/export-utils'
 
 type Veiculo = {
   id: string
@@ -357,7 +358,36 @@ export function TabVeiculos() {
       {/* Header */}
       <div className="flex justify-between items-center gap-2 flex-wrap">
         <h2 className="text-sm font-semibold text-fg">🚗 Carteira de Veículos</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => {
+            exportCSV(`veiculos_${new Date().toISOString().slice(0,10)}.csv`,
+              ['Título','Marca','Modelo','Ano Fab.','Ano Mod.','Placa','Cor','Combustível','KM','Status','Valor Compra','Valor Mercado','Parcelas','Data Aquisição'],
+              veiculos.map(v => [
+                v.titulo, v.marca||'', v.modelo||'',
+                v.ano_fabricacao??'', v.ano_modelo??'',
+                v.placa||'', v.cor||'', v.combustivel||'',
+                v.km_atual??'', v.status,
+                v.valor_compra??'', v.valor_mercado??'',
+                `${v.parcelas_pagas??0}/${v.parcelas_total??0}`,
+                v.data_aquisicao||'',
+              ])
+            )
+          }} className="btn-secondary text-xs">📥 Exportar CSV</button>
+          <button onClick={async () => {
+            const { exportPDF } = await import('@/lib/export-utils')
+            await exportPDF(
+              `veiculos_${new Date().toISOString().slice(0,10)}.pdf`,
+              '🚗 Carteira de Veículos', `Total: ${veiculos.length} veículos`,
+              ['Título','Marca/Modelo','Placa','Status','Valor Compra','Valor Mercado','KM'],
+              veiculos.map(v => [
+                [v.titulo], [`${v.marca||''} ${v.modelo||''}`],
+                [v.placa||'—'], [v.status],
+                [v.valor_compra ? `R$ ${v.valor_compra.toLocaleString('pt-BR')}` : '—'],
+                [v.valor_mercado ? `R$ ${v.valor_mercado.toLocaleString('pt-BR')}` : '—'],
+                [v.km_atual ? `${v.km_atual.toLocaleString('pt-BR')} km` : '—'],
+              ])
+            )
+          }} className="btn-secondary text-xs">📄 Exportar PDF</button>
           <button onClick={() => setShowImportIA(true)} className="btn-secondary text-xs">
             🤖 Importar Documento
           </button>

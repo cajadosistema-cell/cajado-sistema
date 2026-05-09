@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn } from '@/lib/utils'
+import { exportCSV } from '@/lib/export-utils'
 
 type Imovel = {
   id: string
@@ -573,7 +574,35 @@ export function TabImoveis() {
       {/* Header */}
       <div className="flex justify-between items-center gap-2 flex-wrap">
         <h2 className="text-sm font-semibold text-fg">🏠 Carteira de Imóveis</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => {
+            exportCSV(`imoveis_${new Date().toISOString().slice(0,10)}.csv`,
+              ['Título','Tipo','Status','Construtora','Unidade','Valor Compra','Valor Mercado','Contrato Total','Parcela','Pagas','Total','Taxa% a.a.','Indexador','Data Aquisição'],
+              imoveis.map(im => [
+                im.titulo, im.tipo_imovel, im.status,
+                im.construtora||'', im.unidade||'',
+                im.valor_compra??'', im.valor_mercado??'',
+                im.valor_total_contrato??'', im.valor_parcela??'',
+                im.parcelas_pagas??'', im.parcelas_total??'',
+                im.taxa_juros_anual??'', im.indexador||'',
+                im.data_aquisicao||'',
+              ])
+            )
+          }} className="btn-secondary text-xs">📥 Exportar CSV</button>
+          <button onClick={async () => {
+            const { exportPDF } = await import('@/lib/export-utils')
+            await exportPDF(
+              `imoveis_${new Date().toISOString().slice(0,10)}.pdf`,
+              '🏠 Carteira de Imóveis', `Total: ${imoveis.length} imóveis`,
+              ['Título','Tipo','Status','Valor Compra','Valor Mercado','Parcelas','Taxa'],
+              imoveis.map(im => [[im.titulo],[im.tipo_imovel],[im.status],
+                [im.valor_compra ? `R$ ${im.valor_compra.toLocaleString('pt-BR')}` : '—'],
+                [im.valor_mercado ? `R$ ${im.valor_mercado.toLocaleString('pt-BR')}` : '—'],
+                [`${im.parcelas_pagas||0}/${im.parcelas_total||0}`],
+                [im.taxa_juros_anual ? `${im.taxa_juros_anual}% a.a.` : '—']
+              ])
+            )
+          }} className="btn-secondary text-xs">📄 Exportar PDF</button>
           <button onClick={() => setShowImportIA(true)} className="btn-secondary text-xs">
             🤖 Importar Documento
           </button>
