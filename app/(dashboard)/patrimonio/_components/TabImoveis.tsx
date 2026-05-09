@@ -381,14 +381,14 @@ REGRAS CRÍTICAS para extração:
 4. "valor_total_contrato" = campo "Valor total do contrato" ou soma total
 5. "titulo" = nome da empresa construtora + unidade (ex: "GMS SPE LTDA — S01-Q05-LT14")
 6. "indexador" = campo Indexador (ex: REAL, INCC-M, IGP-M, TR, IPCA)
-7. "status" = use APENAS: disponivel, financiado, quitado, vendido, alugado, em_obra
+7. "status" = use APENAS uma destas palavras exatas: disponivel, alugado, vendido, em_reforma
 8. "tipo_imovel" = use APENAS: residencial, comercial, terreno, galpao
 
 Documento (${texto.length} chars total — primeiros 12000):
 ${texto.substring(0, 12000)}
 
 Retorne APENAS JSON válido sem markdown:
-{"titulo":"empresa + unidade","construtora":"nome empresa","unidade":"cod","endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":null,"valor_total_contrato":null,"valor_parcela":null,"parcelas_total":null,"parcelas_pagas":0,"indexador":null,"taxa_juros_anual":null,"data_aquisicao":null,"status":"financiado"}`
+{"titulo":"empresa + unidade","construtora":"nome empresa","unidade":"cod","endereco":null,"tipo_imovel":"residencial","area_m2":null,"quartos":null,"valor_compra":null,"valor_total_contrato":null,"valor_parcela":null,"parcelas_total":null,"parcelas_pagas":0,"indexador":null,"taxa_juros_anual":null,"data_aquisicao":null,"status":"disponivel"}`
 
       const res = await fetch('/api/openrouter', {
         method: 'POST',
@@ -439,14 +439,19 @@ Retorne APENAS JSON válido sem markdown:
         empresaId = perf?.empresa_id ?? null
       }
 
-      // Sanitiza campos com CHECK CONSTRAINT — IA pode retornar valores fora do padrão
-      const STATUS_VALIDOS = ['disponivel', 'alugado', 'vendido', 'em_obra', 'quitado', 'financiado']
+      // Sanitiza campos com CHECK CONSTRAINT — usa apenas valores conhecidos do banco
+      const STATUS_VALIDOS = ['disponivel', 'alugado', 'vendido', 'em_reforma']
       const TIPO_VALIDOS   = ['residencial', 'comercial', 'terreno', 'galpao']
 
       const sanitizeStatus = (v: string | null | undefined): string => {
         if (!v) return 'disponivel'
         const norm = v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-        return STATUS_VALIDOS.find(s => norm.includes(s)) ?? 'disponivel'
+        // Mapeamento explícito de variações comuns
+        if (norm.includes('quitad') || norm.includes('pago') || norm.includes('liquidado')) return 'disponivel'
+        if (norm.includes('alugad') || norm.includes('locad')) return 'alugado'
+        if (norm.includes('vendid') || norm.includes('alienad')) return 'vendido'
+        if (norm.includes('reforma') || norm.includes('obra') || norm.includes('constru') || norm.includes('incorpora') || norm.includes('financiad')) return 'em_reforma'
+        return STATUS_VALIDOS.find(s => norm === s) ?? 'disponivel'
       }
       const sanitizeTipo = (v: string | null | undefined): string => {
         if (!v) return 'residencial'
