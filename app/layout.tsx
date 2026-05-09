@@ -72,6 +72,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `(function(){try{var t=localStorage.getItem('cajado-theme');var x=t||'dark';document.documentElement.setAttribute('data-theme',x);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`,
           }}
         />
+        {/* Captura precoce do evento de instalação da PWA para não perder se o React demorar a montar */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); window.deferredPrompt = e; window.dispatchEvent(new Event('pwa-prompt-ready')); });`,
+          }}
+        />
         {/* iOS PWA — safe area e splash */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
