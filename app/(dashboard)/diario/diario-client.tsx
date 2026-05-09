@@ -5,6 +5,7 @@ import { PageHeader, EmptyState } from '@/components/shared/ui'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { formatRelative } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 type EntradaDiario = {
   id: string
@@ -13,7 +14,9 @@ type EntradaDiario = {
   categoria: string
   humor: string | null
   fixada: boolean
-  tipo: 'diario' | 'decisao' | 'snapshot' | 'marco'
+  tipo: 'diario' | 'decisao' | 'snapshot' | 'marco' | 'espiritual'
+  gratidao: string | null
+  intencao: string | null
   created_at: string
 }
 
@@ -41,10 +44,11 @@ const humorConfig: Record<string, { label: string; color: string; emoji: string 
 }
 
 const tipoConfig: Record<string, { label: string; icon: string; borderColor: string }> = {
-  diario:   { label: 'Diário',          icon: '📓', borderColor: 'border-zinc-600' },
-  decisao:  { label: 'Decisão',         icon: '⚡', borderColor: 'border-purple-500' },
-  snapshot: { label: 'Snapshot',        icon: '📸', borderColor: 'border-blue-500' },
-  marco:    { label: 'Marco / Resultado', icon: '🏆', borderColor: 'border-amber-500' },
+  diario:    { label: 'Diário',            icon: '📓', borderColor: 'border-zinc-600' },
+  decisao:   { label: 'Decisão',           icon: '⚡', borderColor: 'border-purple-500' },
+  snapshot:  { label: 'Snapshot',           icon: '📸', borderColor: 'border-blue-500' },
+  marco:     { label: 'Marco / Resultado',  icon: '🏆', borderColor: 'border-amber-500' },
+  espiritual:{ label: 'Esp. / Gratidão',   icon: '🙏', borderColor: 'border-emerald-500' },
 }
 
 function ModalNovaEntrada({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
@@ -57,6 +61,8 @@ function ModalNovaEntrada({ onClose, onSave }: { onClose: () => void; onSave: ()
     categoria: 'geral',
     humor: 'neutro',
     fixada: false,
+    gratidao: '',
+    intencao: '',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,6 +76,8 @@ function ModalNovaEntrada({ onClose, onSave }: { onClose: () => void; onSave: ()
       categoria: form.categoria,
       humor: form.humor || null,
       fixada: form.fixada,
+      gratidao: form.gratidao || null,
+      intencao: form.intencao || null,
     })
     if (result.error) { setErro(`Erro: ${result.error}`); return }
     onSave()
@@ -129,6 +137,26 @@ function ModalNovaEntrada({ onClose, onSave }: { onClose: () => void; onSave: ()
             <input type="checkbox" id="fixada" className="w-4 h-4 accent-amber-500" checked={form.fixada} onChange={e => setForm(f => ({...f, fixada: e.target.checked}))} />
             <label htmlFor="fixada" className="text-sm text-fg-secondary cursor-pointer">📌 Fixar esta entrada no painel lateral</label>
           </div>
+          {/* Campos espirituais — aparecem quando tipo = espiritual */}
+          {form.tipo === 'espiritual' && (
+            <div className="space-y-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+              <p className="text-[10px] text-emerald-400 font-semibold uppercase">🙏 Desenvolvimento Pessoal & Espiritual</p>
+              <div>
+                <label className="label">3 Coisas pelas quais sou grato hoje</label>
+                <textarea className="input mt-1 resize-none h-16 text-xs" value={form.gratidao}
+                  onChange={e => setForm(f => ({...f, gratidao: e.target.value}))}
+                  placeholder="1. ...
+2. ...
+3. ..." />
+              </div>
+              <div>
+                <label className="label">Intenção / Orção do dia</label>
+                <textarea className="input mt-1 resize-none h-14 text-xs" value={form.intencao}
+                  onChange={e => setForm(f => ({...f, intencao: e.target.value}))}
+                  placeholder="Senhor, hoje eu preciso de..." />
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-3 border-t border-white/5">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary">
@@ -142,9 +170,53 @@ function ModalNovaEntrada({ onClose, onSave }: { onClose: () => void; onSave: ()
 }
 
 export default function DiarioEstrategicoClient() {
+  const supabase = createClient()
   const [modalAberto, setModalAberto] = useState(false)
   const [filtroCat, setFiltroCat] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
+  const [analiseIA, setAnaliseIA] = useState('')
+  const [loadingAnalise, setLoadingAnalise] = useState(false)
+
+  const analisarComIA = async (entradas: EntradaDiario[]) => {
+    if (entradas.length === 0) return
+    setLoadingAnalise(true)
+    setAnaliseIA('')
+    try {
+      const resumo = entradas.slice(0, 30).map(e =>
+        `[${e.tipo}][${e.categoria}][humor:${e.humor||'?'}] ${e.titulo ? e.titulo + ': ' : ''}${e.texto.slice(0, 200)}`
+      ).join('
+---
+')
+      const { data: { user } } = await supabase.auth.getUser()
+      const resp = await fetch('/api/elena/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.id,
+          message: `Analise meu diário pessoal. Identifique:
+1. Padrões de comportamento (positivos e negativos)
+2. Tendências de humor ao longo do tempo
+3. Categorias mais frequentes e o que isso revela
+4. Pontos de crescimento pessoal percebidos
+5. 3 sugestões práticas para desenvolvimento
+6. Uma palavra de encoraja mentou espiritual
+
+Entradas do diário:
+${resumo}`,
+          contexto: 'diario'
+        })
+      })
+      if (resp.ok) {
+        const d = await resp.json()
+        setAnaliseIA(d.response || d.message || 'Sem resposta da IA.')
+      } else {
+        setAnaliseIA('⚠️ Erro ao conectar com a Elena. Tente novamente.')
+      }
+    } catch {
+      setAnaliseIA('⚠️ Falha na conexão com a IA.')
+    }
+    setLoadingAnalise(false)
+  }
 
   const { data: entradas, refetch } = useSupabaseQuery<EntradaDiario>('diario_entradas', {
     orderBy: { column: 'created_at', ascending: false },
@@ -171,9 +243,10 @@ export default function DiarioEstrategicoClient() {
   return (
     <>
       <PageHeader
-        title="Diário Estratégico"
-        subtitle="Memória acumulada · Decisões · Aprendizados · Linha do tempo"
+        title="📓 Diário Pessoal"
+        subtitle="Memória acumulada · Decisões · Aprendizados · Desenvolvimento Pessoal · Espiritual"
       >
+        <button onClick={() => setModalAberto(true)} className="btn-secondary text-xs">🙏 Entrada Espiritual</button>
         <button onClick={() => setModalAberto(true)} className="btn-primary">+ Nova entrada</button>
       </PageHeader>
 
@@ -308,22 +381,59 @@ export default function DiarioEstrategicoClient() {
             )}
           </div>
 
-          {/* Ação rápida */}
+          {/* Análise IA */}
           <div className="card">
-            <h2 className="section-title">⚡ Ação rápida</h2>
-            <div className="space-y-2">
-              {Object.entries(tipoConfig).map(([k, v]) => (
-                <button
-                  key={k}
-                  onClick={() => setModalAberto(true)}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-muted/40 border border-border-subtle hover:border-border-subtle hover:bg-muted/70 transition-all text-xs text-fg-secondary flex items-center gap-2"
-                >
-                  <span>{v.icon}</span>
-                  <span>Registrar {v.label}</span>
-                </button>
-              ))}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="section-title mb-0">🧠 Análise IA</h2>
+              <button
+                onClick={() => analisarComIA(entradas)}
+                disabled={loadingAnalise || entradas.length === 0}
+                className="btn-primary text-xs py-1 px-3 disabled:opacity-50"
+              >
+                {loadingAnalise ? '⏳ Analisando...' : '✨ Analisar'}
+              </button>
             </div>
+            {!analiseIA && !loadingAnalise && (
+              <p className="text-xs text-fg-disabled">
+                Clique em <strong className="text-amber-400">✨ Analisar</strong> para a Elena ler seus registros e identificar padrões de comportamento, humor e sugestões de crescimento pessoal.
+              </p>
+            )}
+            {loadingAnalise && (
+              <div className="flex items-center gap-2 py-4">
+                <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-fg-tertiary">Elena está lendo seus registros...</p>
+              </div>
+            )}
+            {analiseIA && (
+              <div className="text-xs text-fg-secondary leading-relaxed whitespace-pre-wrap mt-2 max-h-[400px] overflow-y-auto">
+                {analiseIA}
+              </div>
+            )}
           </div>
+
+          {/* Gráfico de humor */}
+          {entradas.length > 0 && (() => {
+            const ordem = ['otimo','bom','neutro','ruim','critico']
+            const humores = entradas.slice(0, 14).reverse()
+            return (
+              <div className="card">
+                <h2 className="section-title">📈 Humor — úItimas entradas</h2>
+                <div className="flex items-end gap-1 h-16 mt-2">
+                  {humores.map((e, i) => {
+                    const idx = ordem.indexOf(e.humor || 'neutro')
+                    const h = 100 - (idx * 20)
+                    const cor = idx === 0 ? '#10b981' : idx === 1 ? '#34d399' : idx === 2 ? '#6b7280' : idx === 3 ? '#f59e0b' : '#ef4444'
+                    return (
+                      <div key={e.id} className="flex-1 flex flex-col items-center gap-1" title={`${e.humor} — ${formatRelative(e.created_at)}`}>
+                        <div className="w-full rounded-t" style={{ height: `${h}%`, backgroundColor: cor, opacity: 0.8 }} />
+                        <span className="text-[8px] text-fg-disabled">{humorConfig[e.humor||'neutro']?.emoji}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
