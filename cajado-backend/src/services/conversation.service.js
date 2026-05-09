@@ -42,8 +42,22 @@ async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, in
     conv.ultimoHorario = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
 
-  // PERSISTÊNCIA NO SUPABASE — só salva quando temos UUID real de empresa
-  const empresaIdFinal = conv.empresa_id === "empresa-padrao" ? ADMIN_DEFAULT.empresa_id : conv.empresa_id;
+  // PERSISTÊNCIA NO SUPABASE — resolve empresa_id real antes de salvar
+  let empresaIdFinal = conv.empresa_id === "empresa-padrao" ? ADMIN_DEFAULT.empresa_id : conv.empresa_id;
+
+  // Resolução lazy: se ainda é placeholder, busca primeiro UUID real da tabela empresas
+  if (supabase && (!empresaIdFinal || empresaIdFinal === "empresa-padrao" || empresaIdFinal === "vazia")) {
+    try {
+      const { data: emp } = await supabase.from("empresas").select("id").limit(1).single();
+      if (emp?.id) {
+        ADMIN_DEFAULT.empresa_id = emp.id; // cacheia para próximas chamadas
+        empresaIdFinal = emp.id;
+        conv.empresa_id = emp.id;
+        console.log(`[Conv] Empresa resolvida lazy: ${emp.id}`);
+      }
+    } catch {}
+  }
+
   const isRealUuid = empresaIdFinal && empresaIdFinal !== "empresa-padrao" && empresaIdFinal !== "vazia";
   if (supabase && isRealUuid) {
     const { error } = await supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: empresaIdFinal, dados: conv });
