@@ -259,14 +259,7 @@ router.post(["/evolution", "/"], async (req, res) => {
 
     // 1. Se o bot está pausado manualmente ou por atendimento humano ativo
     if (botPausado.has(number) || (convRec && convRec.botOn === false)) {
-       console.log(`[${number}] Bot pausado — enviando apenas aviso de espera.`);
-       const promptEspera = getPrompt(empresa_id, "prompt_espera", WAITING_PROMPT);
-       const ctx = `O bot está pausado para este cliente (${nomeParaInbox}) que aguarda atendimento humano. Ele enviou: ${messageText}`;
-       envioAoCliente = await chamarOpenRouter([], ctx, promptEspera);
-       
-       await enviarWhatsApp(number, envioAoCliente, instanceName, messageId, instCreds);
-       const msgBotErr = { id: `bot-${Date.now()}`, tipo: "bot", texto: envioAoCliente, numero: number, timestamp: new Date().toISOString() };
-       await registrarNaConversa(number, msgBotErr, nomeParaInbox, null, empresa_id, instanceName);
+       console.log(`[${number}] Bot pausado — permanecendo em silêncio absoluto para o humano atuar.`);
        return;
     }
 
