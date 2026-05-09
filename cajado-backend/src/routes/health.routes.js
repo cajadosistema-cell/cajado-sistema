@@ -20,6 +20,40 @@ router.get("/health", (req, res) => {
   });
 });
 
+// Diagnóstico do bot — verifica se todas as dependências estão OK
+router.get("/debug/bot", authMiddleware, (req, res) => {
+  const { canaisMemoria } = require("../config/memory");
+  const { EVOLUTION_URL, EVOLUTION_KEY, OPENROUTER_KEY } = require("../config/env");
+
+  const instancias = [];
+  canaisMemoria.forEach((val, key) => {
+    instancias.push({
+      instancia: key,
+      empresa_id: typeof val === "object" ? val.empresa_id : val,
+      tem_api_key: typeof val === "object" ? !!val.api_key : false,
+      tem_evolution_url: typeof val === "object" ? !!val.evolution_url : false,
+      evolution_url: typeof val === "object" ? (val.evolution_url || "usa global") : "usa global",
+    });
+  });
+
+  res.json({
+    openrouter: {
+      configurado: !!OPENROUTER_KEY,
+      chave_inicio: OPENROUTER_KEY ? OPENROUTER_KEY.slice(0, 8) + "..." : "NÃO DEFINIDA ❌",
+    },
+    evolution: {
+      url_global: EVOLUTION_URL,
+      tem_chave_global: !!EVOLUTION_KEY,
+    },
+    admin: {
+      empresa_id: ADMIN_DEFAULT.empresa_id,
+      empresa_resolvida: ADMIN_DEFAULT.empresa_id !== "empresa-padrao",
+    },
+    instancias_em_memoria: instancias,
+    total_conversas: conversas.size,
+  });
+});
+
 // Endpoint de diagnóstico de banco — testa insert/delete real para verificar RLS
 router.get("/debug/db", async (req, res) => {
   const { supabaseAdmin } = require("../config/database");
