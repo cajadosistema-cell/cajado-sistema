@@ -18,6 +18,8 @@ app.use(cors({
       /^https:\/\/cajado-sistema.*\.vercel\.app$/,
       /^https:\/\/.*\.railway\.app$/,
       /^https:\/\/.*\.up\.railway\.app$/,
+      /^https:\/\/.*\.cajadosolucoes\.com\.br$/,
+      /^https:\/\/cajadosolucoes\.com\.br$/,
     ];
     if (allowed.some(r => r.test(origin))) return callback(null, true);
     console.warn(`[CORS] Bloqueado: ${origin}`);
