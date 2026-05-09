@@ -98,6 +98,22 @@ async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return res.json()
 }
 
+// Auto-login: obtém token via /api/inbox-token (server-side, usa sessão Supabase)
+async function ensureInboxToken(): Promise<string | null> {
+  const existing = getToken()
+  if (existing) return existing
+  try {
+    const res = await fetch('/api/inbox-token')
+    if (!res.ok) return null
+    const data = await res.json()
+    if (data.token) {
+      if (typeof window !== 'undefined') localStorage.setItem(INBOX_TOKEN_KEY, data.token)
+      return data.token
+    }
+  } catch {}
+  return null
+}
+
 // ── Hook principal ─────────────────────────────────────────────
 
 export function useInbox() {
@@ -107,13 +123,24 @@ export function useInbox() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const fetchConversas = useCallback(async () => {
-    const token = getToken()
+    // Garante que há um token antes de tentar carregar
+    const token = await ensureInboxToken()
     if (!token) {
       setLoading(false)
+      setError('Sessão expirada — faça login novamente')
       return
     }
     try {
-      const data = await apiGet<Conversa[]>('/inbox/conversas')
+      const res = await fetch(`${API}/inbox/conversas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.status === 401) {
+        // Token inválido: limpa e tenta renovar na próxima rodada
+        if (typeof window !== 'undefined') localStorage.removeItem(INBOX_TOKEN_KEY)
+        return
+      }
+      if (!res.ok) throw new Error(`Inbox API error: ${res.status}`)
+      const data: Conversa[] = await res.json()
       setConversas(data.sort((a, b) => (b.unread || 0) - (a.unread || 0)))
       setError(null)
     } catch (e) {
