@@ -64,12 +64,14 @@ const NAV_PESSOAL: Array<{
   {
     group: '💎 Finanças Pessoais', id: 'pfin',
     items: [
-      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'  },
-      { href: '/patrimonio',    label: '🏠 Patrimônio'       },
-      { href: '/investimentos', label: '📈 Investimentos'    },
-      { href: '/trader',        label: '📊 Day Trader'       },
-      { href: '/gestao-pessoal',label: '👥 Equipe Pessoal'  },
-      { href: '/cofre',         label: '🔐 Cofre de Senhas' },
+      { href: '/pf-pessoal',    label: '💵 Lançamentos PF'   },
+      { href: '/patrimonio',    label: '🏠 Patrimônio'        },
+      { href: '/investimentos', label: '📈 Investimentos'     },
+      { href: '/trader',        label: '📊 Day Trader'        },
+      { href: '/gestao-pessoal',label: '👥 Equipe Pessoal'   },
+      { href: '/cofre',         label: '🔐 Cofre de Senhas'  },
+      { href: '/perfis',        label: '🧠 Perfis Comportamentais' },
+      { href: '/diario',        label: '📓 Diário Pessoal'   },
     ],
   },
 ]
