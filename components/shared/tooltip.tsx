@@ -68,7 +68,7 @@ export function Tooltip({ content, children, side = 'top', delay = 400, classNam
   return (
     <span
       ref={triggerRef}
-      className={cn('relative inline-flex w-full', className)}
+      className={cn('relative', className ?? 'inline-flex')}
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}

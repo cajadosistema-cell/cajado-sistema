@@ -170,7 +170,7 @@ export function Sidebar() {
             {group.items.map(item => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
               return (
-                <Tooltip key={item.href} content={(item as any).tooltip || ''} side="right" delay={500}>
+                <Tooltip key={item.href} content={(item as any).tooltip || ''} side="right" delay={500} className="block">
                   <Link
                     href={item.href}
                     className={cn(
