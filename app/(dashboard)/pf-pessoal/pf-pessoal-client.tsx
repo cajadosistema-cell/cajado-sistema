@@ -17,6 +17,8 @@ import { TabAgenda }      from './_components/tabs/TabAgenda'
 import { TabIdeias }      from './_components/tabs/TabIdeias'
 import { TabRegistros }   from './_components/tabs/TabRegistros'
 import { TabCartoesPF }   from './_components/tabs/TabCartoesPF'
+import { TabDiario }      from './_components/tabs/TabDiario'
+import { TabIdiomas }     from './_components/tabs/TabIdiomas'
 import { SecretariaFlutuante }    from '@/components/shared/SecretariaFlutuante'
 import { AlarmManager }           from '@/components/shared/AlarmManager'
 import { ModalNovoGasto }         from './_components/modals/ModalNovoGasto'
@@ -25,7 +27,7 @@ import { PainelComparativoMes }   from '@/components/shared/PainelComparativoMes
 import { PainelLimitesOrcamento } from '@/components/shared/LimitesOrcamento'
 import { VencimentosMesPF }       from './_components/VencimentosMesPF'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros' | 'agenda' | 'ideias'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros' | 'agenda' | 'ideias' | 'diario' | 'idiomas'
 
 // ── 3 grupos visuais — reduz carga cognitiva ──────────────────
 const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; emoji: string }[] }[] = [
@@ -51,6 +53,13 @@ const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; emoji: stri
     tabs: [
       { id: 'agenda', label: 'Agenda', emoji: '📅' },
       { id: 'ideias', label: 'Ideias', emoji: '💡' },
+    ],
+  },
+  {
+    label: '🧠 Desenvolvimento',
+    tabs: [
+      { id: 'diario', label: 'Diário Pessoal', emoji: '📖' },
+      { id: 'idiomas', label: 'Curso de Inglês', emoji: '🇺🇸' },
     ],
   },
 ]
@@ -236,6 +245,8 @@ export default function PfPessoalClient() {
       {tab === 'registros' && <TabRegistros userId={authUserId} />}
       {tab === 'agenda'    && <TabAgenda    userId={authUserId} />}
       {tab === 'ideias'    && <TabIdeias    userId={authUserId} />}
+      {tab === 'diario'    && <TabDiario    userId={authUserId} />}
+      {tab === 'idiomas'   && <TabIdiomas   userId={authUserId} />}
 
       <SecretariaFlutuante />
       <AlarmManager userId={authUserId} />
