@@ -1293,15 +1293,33 @@ export default function InboxClient() {
 
                     {/* Emoji Picker Popover */}
                     {showEmojiPicker && (
-                      <div className="absolute bottom-[80px] left-3 z-50 shadow-2xl rounded-xl border border-border-subtle">
-                        <EmojiPicker 
-                          theme={Theme.DARK} 
-                          onEmojiClick={(emojiData) => {
-                            setTexto(prev => prev + emojiData.emoji);
-                            setTimeout(() => textareaRef.current?.focus(), 0);
-                          }} 
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowEmojiPicker(false)}
                         />
-                      </div>
+                        <div className="absolute bottom-[80px] left-3 z-50 shadow-2xl rounded-xl border border-border-subtle overflow-hidden bg-[#18191a]">
+                          <div className="flex justify-between items-center px-3 py-2 border-b border-border-subtle">
+                            <span className="text-xs font-semibold text-fg-secondary">Emojis</span>
+                            <button 
+                              onClick={() => {
+                                setShowEmojiPicker(false);
+                                setTimeout(() => textareaRef.current?.focus(), 0);
+                              }}
+                              className="text-fg-tertiary hover:text-red-400 text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <EmojiPicker 
+                            theme={Theme.DARK} 
+                            onEmojiClick={(emojiData) => {
+                              setTexto(prev => prev + emojiData.emoji);
+                              setTimeout(() => textareaRef.current?.focus(), 0);
+                            }} 
+                          />
+                        </div>
+                      </>
                     )}
 
                     {/* Área de Input ou Gravação */}
