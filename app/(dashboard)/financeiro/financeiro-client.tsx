@@ -497,12 +497,13 @@ function ModalLancamento({
           {form.tipo === 'despesa' && (
             <div>
               <label className="label">Forma de Pagamento</label>
-              <div className="grid grid-cols-4 gap-1.5 mt-1">
+              <div className="grid grid-cols-5 gap-1.5 mt-1">
                 {([
-                  { id: 'dinheiro', label: '💵 Dinheiro' },
-                  { id: 'pix',      label: '📱 Pix' },
-                  { id: 'debito',   label: '💳 Débito' },
-                  { id: 'credito',  label: '💎 Crédito' },
+                  { id: 'dinheiro',      label: '💵 Dinheiro' },
+                  { id: 'pix',           label: '📱 Pix' },
+                  { id: 'transferencia', label: '🏦 Transf.' },
+                  { id: 'debito',        label: '💳 Débito' },
+                  { id: 'credito',       label: '💎 Crédito' },
                 ] as const).map(f => (
                   <button key={f.id} type="button" onClick={() => handleForma(f.id)}
                     className={cn(

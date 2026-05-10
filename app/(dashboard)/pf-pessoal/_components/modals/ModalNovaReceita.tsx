@@ -6,12 +6,13 @@ import { CATEGORIAS_RECEITA } from '../types'
 
 type Props = {
   userId: string
+  contas: any[]
   onSave: () => void
   onClose: () => void
   receitaEdit?: any
 }
 
-export function ModalNovaReceita({ userId, onSave, onClose, receitaEdit }: Props) {
+export function ModalNovaReceita({ userId, contas, onSave, onClose, receitaEdit }: Props) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const today = new Date().toISOString().split('T')[0]
@@ -22,7 +23,10 @@ export function ModalNovaReceita({ userId, onSave, onClose, receitaEdit }: Props
     data: receitaEdit?.data ?? today,
     recorrente: receitaEdit?.recorrente ?? true,
     notas: receitaEdit?.notas ?? '',
+    conta_id: receitaEdit?.conta_id ?? (contas.filter(c => c.tipo !== 'cartao_credito')[0]?.id || ''),
   })
+
+  const contasNormais = contas.filter(c => c.tipo !== 'cartao_credito')
 
   const set = (k: keyof typeof form, v: string | boolean) => setForm(f => ({ ...f, [k]: v }))
 
@@ -39,6 +43,7 @@ export function ModalNovaReceita({ userId, onSave, onClose, receitaEdit }: Props
       data: form.data,
       recorrente: form.recorrente,
       notas: form.notas || null,
+      conta_id: form.conta_id || null,
     }
 
     if (receitaEdit) {
@@ -81,13 +86,29 @@ export function ModalNovaReceita({ userId, onSave, onClose, receitaEdit }: Props
             </div>
           </div>
 
-          <div>
-            <label className="label">Categoria</label>
-            <select className="input mt-1" value={form.categoria} onChange={e => set('categoria', e.target.value)}>
-              {Object.entries(CATEGORIAS_RECEITA).map(([k, v]) => (
-                <option key={k} value={k}>{v.icon} {v.label}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Categoria</label>
+              <select className="input mt-1" value={form.categoria} onChange={e => set('categoria', e.target.value)}>
+                {Object.entries(CATEGORIAS_RECEITA).map(([k, v]) => (
+                  <option key={k} value={k}>{v.icon} {v.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Conta de Entrada *</label>
+              {contasNormais.length === 0 ? (
+                <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 mt-1">
+                  ⚠️ Nenhuma conta cadastrada.
+                </p>
+              ) : (
+                <select className="input mt-1" value={form.conta_id} onChange={e => set('conta_id', e.target.value)}>
+                  {contasNormais.map(c => (
+                    <option key={c.id} value={c.id}>🏦 {c.nome}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">

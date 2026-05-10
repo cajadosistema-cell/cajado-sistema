@@ -74,6 +74,7 @@ export default function PfPessoalClient() {
   const { data: gastos,     refetch: refetchGastos     } = useSupabaseQuery<GastoPessoal>('gastos_pessoais',     { orderBy: { column: 'data',           ascending: false } })
   const { data: receitas,   refetch: refetchReceitas   } = useSupabaseQuery<ReceitaPessoal>('receitas_pessoais', { orderBy: { column: 'data',           ascending: false } })
   const { data: orcamentos, refetch: refetchOrcamentos } = useSupabaseQuery<OrcamentoPessoal>('orcamentos_pessoais', { orderBy: { column: 'mes_referencia', ascending: false } })
+  const { data: contas          } = useSupabaseQuery<any>('contas', { filters: { ativo: true, categoria: 'pf' } })
   const { data: ativos          } = useSupabaseQuery<any>('ativos')
   const { data: patrimonioFisico} = useSupabaseQuery<any>('projetos_patrimonio')
   const refreshTudo = () => { refetchGastos(); refetchReceitas(); refetchOrcamentos() }
@@ -250,14 +251,14 @@ export default function PfPessoalClient() {
       />
       {modalGasto && (
         <ModalNovoGasto
-          userId={authUserId} gastoEdit={gastoEdit}
+          userId={authUserId} gastoEdit={gastoEdit} contas={contas}
           onSave={() => { refetchGastos();   setModalGasto(false);   setGastoEdit(null)   }}
           onClose={() => {                   setModalGasto(false);   setGastoEdit(null)   }}
         />
       )}
       {modalReceita && (
         <ModalNovaReceita
-          userId={authUserId} receitaEdit={receitaEdit}
+          userId={authUserId} receitaEdit={receitaEdit} contas={contas}
           onSave={() => { refetchReceitas(); setModalReceita(false); setReceitaEdit(null) }}
           onClose={() => {                   setModalReceita(false); setReceitaEdit(null) }}
         />

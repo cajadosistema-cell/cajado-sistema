@@ -6,12 +6,13 @@ import { detectarCategoria, CATEGORIAS_GASTO } from '../types'
 
 type Props = {
   userId: string
+  contas: any[]
   onSave: () => void
   onClose: () => void
   gastoEdit?: any
 }
 
-export function ModalNovoGasto({ userId, onSave, onClose, gastoEdit }: Props) {
+export function ModalNovoGasto({ userId, contas, onSave, onClose, gastoEdit }: Props) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const today = new Date().toISOString().split('T')[0]
@@ -24,7 +25,12 @@ export function ModalNovoGasto({ userId, onSave, onClose, gastoEdit }: Props) {
     recorrente:      gastoEdit?.recorrente        ?? false,
     notas:           gastoEdit?.notas             ?? '',
     parcelas:        gastoEdit?.parcelas?.toString() ?? '1',
+    conta_id:        gastoEdit?.conta_id          ?? (contas.length > 0 ? contas[0].id : ''),
   })
+
+  // Separa cartões de crédito e contas normais para o seletor
+  const cartoes = contas.filter(c => c.tipo === 'cartao_credito')
+  const contasNormais = contas.filter(c => c.tipo !== 'cartao_credito')
 
   const set = (k: keyof typeof form, v: string | boolean) =>
     setForm(f => ({ ...f, [k]: v }))
@@ -54,6 +60,7 @@ export function ModalNovoGasto({ userId, onSave, onClose, gastoEdit }: Props) {
       recorrente:      form.recorrente,
       notas:           form.notas || null,
       parcelas:        isCartaoCredito && numParcelas > 1 ? numParcelas : null,
+      conta_id:        form.conta_id || null,
     }
 
     if (gastoEdit) {
@@ -131,7 +138,15 @@ export function ModalNovoGasto({ userId, onSave, onClose, gastoEdit }: Props) {
             <div>
               <label className="label">Pagamento</label>
               <select className="input mt-1" value={form.forma_pagamento}
-                onChange={e => set('forma_pagamento', e.target.value)}>
+                onChange={e => {
+                  const val = e.target.value
+                  set('forma_pagamento', val)
+                  if (val === 'cartao_credito' && cartoes.length > 0) {
+                    set('conta_id', cartoes[0].id)
+                  } else if (val !== 'cartao_credito' && contasNormais.length > 0) {
+                    set('conta_id', contasNormais[0].id)
+                  }
+                }}>
                 <option value="pix">PIX</option>
                 <option value="cartao_debito">Cartão Débito</option>
                 <option value="cartao_credito">Cartão Crédito</option>
@@ -139,6 +154,36 @@ export function ModalNovoGasto({ userId, onSave, onClose, gastoEdit }: Props) {
                 <option value="transferencia">Transferência</option>
               </select>
             </div>
+          </div>
+          
+          {/* Seletor de Conta / Cartão */}
+          <div>
+            <label className="label">{isCartaoCredito ? 'Cartão de Crédito *' : 'Conta de Saída *'}</label>
+            {isCartaoCredito ? (
+              cartoes.length === 0 ? (
+                <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 mt-1">
+                  ⚠️ Nenhum cartão cadastrado. Cadastre em "Cartões PF".
+                </p>
+              ) : (
+                <select className="input mt-1" value={form.conta_id} onChange={e => set('conta_id', e.target.value)}>
+                  {cartoes.map(c => (
+                    <option key={c.id} value={c.id}>💳 {c.nome_cartao || c.nome}</option>
+                  ))}
+                </select>
+              )
+            ) : (
+              contasNormais.length === 0 ? (
+                <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 mt-1">
+                  ⚠️ Nenhuma conta cadastrada.
+                </p>
+              ) : (
+                <select className="input mt-1" value={form.conta_id} onChange={e => set('conta_id', e.target.value)}>
+                  {contasNormais.map(c => (
+                    <option key={c.id} value={c.id}>🏦 {c.nome}</option>
+                  ))}
+                </select>
+              )
+            )}
           </div>
 
           {/* ── Parcelas — só aparece para Cartão Crédito ── */}
