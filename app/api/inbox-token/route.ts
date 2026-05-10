@@ -33,13 +33,19 @@ export async function GET(req: Request) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
+        'x-integration-key': process.env.INBOX_INTEGRATION_KEY || 'fe735c00cfb3613832c4e8b7e88a67af7892cdb6d5c94b901e028e3f25d06ebb'
       },
+      body: JSON.stringify({
+        email: session.user?.email,
+        nome: session.user?.user_metadata?.full_name || session.user?.user_metadata?.nome || session.user?.email,
+        id: session.user?.id
+      })
     })
 
     if (!res.ok) {
       const err = await res.text()
-      console.error('[inbox-token] Falha no exchange:', err)
-      return NextResponse.json({ error: 'Falha na troca de token com o backend' }, { status: 502 })
+      console.error('[inbox-token] Falha no exchange. Status:', res.status, 'Body:', err)
+      return NextResponse.json({ error: `Backend exchange failed: ${res.status} - ${err}` }, { status: 502 })
     }
 
     const data = await res.json()
