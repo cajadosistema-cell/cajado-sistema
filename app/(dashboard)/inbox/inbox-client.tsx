@@ -1253,13 +1253,13 @@ export default function InboxClient() {
                   <div className="flex items-end gap-1.5 sm:gap-2">
                     {/* Botões anexo e nota */}
                     {!nota && (
-                      <div className="flex gap-1.5 shrink-0">
+                      <div className="flex gap-0.5 sm:gap-1 shrink-0 items-center">
                         <button
                           onClick={() => fileInputRef.current?.click()}
                           title="Anexar arquivo"
-                          className="flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-emerald-400 flex items-center justify-center transition-colors"
+                          className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full hover:bg-white/5 text-fg-tertiary hover:text-emerald-400 flex items-center justify-center transition-colors"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 sm:w-5 sm:h-5"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                         </button>
                         <input 
                           type="file" 
@@ -1274,9 +1274,9 @@ export default function InboxClient() {
                         <button
                           onClick={() => setNota(true)}
                           title="Nota interna"
-                          className="flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors"
+                          className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full hover:bg-white/5 text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors"
                         >
-                          <IconNote className="w-4 h-4" />
+                          <IconNote className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
                         <button
                           onClick={() => {
@@ -1285,8 +1285,8 @@ export default function InboxClient() {
                           }}
                           title={showEmojiPicker ? "Fechar Emojis" : "Inserir Emoji"}
                           className={cn(
-                            "flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary flex items-center justify-center transition-colors text-lg",
-                            showEmojiPicker ? "text-red-400 border-red-500/30 bg-red-500/10 hover:text-red-300" : "hover:text-amber-400"
+                            "flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-colors text-lg sm:text-xl",
+                            showEmojiPicker ? "text-red-400 bg-red-500/10 hover:text-red-300" : "text-fg-tertiary hover:bg-white/5 hover:text-emerald-400"
                           )}
                         >
                           {showEmojiPicker ? "✕" : "😀"}
