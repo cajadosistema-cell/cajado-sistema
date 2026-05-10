@@ -281,14 +281,23 @@ router.post("/inbox/enviar", authMiddleware, async (req, res) => {
       
       let base64OrUrl = media.url;
       
-      await axios.post(url, {
-        number: numero,
-        mediatype: mediaType,
-        mimetype: media.mimetype,
-        caption: texto || "",
-        media: base64OrUrl,
-        fileName: media.fileName || "arquivo"
-      }, { headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" } });
+      if (mediaType === "audio" && media.isVoiceNote) {
+        const pttUrl = `${EVOLUTION_URL}/message/sendWhatsAppAudio/${instance}`;
+        await axios.post(pttUrl, {
+          number: numero,
+          audio: base64OrUrl,
+          delay: 1500
+        }, { headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" } });
+      } else {
+        await axios.post(url, {
+          number: numero,
+          mediatype: mediaType,
+          mimetype: media.mimetype,
+          caption: texto || "",
+          media: base64OrUrl,
+          fileName: media.fileName || "arquivo"
+        }, { headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" } });
+      }
     } else {
       await enviarWhatsApp(numero, texto || "📎 Anexo", instOverride);
     }

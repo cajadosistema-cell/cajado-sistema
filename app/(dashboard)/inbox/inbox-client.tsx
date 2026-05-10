@@ -60,6 +60,16 @@ function IconSend({ className }: { className?: string }) {
   )
 }
 
+function IconMic({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" x2="12" y1="19" y2="22"/>
+    </svg>
+  )
+}
+
 function IconNote({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -492,6 +502,14 @@ export default function InboxClient() {
   const [notaAtendente, setNotaAtendente] = useState('')
   const [salvandoNota, setSalvandoNota] = useState(false)
   const [arquivo, setArquivo] = useState<File | null>(null)
+  
+  // Audio Recording State
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -512,6 +530,65 @@ export default function InboxClient() {
   }, [])
 
   useEffect(() => { autoGrow() }, [texto, autoGrow])
+
+  // ── Gravador de Áudio ──────────────────────────────────────
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp4' })
+        const audioFile = new File([audioBlob], `audio_${Date.now()}.mp4`, { type: 'audio/mp4' })
+        Object.defineProperty(audioFile, 'isVoiceNote', { value: true, writable: false })
+        setArquivo(audioFile)
+        stream.getTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+
+    } catch (err) {
+      alert('Erro ao acessar o microfone. Verifique se o navegador tem permissão.')
+      console.error(err)
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+    }
+  }
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop())
+      }
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+    }
+  }
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
 
   // ── Notificações ───────────────────────────────────────────
   useEffect(() => {
@@ -990,52 +1067,80 @@ export default function InboxClient() {
                       </div>
                     )}
 
-                    {/* Textarea auto-grow */}
-                    <textarea
-                      ref={textareaRef}
-                      className={cn(
-                        'flex-1 min-h-[40px] max-h-40 px-3 py-2.5 rounded-xl text-sm resize-none bg-page border text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-1 transition-all overflow-y-auto',
-                        nota
-                          ? 'border-amber-500/40 focus:ring-amber-500/40 focus:border-amber-500/60'
-                          : 'border-border-subtle focus:ring-emerald-500/30 focus:border-emerald-500/50'
-                      )}
-                      style={{ height: 'auto' }}
-                      rows={1}
-                      placeholder={nota ? 'Nota que apenas sua equipe verá...' : 'Digite / para respostas rápidas...'}
-                      value={texto}
-                      onChange={e => {
-                        const val = e.target.value
-                        setTexto(val)
-                        autoGrow()
-                        if (val === '/') setShowSnippets(true)
-                        else if (!val.startsWith('/')) setShowSnippets(false)
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleEnviar()
-                        }
-                      }}
-                    />
+                    {/* Área de Input ou Gravação */}
+                    {isRecording ? (
+                      <div className="flex-1 flex items-center justify-between bg-page border border-red-500/30 rounded-xl px-4 py-2.5 h-[44px]">
+                        <div className="flex items-center gap-3">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                          <span className="text-sm font-medium text-red-400">{formatRecordingTime(recordingTime)}</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <button onClick={cancelRecording} className="text-xs text-fg-disabled hover:text-red-400 font-semibold transition-colors uppercase tracking-wider">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <textarea
+                        ref={textareaRef}
+                        className={cn(
+                          'flex-1 min-h-[40px] max-h-40 px-3 py-2.5 rounded-xl text-sm resize-none bg-page border text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-1 transition-all overflow-y-auto',
+                          nota
+                            ? 'border-amber-500/40 focus:ring-amber-500/40 focus:border-amber-500/60'
+                            : 'border-border-subtle focus:ring-emerald-500/30 focus:border-emerald-500/50'
+                        )}
+                        style={{ height: 'auto' }}
+                        rows={1}
+                        placeholder={nota ? 'Nota que apenas sua equipe verá...' : 'Mensagem... (ou grave um áudio)'}
+                        value={texto}
+                        onChange={e => {
+                          const val = e.target.value
+                          setTexto(val)
+                          autoGrow()
+                          if (val === '/') setShowSnippets(true)
+                          else if (!val.startsWith('/')) setShowSnippets(false)
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            handleEnviar()
+                          }
+                        }}
+                      />
+                    )}
 
-                    {/* Botão enviar — ícone grande, 44×44px área de toque */}
-                    <button
-                      onClick={handleEnviar}
-                      disabled={(!texto.trim() && !arquivo) || enviando}
-                      className={cn(
-                        "flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-40",
-                        nota
-                          ? "bg-amber-500 hover:bg-amber-400 text-zinc-900"
-                          : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:scale-105"
-                      )}
-                      title={nota ? 'Adicionar nota' : 'Enviar mensagem'}
-                    >
-                      {enviando ? (
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
+                    {/* Botão de Envio / Gravar / Parar */}
+                    {isRecording ? (
+                      <button
+                        onClick={stopRecording}
+                        className="flex-shrink-0 w-11 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)] hover:scale-105 flex items-center justify-center transition-all duration-200"
+                        title="Enviar Áudio"
+                      >
                         <IconSend className="w-5 h-5" />
-                      )}
-                    </button>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(!texto.trim() && !arquivo && !nota) ? startRecording : handleEnviar}
+                        disabled={enviando}
+                        className={cn(
+                          "flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-40",
+                          (!texto.trim() && !arquivo && !nota)
+                            ? "bg-emerald-600/10 text-emerald-400 hover:bg-emerald-600/20"
+                            : nota
+                              ? "bg-amber-500 hover:bg-amber-400 text-zinc-900"
+                              : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:scale-105"
+                        )}
+                        title={(!texto.trim() && !arquivo && !nota) ? 'Gravar áudio' : nota ? 'Adicionar nota' : 'Enviar mensagem'}
+                      >
+                        {enviando ? (
+                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (!texto.trim() && !arquivo && !nota) ? (
+                          <IconMic className="w-5 h-5" />
+                        ) : (
+                          <IconSend className="w-5 h-5" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
