@@ -11,6 +11,7 @@ import {
   loginInbox, fetchContactPhoto,
   type Conversa,
 } from '@/lib/hooks/useInbox'
+import EmojiPicker, { Theme } from 'emoji-picker-react'
 
 import ConfiguracoesBotClient from '../configuracoes/bot/bot-client'
 
@@ -633,6 +634,7 @@ export default function InboxClient() {
   const [enviando, setEnviando] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [showSnippets, setShowSnippets] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [snippetIndex, setSnippetIndex] = useState(0)
   const [snippetFiltro, setSnippetFiltro] = useState('')
   const [showMobileActions, setShowMobileActions] = useState(false)
@@ -1273,6 +1275,29 @@ export default function InboxClient() {
                         >
                           <IconNote className="w-4 h-4" />
                         </button>
+                        <button
+                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                          title="Inserir Emoji"
+                          className={cn(
+                            "flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors text-lg",
+                            showEmojiPicker && "text-amber-400 border-amber-500/30 bg-surface-hover"
+                          )}
+                        >
+                          😀
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Emoji Picker Popover */}
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-[80px] left-3 z-50 shadow-2xl rounded-xl border border-border-subtle">
+                        <EmojiPicker 
+                          theme={Theme.DARK} 
+                          onEmojiClick={(emojiData) => {
+                            setTexto(prev => prev + emojiData.emoji);
+                            setTimeout(() => textareaRef.current?.focus(), 0);
+                          }} 
+                        />
                       </div>
                     )}
 
