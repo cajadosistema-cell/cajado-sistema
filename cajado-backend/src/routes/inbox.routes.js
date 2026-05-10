@@ -29,13 +29,49 @@ router.post("/inbox/webhook", webhookSecret, async (req, res) => {
 
   const texto = msg.message?.conversation ||
     msg.message?.extendedTextMessage?.text ||
-    msg.message?.imageMessage?.caption || "";
+    msg.message?.imageMessage?.caption ||
+    msg.message?.videoMessage?.caption ||
+    msg.message?.documentMessage?.caption || "";
 
   const nome = msg.pushName || numero;
   const mensagem = { id: msg.key.id, tipo: "recebida", texto, numero, timestamp: new Date().toISOString() };
+
+  // Verifica se é mídia
+  const hasMedia = msg.message?.imageMessage || msg.message?.audioMessage || msg.message?.videoMessage || msg.message?.documentMessage || msg.message?.documentWithCaptionMessage;
+  if (hasMedia) {
+    try {
+      const instanceName = data?.instance || "botwhatsapp01";
+      const resp = await axios.post(`${EVOLUTION_URL}/chat/getBase64FromMediaMessage/${instanceName}`, { message: msg }, { headers: { apikey: EVOLUTION_KEY } });
+      const base64Str = resp.data?.base64;
+      if (base64Str) {
+        const matches = base64Str.match(/^data:(.+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const mimetype = matches[1];
+          const base64Data = matches[2];
+          const ext = mimetype.split('/')[1]?.split(';')[0]?.replace('x-matroska', 'mkv') || "bin";
+          const buffer = Buffer.from(base64Data, "base64");
+          const filePath = `${numero}/${Date.now()}_received.${ext}`;
+          
+          if (supabase) {
+             const { error } = await supabase.storage.from('inbox-media').upload(filePath, buffer, { contentType: mimetype });
+             if (!error) {
+               const { data: publicUrlData } = supabase.storage.from('inbox-media').getPublicUrl(filePath);
+               mensagem.mediaUrl = publicUrlData.publicUrl;
+               mensagem.mediaType = mimetype.startsWith("image/") ? "image" : mimetype.startsWith("audio/") ? "audio" : mimetype.startsWith("video/") ? "video" : "document";
+               mensagem.mimetype = mimetype;
+               if (!mensagem.texto) mensagem.texto = `📎 ${mensagem.mediaType}`;
+             }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[WEBHOOK] Erro ao baixar/upar mídia:", e.message);
+    }
+  }
+
   const conv = await registrarNaConversa(numero, mensagem, nome, null);
   conv.unread = (conv.unread || 0) + 1;
-  console.log(`[INBOX] ${nome}: ${texto}`);
+  console.log(`[INBOX] ${nome}: ${texto || 'Mídia recebida'}`);
 });
 
 router.post("/inbox/mensagem", authMiddleware, async (req, res) => {
@@ -212,8 +248,8 @@ router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
 });
 
 router.post("/inbox/enviar", authMiddleware, async (req, res) => {
-  const { numero, texto, interna } = req.body;
-  if (!numero || !texto) return res.status(400).json({ erro: "numero e texto obrigatórios" });
+  const { numero, texto, interna, media } = req.body;
+  if (!numero || (!texto && !media)) return res.status(400).json({ erro: "numero e texto/media obrigatórios" });
   try {
     if (interna) {
       const mensagem = { id: Date.now().toString(), tipo: "interna", texto, numero, timestamp: new Date().toISOString() };
@@ -238,8 +274,31 @@ router.post("/inbox/enviar", authMiddleware, async (req, res) => {
       return res.json({ ok: true });
     }
 
-    await enviarWhatsApp(numero, texto, instOverride);
-    const mensagem = { id: Date.now().toString(), tipo: "enviada", texto, numero, timestamp: new Date().toISOString() };
+    if (media && !numero.match(/[a-zA-Z-]/)) {
+      const instance = instOverride || process.env.INSTANCE || "botwhatsapp01";
+      const mediaType = media.tipo || (media.mimetype?.startsWith("image/") ? "image" : media.mimetype?.startsWith("video/") ? "video" : media.mimetype?.startsWith("audio/") ? "audio" : "document");
+      const url = `${EVOLUTION_URL}/message/sendMedia/${instance}`;
+      
+      let base64OrUrl = media.url;
+      
+      await axios.post(url, {
+        number: numero,
+        mediatype: mediaType,
+        mimetype: media.mimetype,
+        caption: texto || "",
+        media: base64OrUrl,
+        fileName: media.fileName || "arquivo"
+      }, { headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" } });
+    } else {
+      await enviarWhatsApp(numero, texto || "📎 Anexo", instOverride);
+    }
+    
+    const mensagem = { id: Date.now().toString(), tipo: "enviada", texto: texto || "", numero, timestamp: new Date().toISOString() };
+    if (media) {
+      mensagem.mediaType = media.tipo;
+      mensagem.mediaUrl = media.url;
+      mensagem.mimetype = media.mimetype;
+    }
     await registrarNaConversa(numero, mensagem, null, null, null, instOverride);
     res.json({ ok: true });
   } catch (e) {

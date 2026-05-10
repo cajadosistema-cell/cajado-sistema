@@ -160,12 +160,41 @@ function ConversaItem({
   )
 }
 
-function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: string; timestamp: string; transcricao?: string } }) {
+function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: string; timestamp: string; transcricao?: string; mediaType?: string; mediaUrl?: string; mimetype?: string } }) {
   const isEnviada = msg.tipo === 'enviada' || msg.tipo === 'bot'
   const isInterna = msg.tipo === 'interna'
-  const isAudio = msg.texto.toLowerCase().includes('[áudio]') || msg.texto.toLowerCase().includes('audio') || msg.tipo === 'audio'
+  const isAudio = msg.mediaType === 'audio' || msg.texto.toLowerCase().includes('[áudio]') || msg.texto.toLowerCase().includes('audio') || msg.tipo === 'audio'
 
-  const transcricaoUI = msg.transcricao || (isAudio && !isEnviada ? 'Transcrevendo áudio...' : null)
+  const transcricaoUI = msg.transcricao || (isAudio && !isEnviada && !msg.mediaUrl ? 'Transcrevendo áudio...' : null)
+
+  const renderMedia = () => {
+    if (!msg.mediaUrl) return null
+    const type = msg.mediaType || (msg.mimetype?.startsWith('image/') ? 'image' : msg.mimetype?.startsWith('video/') ? 'video' : msg.mimetype?.startsWith('audio/') ? 'audio' : 'document')
+    
+    if (type === 'image') {
+      return (
+        <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="block mb-2 overflow-hidden rounded-lg">
+          <img src={msg.mediaUrl} alt="Imagem anexada" className="max-w-full max-h-60 object-contain hover:opacity-90 transition-opacity" />
+        </a>
+      )
+    }
+    if (type === 'audio') {
+      return (
+        <audio controls src={msg.mediaUrl} className="w-full max-w-[240px] mb-2 h-10 outline-none" />
+      )
+    }
+    if (type === 'video') {
+      return (
+        <video controls src={msg.mediaUrl} className="max-w-full max-h-60 rounded-lg mb-2" />
+      )
+    }
+    return (
+      <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors border border-white/10 text-white text-xs font-semibold">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 shrink-0 text-emerald-400"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span className="truncate max-w-[150px]">{msg.texto.replace('📎 ', '') || 'Documento'}</span>
+      </a>
+    )
+  }
 
   return (
     <div className={cn('flex mb-2', isEnviada ? 'justify-end' : isInterna ? 'justify-center' : 'justify-start')}>
@@ -184,7 +213,12 @@ function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: strin
         } : undefined}
       >
         {isInterna && <span className="text-amber-400 mr-1">📝</span>}
-        <span style={{ whiteSpace: 'pre-wrap' }}>{msg.texto}</span>
+        
+        {renderMedia()}
+        
+        {(!msg.mediaUrl || msg.texto !== `📎 ${msg.texto.replace('📎 ', '')}`) && (
+          <span style={{ whiteSpace: 'pre-wrap' }}>{msg.texto}</span>
+        )}
 
         {/* Transcrição de áudio */}
         {transcricaoUI && (
@@ -457,8 +491,11 @@ export default function InboxClient() {
   const [abaAtiva, setAbaAtiva] = useState<'info' | 'historico'>('info')
   const [notaAtendente, setNotaAtendente] = useState('')
   const [salvandoNota, setSalvandoNota] = useState(false)
+  const [arquivo, setArquivo] = useState<File | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const supabase = createClient()
 
   const { conversas, loading, refetch } = useInbox()
   const { conversa, refetch: refetchConversa } = useConversaDetalhe(!showConfig ? numeroAtivo : null)
@@ -520,18 +557,42 @@ export default function InboxClient() {
   ]
 
   async function handleEnviar() {
-    if (!texto.trim() || !numeroAtivo || enviando) return
+    if ((!texto.trim() && !arquivo) || !numeroAtivo || enviando) return
     setEnviando(true)
     try {
       if (nota) {
         await enviarNota(numeroAtivo, texto)
       } else {
-        await enviarMensagem(numeroAtivo, texto)
+        let mediaPayload = undefined
+        if (arquivo) {
+          const fileExt = arquivo.name.split('.').pop()
+          const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+          const filePath = `${numeroAtivo}/${fileName}`
+          
+          const { error: uploadError } = await supabase.storage
+            .from('inbox-media')
+            .upload(filePath, arquivo)
+            
+          if (uploadError) throw new Error('Erro no upload da mídia: ' + uploadError.message)
+          
+          const { data } = supabase.storage.from('inbox-media').getPublicUrl(filePath)
+          
+          mediaPayload = {
+            url: data.publicUrl,
+            mimetype: arquivo.type,
+            tipo: arquivo.type.startsWith('image/') ? 'image' : arquivo.type.startsWith('video/') ? 'video' : arquivo.type.startsWith('audio/') ? 'audio' : 'document',
+            fileName: arquivo.name
+          }
+        }
+        await enviarMensagem(numeroAtivo, texto, mediaPayload)
       }
       setTexto('')
+      setArquivo(null)
       // reset textarea height
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
       await refetchConversa()
+    } catch (e: any) {
+      alert('Erro ao enviar: ' + e.message)
     } finally {
       setEnviando(false)
     }
@@ -881,17 +942,52 @@ export default function InboxClient() {
                     </div>
                   )}
 
-                  {/* Row principal: textarea + botões */}
-                  <div className="flex items-end gap-2">
-                    {/* Botão nota → ícone inline */}
-                    {!nota && (
-                      <button
-                        onClick={() => setNota(true)}
-                        title="Nota interna"
-                        className="flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors"
-                      >
-                        <IconNote className="w-4 h-4" />
+                  {/* Preview de Arquivo */}
+                  {arquivo && (
+                    <div className="flex items-center justify-between mb-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl animate-in fade-in">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="text-emerald-400 text-lg shrink-0">📎</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-emerald-400 truncate">{arquivo.name}</p>
+                          <p className="text-[10px] text-emerald-400/70">{(arquivo.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setArquivo(null)} className="p-1 text-emerald-400/70 hover:text-emerald-400 shrink-0">
+                        ✕
                       </button>
+                    </div>
+                  )}
+
+                  {/* Row principal: textarea + botões */}
+                  <div className="flex items-end gap-1.5 sm:gap-2">
+                    {/* Botões anexo e nota */}
+                    {!nota && (
+                      <div className="flex gap-1.5 shrink-0">
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          title="Anexar arquivo"
+                          className="flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-emerald-400 flex items-center justify-center transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </button>
+                        <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          className="hidden" 
+                          onChange={e => {
+                            if (e.target.files && e.target.files[0]) {
+                              setArquivo(e.target.files[0])
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => setNota(true)}
+                          title="Nota interna"
+                          className="flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors"
+                        >
+                          <IconNote className="w-4 h-4" />
+                        </button>
+                      </div>
                     )}
 
                     {/* Textarea auto-grow */}
@@ -925,7 +1021,7 @@ export default function InboxClient() {
                     {/* Botão enviar — ícone grande, 44×44px área de toque */}
                     <button
                       onClick={handleEnviar}
-                      disabled={!texto.trim() || enviando}
+                      disabled={(!texto.trim() && !arquivo) || enviando}
                       className={cn(
                         "flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 disabled:opacity-40",
                         nota

@@ -196,8 +196,8 @@ export function useConversaDetalhe(numero: string | null) {
 
 // ── Ações ──────────────────────────────────────────────────────
 
-export async function enviarMensagem(numero: string, texto: string) {
-  return apiPost('/inbox/enviar', { numero, texto })
+export async function enviarMensagem(numero: string, texto: string, media?: { url: string, mimetype: string, tipo: string, fileName?: string }) {
+  return apiPost('/inbox/enviar', { numero, texto, media })
 }
 
 export async function enviarNota(numero: string, texto: string) {
