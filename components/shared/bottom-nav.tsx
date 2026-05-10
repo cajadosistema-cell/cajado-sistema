@@ -68,10 +68,23 @@ export function BottomNav() {
   const pathname = usePathname()
   const [showMore, setShowMore] = useState(false)
 
+  const isInboxRoute = pathname.startsWith('/inbox')
+
+  // Itens exclusivos quando estiver no Inbox (estilo VisioPro)
+  const inboxItems = [
+    { href: '/inicio',        label: 'Resumo',   icon: '⬡',  activeColor: 'text-amber-400' },
+    { href: '/inbox',         label: 'Inbox',    icon: '💬', activeColor: 'text-emerald-400' },
+    { href: '/configuracoes', label: 'Canais',   icon: '📞', activeColor: 'text-blue-400' },
+    { href: '/inteligencia',  label: 'Vivi',     icon: '✨', activeColor: 'text-purple-400' },
+    { href: '/cajado',        label: 'Leads',    icon: '👥', activeColor: 'text-rose-400' },
+    { href: '/organizacao',   label: 'Agenda',   icon: '📅', activeColor: 'text-amber-400' },
+    { href: '/vendas',        label: 'Clientes', icon: '💼', activeColor: 'text-teal-400' },
+  ]
+
   return (
     <>
-      {/* ── Drawer "Mais" ──────────────────────────────── */}
-      {showMore && (
+      {/* ── Drawer "Mais" (Não renderiza no modo Inbox) ──────────────────────────────── */}
+      {showMore && !isInboxRoute && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
           onClick={() => setShowMore(false)}
@@ -114,16 +127,16 @@ export function BottomNav() {
       )}
 
       {/* ── Bottom Nav Bar ─────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0a0d16]/95 backdrop-blur-md border-t border-border-subtle pb-safe">
-        <div className="flex items-center justify-around px-1 py-2">
-          {mainItems.map(item => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0a0d16]/95 backdrop-blur-md border-t border-border-subtle pb-safe overflow-x-auto custom-scrollbar-hide">
+        <div className="flex items-center justify-start px-1 py-2 min-w-max">
+          {(isInboxRoute ? inboxItems : mainItems).map(item => {
             const isActive = pathname.startsWith(item.href)
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
+                  'relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-w-[64px]',
                   isActive ? `${item.activeColor} scale-105` : 'text-fg-tertiary hover:text-fg-secondary'
                 )}
               >
@@ -136,17 +149,19 @@ export function BottomNav() {
             )
           })}
 
-          {/* Botão "Mais" */}
-          <button
-            onClick={() => setShowMore(prev => !prev)}
-            className={cn(
-              'relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
-              showMore ? 'text-amber-400 scale-105' : 'text-fg-tertiary hover:text-fg-secondary'
-            )}
-          >
-            <span className="text-lg mb-0.5">⋯</span>
-            <span className="text-[9px] font-bold tracking-wide">Mais</span>
-          </button>
+          {/* Botão "Mais" (Oculto no modo Inbox) */}
+          {!isInboxRoute && (
+            <button
+              onClick={() => setShowMore(prev => !prev)}
+              className={cn(
+                'relative flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-w-[64px]',
+                showMore ? 'text-amber-400 scale-105' : 'text-fg-tertiary hover:text-fg-secondary'
+              )}
+            >
+              <span className="text-lg mb-0.5">⋯</span>
+              <span className="text-[9px] font-bold tracking-wide">Mais</span>
+            </button>
+          )}
         </div>
       </nav>
     </>

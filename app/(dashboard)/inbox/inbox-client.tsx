@@ -452,6 +452,7 @@ export default function InboxClient() {
   const [enviando, setEnviando] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [showSnippets, setShowSnippets] = useState(false)
+  const [showMobileActions, setShowMobileActions] = useState(false)
   const [prevUnread, setPrevUnread] = useState(0)
   const [abaAtiva, setAbaAtiva] = useState<'info' | 'historico'>('info')
   const [notaAtendente, setNotaAtendente] = useState('')
@@ -803,8 +804,43 @@ export default function InboxClient() {
                     >
                       {conversa?.botOn !== false ? '🤖 Bot' : '👤 Humano'}
                     </button>
+
+                    {/* Menu de Ações (Mobile) */}
+                    <div className="relative lg:hidden">
+                      <button
+                        onClick={() => setShowMobileActions(!showMobileActions)}
+                        className="text-fg-secondary hover:text-fg w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-hover/50 transition-colors"
+                      >
+                        ⋮
+                      </button>
+                      
+                      {showMobileActions && (
+                        <div className="absolute top-full right-0 mt-2 w-48 bg-[#0a0d16] border border-border-subtle shadow-2xl rounded-xl p-2 z-50 flex flex-col gap-1"
+                             onClick={() => setShowMobileActions(false)}>
+                          <button onClick={handleAssumirConversa}
+                            className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25">
+                            ✋ Assumir conversa
+                          </button>
+                          <button
+                            onClick={async () => { const s = prompt('Setor destino: (vendas, suporte, financeiro, cursos, reciclagem, mopp)'); if (s) { await mudarSetor(numeroAtivo!, s); await refetch(); await refetchConversa(); } }}
+                            className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg bg-muted text-fg-secondary hover:bg-surface-hover hover:text-fg">
+                            → Transferir setor
+                          </button>
+                          <button
+                            onClick={async () => { await mudarEtiqueta(numeroAtivo!, 'perdido'); await refetch(); setNumeroAtivo(null) }}
+                            className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg text-fg-tertiary hover:text-red-400 hover:bg-red-500/10 mt-1">
+                            ✕ Arquivar
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Fundo clicável para fechar o menu mobile */}
+                {showMobileActions && (
+                  <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setShowMobileActions(false)} />
+                )}
 
                 {/* ── Área de mensagens ── */}
                 <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 scroll-smooth">
