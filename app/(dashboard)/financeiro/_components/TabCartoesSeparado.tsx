@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatCurrency, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { EmptyState } from '@/components/shared/ui'
