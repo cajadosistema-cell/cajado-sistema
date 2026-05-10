@@ -590,8 +590,8 @@ export default function InboxClient() {
   }
 
   return (
-    // Tela cheia — sidebar oculta no inbox
-    <div className="flex h-screen overflow-hidden bg-[#05070a]">
+    // Tela cheia — fixa no mobile para não rolar a página toda e esconder o header
+    <div className="fixed inset-0 pb-[65px] md:pb-0 z-40 md:z-auto md:relative md:inset-auto flex h-[100dvh] md:h-screen overflow-hidden bg-[#05070a]">
 
       {/* ── Coluna 1: Lista de conversas ──────────────────────── */}
       <div className={cn("shrink-0 border-r border-border-subtle flex-col bg-[#05070a]", (numeroAtivo || showConfig) ? "hidden md:flex md:w-80" : "flex w-full md:w-80")}>
