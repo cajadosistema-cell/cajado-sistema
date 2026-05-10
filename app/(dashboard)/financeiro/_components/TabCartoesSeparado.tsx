@@ -56,13 +56,23 @@ function ModalLimiteMensal({ conta, onClose, onSave }: { conta: any; onClose: ()
 }
 
 // ── Modal Fatura Prevista ────────────────────────────────────────
-function ModalFaturaPrevista({ conta, onClose, onSave }: { conta: any; onClose: () => void; onSave: () => void }) {
+function ModalFaturaPrevista({ conta, mesSel, faturas, onClose, onSave }: { conta: any; mesSel: string; faturas: any[]; onClose: () => void; onSave: () => void }) {
   const supabase = createClient()
-  const [valor, setValor] = useState(String(conta.fatura_prevista ?? ''))
+  const faturaManual = faturas.find(f => f.conta_id === conta.id && f.mes_referencia === mesSel)
+  const [valor, setValor] = useState(faturaManual?.valor_fechado ? String(faturaManual.valor_fechado) : '')
   const [loading, setLoading] = useState(false)
   const handleSave = async () => {
     setLoading(true)
-    await (supabase.from('contas') as any).update({ fatura_prevista: parseFloat(valor) || null }).eq('id', conta.id)
+    const val = parseFloat(valor.replace(',', '.'))
+    if (isNaN(val)) {
+      await (supabase.from('faturas_cartoes') as any).delete().match({ conta_id: conta.id, mes_referencia: mesSel })
+    } else {
+      await (supabase.from('faturas_cartoes') as any).upsert({
+        conta_id: conta.id,
+        mes_referencia: mesSel,
+        valor_fechado: val
+      }, { onConflict: 'conta_id,mes_referencia' })
+    }
     setLoading(false); onSave(); onClose()
   }
   return (
@@ -504,6 +514,17 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
   const mesAtual = new Date().toISOString().substring(0, 7)
   const [mesSel, setMesSel] = useState(mesAtual)
 
+  // Faturas lançadas (prevista/fechada)
+  const [faturas, setFaturas] = useState<any[]>([])
+  const supabase = createClient()
+
+  const fetchFaturas = useCallback(async () => {
+    const { data } = await (supabase.from('faturas_cartoes') as any).select('*')
+    if (data) setFaturas(data)
+  }, [supabase])
+
+  useEffect(() => { fetchFaturas() }, [fetchFaturas])
+
   if (cartoes.length === 0 && subAba === 'lancamentos') {
     // Mantém sub-abas visíveis mas mostra vazio dentro do lançamentos
   }
@@ -625,16 +646,17 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                 <p className={`text-lg sm:text-xl font-bold ${color}`}>{formatCurrency(val)}</p>
               </div>
             ))}
-            {/* Confronto Fatura Prevista */}
+            {/* Confronto Fatura Prevista / Fechada */}
             {cartaoSel !== 'todos' && (() => {
               const cartao = cartoes.find(c => c.id === cartaoSel)
-              const prev = cartao?.fatura_prevista
-              if (!prev) return (
+              const faturaObj = faturas.find(f => f.conta_id === cartaoSel && f.mes_referencia === mesSel)
+              const prev = faturaObj?.valor_fechado
+              if (prev == null) return (
                 <div className="bg-muted/30 border border-border-subtle rounded-xl p-3 sm:p-4 flex flex-col justify-between">
-                  <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">📊 Fatura Prevista</p>
+                  <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">📊 Fatura do Mês (Manual)</p>
                   <button onClick={() => setModalFatura(cartao)}
                     className="text-xs text-amber-400 hover:text-amber-300 text-left">
-                    + Definir valor previsto
+                    + Definir valor p/ {labelMes(mesSel)}
                   </button>
                 </div>
               )
@@ -643,7 +665,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
               return (
                 <div className={`border rounded-xl p-3 sm:p-4 ${diff > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
                   <div className="flex justify-between items-start">
-                    <p className="text-[10px] text-fg-tertiary uppercase tracking-wider">📊 Fatura Prevista</p>
+                    <p className="text-[10px] text-fg-tertiary uppercase tracking-wider">📊 Fatura do Mês (Manual)</p>
                     <button onClick={() => setModalFatura(cartao)} className="text-[9px] text-fg-disabled hover:text-fg">✏️</button>
                   </div>
                   <p className="text-lg font-bold text-fg mt-1">{formatCurrency(prev)}</p>
@@ -934,8 +956,10 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
       {modalFatura && (
         <ModalFaturaPrevista
           conta={modalFatura}
+          mesSel={mesSel}
+          faturas={faturas}
           onClose={() => setModalFatura(null)}
-          onSave={() => { onRefresh?.() }}
+          onSave={() => { fetchFaturas(); onRefresh?.() }}
         />
       )}
       {modalLimite && (

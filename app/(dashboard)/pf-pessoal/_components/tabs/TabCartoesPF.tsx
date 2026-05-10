@@ -483,16 +483,19 @@ function GastoProgressBar({ gasto, limite }: { gasto: number; limite: number | n
 
 // ── Modal Detalhe do Cartão ────────────────────────────────────────────────────────
 function ModalDetalheCartao({
-  conta, gastos, receitas, onClose, onLancar, onEditar, onExcluir,
+  conta, gastos, receitas, faturas, onClose, onLancar, onEditar, onExcluir, onFaturaUpdate
 }: {
   conta: any
   gastos: any[]
   receitas: any[]
+  faturas: any[]
   onClose: () => void
   onLancar: () => void
   onEditar: () => void
   onExcluir: () => void
+  onFaturaUpdate: () => void
 }) {
+  const supabase = createClient()
   const band = getBand(conta.bandeira)
   const mesAtual = new Date().toISOString().substring(0, 7)
   const [mesSel, setMesSel] = useState(mesAtual)
@@ -515,6 +518,32 @@ function ModalDetalheCartao({
   const totalGastos  = lancMes.filter(l => l._tipo === 'gasto').reduce((a, l) => a + l.valor, 0)
   const totalEstornos = lancMes.filter(l => l._tipo === 'receita').reduce((a, l) => a + l.valor, 0)
   const fatura = totalGastos - totalEstornos
+
+  const faturaManualDoc = faturas.find(f => f.conta_id === conta.id && f.mes_referencia === mesSel)
+  const valorFechado = faturaManualDoc?.valor_fechado ?? null
+  const [editFaturaManual, setEditFaturaManual] = useState(false)
+  const [inputFaturaManual, setInputFaturaManual] = useState('')
+
+  useEffect(() => {
+    setInputFaturaManual(valorFechado !== null ? valorFechado.toString() : '')
+  }, [valorFechado, mesSel])
+
+  const handleSalvarFaturaManual = async () => {
+    const val = parseFloat(inputFaturaManual.replace(',', '.'))
+    if (isNaN(val)) {
+      await (supabase.from('faturas_cartoes') as any).delete().match({ conta_id: conta.id, mes_referencia: mesSel })
+    } else {
+      await (supabase.from('faturas_cartoes') as any).upsert({
+        conta_id: conta.id,
+        mes_referencia: mesSel,
+        valor_fechado: val
+      }, { onConflict: 'conta_id,mes_referencia' })
+    }
+    setEditFaturaManual(false)
+    onFaturaUpdate()
+  }
+
+  const diferencaFatura = valorFechado !== null ? fatura - valorFechado : null
 
   const limiteCredito = conta.limite ?? null
   const limiteMensal  = conta.limite_gasto_mensal ?? null
@@ -560,7 +589,7 @@ function ModalDetalheCartao({
         {/* KPIs rápidos */}
         <div className="grid grid-cols-3 gap-0 border-b border-white/8 shrink-0">
           {[
-            { label: 'Fatura', v: fmt(fatura), cor: fatura > 0 ? 'text-red-400' : 'text-fg' },
+            { label: 'Fatura do Sistema', v: fmt(fatura), cor: fatura > 0 ? 'text-red-400' : 'text-fg' },
             { label: 'Estornos', v: fmt(totalEstornos), cor: 'text-emerald-400' },
             { label: disponivel != null ? 'Disponível' : 'Limite', v: disponivel != null ? fmt(disponivel) : limiteCredito ? fmt(limiteCredito) : '—', cor: 'text-blue-400' },
           ].map(k => (
@@ -569,6 +598,36 @@ function ModalDetalheCartao({
               <p className={`text-sm font-bold ${k.cor} mt-0.5`}>{k.v}</p>
             </div>
           ))}
+        </div>
+
+        {/* Fatura Fechada (Manual) */}
+        <div className="px-4 py-3 border-b border-white/8 shrink-0 flex items-center justify-between bg-white/5">
+          <div>
+            <p className="text-[10px] font-bold text-fg-tertiary uppercase tracking-widest">Fatura Real / Fechada</p>
+            {editFaturaManual ? (
+              <div className="flex gap-2 mt-1">
+                <input type="number" step="0.01" className="input text-xs w-28 py-1" placeholder="0.00"
+                  value={inputFaturaManual} onChange={e => setInputFaturaManual(e.target.value)} />
+                <button onClick={handleSalvarFaturaManual} className="btn-primary text-[10px] px-2 py-1">Salvar</button>
+                <button onClick={() => setEditFaturaManual(false)} className="btn-secondary text-[10px] px-2 py-1">X</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className={cn("text-base font-bold", valorFechado !== null ? "text-amber-400" : "text-fg-disabled")}>
+                  {valorFechado !== null ? fmt(valorFechado) : 'Não informada'}
+                </p>
+                <button onClick={() => setEditFaturaManual(true)} className="text-[10px] text-blue-400 hover:text-blue-300">✏️ Editar</button>
+              </div>
+            )}
+          </div>
+          {valorFechado !== null && (
+            <div className="text-right">
+              <p className="text-[10px] text-fg-tertiary uppercase">Diferença Sist. x Real</p>
+              <p className={cn("text-xs font-bold mt-0.5", Math.abs(diferencaFatura!) > 0.01 ? "text-red-400" : "text-emerald-400")}>
+                {Math.abs(diferencaFatura!) > 0.01 ? `⚠️ Dif. de ${fmt(Math.abs(diferencaFatura!))}` : '✅ Bateu certo!'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Info de vencimento e seletor de mês */}
@@ -649,6 +708,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
 }) {
   const supabase = createClient()
   const [contas, setContas] = useState<any[]>([])
+  const [faturas, setFaturas] = useState<any[]>([])
   const [cartaoSel, setCartaoSel] = useState('todos')
   const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro'>('lancamentos')
   const [modalLanc, setModalLanc] = useState(false)
@@ -662,12 +722,15 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   const [mesSel, setMesSel] = useState(mesAtual)
 
   const carregarContas = useCallback(async () => {
-    const { data } = await (supabase.from('contas') as any)
+    const { data: contasData } = await (supabase.from('contas') as any)
       .select('*')
       .eq('categoria', 'pf')
       .in('tipo', ['cartao_credito', 'cartao_debito'])
       .eq('ativo', true)
-    setContas(data || [])
+    setContas(contasData || [])
+
+    const { data: faturasData } = await (supabase.from('faturas_cartoes') as any).select('*')
+    setFaturas(faturasData || [])
   }, [supabase])
 
   const handleExcluirCartao = async (c: any) => {
@@ -955,6 +1018,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           conta={modalDetalhe}
           gastos={gastos}
           receitas={receitas}
+          faturas={faturas}
           onClose={() => setModalDetalhe(null)}
           onLancar={() => {
             setCartaoSel(modalDetalhe.id)
@@ -969,6 +1033,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
             handleExcluirCartao(modalDetalhe)
             setModalDetalhe(null)
           }}
+          onFaturaUpdate={carregarContas}
         />
       )}
     </div>
