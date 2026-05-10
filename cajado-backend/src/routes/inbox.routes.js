@@ -232,9 +232,10 @@ router.get("/inbox/contact-photo/:numero", authMiddleware, async (req, res) => {
   const jid = numero.includes("@") ? numero : `${numero}@s.whatsapp.net`;
 
   try {
-    const resp = await axios.get(
+    const resp = await axios.post(
       `${EVOLUTION_URL}/chat/fetchProfile/${instanceName}`,
-      { params: { number: jid }, headers: { apikey: EVOLUTION_KEY }, timeout: 5000 }
+      { number: jid },
+      { headers: { apikey: EVOLUTION_KEY }, timeout: 5000 }
     );
     const url = resp.data?.profilePictureUrl || resp.data?.picture || null;
     fotosCache.set(numero, { url, ts: Date.now() });
