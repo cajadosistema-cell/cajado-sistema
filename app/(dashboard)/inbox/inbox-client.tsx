@@ -743,104 +743,89 @@ export default function InboxClient() {
               </div>
             ) : (
               <div className="flex flex-col h-full relative z-10">
-                {/* ── Header do chat — simplificado ── */}
-                <div className="px-3 md:px-4 py-2.5 border-b border-border-subtle/80 flex items-center justify-between flex-shrink-0 bg-[#0a0d16]/90 backdrop-blur-md">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <button 
-                      onClick={() => { setNumeroAtivo(null); setShowConfig(false); }} 
-                      className="md:hidden text-fg-secondary hover:text-fg flex items-center justify-center w-8 h-8 -ml-1 rounded-full hover:bg-surface-hover/50 transition-colors"
-                    >
-                      <IconBack className="w-5 h-5" />
-                    </button>
-                    {/* Avatar no header */}
-                    <div className={cn(
-                      'w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold',
-                      conversa?.botOn !== false
-                        ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40'
-                        : 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40'
-                    )}>
-                      {conversa?.nome?.[0]?.toUpperCase() || '#'}
+                {/* ── Header do chat — simplificado e FIXO no topo ── */}
+                <div className="sticky top-0 z-30 px-3 md:px-4 py-2.5 border-b border-border-subtle/80 flex flex-col flex-shrink-0 bg-[#0a0d16]/95 backdrop-blur-md">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <button 
+                        onClick={() => { setNumeroAtivo(null); setShowConfig(false); }} 
+                        className="md:hidden text-fg-secondary hover:text-fg flex items-center justify-center w-8 h-8 -ml-1 rounded-full hover:bg-surface-hover/50 transition-colors"
+                      >
+                        <IconBack className="w-5 h-5" />
+                      </button>
+                      {/* Avatar no header */}
+                      <div className={cn(
+                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold',
+                        conversa?.botOn !== false
+                          ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40'
+                          : 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40'
+                      )}>
+                        {conversa?.nome?.[0]?.toUpperCase() || '#'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-fg truncate">{conversa?.nome || numeroAtivo}</p>
+                        <p className="text-[10px] text-fg-tertiary font-mono">{numeroAtivo}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-fg truncate">{conversa?.nome || numeroAtivo}</p>
-                      <p className="text-[10px] text-fg-tertiary font-mono">{numeroAtivo}</p>
+
+                    {/* Ações no header — bot toggle + etiqueta select */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Seletor de etiqueta compacto */}
+                      <select 
+                        className={cn(
+                          "text-[10px] px-1.5 py-1 rounded-lg border appearance-none outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium max-w-[90px] hidden sm:block",
+                          conversa?.etiqueta ? (etiquetaColors[conversa.etiqueta] || 'bg-muted border-border-subtle text-fg-secondary') : 'bg-muted border-border-subtle text-fg-secondary'
+                        )}
+                        value={conversa?.etiqueta || ''}
+                        onChange={async (e) => {
+                           const nova = e.target.value
+                           await mudarEtiqueta(numeroAtivo!, nova)
+                           await refetch()
+                           await refetchConversa()
+                        }}
+                      >
+                        <option value="">Etiqueta</option>
+                        <option value="novo">Novo</option>
+                        <option value="proposta">Proposta</option>
+                        <option value="cliente">Cliente Ativo</option>
+                        <option value="aguardando">Aguardando</option>
+                        <option value="retomar">Retomar</option>
+                        <option value="perdido">Perdido</option>
+                      </select>
+
+                      {/* Botão bot/humano */}
+                      <button
+                        onClick={handleToggleBot}
+                        className={cn(
+                          'text-[10px] px-2.5 py-1.5 rounded-lg border transition-all duration-300 font-semibold flex items-center gap-1 whitespace-nowrap',
+                          conversa?.botOn !== false
+                            ? 'border-border-subtle text-fg-secondary hover:border-emerald-500/50 hover:text-emerald-400 hover:bg-emerald-500/5'
+                            : 'border-amber-500/30 text-amber-400 bg-amber-500/10'
+                        )}
+                      >
+                        {conversa?.botOn !== false ? '🤖 Bot' : '👤 Humano'}
+                      </button>
                     </div>
                   </div>
 
-                  {/* Ações no header — bot toggle + etiqueta select */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Seletor de etiqueta compacto */}
-                    <select 
-                      className={cn(
-                        "text-[10px] px-1.5 py-1 rounded-lg border appearance-none outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer font-medium max-w-[90px] hidden sm:block",
-                        conversa?.etiqueta ? (etiquetaColors[conversa.etiqueta] || 'bg-muted border-border-subtle text-fg-secondary') : 'bg-muted border-border-subtle text-fg-secondary'
-                      )}
-                      value={conversa?.etiqueta || ''}
-                      onChange={async (e) => {
-                         const nova = e.target.value
-                         await mudarEtiqueta(numeroAtivo!, nova)
-                         await refetch()
-                         await refetchConversa()
-                      }}
-                    >
-                      <option value="">Etiqueta</option>
-                      <option value="novo">Novo</option>
-                      <option value="proposta">Proposta</option>
-                      <option value="cliente">Cliente Ativo</option>
-                      <option value="aguardando">Aguardando</option>
-                      <option value="retomar">Retomar</option>
-                      <option value="perdido">Perdido</option>
-                    </select>
-
-                    {/* Botão bot/humano */}
-                    <button
-                      onClick={handleToggleBot}
-                      className={cn(
-                        'text-[10px] px-2.5 py-1.5 rounded-lg border transition-all duration-300 font-semibold flex items-center gap-1 whitespace-nowrap',
-                        conversa?.botOn !== false
-                          ? 'border-border-subtle text-fg-secondary hover:border-emerald-500/50 hover:text-emerald-400 hover:bg-emerald-500/5'
-                          : 'border-amber-500/30 text-amber-400 bg-amber-500/10'
-                      )}
-                    >
-                      {conversa?.botOn !== false ? '🤖 Bot' : '👤 Humano'}
+                  {/* ── Barra Inferior do Header (Ações Mobile) ── */}
+                  <div className="lg:hidden mt-2.5 pt-2 border-t border-border-subtle/50 flex items-center gap-2 overflow-x-auto custom-scrollbar-hide pb-0.5">
+                    <button onClick={handleAssumirConversa}
+                      className="whitespace-nowrap px-3 py-1.5 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 rounded-lg text-[11px] font-bold border border-emerald-500/20 transition-colors">
+                      ✋ Assumir
                     </button>
-
-                    {/* Menu de Ações (Mobile) */}
-                    <div className="relative lg:hidden">
-                      <button
-                        onClick={() => setShowMobileActions(!showMobileActions)}
-                        className="text-fg-secondary hover:text-fg w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-hover/50 transition-colors"
-                      >
-                        ⋮
-                      </button>
-                      
-                      {showMobileActions && (
-                        <div className="absolute top-full right-0 mt-2 w-48 bg-[#0a0d16] border border-border-subtle shadow-2xl rounded-xl p-2 z-50 flex flex-col gap-1"
-                             onClick={() => setShowMobileActions(false)}>
-                          <button onClick={handleAssumirConversa}
-                            className="w-full text-left px-3 py-2 text-xs font-bold rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25">
-                            ✋ Assumir conversa
-                          </button>
-                          <button
-                            onClick={async () => { const s = prompt('Setor destino: (vendas, suporte, financeiro, cursos, reciclagem, mopp)'); if (s) { await mudarSetor(numeroAtivo!, s); await refetch(); await refetchConversa(); } }}
-                            className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg bg-muted text-fg-secondary hover:bg-surface-hover hover:text-fg">
-                            → Transferir setor
-                          </button>
-                          <button
-                            onClick={async () => { await mudarEtiqueta(numeroAtivo!, 'perdido'); await refetch(); setNumeroAtivo(null) }}
-                            className="w-full text-left px-3 py-2 text-xs font-semibold rounded-lg text-fg-tertiary hover:text-red-400 hover:bg-red-500/10 mt-1">
-                            ✕ Arquivar
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      onClick={async () => { const s = prompt('Setor destino: (vendas, suporte, financeiro, cursos, reciclagem, mopp)'); if (s) { await mudarSetor(numeroAtivo!, s); await refetch(); await refetchConversa(); } }}
+                      className="whitespace-nowrap px-3 py-1.5 bg-muted text-fg-secondary hover:text-fg hover:bg-surface-hover rounded-lg text-[11px] font-semibold border border-border-subtle transition-colors">
+                      → Transferir
+                    </button>
+                    <button
+                      onClick={async () => { await mudarEtiqueta(numeroAtivo!, 'perdido'); await refetch(); setNumeroAtivo(null) }}
+                      className="whitespace-nowrap px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg text-[11px] font-semibold border border-red-500/20 transition-colors">
+                      ✕ Arquivar
+                    </button>
                   </div>
                 </div>
-
-                {/* Fundo clicável para fechar o menu mobile */}
-                {showMobileActions && (
-                  <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setShowMobileActions(false)} />
-                )}
 
                 {/* ── Área de mensagens ── */}
                 <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 scroll-smooth">
