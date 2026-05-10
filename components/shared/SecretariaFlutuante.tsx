@@ -858,7 +858,7 @@ export function SecretariaFlutuante() {
     const r = new SR()
     recognitionRef.current = r
     r.lang = 'pt-BR'
-    r.continuous = false       // para após o silêncio — evita duplicação
+    r.continuous = true        // Mantém gravando mesmo se o usuário pausar para pensar
     r.interimResults = true    // mostra texto em tempo real enquanto fala
 
     r.onstart = () => setIsListening(true)
@@ -1199,7 +1199,7 @@ export function SecretariaFlutuante() {
                   className="flex-1 bg-transparent border-0 focus:ring-0 text-xs text-fg placeholder-zinc-600 h-8"
                   placeholder={
                     buscandoWeb ? '🌐 Buscando na internet...' :
-                    isListening ? '🎙️ Ouvindo... fale seu comando' :
+                    isListening ? '🎙️ Ouvindo... clique novamente no microfone para enviar' :
                     attachedFile ? 'Descreva o que quer saber...' :
                     'Diga um comando para a Elena...'
                   }
