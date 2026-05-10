@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { usePathname } from 'next/navigation'
 
 const GUIA = [
   {
@@ -62,6 +63,11 @@ const GUIA = [
 export function HelpButton() {
   const [open, setOpen] = useState(false)
   const [busca, setBusca] = useState('')
+  const pathname = usePathname()
+
+  if (pathname?.includes('/inbox')) {
+    return null
+  }
 
   const filtrado = GUIA.map(g => ({
     ...g,
