@@ -1129,6 +1129,21 @@ export default function InboxClient() {
                         <option value="perdido">Perdido</option>
                       </select>
 
+                      {/* Botão Nota Interna no Header */}
+                      <button
+                        onClick={() => setNota(!nota)}
+                        className={cn(
+                          'text-[10px] px-2.5 py-1.5 rounded-lg border transition-all duration-300 font-semibold flex items-center gap-1 whitespace-nowrap',
+                          nota
+                            ? 'border-amber-500/30 text-amber-400 bg-amber-500/10'
+                            : 'border-border-subtle text-fg-secondary hover:border-amber-500/50 hover:text-amber-400 hover:bg-amber-500/5'
+                        )}
+                        title="Alternar Nota Interna"
+                      >
+                        <IconNote className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Nota</span>
+                      </button>
+
                       {/* Botão bot/humano */}
                       <button
                         onClick={handleToggleBot}
@@ -1251,47 +1266,21 @@ export default function InboxClient() {
 
                   {/* Row principal: textarea + botões */}
                   <div className="flex items-end gap-1.5 sm:gap-2">
-                    {/* Botões anexo e nota */}
+                    {/* Botão de Emoji (fora da caixa) */}
                     {!nota && (
-                      <div className="flex gap-0.5 sm:gap-1 shrink-0 items-center">
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          title="Anexar arquivo"
-                          className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full hover:bg-white/5 text-fg-tertiary hover:text-emerald-400 flex items-center justify-center transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 sm:w-5 sm:h-5"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                        </button>
-                        <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          className="hidden" 
-                          onChange={e => {
-                            if (e.target.files && e.target.files[0]) {
-                              setArquivo(e.target.files[0])
-                            }
-                          }}
-                        />
-                        <button
-                          onClick={() => setNota(true)}
-                          title="Nota interna"
-                          className="flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full hover:bg-white/5 text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors"
-                        >
-                          <IconNote className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (showEmojiPicker) setTimeout(() => textareaRef.current?.focus(), 0)
-                            setShowEmojiPicker(!showEmojiPicker)
-                          }}
-                          title={showEmojiPicker ? "Fechar Emojis" : "Inserir Emoji"}
-                          className={cn(
-                            "flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-colors text-lg sm:text-xl",
-                            showEmojiPicker ? "text-red-400 bg-red-500/10 hover:text-red-300" : "text-fg-tertiary hover:bg-white/5 hover:text-emerald-400"
-                          )}
-                        >
-                          {showEmojiPicker ? "✕" : "😀"}
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => {
+                          if (showEmojiPicker) setTimeout(() => textareaRef.current?.focus(), 0)
+                          setShowEmojiPicker(!showEmojiPicker)
+                        }}
+                        title={showEmojiPicker ? "Fechar Emojis" : "Inserir Emoji"}
+                        className={cn(
+                          "flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-colors text-xl mb-0.5",
+                          showEmojiPicker ? "text-red-400 bg-red-500/10 hover:text-red-300" : "text-fg-tertiary hover:bg-white/5 hover:text-emerald-400"
+                        )}
+                      >
+                        {showEmojiPicker ? "✕" : "😀"}
+                      </button>
                     )}
 
                     {/* Emoji Picker Popover */}
@@ -1317,7 +1306,7 @@ export default function InboxClient() {
                       </>
                     )}
 
-                    {/* Área de Input ou Gravação */}
+                    {/* Área de Input ou Gravação (Caixa de texto) */}
                     {isRecording ? (
                       <div className="flex-1 flex items-center justify-between bg-page border border-red-500/30 rounded-xl px-4 py-2.5 h-[44px]">
                         <div className="flex items-center gap-3">
@@ -1331,73 +1320,98 @@ export default function InboxClient() {
                         </div>
                       </div>
                     ) : (
-                      <textarea
-                        ref={textareaRef}
-                        className={cn(
-                          'flex-1 min-h-[40px] max-h-40 px-3 py-2.5 rounded-xl text-sm resize-none bg-page border text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-1 transition-all overflow-y-auto',
-                          nota
-                            ? 'border-amber-500/40 focus:ring-amber-500/40 focus:border-amber-500/60'
-                            : 'border-border-subtle focus:ring-emerald-500/30 focus:border-emerald-500/50'
-                        )}
-                        style={{ height: 'auto' }}
-                        rows={1}
-                        placeholder={nota ? 'Nota que apenas sua equipe verá...' : 'Mensagem... (ou grave um áudio)'}
-                        value={texto}
-                        onChange={e => {
-                          const val = e.target.value
-                          setTexto(val)
-                          autoGrow()
-                          if (val === '/') {
-                            setShowSnippets(true)
-                            setSnippetFiltro('')
-                            setSnippetIndex(0)
-                          } else if (val.startsWith('/') && !val.includes(' ')) {
-                            setShowSnippets(true)
-                            setSnippetFiltro(val.slice(1))
-                            setSnippetIndex(0)
-                          } else {
-                            setShowSnippets(false)
-                            setSnippetFiltro('')
-                          }
-                        }}
-                        onKeyDown={e => {
-                          // Navegação do snippet com teclado
-                          if (showSnippets) {
-                            const filtrados = SNIPPETS.filter(s =>
-                              snippetFiltro === '' ||
-                              s.atalho.includes(snippetFiltro) ||
-                              s.titulo.toLowerCase().includes(snippetFiltro.toLowerCase())
-                            )
-                            if (e.key === 'ArrowDown') {
-                              e.preventDefault()
-                              setSnippetIndex(i => Math.min(i + 1, filtrados.length - 1))
-                              return
-                            }
-                            if (e.key === 'ArrowUp') {
-                              e.preventDefault()
-                              setSnippetIndex(i => Math.max(i - 1, 0))
-                              return
-                            }
-                            if (e.key === 'Enter' && filtrados[snippetIndex]) {
-                              e.preventDefault()
-                              setTexto(filtrados[snippetIndex].texto)
-                              setShowSnippets(false)
+                      <div className={cn(
+                        'flex-1 flex items-end min-h-[40px] max-h-40 rounded-xl bg-page border transition-all overflow-hidden',
+                        nota
+                          ? 'border-amber-500/40 focus-within:ring-1 focus-within:ring-amber-500/40 focus-within:border-amber-500/60'
+                          : 'border-border-subtle focus-within:ring-1 focus-within:ring-emerald-500/30 focus-within:border-emerald-500/50'
+                      )}>
+                        <textarea
+                          ref={textareaRef}
+                          className="flex-1 max-h-40 px-3 py-2.5 text-sm resize-none bg-transparent text-fg placeholder:text-fg-disabled focus:outline-none overflow-y-auto"
+                          style={{ height: 'auto' }}
+                          rows={1}
+                          placeholder={nota ? 'Nota que apenas sua equipe verá...' : 'Mensagem... (ou grave um áudio)'}
+                          value={texto}
+                          onChange={e => {
+                            const val = e.target.value
+                            setTexto(val)
+                            autoGrow()
+                            if (val === '/') {
+                              setShowSnippets(true)
                               setSnippetFiltro('')
                               setSnippetIndex(0)
-                              return
-                            }
-                            if (e.key === 'Escape') {
+                            } else if (val.startsWith('/') && !val.includes(' ')) {
+                              setShowSnippets(true)
+                              setSnippetFiltro(val.slice(1))
+                              setSnippetIndex(0)
+                            } else {
                               setShowSnippets(false)
                               setSnippetFiltro('')
-                              return
                             }
-                          }
-                          if (e.key === 'Enter' && !e.shiftKey && !showSnippets) {
-                            e.preventDefault()
-                            handleEnviar()
-                          }
-                        }}
-                      />
+                          }}
+                          onKeyDown={e => {
+                            // Navegação do snippet com teclado
+                            if (showSnippets) {
+                              const filtrados = SNIPPETS.filter(s =>
+                                snippetFiltro === '' ||
+                                s.atalho.includes(snippetFiltro) ||
+                                s.titulo.toLowerCase().includes(snippetFiltro.toLowerCase())
+                              )
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault()
+                                setSnippetIndex(i => Math.min(i + 1, filtrados.length - 1))
+                                return
+                              }
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault()
+                                setSnippetIndex(i => Math.max(i - 1, 0))
+                                return
+                              }
+                              if (e.key === 'Enter' && filtrados[snippetIndex]) {
+                                e.preventDefault()
+                                setTexto(filtrados[snippetIndex].texto)
+                                setShowSnippets(false)
+                                setSnippetFiltro('')
+                                setSnippetIndex(0)
+                                return
+                              }
+                              if (e.key === 'Escape') {
+                                setShowSnippets(false)
+                                setSnippetFiltro('')
+                                return
+                              }
+                            }
+                            if (e.key === 'Enter' && !e.shiftKey && !showSnippets) {
+                              e.preventDefault()
+                              handleEnviar()
+                            }
+                          }}
+                        />
+
+                        {/* Botão Clips DENTRO da caixa de texto */}
+                        {!nota && (
+                          <div className="flex shrink-0 pb-1 pr-1.5">
+                            <button
+                              onClick={() => fileInputRef.current?.click()}
+                              title="Anexar arquivo"
+                              className="w-8 h-8 rounded-full hover:bg-white/5 text-fg-tertiary hover:text-emerald-400 flex items-center justify-center transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
+                            <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              className="hidden" 
+                              onChange={e => {
+                                if (e.target.files && e.target.files[0]) {
+                                  setArquivo(e.target.files[0])
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
                     )}
 
                     {/* Botão de Envio / Gravar / Parar */}
