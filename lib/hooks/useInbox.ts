@@ -18,6 +18,7 @@ export interface Conversa {
   ultimoHorario: string
   setor: string | null
   assumido_nome: string | null
+  lastInboundAt?: string | null
 }
 
 export interface Mensagem {
@@ -150,6 +151,11 @@ export function useInbox() {
     }
   }, [])
 
+  // Zera o unread localmente de imediato (sem esperar próximo polling)
+  const clearUnreadLocal = useCallback((numero: string) => {
+    setConversas(prev => prev.map(c => c.numero === numero ? { ...c, unread: 0 } : c))
+  }, [])
+
   useEffect(() => {
     fetchConversas()
     intervalRef.current = setInterval(fetchConversas, 5000) // polling 5s
@@ -158,7 +164,7 @@ export function useInbox() {
     }
   }, [fetchConversas])
 
-  return { conversas, loading, error, refetch: fetchConversas }
+  return { conversas, loading, error, refetch: fetchConversas, clearUnreadLocal }
 }
 
 // ── Hook de conversa individual ────────────────────────────────

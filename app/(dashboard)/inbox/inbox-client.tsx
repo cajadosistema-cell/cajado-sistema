@@ -50,6 +50,18 @@ function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '').replace(/^55/, '')
 }
 
+// Formata tempo de espera desde a última mensagem recebida
+function formatarTempoEspera(isoTimestamp: string | null | undefined): { label: string; color: string } | null {
+  if (!isoTimestamp) return null
+  const diff = Date.now() - new Date(isoTimestamp).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 5) return null // menos de 5min não mostra
+  if (mins < 60) return { label: `${mins}min`, color: 'text-emerald-400' }
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 3) return { label: `${hrs}h`, color: 'text-amber-400' }
+  return { label: `${hrs}h`, color: 'text-red-400' }
+}
+
 // ── Ícones SVG inline ──────────────────────────────────────────
 
 function IconSend({ className }: { className?: string }) {
@@ -107,6 +119,8 @@ function ConversaItem({
   ativa: boolean
   onClick: () => void
 }) {
+  const tempoEspera = formatarTempoEspera(conv.lastInboundAt)
+
   return (
     <button
       onClick={onClick}
@@ -137,7 +151,12 @@ function ConversaItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
             <p className={cn('text-sm font-semibold truncate', ativa ? 'text-white' : 'text-fg')}>{conv.nome}</p>
-            <span className="text-[10px] text-fg-disabled/70 shrink-0">{conv.ultimoHorario}</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {tempoEspera && (
+                <span className={cn('text-[9px] font-bold', tempoEspera.color)}>⏱ {tempoEspera.label}</span>
+              )}
+              <span className="text-[10px] text-fg-disabled/70">{conv.ultimoHorario}</span>
+            </div>
           </div>
           <div className="flex items-center justify-between gap-1 mt-0.5">
             <p className="text-xs text-fg-disabled truncate flex-1">{conv.ultimaMensagem}</p>
@@ -516,7 +535,7 @@ export default function InboxClient() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
-  const { conversas, loading, refetch } = useInbox()
+  const { conversas, loading, refetch, clearUnreadLocal } = useInbox()
   const { conversa, refetch: refetchConversa } = useConversaDetalhe(!showConfig ? numeroAtivo : null)
 
   const totalUnread = conversas.reduce((a, c) => a + (c.unread || 0), 0)
@@ -849,7 +868,11 @@ export default function InboxClient() {
               key={c.numero}
               conv={c}
               ativa={c.numero === numeroAtivo && !showConfig}
-              onClick={() => { setNumeroAtivo(c.numero); setShowConfig(false); }}
+              onClick={() => {
+                setNumeroAtivo(c.numero)
+                setShowConfig(false)
+                if (c.unread > 0) clearUnreadLocal(c.numero)
+              }}
             />
           ))}
         </div>

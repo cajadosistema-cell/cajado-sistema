@@ -71,6 +71,7 @@ router.post("/inbox/webhook", webhookSecret, async (req, res) => {
 
   const conv = await registrarNaConversa(numero, mensagem, nome, null);
   conv.unread = (conv.unread || 0) + 1;
+  conv.lastInboundAt = new Date().toISOString(); // timestamp para cálculo de tempo de espera
   console.log(`[INBOX] ${nome}: ${texto || 'Mídia recebida'}`);
 });
 
@@ -145,6 +146,7 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
       ultimoHorario: c.ultimoHorario || "",
       setor: c.setor || null,
       assumido_nome: c.assumido_nome || null,
+      lastInboundAt: c.lastInboundAt || null,
   }));
   // Adiciona as conversas do Webchat (Vivi site)
   let listaVivi = [];
