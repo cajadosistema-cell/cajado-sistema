@@ -515,6 +515,8 @@ export default function InboxClient() {
   const [enviando, setEnviando] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [showSnippets, setShowSnippets] = useState(false)
+  const [snippetIndex, setSnippetIndex] = useState(0)
+  const [snippetFiltro, setSnippetFiltro] = useState('')
   const [showMobileActions, setShowMobileActions] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [prevUnread, setPrevUnread] = useState(0)
@@ -1010,30 +1012,51 @@ export default function InboxClient() {
                   "px-3 py-2.5 border-t flex-shrink-0 transition-colors",
                   nota ? 'border-amber-500/20 bg-amber-500/5' : 'border-border-subtle bg-[#05070a]'
                 )}>
-                  {/* Menu de Snippets */}
-                  {showSnippets && !nota && (
-                    <div className="mb-2 bg-muted border border-border-subtle shadow-xl rounded-xl p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-                      <p className="text-[10px] font-bold text-fg-tertiary px-2 py-1 uppercase tracking-wider">⚡ Respostas Rápidas</p>
-                      <div className="flex flex-col gap-1 mt-1 max-h-48 overflow-y-auto">
-                        {SNIPPETS.map(snip => (
-                          <button
-                            key={snip.atalho}
-                            onClick={() => {
-                              setTexto(snip.texto)
-                              setShowSnippets(false)
-                            }}
-                            className="text-left px-3 py-2 rounded-lg hover:bg-surface-hover/50 transition-colors flex flex-col group"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 rounded">{snip.atalho}</span>
-                              <span className="text-xs font-semibold text-fg group-hover:text-emerald-400">{snip.titulo}</span>
-                            </div>
-                            <span className="text-[10px] text-fg-tertiary truncate mt-0.5">{snip.texto}</span>
-                          </button>
-                        ))}
+                  {/* Menu de Snippets — popover inteligente com filtro e navegação por teclado */}
+                  {showSnippets && !nota && (() => {
+                    const filtrados = SNIPPETS.filter(s =>
+                      snippetFiltro === '' ||
+                      s.atalho.includes(snippetFiltro) ||
+                      s.titulo.toLowerCase().includes(snippetFiltro.toLowerCase())
+                    )
+                    return (
+                      <div className="mb-2 bg-[#0d1117] border border-emerald-500/20 shadow-2xl shadow-emerald-500/5 rounded-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-border-subtle">
+                          <span className="text-emerald-400 font-mono text-xs font-bold">/{snippetFiltro}</span>
+                          <span className="text-[10px] text-fg-disabled">— use ↑↓ para navegar, Enter para inserir, Esc para fechar</span>
+                        </div>
+                        <div className="flex flex-col max-h-52 overflow-y-auto custom-scrollbar">
+                          {filtrados.length === 0 ? (
+                            <p className="text-xs text-fg-disabled text-center py-4">Nenhum atalho encontrado para /{snippetFiltro}</p>
+                          ) : filtrados.map((snip, idx) => (
+                            <button
+                              key={snip.atalho}
+                              onMouseDown={e => e.preventDefault()} // evita blur do textarea
+                              onClick={() => {
+                                setTexto(snip.texto)
+                                setShowSnippets(false)
+                                setSnippetFiltro('')
+                                setSnippetIndex(0)
+                                setTimeout(() => textareaRef.current?.focus(), 0)
+                              }}
+                              className={cn(
+                                'text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors border-b border-border-subtle/30 last:border-0',
+                                idx === snippetIndex
+                                  ? 'bg-emerald-500/10'
+                                  : 'hover:bg-white/[0.04]'
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">{snip.atalho}</span>
+                                <span className="text-xs font-semibold text-fg">{snip.titulo}</span>
+                              </div>
+                              <p className="text-[10px] text-fg-disabled truncate pl-0.5">{snip.texto.substring(0, 80)}...</p>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )
+                  })()}
 
                   {/* Indicador de modo nota */}
                   {nota && (
@@ -1121,11 +1144,52 @@ export default function InboxClient() {
                           const val = e.target.value
                           setTexto(val)
                           autoGrow()
-                          if (val === '/') setShowSnippets(true)
-                          else if (!val.startsWith('/')) setShowSnippets(false)
+                          if (val === '/') {
+                            setShowSnippets(true)
+                            setSnippetFiltro('')
+                            setSnippetIndex(0)
+                          } else if (val.startsWith('/') && !val.includes(' ')) {
+                            setShowSnippets(true)
+                            setSnippetFiltro(val.slice(1))
+                            setSnippetIndex(0)
+                          } else {
+                            setShowSnippets(false)
+                            setSnippetFiltro('')
+                          }
                         }}
                         onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
+                          // Navegação do snippet com teclado
+                          if (showSnippets) {
+                            const filtrados = SNIPPETS.filter(s =>
+                              snippetFiltro === '' ||
+                              s.atalho.includes(snippetFiltro) ||
+                              s.titulo.toLowerCase().includes(snippetFiltro.toLowerCase())
+                            )
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault()
+                              setSnippetIndex(i => Math.min(i + 1, filtrados.length - 1))
+                              return
+                            }
+                            if (e.key === 'ArrowUp') {
+                              e.preventDefault()
+                              setSnippetIndex(i => Math.max(i - 1, 0))
+                              return
+                            }
+                            if (e.key === 'Enter' && filtrados[snippetIndex]) {
+                              e.preventDefault()
+                              setTexto(filtrados[snippetIndex].texto)
+                              setShowSnippets(false)
+                              setSnippetFiltro('')
+                              setSnippetIndex(0)
+                              return
+                            }
+                            if (e.key === 'Escape') {
+                              setShowSnippets(false)
+                              setSnippetFiltro('')
+                              return
+                            }
+                          }
+                          if (e.key === 'Enter' && !e.shiftKey && !showSnippets) {
                             e.preventDefault()
                             handleEnviar()
                           }
