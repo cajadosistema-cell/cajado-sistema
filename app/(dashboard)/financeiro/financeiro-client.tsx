@@ -49,6 +49,7 @@ type Lancamento = {
   conta_id: string
   categoria_id?: string | null
   observacoes?: string | null
+  is_fixo?: boolean
 }
 
 type CategoriaFinanceira = {
@@ -385,6 +386,7 @@ function ModalLancamento({
     total_parcelas: lancamentoEdit?.total_parcelas?.toString() ?? '1',
     observacoes: '',
     taxa_cartao: '0',
+    is_fixo: lancamentoEdit?.is_fixo ?? false,
   })
 
   // Quando muda forma de pagamento, pre-seleciona conta adequada
@@ -453,6 +455,7 @@ function ModalLancamento({
         data_competencia: form.data_competencia,
         categoria_id: form.categoria_id || null,
         total_parcelas: parcelas,
+        is_fixo: form.is_fixo,
       } as any
 
       if (lancamentoEdit) {
@@ -554,10 +557,25 @@ function ModalLancamento({
               <label className="label">Parcelas</label>
               <input className="input mt-1" type="number" min="1" max="60"
                 value={form.total_parcelas}
-                disabled={!!lancamentoEdit}
+                disabled={!!lancamentoEdit || form.is_fixo}
                 onChange={e => setForm(f => ({ ...f, total_parcelas: e.target.value }))} />
             </div>
           </div>
+          
+          {form.tipo === 'despesa' && (
+            <div className="flex items-center gap-2 mt-2">
+              <input 
+                type="checkbox" 
+                id="is_fixo" 
+                checked={form.is_fixo}
+                onChange={e => setForm(f => ({ ...f, is_fixo: e.target.checked, total_parcelas: e.target.checked ? '1' : f.total_parcelas }))}
+                className="w-4 h-4 rounded border-border-subtle bg-page text-emerald-500 focus:ring-emerald-500/30"
+              />
+              <label htmlFor="is_fixo" className="text-xs text-fg-secondary cursor-pointer">
+                Marcar como Gasto Fixo (Recorrente todo mês)
+              </label>
+            </div>
+          )}
           
           {form.tipo === 'receita' && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
@@ -851,41 +869,48 @@ export default function FinanceiroClient() {
         />
       )}
 
-      {/* ── ABA LANÇAMENTOS (split: avulsos | fixos+parcelas) ── */}
+      {/* ── ABA LANÇAMENTOS (split: avulsos | fixos | parcelas) ── */}
       {view === 'lancamentos' && (() => {
         const mes = new Date().toISOString().substring(0, 7)
         const doMes = lancamentos.filter(l => l.data_competencia?.startsWith(mes) && l.tipo === 'despesa')
-        const avulsos = doMes.filter(l => !l.total_parcelas || l.total_parcelas <= 1)
-        const fixosParcelados = lancamentos.filter(l =>
-          l.tipo === 'despesa' && (l.total_parcelas && l.total_parcelas > 1)
-        ).slice(0, 50)
+        
+        const avulsos = doMes.filter(l => (!l.total_parcelas || l.total_parcelas <= 1) && !l.is_fixo)
+        const gastosFixos = lancamentos.filter(l => l.tipo === 'despesa' && l.is_fixo).slice(0, 50)
+        const gastosParcelados = lancamentos.filter(l => l.tipo === 'despesa' && (l.total_parcelas && l.total_parcelas > 1) && !l.is_fixo).slice(0, 50)
+        
         const totalAvulsos = avulsos.reduce((s, l) => s + l.valor, 0)
-        const totalFixos   = fixosParcelados.reduce((s, l) => s + l.valor, 0)
+        const totalFixos   = gastosFixos.reduce((s, l) => s + l.valor, 0)
+        const totalParcelados = gastosParcelados.reduce((s, l) => s + l.valor, 0)
+        
         const getNomeConta = (id: string) => contas.find(c => c.id === id)?.nome || '—'
         const rowCls = 'flex items-center justify-between py-2 px-3 rounded-xl hover:bg-muted/50 transition-colors group'
         const valCls = (l: Lancamento) => l.status === 'validado' ? 'text-fg-disabled line-through' : 'text-red-400 font-semibold'
         return (
           <div className="space-y-4">
             {/* KPIs */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-page border border-border-subtle rounded-xl p-4">
                 <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💸 Avulsos do Mês</p>
                 <p className="text-2xl font-bold text-red-400">{formatCurrency(totalAvulsos)}</p>
                 <p className="text-xs text-fg-disabled mt-0.5">{avulsos.length} lançamento(s)</p>
               </div>
               <div className="bg-page border border-border-subtle rounded-xl p-4">
-                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">🔁 Fixos & Parcelados</p>
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">📌 Gastos Fixos</p>
                 <p className="text-2xl font-bold text-amber-400">{formatCurrency(totalFixos)}</p>
-                <p className="text-xs text-fg-disabled mt-0.5">{fixosParcelados.length} lançamento(s)</p>
+                <p className="text-xs text-fg-disabled mt-0.5">{gastosFixos.length} lançamento(s)</p>
+              </div>
+              <div className="bg-page border border-border-subtle rounded-xl p-4">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💳 Parcelados</p>
+                <p className="text-2xl font-bold text-blue-400">{formatCurrency(totalParcelados)}</p>
+                <p className="text-xs text-fg-disabled mt-0.5">{gastosParcelados.length} lançamento(s)</p>
               </div>
             </div>
             {/* Split columns */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Coluna: avulsos do mês */}
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-red-500/5">
-                  <h3 className="text-sm font-semibold text-fg">💸 Gastos do Mês</h3>
-                  <span className="text-xs text-fg-tertiary">{new Date().toLocaleString('pt-BR',{month:'long',year:'numeric'})}</span>
+                  <h3 className="text-sm font-semibold text-fg">💸 Gastos Avulsos</h3>
                 </div>
                 <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
                   {avulsos.length === 0
@@ -909,23 +934,53 @@ export default function FinanceiroClient() {
                     ))}
                 </div>
               </div>
-              {/* Coluna: fixos + parcelados */}
+              
+              {/* Coluna: gastos fixos */}
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
-                  <h3 className="text-sm font-semibold text-fg">🔁 Fixos & Parcelados</h3>
-                  <span className="text-xs text-fg-tertiary">Todos os meses</span>
+                  <h3 className="text-sm font-semibold text-fg">📌 Gastos Fixos</h3>
                 </div>
                 <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
-                  {fixosParcelados.length === 0
-                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo ou parcelado.</p>
-                    : fixosParcelados.map(l => (
+                  {gastosFixos.length === 0
+                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo registrado.</p>
+                    : gastosFixos.map(l => (
+                      <div key={l.id} className={rowCls}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-fg truncate">{l.descricao}</p>
+                          <div className="flex gap-2 items-center">
+                            <p className="text-[10px] text-fg-disabled">{getNomeConta(l.conta_id)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className={`text-xs ${valCls(l)}`}>{formatCurrency(l.valor)}</span>
+                          {l.status !== 'validado' && (
+                            <button onClick={() => validarLancamento(l.id, l.descricao)}
+                              className="hidden group-hover:block text-[10px] text-emerald-400 hover:text-emerald-300">✓</button>
+                          )}
+                          <button onClick={() => handleDeleteLancamento(l.id)}
+                            className="hidden group-hover:block text-[10px] text-fg-disabled hover:text-red-400 md:block">✕</button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Coluna: parcelados */}
+              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-blue-500/5">
+                  <h3 className="text-sm font-semibold text-fg">💳 Parcelados</h3>
+                </div>
+                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
+                  {gastosParcelados.length === 0
+                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto parcelado.</p>
+                    : gastosParcelados.map(l => (
                       <div key={l.id} className={rowCls}>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-fg truncate">{l.descricao}</p>
                           <div className="flex gap-2 items-center">
                             <p className="text-[10px] text-fg-disabled">{getNomeConta(l.conta_id)}</p>
                             {l.total_parcelas && l.total_parcelas > 1 && (
-                              <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded-full">
+                              <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded-full">
                                 {l.parcela_atual}/{l.total_parcelas}
                               </span>
                             )}

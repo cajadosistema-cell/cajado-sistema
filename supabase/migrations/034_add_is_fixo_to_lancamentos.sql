@@ -1,0 +1,1 @@
+ALTER TABLE public.lancamentos ADD COLUMN IF NOT EXISTS is_fixo BOOLEAN DEFAULT false;
