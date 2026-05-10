@@ -1247,6 +1247,12 @@ export default function InboxClient() {
                       {salvandoNota ? 'Salvando...' : '💾 Salvar nota'}
                     </button>
                   </div>
+
+                  <div className="pt-2 border-t border-border-subtle">
+                    <a href="/cajado" className="block w-full text-center text-xs text-amber-400/70 hover:text-amber-400 font-semibold transition-colors py-2 bg-amber-500/5 hover:bg-amber-500/10 rounded-lg">
+                      Ver perfil completo no CRM →
+                    </a>
+                  </div>
                 </div>
               ) : abaAtiva === 'historico' && numeroAtivo ? (
                 <PainelCRM numero={numeroAtivo} nome={conversas.find(c => c.numero === numeroAtivo)?.nome} />
