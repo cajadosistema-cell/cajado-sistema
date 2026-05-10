@@ -1279,14 +1279,17 @@ export default function InboxClient() {
                           <IconNote className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                          title="Inserir Emoji"
+                          onClick={() => {
+                            if (showEmojiPicker) setTimeout(() => textareaRef.current?.focus(), 0)
+                            setShowEmojiPicker(!showEmojiPicker)
+                          }}
+                          title={showEmojiPicker ? "Fechar Emojis" : "Inserir Emoji"}
                           className={cn(
-                            "flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary hover:text-amber-400 flex items-center justify-center transition-colors text-lg",
-                            showEmojiPicker && "text-amber-400 border-amber-500/30 bg-surface-hover"
+                            "flex-shrink-0 w-10 h-10 rounded-xl bg-muted hover:bg-surface-hover border border-border-subtle text-fg-tertiary flex items-center justify-center transition-colors text-lg",
+                            showEmojiPicker ? "text-red-400 border-red-500/30 bg-red-500/10 hover:text-red-300" : "hover:text-amber-400"
                           )}
                         >
-                          😀
+                          {showEmojiPicker ? "✕" : "😀"}
                         </button>
                       </div>
                     )}
@@ -1296,23 +1299,15 @@ export default function InboxClient() {
                       <>
                         <div 
                           className="fixed inset-0 z-40" 
-                          onClick={() => setShowEmojiPicker(false)}
+                          onClick={() => {
+                            setShowEmojiPicker(false)
+                            setTimeout(() => textareaRef.current?.focus(), 0)
+                          }}
                         />
-                        <div className="absolute bottom-[80px] left-3 z-50 shadow-2xl rounded-xl border border-border-subtle overflow-hidden bg-[#18191a]">
-                          <div className="flex justify-between items-center px-3 py-2 border-b border-border-subtle">
-                            <span className="text-xs font-semibold text-fg-secondary">Emojis</span>
-                            <button 
-                              onClick={() => {
-                                setShowEmojiPicker(false);
-                                setTimeout(() => textareaRef.current?.focus(), 0);
-                              }}
-                              className="text-fg-tertiary hover:text-red-400 text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors"
-                            >
-                              ✕
-                            </button>
-                          </div>
+                        <div className="absolute bottom-[60px] sm:bottom-[70px] left-2 sm:left-3 z-50 shadow-2xl rounded-xl overflow-hidden animate-in fade-in slide-in-from-bottom-4">
                           <EmojiPicker 
                             theme={Theme.DARK} 
+                            height={350}
                             onEmojiClick={(emojiData) => {
                               setTexto(prev => prev + emojiData.emoji);
                               setTimeout(() => textareaRef.current?.focus(), 0);
