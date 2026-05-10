@@ -837,6 +837,25 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
         </div>
       </div>
 
+      {subAba === 'lancamentos' && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          <button onClick={() => setCartaoSel('todos')}
+            className={cn('shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all',
+              cartaoSel === 'todos' ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'border-border-subtle text-fg-tertiary hover:text-fg'
+            )}>
+            🗂️ Todos ({contas.length})
+          </button>
+          {contas.map(c => (
+            <button key={c.id} onClick={() => setCartaoSel(c.id)}
+              className={cn('shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5',
+                cartaoSel === c.id ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'border-border-subtle text-fg-tertiary hover:text-fg'
+              )}>
+              💳 {c.nome_cartao || c.nome}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         {[
