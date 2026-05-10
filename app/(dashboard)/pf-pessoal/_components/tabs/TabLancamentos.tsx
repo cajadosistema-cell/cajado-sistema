@@ -70,70 +70,95 @@ export function TabLancamentos({ gastos, receitas, onUpdate, onNovoGasto, onNova
         </div>
       </div>
 
-      {/* Lista */}
-      <div className="bg-page border border-border-subtle rounded-2xl overflow-hidden">
-        {filtrados.length === 0 ? (
-          <div className="p-16 text-center">
-            <p className="text-3xl mb-3">📋</p>
-            <p className="text-sm text-fg-tertiary">Nenhum lançamento encontrado.</p>
-            <div className="flex gap-2 justify-center mt-4">
-              <button onClick={onNovoGasto} className="btn-secondary text-xs">+ Registrar gasto</button>
-              <button onClick={onNovaReceita} className="btn-primary text-xs">+ Registrar receita</button>
-            </div>
+      {/* Listas separadas em colunas */}
+      {filtrados.length === 0 ? (
+        <div className="bg-page border border-border-subtle rounded-2xl overflow-hidden p-16 text-center">
+          <p className="text-3xl mb-3">📋</p>
+          <p className="text-sm text-fg-tertiary">Nenhum lançamento encontrado.</p>
+          <div className="flex gap-2 justify-center mt-4">
+            <button onClick={onNovoGasto} className="btn-secondary text-xs">+ Registrar gasto</button>
+            <button onClick={onNovaReceita} className="btn-primary text-xs">+ Registrar receita</button>
           </div>
-        ) : (
-          <div className="divide-y divide-border-subtle/50">
-            {filtrados.map(item => {
-              const isGasto = item._tipo === 'gasto'
-              const catInfo = isGasto
-                ? CATEGORIAS_GASTO[item.categoria]
-                : CATEGORIAS_RECEITA[item.categoria]
-
-              return (
-                <div key={item.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/20 transition-colors group">
-                  {/* Ícone categoria */}
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0 ${
-                    isGasto ? 'bg-red-500/10' : 'bg-emerald-500/10'
-                  }`}>
-                    {catInfo?.icon ?? (isGasto ? '💸' : '💰')}
-                  </div>
-
-                  {/* Descrição + categoria */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-fg truncate">{item.descricao}</p>
-                    <p className="text-xs text-fg-tertiary">
-                      {catInfo?.label ?? item.categoria} · {formatData(item.data)}
-                      {item.recorrente && ' · 🔄 Recorrente'}
-                    </p>
-                  </div>
-
-                  {/* Valor */}
-                  <p className={`text-sm font-semibold shrink-0 ${isGasto ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {isGasto ? '-' : '+'}{formatCurrency(item.valor)}
-                  </p>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => isGasto ? onEditGasto(item as any) : onEditReceita(item as any)}
-                      className="text-zinc-700 hover:text-blue-400 text-sm transition-colors opacity-0 group-hover:opacity-100"
-                      title="Editar"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => isGasto ? excluirGasto(item.id) : excluirReceita(item.id)}
-                      className="text-zinc-700 hover:text-red-400 text-sm transition-colors opacity-0 group-hover:opacity-100"
-                      title="Excluir"
-                    >
-                      ✕
-                    </button>
+        </div>
+      ) : (() => {
+        const avulsos = filtrados.filter(item => !item.recorrente && (!(item as any).parcelas || (item as any).parcelas <= 1))
+        const fixos = filtrados.filter(item => item.recorrente)
+        const parcelados = filtrados.filter(item => !item.recorrente && (item as any).parcelas && (item as any).parcelas > 1)
+        
+        const renderItem = (item: any) => {
+          const isGasto = item._tipo === 'gasto'
+          const catInfo = isGasto ? CATEGORIAS_GASTO[item.categoria] : CATEGORIAS_RECEITA[item.categoria]
+          
+          return (
+            <div key={item.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-muted/50 transition-colors group">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                  isGasto ? 'bg-red-500/10' : 'bg-emerald-500/10'
+                }`}>
+                  {catInfo?.icon ?? (isGasto ? '💸' : '💰')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-fg truncate">{item.descricao}</p>
+                  <div className="flex gap-2 items-center">
+                    <p className="text-[10px] text-fg-disabled">{catInfo?.label ?? item.categoria} · {formatData(item.data)}</p>
+                    {item.parcelas && item.parcelas > 1 && (
+                      <span className="text-[9px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded-full">
+                        Em {item.parcelas}x
+                      </span>
+                    )}
                   </div>
                 </div>
-              )
-            })}
+              </div>
+              <div className="flex items-center gap-2 ml-2 shrink-0">
+                <p className={`text-xs font-semibold ${isGasto ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {isGasto ? '-' : '+'}{formatCurrency(item.valor)}
+                </p>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => isGasto ? onEditGasto(item as any) : onEditReceita(item as any)} className="text-[10px] text-blue-400 hover:text-blue-300">✏️</button>
+                  <button onClick={() => isGasto ? excluirGasto(item.id) : excluirReceita(item.id)} className="text-[10px] text-red-400 hover:text-red-300">✕</button>
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Coluna: Avulsos */}
+            <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-emerald-500/5">
+                <h3 className="text-sm font-semibold text-fg">💸 Avulsos</h3>
+                <span className="text-xs text-fg-tertiary">{avulsos.length} itens</span>
+              </div>
+              <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+                {avulsos.length === 0 ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item avulso.</p> : avulsos.map(renderItem)}
+              </div>
+            </div>
+
+            {/* Coluna: Fixos / Recorrentes */}
+            <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
+                <h3 className="text-sm font-semibold text-fg">📌 Fixos & Recorrentes</h3>
+                <span className="text-xs text-fg-tertiary">{fixos.length} itens</span>
+              </div>
+              <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+                {fixos.length === 0 ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item fixo.</p> : fixos.map(renderItem)}
+              </div>
+            </div>
+
+            {/* Coluna: Parcelados */}
+            <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-blue-500/5">
+                <h3 className="text-sm font-semibold text-fg">💳 Parcelados</h3>
+                <span className="text-xs text-fg-tertiary">{parcelados.length} itens</span>
+              </div>
+              <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+                {parcelados.length === 0 ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item parcelado.</p> : parcelados.map(renderItem)}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        )
+      })()}
     </div>
   )
 }

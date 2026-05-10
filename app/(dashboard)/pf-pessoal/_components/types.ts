@@ -10,6 +10,7 @@ export type GastoPessoal = {
   data: string
   recorrente: boolean
   notas: string | null
+  parcelas?: number | null
   created_at: string
 }
 
