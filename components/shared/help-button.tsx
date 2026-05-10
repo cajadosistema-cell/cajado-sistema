@@ -83,8 +83,8 @@ export function HelpButton() {
       <button
         onClick={() => setOpen(true)}
         className={cn(
-          'fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50',
-          'w-11 h-11 rounded-full flex items-center justify-center',
+          'hidden md:flex fixed bottom-6 right-6 z-50',
+          'w-11 h-11 rounded-full items-center justify-center',
           'bg-gradient-to-br from-amber-500 to-amber-600',
           'shadow-lg shadow-amber-500/30 border border-amber-400/30',
           'text-black font-black text-lg',
