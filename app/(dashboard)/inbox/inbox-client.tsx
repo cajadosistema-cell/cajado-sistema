@@ -8,7 +8,7 @@ import {
   useInbox, useConversaDetalhe,
   enviarMensagem, enviarNota, toggleBot,
   humanouAssumiu, reativarBot, mudarEtiqueta, mudarSetor,
-  loginInbox,
+  loginInbox, fetchContactPhoto,
   type Conversa,
 } from '@/lib/hooks/useInbox'
 
@@ -110,6 +110,9 @@ function IconBack({ className }: { className?: string }) {
 
 // ── Componentes menores ────────────────────────────────────────
 
+// Cache de fotos no client (evita refetch para a mesma conversa na sessão)
+const fotaoCacheClient: Record<string, string | null> = {}
+
 function ConversaItem({
   conv,
   ativa,
@@ -120,6 +123,19 @@ function ConversaItem({
   onClick: () => void
 }) {
   const tempoEspera = formatarTempoEspera(conv.lastInboundAt)
+  const [foto, setFoto] = useState<string | null | undefined>(undefined) // undefined = carregando
+
+  useEffect(() => {
+    if (conv.numero.match(/[a-zA-Z-]/)) return // pula Webchat
+    if (fotaoCacheClient[conv.numero] !== undefined) {
+      setFoto(fotaoCacheClient[conv.numero])
+      return
+    }
+    fetchContactPhoto(conv.numero).then(url => {
+      fotaoCacheClient[conv.numero] = url
+      setFoto(url)
+    })
+  }, [conv.numero])
 
   return (
     <button
@@ -136,16 +152,28 @@ function ConversaItem({
         <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-gradient-to-b from-emerald-400 to-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
       )}
       <div className="flex items-center gap-3 pl-1">
-        {/* Avatar com gradiente e glow */}
+        {/* Avatar com foto real ou gradiente+inicial */}
         <div
           className={cn(
-            'w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-md',
+            'w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-md overflow-hidden',
             conv.botOn !== false
-              ? 'bg-gradient-to-br from-emerald-500/30 to-emerald-700/20 text-emerald-300 ring-1 ring-emerald-500/40 shadow-emerald-500/10'
-              : 'bg-gradient-to-br from-amber-500/30 to-amber-700/20 text-amber-300 ring-1 ring-amber-500/40 shadow-amber-500/10'
+              ? 'ring-1 ring-emerald-500/40 shadow-emerald-500/10'
+              : 'ring-1 ring-amber-500/40 shadow-amber-500/10'
           )}
         >
-          {conv.nome?.[0]?.toUpperCase() || '#'}
+          {foto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={foto} alt={conv.nome} className="w-full h-full object-cover" />
+          ) : (
+            <div className={cn(
+              'w-full h-full flex items-center justify-center',
+              conv.botOn !== false
+                ? 'bg-gradient-to-br from-emerald-500/30 to-emerald-700/20 text-emerald-300'
+                : 'bg-gradient-to-br from-amber-500/30 to-amber-700/20 text-amber-300'
+            )}>
+              {conv.nome?.[0]?.toUpperCase() || '#'}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">

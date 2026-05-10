@@ -230,6 +230,15 @@ export async function mudarSetor(numero: string, setor: string) {
   return apiPatch(`/inbox/conversas/${numero}/setor`, { setor })
 }
 
+export async function fetchContactPhoto(numero: string): Promise<string | null> {
+  try {
+    const data = await apiGet<{ url: string | null }>(`/inbox/contact-photo/${numero}`)
+    return data.url
+  } catch {
+    return null
+  }
+}
+
 export async function buscarTimes(): Promise<Time[]> {
   return apiGet('/times')
 }

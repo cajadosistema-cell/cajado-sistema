@@ -183,6 +183,42 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
   res.json([...lista, ...listaVivi]);
 });
 
+// ── Cache de fotos de perfil (evita bater na API repetidamente) ──
+const fotosCache = new Map(); // numero -> { url, ts }
+const FOTO_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
+
+router.get("/inbox/contact-photo/:numero", authMiddleware, async (req, res) => {
+  const { numero } = req.params;
+
+  // Verifica cache
+  const cached = fotosCache.get(numero);
+  if (cached && (Date.now() - cached.ts) < FOTO_CACHE_TTL) {
+    return res.json({ url: cached.url });
+  }
+
+  if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+    return res.json({ url: null });
+  }
+
+  // Detecta qual instância está usando este número
+  const conv = conversas.get(numero);
+  const instanceName = conv?.instanceName || "botwhatsapp01";
+  const jid = numero.includes("@") ? numero : `${numero}@s.whatsapp.net`;
+
+  try {
+    const resp = await axios.get(
+      `${EVOLUTION_URL}/chat/fetchProfile/${instanceName}`,
+      { params: { number: jid }, headers: { apikey: EVOLUTION_KEY }, timeout: 5000 }
+    );
+    const url = resp.data?.profilePictureUrl || resp.data?.picture || null;
+    fotosCache.set(numero, { url, ts: Date.now() });
+    return res.json({ url });
+  } catch {
+    fotosCache.set(numero, { url: null, ts: Date.now() });
+    return res.json({ url: null });
+  }
+});
+
 router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
   const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
   const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.empresa_id === ADMIN_DEFAULT.empresa_id || req.user.empresa_id === "empresa-padrao";
