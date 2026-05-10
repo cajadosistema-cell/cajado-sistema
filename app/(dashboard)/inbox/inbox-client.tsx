@@ -11,7 +11,10 @@ import {
   loginInbox, fetchContactPhoto,
   type Conversa,
 } from '@/lib/hooks/useInbox'
-import EmojiPicker, { Theme } from 'emoji-picker-react'
+import dynamic from 'next/dynamic'
+import { Theme } from 'emoji-picker-react'
+
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false })
 
 import ConfiguracoesBotClient from '../configuracoes/bot/bot-client'
 
