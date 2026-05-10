@@ -950,18 +950,39 @@ export default function InboxClient() {
                       >
                         <IconBack className="w-5 h-5" />
                       </button>
-                      {/* Avatar no header */}
+                      {/* Avatar no header com foto real */}
                       <div className={cn(
-                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold',
+                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold overflow-hidden',
                         conversa?.botOn !== false
-                          ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/40'
-                          : 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40'
+                          ? 'ring-1 ring-emerald-500/40'
+                          : 'ring-1 ring-amber-500/40'
                       )}>
-                        {conversa?.nome?.[0]?.toUpperCase() || '#'}
+                        {fotaoCacheClient[numeroAtivo!] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={fotaoCacheClient[numeroAtivo!]!} alt="foto" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className={cn(
+                            'w-full h-full flex items-center justify-center',
+                            conversa?.botOn !== false ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                          )}>
+                            {conversa?.nome?.[0]?.toUpperCase() || '#'}
+                          </div>
+                        )}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-fg truncate">{conversa?.nome || numeroAtivo}</p>
-                        <p className="text-[10px] text-fg-tertiary font-mono">{numeroAtivo}</p>
+                        {(conversa as any)?.isTyping ? (
+                          <p className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                            <span className="flex gap-0.5">
+                              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                            digitando...
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-fg-tertiary font-mono">{numeroAtivo}</p>
+                        )}
                       </div>
                     </div>
 

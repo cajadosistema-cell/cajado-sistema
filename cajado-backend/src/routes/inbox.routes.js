@@ -18,10 +18,36 @@ const webhookSecret = (req, res, next) => {
   next();
 };
 
+// ── Mapa de status "digitando" por número (expira em 8s) ────────
+const typingStatus = new Map(); // numero -> timestamp
+
 router.post("/inbox/webhook", webhookSecret, async (req, res) => {
   res.sendStatus(200);
   const data = req.body;
-  if (data?.event?.toLowerCase() !== "messages.upsert") return;
+  const event = data?.event?.toLowerCase();
+
+  // ── Evento: digitando (presence.update) ──────────────────────
+  if (event === 'presence.update' || event === 'presence') {
+    const presences = data?.data?.presences || {};
+    for (const jid of Object.keys(presences)) {
+      const numero = jid.split('@')[0];
+      const presence = presences[jid]?.lastKnownPresence;
+      if (presence === 'composing' || presence === 'recording') {
+        typingStatus.set(numero, Date.now());
+        // Auto-limpa após 8s (caso o webhook de parar não chegue)
+        setTimeout(() => {
+          if (typingStatus.get(numero) && Date.now() - typingStatus.get(numero) >= 7500) {
+            typingStatus.delete(numero);
+          }
+        }, 8000);
+      } else {
+        typingStatus.delete(numero);
+      }
+    }
+    return;
+  }
+
+  if (event !== 'messages.upsert') return;
   const msg = data?.data;
   if (!msg?.key || msg.key.fromMe) return;
   const numero = msg.key.remoteJid?.split("@")[0];
@@ -281,8 +307,11 @@ router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
       supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: conv.empresa_id, dados: conv }).then(()=>{});
     }
   }
-  
-  res.json({ ...conv, botOn: !botPausado.has(numero) });
+
+  // Inclui status de digitando na resposta (TTL de 8s)
+  const isTyping = typingStatus.has(numero) && (Date.now() - typingStatus.get(numero)) < 8000;
+
+  res.json({ ...conv, botOn: !botPausado.has(numero), isTyping });
 });
 
 router.post("/inbox/enviar", authMiddleware, async (req, res) => {
