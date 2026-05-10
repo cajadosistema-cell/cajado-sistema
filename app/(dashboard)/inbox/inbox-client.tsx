@@ -497,6 +497,7 @@ export default function InboxClient() {
   const [showConfig, setShowConfig] = useState(false)
   const [showSnippets, setShowSnippets] = useState(false)
   const [showMobileActions, setShowMobileActions] = useState(false)
+  const [showTransferModal, setShowTransferModal] = useState(false)
   const [prevUnread, setPrevUnread] = useState(0)
   const [abaAtiva, setAbaAtiva] = useState<'info' | 'historico'>('info')
   const [notaAtendente, setNotaAtendente] = useState('')
@@ -1273,7 +1274,7 @@ export default function InboxClient() {
                   ✋ Assumir conversa
                 </button>
                 <button
-                  onClick={async () => { const s = prompt('Setor destino: (vendas, suporte, financeiro, cursos, reciclagem, mopp)'); if (s) { await mudarSetor(numeroAtivo, s); await refetch(); await refetchConversa(); } }}
+                  onClick={() => setShowTransferModal(true)}
                   className="w-full py-2 text-xs font-bold rounded-lg bg-muted hover:bg-surface-hover text-fg-secondary border border-border-subtle transition-all">
                   → Transferir setor
                 </button>
@@ -1286,6 +1287,51 @@ export default function InboxClient() {
             )}
           </div>
         </>
+      )}
+
+      {/* Modal de Transferência de Setor */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) setShowTransferModal(false) }}>
+          <div className="bg-page border border-border-subtle rounded-xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-border-subtle flex items-center justify-between">
+              <h2 className="text-sm font-bold text-fg">Transferir Setor</h2>
+              <button onClick={() => setShowTransferModal(false)} className="text-fg-tertiary hover:text-fg text-lg leading-none">×</button>
+            </div>
+            <div className="p-4 space-y-2 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              <p className="text-xs text-fg-secondary mb-3">Escolha o setor de destino para <strong>{conversa?.nome || numeroAtivo}</strong>:</p>
+              {[
+                { id: 'vendas', nome: 'Vendas' },
+                { id: 'suporte', nome: 'Suporte' },
+                { id: 'financeiro', nome: 'Financeiro' },
+                { id: 'cursos', nome: 'Cursos' },
+                { id: 'reciclagem', nome: 'Reciclagem CNH' },
+                { id: 'mopp', nome: 'MOPP' },
+                { id: 'transporte_escolar', nome: 'Transp. Escolar' },
+                { id: '', nome: 'Pendente / Sem Setor' }
+              ].map(s => (
+                <button key={s.id}
+                  onClick={async () => {
+                    if (numeroAtivo) {
+                      await mudarSetor(numeroAtivo, s.id);
+                      await refetch();
+                      await refetchConversa();
+                    }
+                    setShowTransferModal(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-4 py-3 rounded-lg text-xs font-semibold transition-colors border",
+                    conversa?.setor === s.id
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                      : "bg-muted hover:bg-surface-hover border-border-subtle text-fg"
+                  )}
+                >
+                  {s.nome}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
