@@ -699,6 +699,47 @@ function ModalDetalheCartao({
   )
 }
 
+// ── Modal Fatura Prevista ────────────────────────────────────────
+function ModalFaturaPrevista({ conta, mesSel, faturas, onClose, onSave }: { conta: any; mesSel: string; faturas: any[]; onClose: () => void; onSave: () => void }) {
+  const supabase = createClient()
+  const faturaManual = faturas.find(f => f.conta_id === conta.id && f.mes_referencia === mesSel)
+  const [valor, setValor] = useState(faturaManual?.valor_fechado ? String(faturaManual.valor_fechado) : '')
+  const [loading, setLoading] = useState(false)
+  const handleSave = async () => {
+    setLoading(true)
+    const val = parseFloat(valor.replace(',', '.'))
+    if (isNaN(val)) {
+      await (supabase.from('faturas_cartoes') as any).delete().match({ conta_id: conta.id, mes_referencia: mesSel })
+    } else {
+      await (supabase.from('faturas_cartoes') as any).upsert({
+        conta_id: conta.id,
+        mes_referencia: mesSel,
+        valor_fechado: val
+      }, { onConflict: 'conta_id,mes_referencia' })
+    }
+    setLoading(false); onSave(); onClose()
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+        <h2 className="text-sm font-bold text-fg">📊 Fatura Prevista — {conta.nome_cartao || conta.nome}</h2>
+        <p className="text-xs text-fg-tertiary">Insira o valor que você espera pagar na fatura antes do fechamento. O sistema confrontará com os lançamentos reais.</p>
+        <div>
+          <label className="label">Valor da Fatura Prevista (R$)</label>
+          <input className="input mt-1 w-full" type="number" step="0.01" placeholder="Ex: 2500.00"
+            value={valor} onChange={e => setValor(e.target.value)} />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handleSave} disabled={loading} className="btn-primary">
+            {loading ? 'Salvando...' : '✅ Definir'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Tab Principal ───────────────────────────────────────────────
 export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   userId: string
@@ -717,6 +758,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   const [modalLimite, setModalLimite] = useState<any>(null)
   const [modalEditar, setModalEditar] = useState<any>(null)
   const [modalDetalhe, setModalDetalhe] = useState<any>(null)
+  const [modalFatura, setModalFatura] = useState<any>(null)
   const [busca, setBusca] = useState('')
   const mesAtual = new Date().toISOString().substring(0, 7)
   const [mesSel, setMesSel] = useState(mesAtual)
@@ -796,19 +838,52 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         {[
-          { label: `Gastos (${labelMes(mesSel)})`, v: totalGastosFiltrados, cor: 'text-red-400' },
-          { label: 'Recebido/Estorno', v: totalReceitasFiltrados, cor: 'text-emerald-400' },
-          { label: 'Cartões PF', v: contas.length, cor: 'text-amber-400', isNum: true },
+          { label: `Gastos (${labelMes(mesSel)})`, v: totalGastosFiltrados, cor: 'text-red-400', bg: 'bg-red-500/10' },
+          { label: 'Recebido/Estorno', v: totalReceitasFiltrados, cor: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+          { label: 'Cartões PF', v: contas.length, cor: 'text-amber-400', bg: 'bg-amber-500/10', isNum: true },
         ].map(k => (
-          <div key={k.label} className="bg-surface border border-white/5 rounded-xl p-4">
+          <div key={k.label} className={`${k.bg} border border-white/5 rounded-xl p-3 sm:p-4`}>
             <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">{k.label}</p>
             <p className={`text-xl font-bold ${k.cor}`}>
               {k.isNum ? k.v : fmt(k.v as number)}
             </p>
           </div>
         ))}
+        {/* Confronto Fatura Prevista / Fechada */}
+        {cartaoSel !== 'todos' && (() => {
+          const cartao = contas.find(c => c.id === cartaoSel)
+          const faturaObj = faturas.find(f => f.conta_id === cartaoSel && f.mes_referencia === mesSel)
+          const prev = faturaObj?.valor_fechado
+          if (prev == null) return (
+            <div className="bg-muted/30 border border-border-subtle rounded-xl p-3 sm:p-4 flex flex-col justify-between">
+              <p className="text-[10px] text-fg-tertiary uppercase tracking-wider mb-1">📊 Fatura do Mês (Manual)</p>
+              <button onClick={() => setModalFatura(cartao)}
+                className="text-xs text-amber-400 hover:text-amber-300 text-left">
+                + Definir valor p/ {labelMes(mesSel)}
+              </button>
+            </div>
+          )
+          const totalDespesas = totalGastosFiltrados - totalReceitasFiltrados
+          const diff = totalDespesas - prev
+          const pct = Math.min((totalDespesas / prev) * 100, 999)
+          return (
+            <div className={`border rounded-xl p-3 sm:p-4 ${diff > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-wider">📊 Fatura do Mês (Manual)</p>
+                <button onClick={() => setModalFatura(cartao)} className="text-[9px] text-fg-disabled hover:text-fg">✏️</button>
+              </div>
+              <p className="text-lg font-bold text-fg mt-1">{fmt(prev)}</p>
+              <p className={`text-xs font-semibold mt-0.5 ${diff > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {diff > 0 ? `⚠️ +${fmt(diff)} acima` : `✅ ${fmt(Math.abs(diff))} abaixo`}
+              </p>
+              <div className="mt-1.5 w-full bg-muted rounded-full h-1">
+                <div className="h-1 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: diff > 0 ? '#ef4444' : '#10b981' }} />
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* ── Comparativo Mensal Geral dos Cartões PF ── */}
@@ -1034,6 +1109,18 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
             setModalDetalhe(null)
           }}
           onFaturaUpdate={carregarContas}
+        />
+      )}
+      {modalFatura && (
+        <ModalFaturaPrevista
+          conta={modalFatura}
+          mesSel={mesSel}
+          faturas={faturas}
+          onClose={() => setModalFatura(null)}
+          onSave={() => {
+            carregarContas()
+            setModalFatura(null)
+          }}
         />
       )}
     </div>
