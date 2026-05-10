@@ -217,6 +217,96 @@ function ConversaItem({
   )
 }
 
+function AudioPlayer({ src, isEnviada }: { src: string; isEnviada: boolean }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    
+    const onTimeUpdate = () => {
+      setProgress((audio.currentTime / (audio.duration || 1)) * 100)
+    }
+    const onLoadedMetadata = () => setDuration(audio.duration)
+    const onEnded = () => {
+      setIsPlaying(false)
+      setProgress(0)
+      audio.currentTime = 0
+    }
+    
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('loadedmetadata', onLoadedMetadata)
+    audio.addEventListener('ended', onEnded)
+    
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata)
+      audio.removeEventListener('ended', onEnded)
+    }
+  }, [])
+
+  const togglePlay = () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (isPlaying) {
+      audio.pause()
+    } else {
+      audio.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current
+    if (!audio) return
+    const newTime = (Number(e.target.value) / 100) * (audio.duration || 1)
+    audio.currentTime = newTime
+    setProgress(Number(e.target.value))
+  }
+
+  const formatTime = (secs: number) => {
+    if (!secs || isNaN(secs)) return '0:00'
+    const m = Math.floor(secs / 60)
+    const s = Math.floor(secs % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  }
+
+  return (
+    <div className={cn("flex items-center gap-2 mb-2 min-w-[200px] max-w-[240px]", isEnviada ? "text-emerald-50" : "text-fg")}>
+      <audio ref={audioRef} src={src} preload="metadata" />
+      <button 
+        onClick={togglePlay}
+        className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full transition-colors"
+      >
+        {isPlaying ? (
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 ml-1"><path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36a1 1 0 00-1.5.86z"/></svg>
+        )}
+      </button>
+      <div className="flex-1 flex flex-col justify-center">
+        <input 
+          type="range" 
+          min="0" max="100" 
+          value={progress || 0}
+          onChange={handleSeek}
+          className="w-full h-1.5 rounded-full appearance-none outline-none cursor-pointer"
+          style={{
+            background: `linear-gradient(to right, ${isEnviada ? '#fff' : '#34d399'} ${progress}%, rgba(0,0,0,0.2) ${progress}%)`
+          }}
+        />
+        <div className="flex justify-between mt-1 text-[9px] font-medium opacity-70">
+          <span>{formatTime(audioRef.current?.currentTime || 0)}</span>
+          <span>{formatTime(duration)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: string; timestamp: string; transcricao?: string; mediaType?: string; mediaUrl?: string; mimetype?: string } }) {
   const isEnviada = msg.tipo === 'enviada' || msg.tipo === 'bot'
   const isInterna = msg.tipo === 'interna'
@@ -237,7 +327,7 @@ function MensagemBubble({ msg }: { msg: { id: string; tipo: string; texto: strin
     }
     if (type === 'audio') {
       return (
-        <audio controls src={msg.mediaUrl} className="w-full max-w-[240px] mb-2 h-10 outline-none" />
+        <AudioPlayer src={msg.mediaUrl} isEnviada={isEnviada} />
       )
     }
     if (type === 'video') {
@@ -570,6 +660,17 @@ export default function InboxClient() {
 
   const totalUnread = conversas.reduce((a, c) => a + (c.unread || 0), 0)
 
+  // Calcula contadores por setor
+  const setorCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    conversas.forEach(c => {
+      const s = c.setor || 'Sem setor'
+      counts[s] = (counts[s] || 0) + 1
+    })
+    // Ordena do maior pro menor, limitando a 3 para não quebrar layout
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3)
+  }, [conversas])
+
   // ── Auto-grow textarea ─────────────────────────────────────
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -842,6 +943,18 @@ export default function InboxClient() {
               </button>
             </div>
           </div>
+
+          {/* Mini-contadores por setor */}
+          {setorCounts.length > 0 && (
+            <div className="flex gap-2 mb-2 px-1 text-[9px] font-semibold uppercase tracking-wider text-fg-disabled/70 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              {setorCounts.map(([setor, count]) => (
+                <span key={setor} className="shrink-0">
+                  {setor} <span className="text-fg-tertiary ml-0.5">({count})</span>
+                  <span className="mx-1.5 opacity-30">|</span>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Campo de busca premium */}
           <div className="relative">
