@@ -590,8 +590,13 @@ export default function InboxClient() {
   }
 
   return (
-    // Tela cheia — fixa no mobile para não rolar a página toda e esconder o header
-    <div className="fixed inset-0 pb-[65px] md:pb-0 z-40 md:z-auto md:relative md:inset-auto flex h-[100dvh] md:h-screen overflow-hidden bg-[#05070a]">
+    // Tela cheia — fixa no mobile para não rolar a página toda. 
+    // Quando entra num chat (numeroAtivo), ganha z-[60] para cobrir o BottomNav e pb-0 para o input ficar no fundo
+    <div className={cn(
+      "fixed inset-0 flex overflow-hidden bg-[#05070a]",
+      "md:relative md:inset-auto md:h-screen md:pb-0 md:z-auto",
+      (!numeroAtivo && !showConfig) ? "pb-[65px] z-40" : "pb-0 z-[60]"
+    )}>
 
       {/* ── Coluna 1: Lista de conversas ──────────────────────── */}
       <div className={cn("shrink-0 border-r border-border-subtle flex-col bg-[#05070a]", (numeroAtivo || showConfig) ? "hidden md:flex md:w-80" : "flex w-full md:w-80")}>
