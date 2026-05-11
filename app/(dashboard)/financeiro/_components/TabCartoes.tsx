@@ -1,12 +1,129 @@
-'use client'
+﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatCurrency, cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts'
 import { EmptyState } from '@/components/shared/ui'
 
-// Cores para os gráficos baseados em categorias (UI premium)
 const COLORS = ['#10b981', '#3b82f6', '#f5a623', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6', '#facc15']
+
+function fmt(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
+
+function mesAtualYM() { return new Date().toISOString().substring(0, 7) }
+
+// ── Painel duplo Prévia + Fatura Real (PJ) ──────────────────────
+function FaturaPainelPJ({ cartaoId, mesRef, gastoSistema }: { cartaoId: string; mesRef: string; gastoSistema: number }) {
+  const supabase = createClient()
+  const [faturaObj, setFaturaObj] = useState<any>(null)
+  const [editPrev, setEditPrev] = useState(false)
+  const [editReal, setEditReal] = useState(false)
+  const [valPrev, setValPrev] = useState('')
+  const [valReal, setValReal] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const carregar = useCallback(async () => {
+    const { data } = await (supabase.from('faturas_cartoes') as any)
+      .select('*').eq('conta_id', cartaoId).eq('mes_referencia', mesRef).single()
+    setFaturaObj(data)
+    setValPrev(data?.valor_previsto != null ? String(data.valor_previsto) : '')
+    setValReal(data?.valor_fechado  != null ? String(data.valor_fechado)  : '')
+  }, [cartaoId, mesRef, supabase])
+
+  useEffect(() => { if (cartaoId && mesRef) carregar() }, [carregar])
+
+  const salvar = async (campo: 'valor_previsto' | 'valor_fechado', raw: string) => {
+    setLoading(true)
+    const val = parseFloat(raw.replace(',', '.'))
+    await (supabase.from('faturas_cartoes') as any).upsert({
+      conta_id: cartaoId,
+      mes_referencia: mesRef,
+      [campo]: isNaN(val) ? null : val,
+    }, { onConflict: 'conta_id,mes_referencia' })
+    setLoading(false)
+    setEditPrev(false); setEditReal(false)
+    carregar()
+  }
+
+  const prev = faturaObj?.valor_previsto != null ? Number(faturaObj.valor_previsto) : null
+  const real = faturaObj?.valor_fechado  != null ? Number(faturaObj.valor_fechado)  : null
+  const diff = real != null ? gastoSistema - real : null
+
+  return (
+    <div className="bg-surface border border-white/5 rounded-xl p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs text-fg-secondary font-medium tracking-wider uppercase mb-1">Total no Sistema</p>
+          <p className="text-3xl font-bold text-fg">{fmt(gastoSistema)}</p>
+        </div>
+        <span className="text-3xl">💳</span>
+      </div>
+
+      <div className="h-px bg-white/5" />
+
+      {/* Prévia */}
+      <div className="flex items-center justify-between gap-2 bg-blue-500/5 border border-blue-500/20 rounded-xl px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] text-blue-400 font-bold uppercase tracking-wider">📋 Prévia (antes de fechar)</p>
+          {editPrev ? (
+            <div className="flex gap-1.5 mt-1.5">
+              <input type="number" step="0.01" autoFocus className="input text-xs flex-1 py-1 h-7"
+                placeholder="Ex: 3500.00" value={valPrev} onChange={e => setValPrev(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvar('valor_previsto', valPrev); if (e.key === 'Escape') setEditPrev(false) }} />
+              <button onClick={() => salvar('valor_previsto', valPrev)} disabled={loading}
+                className="px-2 h-7 rounded bg-blue-500/20 text-blue-400 text-xs font-bold">{loading ? '...' : '✓'}</button>
+              <button onClick={() => setEditPrev(false)} className="px-2 h-7 rounded bg-white/5 text-fg-disabled text-xs">✕</button>
+            </div>
+          ) : (
+            <p className={`text-sm font-bold mt-0.5 ${prev != null ? 'text-blue-300' : 'text-fg-disabled text-xs italic'}`}>
+              {prev != null ? fmt(prev) : 'não informada'}
+            </p>
+          )}
+        </div>
+        {!editPrev && (
+          <button onClick={() => setEditPrev(true)} className="shrink-0 text-[10px] text-blue-400 hover:text-blue-300 border border-blue-500/20 rounded px-2 py-1">
+            {prev != null ? '✏️ Editar' : '+ Definir'}
+          </button>
+        )}
+      </div>
+
+      {/* Fatura Real */}
+      <div className="flex items-center justify-between gap-2 bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] text-amber-400 font-bold uppercase tracking-wider">🧾 Fatura Real (após fechar)</p>
+          {editReal ? (
+            <div className="flex gap-1.5 mt-1.5">
+              <input type="number" step="0.01" autoFocus className="input text-xs flex-1 py-1 h-7"
+                placeholder="Ex: 3200.00" value={valReal} onChange={e => setValReal(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvar('valor_fechado', valReal); if (e.key === 'Escape') setEditReal(false) }} />
+              <button onClick={() => salvar('valor_fechado', valReal)} disabled={loading}
+                className="px-2 h-7 rounded bg-amber-500/20 text-amber-400 text-xs font-bold">{loading ? '...' : '✓'}</button>
+              <button onClick={() => setEditReal(false)} className="px-2 h-7 rounded bg-white/5 text-fg-disabled text-xs">✕</button>
+            </div>
+          ) : (
+            <p className={`text-sm font-bold mt-0.5 ${real != null ? 'text-amber-300' : 'text-fg-disabled text-xs italic'}`}>
+              {real != null ? fmt(real) : 'não informada'}
+            </p>
+          )}
+        </div>
+        {!editReal && (
+          <button onClick={() => setEditReal(true)} className="shrink-0 text-[10px] text-amber-400 hover:text-amber-300 border border-amber-500/20 rounded px-2 py-1">
+            {real != null ? '✏️ Editar' : '+ Definir'}
+          </button>
+        )}
+      </div>
+
+      {/* Comparativo */}
+      {real != null && (
+        <div className={`rounded-xl px-3 py-2 text-center text-xs font-bold ${Math.abs(diff!) <= 0.5 ? 'bg-emerald-500/10 text-emerald-400' : diff! > 0 ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+          {Math.abs(diff!) <= 0.5 ? '✅ Sistema bate com a fatura real!'
+            : diff! > 0 ? `⚠️ ${fmt(diff!)} a mais no sistema vs fatura`
+            : `✅ ${fmt(Math.abs(diff!))} a menos que a fatura`}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function TabCartoes({
   contas,
@@ -19,9 +136,9 @@ export function TabCartoes({
   categorias: any[]
   onNovoGasto: () => void
 }) {
-  // 1. Filtrar contas que são "Cartão de Crédito"
   const cartoes = contas.filter(c => c.tipo === 'cartao_credito')
   const [cartaoSelecionado, setCartaoSelecionado] = useState<string>(cartoes[0]?.id || 'todos')
+  const [mesSel] = useState(mesAtualYM())
 
   if (cartoes.length === 0) {
     return (
@@ -31,24 +148,22 @@ export function TabCartoes({
         </div>
         <h3 className="text-lg font-bold text-fg mb-2">Sem Cartões de Crédito</h3>
         <p className="text-sm text-fg-tertiary mb-6 max-w-md mx-auto">
-          Você não possui contas configuradas como Cartão de Crédito. Para utilizar este painel de gestão de faturas, crie uma "Nova Conta" definindo o tipo como "Cartão de Crédito".
+          Você não possui contas configuradas como Cartão de Crédito. Para utilizar este painel de gestão de faturas, crie uma &ldquo;Nova Conta&rdquo; definindo o tipo como &ldquo;Cartão de Crédito&rdquo;.
         </p>
         <button onClick={onNovoGasto} className="btn-primary">Criar Cadastro de Conta</button>
       </div>
     )
   }
 
-  // 2. Extrair os gastos no cartão (despesas que estão vinculadas aos cartões de crédito)
-  const gastosTudo = lancamentos.filter(l => 
-    l.tipo === 'despesa' && 
+  const gastosTudo = lancamentos.filter(l =>
+    l.tipo === 'despesa' &&
     cartoes.some(c => c.id === l.conta_id) &&
     (cartaoSelecionado === 'todos' || l.conta_id === cartaoSelecionado)
   )
 
-  // 3. Montar dados agregados por CATEGORIA (para o gráfico Pie)
   const gastosCategoriaTracker: Record<string, number> = {}
   gastosTudo.forEach(g => {
-    const nomeCat = g.categoria_id 
+    const nomeCat = g.categoria_id
       ? categorias.find(c => c.id === g.categoria_id)?.nome || 'Outros'
       : 'Sem Categoria'
     gastosCategoriaTracker[nomeCat] = (gastosCategoriaTracker[nomeCat] || 0) + g.valor
@@ -60,8 +175,6 @@ export function TabCartoes({
 
   const totalGasto = dataCategorias.reduce((a, c) => a + c.value, 0)
 
-  // 4. Montar dados para gastos por FUNCIONÁRIO/PESSOA vs EMPRESA se o cliente mistura tudo
-  // Por default, a divisão PF x PJ será baseada pela classificação da Conta "cartao_credito"
   const gastosPorConta = cartoes.map(c => {
     const total = lancamentos
       .filter(l => l.conta_id === c.id && l.tipo === 'despesa')
@@ -69,7 +182,6 @@ export function TabCartoes({
     return { name: c.nome, total, cat: c.categoria }
   })
 
-  // Bandeiras inline (sem importar de fora)
   const BAND_CORES: Record<string, string> = {
     visa: '#1a1f71', mastercard: '#eb001b', elo: '#c8a800',
     amex: '#2e77bc', hipercard: '#e22c1b', outras: '#6b7280',
@@ -135,17 +247,26 @@ export function TabCartoes({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Total Gasto / Fatura Resumo */}
-        <div className="bg-surface border border-white/5 rounded-xl p-5 md:col-span-1 shadow-2xl relative overflow-hidden flex flex-col justify-center min-h-[220px]">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-[40px] pointer-events-none"></div>
-          <p className="text-xs text-fg-secondary font-medium tracking-wider uppercase mb-2 relative z-10">Total na Fatura Atual</p>
-          <p className="text-4xl font-['Syne'] font-bold text-fg mb-1 relative z-10">
-            {formatCurrency(totalGasto)}
-          </p>
-          <p className="text-[11px] text-fg-tertiary mt-2 relative z-10">
-            Com base em <strong className="text-fg-secondary">{gastosTudo.length} transações</strong> não validadas identificadas como compras no crédito.
-          </p>
-        </div>
+        {/* Painel de Fatura — Prévia + Real */}
+        {cartaoSelecionado !== 'todos' ? (
+          <FaturaPainelPJ
+            cartaoId={cartaoSelecionado}
+            mesRef={mesSel}
+            gastoSistema={totalGasto}
+          />
+        ) : (
+          <div className="bg-surface border border-white/5 rounded-xl p-5 md:col-span-1 shadow-2xl relative overflow-hidden flex flex-col justify-center min-h-[220px]">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-[40px] pointer-events-none"></div>
+            <p className="text-xs text-fg-secondary font-medium tracking-wider uppercase mb-2 relative z-10">Total na Fatura Atual</p>
+            <p className="text-4xl font-['Syne'] font-bold text-fg mb-1 relative z-10">
+              {formatCurrency(totalGasto)}
+            </p>
+            <p className="text-[11px] text-fg-tertiary mt-2 relative z-10">
+              Com base em <strong className="text-fg-secondary">{gastosTudo.length} transações</strong> não validadas identificadas como compras no crédito.
+            </p>
+            <p className="text-[10px] text-blue-400 mt-3 relative z-10">💡 Selecione um cartão para ver Prévia e Fatura Real</p>
+          </div>
+        )}
 
         {/* Gráfico Onde Gastou Mais (Categorias) */}
         <div className="bg-surface border border-white/5 rounded-xl p-5 md:col-span-2">
@@ -173,9 +294,9 @@ export function TabCartoes({
                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                        ))}
                      </Pie>
-                     <Tooltip 
+                     <Tooltip
                        formatter={(value: number) => formatCurrency(value)}
-                       contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} 
+                       contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }}
                      />
                    </PieChart>
                  </ResponsiveContainer>

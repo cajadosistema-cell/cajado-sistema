@@ -742,71 +742,113 @@ function ModalFaturaPrevista({ conta, mesSel, faturas, onClose, onSave }: { cont
 }
 
 // ── Input Inline de Fatura Real (no card) ──────────────────────────────────────
-function FaturaInlineInput({
-  conta, mesSel, valorAtual, onSaved,
-}: { conta: any; mesSel: string; valorAtual: number | null; onSaved: () => void }) {
+// ── Painel duplo: Prévia + Fatura Real ────────────────────────
+function FaturaDupla({
+  conta, mesSel, faturaObj, gastoSistema, onSaved,
+}: { conta: any; mesSel: string; faturaObj: any; gastoSistema: number; onSaved: () => void }) {
   const supabase = createClient()
-  const [editando, setEditando] = useState(false)
-  const [valor, setValor] = useState(valorAtual !== null ? String(valorAtual) : '')
+  const [editPrev, setEditPrev] = useState(false)
+  const [editReal, setEditReal] = useState(false)
+  const [valPrev, setValPrev] = useState(faturaObj?.valor_previsto != null ? String(faturaObj.valor_previsto) : '')
+  const [valReal, setValReal] = useState(faturaObj?.valor_fechado  != null ? String(faturaObj.valor_fechado)  : '')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setValor(valorAtual !== null ? String(valorAtual) : '')
-    setEditando(false)
-  }, [mesSel, valorAtual])
+    setValPrev(faturaObj?.valor_previsto != null ? String(faturaObj.valor_previsto) : '')
+    setValReal(faturaObj?.valor_fechado  != null ? String(faturaObj.valor_fechado)  : '')
+    setEditPrev(false); setEditReal(false)
+  }, [mesSel, faturaObj])
 
-  const handleSalvar = async () => {
+  const salvar = async (campo: 'valor_previsto' | 'valor_fechado', raw: string) => {
     setLoading(true)
-    const val = parseFloat(valor.replace(',', '.'))
-    if (isNaN(val) || valor.trim() === '') {
-      await (supabase.from('faturas_cartoes') as any)
-        .delete().match({ conta_id: conta.id, mes_referencia: mesSel })
-    } else {
-      await (supabase.from('faturas_cartoes') as any).upsert({
-        conta_id: conta.id,
-        mes_referencia: mesSel,
-        valor_fechado: val,
-      }, { onConflict: 'conta_id,mes_referencia' })
-    }
+    const val = parseFloat(raw.replace(',', '.'))
+    await (supabase.from('faturas_cartoes') as any).upsert({
+      conta_id: conta.id,
+      mes_referencia: mesSel,
+      [campo]: isNaN(val) ? null : val,
+    }, { onConflict: 'conta_id,mes_referencia' })
     setLoading(false)
-    setEditando(false)
+    setEditPrev(false); setEditReal(false)
     onSaved()
   }
 
-  if (!editando) {
-    return (
-      <button
-        onClick={e => { e.stopPropagation(); setEditando(true) }}
-        className="w-full text-[10px] py-1 rounded-lg border border-white/10 text-fg-disabled hover:text-amber-400 hover:border-amber-500/30 transition-all text-center"
-      >
-        {valorAtual !== null ? '✏️ Alterar fatura real' : '+ Informar fatura real'}
-      </button>
-    )
-  }
+  const prev  = faturaObj?.valor_previsto != null ? Number(faturaObj.valor_previsto) : null
+  const real  = faturaObj?.valor_fechado  != null ? Number(faturaObj.valor_fechado)  : null
+  const diff  = real != null ? gastoSistema - real : null
 
   return (
-    <div className="flex gap-1.5 items-center" onClick={e => e.stopPropagation()}>
-      <input
-        type="number" step="0.01" autoFocus
-        className="input text-xs flex-1 py-1 h-7"
-        placeholder="Ex: 1250.00"
-        value={valor}
-        onChange={e => setValor(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter') handleSalvar()
-          if (e.key === 'Escape') setEditando(false)
-        }}
-      />
-      <button onClick={handleSalvar} disabled={loading}
-        className="px-2 py-1 h-7 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold hover:bg-amber-500/30 transition-all shrink-0">
-        {loading ? '...' : '✓'}
-      </button>
-      <button onClick={() => setEditando(false)}
-        className="px-2 py-1 h-7 rounded-lg bg-white/5 text-fg-disabled border border-white/10 text-[10px] hover:text-fg transition-all shrink-0">
-        ✕
-      </button>
+    <div className="space-y-2" onClick={e => e.stopPropagation()}>
+      {/* Linha: Prévia */}
+      <div className="flex items-center justify-between gap-2 bg-blue-500/5 border border-blue-500/20 rounded-xl px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[9px] text-blue-400 font-bold uppercase tracking-wider">📋 Prévia (antes de fechar)</p>
+          {editPrev ? (
+            <div className="flex gap-1 mt-1">
+              <input type="number" step="0.01" autoFocus className="input text-xs flex-1 py-0.5 h-6"
+                placeholder="Ex: 2000.00" value={valPrev} onChange={e => setValPrev(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvar('valor_previsto', valPrev); if (e.key === 'Escape') setEditPrev(false) }} />
+              <button onClick={() => salvar('valor_previsto', valPrev)} disabled={loading}
+                className="px-2 h-6 rounded bg-blue-500/20 text-blue-400 text-[10px] font-bold">{loading ? '...' : '✓'}</button>
+              <button onClick={() => setEditPrev(false)} className="px-2 h-6 rounded bg-white/5 text-fg-disabled text-[10px]">✕</button>
+            </div>
+          ) : (
+            <p className={`text-sm font-bold mt-0.5 ${prev != null ? 'text-blue-300' : 'text-fg-disabled italic text-xs'}`}>
+              {prev != null ? fmt(prev) : 'não informada'}
+            </p>
+          )}
+        </div>
+        {!editPrev && (
+          <button onClick={() => setEditPrev(true)} className="shrink-0 text-[10px] text-blue-400 hover:text-blue-300 border border-blue-500/20 rounded px-2 py-0.5">
+            {prev != null ? '✏️' : '+ Definir'}
+          </button>
+        )}
+      </div>
+
+      {/* Linha: Fatura Real */}
+      <div className="flex items-center justify-between gap-2 bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[9px] text-amber-400 font-bold uppercase tracking-wider">🧾 Fatura Real (após fechar)</p>
+          {editReal ? (
+            <div className="flex gap-1 mt-1">
+              <input type="number" step="0.01" autoFocus className="input text-xs flex-1 py-0.5 h-6"
+                placeholder="Ex: 1850.00" value={valReal} onChange={e => setValReal(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvar('valor_fechado', valReal); if (e.key === 'Escape') setEditReal(false) }} />
+              <button onClick={() => salvar('valor_fechado', valReal)} disabled={loading}
+                className="px-2 h-6 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">{loading ? '...' : '✓'}</button>
+              <button onClick={() => setEditReal(false)} className="px-2 h-6 rounded bg-white/5 text-fg-disabled text-[10px]">✕</button>
+            </div>
+          ) : (
+            <p className={`text-sm font-bold mt-0.5 ${real != null ? 'text-amber-300' : 'text-fg-disabled italic text-xs'}`}>
+              {real != null ? fmt(real) : 'não informada'}
+            </p>
+          )}
+        </div>
+        {!editReal && (
+          <button onClick={() => setEditReal(true)} className="shrink-0 text-[10px] text-amber-400 hover:text-amber-300 border border-amber-500/20 rounded px-2 py-0.5">
+            {real != null ? '✏️' : '+ Definir'}
+          </button>
+        )}
+      </div>
+
+      {/* Comparativo */}
+      {real != null && (
+        <div className={`rounded-xl px-3 py-1.5 text-center text-[10px] font-bold ${Math.abs(diff!) <= 0.5 ? 'bg-emerald-500/10 text-emerald-400' : diff! > 0 ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+          {Math.abs(diff!) <= 0.5
+            ? '✅ Sistema e fatura real batem!'
+            : diff! > 0
+              ? `⚠️ ${fmt(diff!)} a mais no sistema vs fatura`
+              : `✅ ${fmt(Math.abs(diff!))} a menos — ok`}
+        </div>
+      )}
     </div>
   )
+}
+
+// Mantém FaturaInlineInput como alias para não quebrar ModalDetalheCartao
+function FaturaInlineInput({
+  conta, mesSel, valorAtual, onSaved,
+}: { conta: any; mesSel: string; valorAtual: number | null; onSaved: () => void }) {
+  return <FaturaDupla conta={conta} mesSel={mesSel} faturaObj={{ valor_previsto: null, valor_fechado: valorAtual }} gastoSistema={0} onSaved={onSaved} />
 }
 
 // ── Modal Nova Conta Bancária PF ────────────────────────────────
@@ -1198,57 +1240,14 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
 
                 <div className="p-3 space-y-2">
 
-                  {/* ── FATURA DO MÊS — campo inline ── */}
-                  <div className="rounded-xl border p-2.5 space-y-1.5"
-                    style={{
-                      background: diff === null ? 'rgba(255,255,255,0.03)' :
-                        diff > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
-                      borderColor: diff === null ? 'rgba(255,255,255,0.08)' :
-                        diff > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)',
-                    }}>
-
-                    {/* Linha: Sistema vs Real */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[9px] text-fg-disabled uppercase tracking-wider">Sistema ({labelMes(mesSel)})</p>
-                        <p className="text-sm font-bold text-fg">{fmt(gastoMes)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[9px] text-fg-disabled uppercase tracking-wider">Fatura Real</p>
-                        {valorFechado !== null ? (
-                          <p className="text-sm font-bold text-amber-400">{fmt(valorFechado)}</p>
-                        ) : (
-                          <p className="text-xs text-fg-disabled italic">não informada</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Barra de comparação + diferença */}
-                    {valorFechado !== null && (
-                      <>
-                        <div className="w-full bg-muted rounded-full h-1.5">
-                          <div className="h-1.5 rounded-full transition-all"
-                            style={{ width: `${Math.min(pctFatura!, 100)}%`, backgroundColor: diff! > 0 ? '#ef4444' : '#10b981' }} />
-                        </div>
-                        <p className={cn('text-[10px] font-bold text-center', diff! > 0 ? 'text-red-400' : 'text-emerald-400')}>
-                          {diff! > 0
-                            ? `⚠️ R$ ${fmt(diff!)} acima da fatura real`
-                            : diff! < -0.01
-                              ? `✅ R$ ${fmt(Math.abs(diff!))} abaixo — ok!`
-                              : '✅ Sistema e fatura batem!'
-                          }
-                        </p>
-                      </>
-                    )}
-
-                    {/* Input rápido de fatura real */}
-                    <FaturaInlineInput
-                      conta={c}
-                      mesSel={mesSel}
-                      valorAtual={valorFechado}
-                      onSaved={carregarContas}
-                    />
-                  </div>
+                  {/* ── FATURA DO MÊS — prévia + real ── */}
+                  <FaturaDupla
+                    conta={c}
+                    mesSel={mesSel}
+                    faturaObj={faturaObj}
+                    gastoSistema={gastoMes}
+                    onSaved={carregarContas}
+                  />
 
                   {/* GastoProgressBar (limite mensal) */}
                   <GastoProgressBar gasto={gastoMes} limite={c.limite_gasto_mensal ?? null} />
