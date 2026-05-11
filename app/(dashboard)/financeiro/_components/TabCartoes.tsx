@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { formatCurrency, cn } from '@/lib/utils'
@@ -7,6 +7,115 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { EmptyState } from '@/components/shared/ui'
 
 const COLORS = ['#10b981', '#3b82f6', '#f5a623', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6', '#facc15']
+
+const BANDEIRAS_PJ = [
+  { id: 'visa',       label: 'Visa',       emoji: '💳', cor: '#1a1f71' },
+  { id: 'mastercard', label: 'Mastercard', emoji: '🔴', cor: '#eb001b' },
+  { id: 'elo',        label: 'Elo',        emoji: '🟡', cor: '#c8a800' },
+  { id: 'amex',       label: 'Amex',       emoji: '💎', cor: '#2e77bc' },
+  { id: 'hipercard',  label: 'Hipercard',  emoji: '🔶', cor: '#e22c1b' },
+  { id: 'outras',     label: 'Outras',     emoji: '💳', cor: '#6b7280' },
+]
+
+function ModalEditarCartaoPJ({ conta, onClose, onSave }: { conta: any; onClose: () => void; onSave: () => void }) {
+  const supabase = createClient()
+  const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState({
+    nome_cartao:    conta.nome_cartao || conta.nome || '',
+    bandeira:       conta.bandeira    || 'outras',
+    limite:         conta.limite      != null ? String(conta.limite) : '',
+    dia_fechamento: conta.dia_fechamento != null ? String(conta.dia_fechamento) : '',
+    dia_vencimento: conta.dia_vencimento != null ? String(conta.dia_vencimento) : '',
+  })
+  const band = BANDEIRAS_PJ.find(b => b.id === form.bandeira) ?? BANDEIRAS_PJ[5]
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault(); setLoading(true)
+    await (supabase.from('contas') as any).update({
+      nome: form.nome_cartao, nome_cartao: form.nome_cartao,
+      bandeira: form.bandeira, cor: band.cor,
+      limite:         form.limite         ? Number(form.limite)         : null,
+      dia_fechamento: form.dia_fechamento ? Number(form.dia_fechamento) : null,
+      dia_vencimento: form.dia_vencimento ? Number(form.dia_vencimento) : null,
+    }).eq('id', conta.id)
+    setLoading(false); onSave(); onClose()
+  }
+
+  const arquivar = async () => {
+    if (!confirm(`Arquivar o cartão "${conta.nome_cartao || conta.nome}"?\n\nOs lançamentos vinculados NÃO serão apagados.`)) return
+    await (supabase.from('contas') as any).update({ ativo: false }).eq('id', conta.id)
+    onSave(); onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-[#0a0d16] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div className="h-20 flex items-center justify-between px-4 relative overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${band.cor}cc, ${band.cor}66)` }}>
+          <div><p className="text-white font-bold text-sm">{form.nome_cartao || 'Cartão PJ'}</p>
+            <p className="text-white/60 text-[10px]">{band.label} · PJ</p></div>
+          <span className="text-3xl">{band.emoji}</span>
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/8">
+          <h2 className="text-sm font-bold text-white">✏️ Editar Cartão PJ</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+        <div className="bg-amber-500/5 border-b border-amber-500/10 px-5 py-2">
+          <p className="text-[10px] text-amber-400">⚠️ Os lançamentos vinculados <strong>não serão alterados</strong>.</p>
+        </div>
+        <form onSubmit={handleSave} className="p-5 space-y-4">
+          <div>
+            <label className="label">Nome do Cartão *</label>
+            <input className="input mt-1 w-full" required value={form.nome_cartao}
+              onChange={e => setForm(f => ({ ...f, nome_cartao: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label mb-2 block">Bandeira</label>
+            <div className="grid grid-cols-3 gap-2">
+              {BANDEIRAS_PJ.map(b => (
+                <button key={b.id} type="button" onClick={() => setForm(f => ({ ...f, bandeira: b.id }))}
+                  className={cn('flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium border transition-all',
+                    form.bandeira === b.id ? 'border-white/40 text-white' : 'border-border-subtle text-fg-tertiary hover:text-fg')}
+                  style={form.bandeira === b.id ? { background: b.cor + '33', borderColor: b.cor + '66' } : {}}>
+                  {b.emoji} {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="label">Limite (R$)</label>
+              <input className="input mt-1 w-full" type="number" step="0.01" placeholder="0.00"
+                value={form.limite} onChange={e => setForm(f => ({ ...f, limite: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Dia Fech.</label>
+              <input className="input mt-1 w-full" type="number" min="1" max="31" placeholder="Ex: 15"
+                value={form.dia_fechamento} onChange={e => setForm(f => ({ ...f, dia_fechamento: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Dia Venc.</label>
+              <input className="input mt-1 w-full" type="number" min="1" max="31" placeholder="Ex: 22"
+                value={form.dia_vencimento} onChange={e => setForm(f => ({ ...f, dia_vencimento: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-white/5">
+            <button type="button" onClick={arquivar}
+              className="text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors">
+              🗂️ Arquivar Cartão
+            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="btn-secondary text-xs">Cancelar</button>
+              <button type="submit" disabled={loading} className="btn-primary text-xs">
+                {loading ? 'Salvando...' : '💾 Salvar'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 function fmt(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
 
@@ -139,6 +248,7 @@ export function TabCartoes({
   const cartoes = contas.filter(c => c.tipo === 'cartao_credito')
   const [cartaoSelecionado, setCartaoSelecionado] = useState<string>(cartoes[0]?.id || 'todos')
   const [mesSel] = useState(mesAtualYM())
+  const [editandoCartao, setEditandoCartao] = useState<any>(null)
 
   if (cartoes.length === 0) {
     return (
@@ -191,6 +301,7 @@ export function TabCartoes({
   }
 
   return (
+    <>
     <div className="space-y-6 mt-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -219,29 +330,36 @@ export function TabCartoes({
           const band = c.bandeira || 'outras'
           const cor = BAND_CORES[band] ?? '#6b7280'
           const emoji = BAND_EMOJI[band] ?? '💳'
+          const isSel = cartaoSelecionado === c.id
           return (
-            <button
-              key={c.id}
-              onClick={() => setCartaoSelecionado(c.id)}
-              className={cn(
-                'flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all',
-                cartaoSelecionado === c.id
-                  ? 'border-white/20 text-white shadow-lg'
-                  : 'border-border-subtle text-fg-tertiary hover:border-border hover:text-fg'
+            <div key={c.id} className="flex-shrink-0 flex items-center">
+              <button
+                onClick={() => setCartaoSelecionado(c.id)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 text-xs font-semibold border transition-all',
+                  isSel ? 'rounded-l-xl border-r-0' : 'rounded-xl',
+                  isSel ? 'border-white/20 text-white shadow-lg' : 'border-border-subtle text-fg-tertiary hover:border-border hover:text-fg'
+                )}
+                style={isSel ? { background: cor + '33', borderColor: cor + '66' } : {}}
+              >
+                <span>{emoji}</span>
+                <span>{c.nome_cartao || c.nome}</span>
+                {c.limite && <span className="text-[10px] opacity-60">· Lim. {formatCurrency(c.limite)}</span>}
+                {(c.dia_fechamento || c.dia_vencimento) && (
+                  <span className="text-[10px] opacity-60">· Fech. {c.dia_fechamento} / Venc. {c.dia_vencimento}</span>
+                )}
+              </button>
+              {isSel && (
+                <div className="flex">
+                  <button onClick={() => setEditandoCartao(c)}
+                    className="flex items-center justify-center px-2 py-2 border border-l-0 border-white/20 bg-white/10 text-blue-400 hover:bg-blue-500 hover:text-white transition-colors"
+                    style={{ borderColor: cor + '66' }} title="Editar Cartão">✏️</button>
+                  <button onClick={() => { if(confirm(`Arquivar o cartão "${c.nome_cartao||c.nome}"?\nLançamentos não serão apagados.`)) { createClient().from('contas').update({ativo:false}).eq('id',c.id).then(()=>onNovoGasto()) } }}
+                    className="flex items-center justify-center px-2 py-2 border border-l-0 border-white/20 rounded-r-xl bg-white/10 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                    style={{ borderColor: cor + '66' }} title="Arquivar Cartão">🗂️</button>
+                </div>
               )}
-              style={cartaoSelecionado === c.id ? { background: cor + '33', borderColor: cor + '66' } : {}}
-            >
-              <span>{emoji}</span>
-              <span>{c.nome_cartao || c.nome}</span>
-              {c.limite && (
-                <span className="text-[10px] opacity-60">· Lim. {formatCurrency(c.limite)}</span>
-              )}
-              {(c.dia_fechamento || c.dia_vencimento) && (
-                <span className="text-[10px] opacity-60">
-                  · Fech. {c.dia_fechamento} / Venc. {c.dia_vencimento}
-                </span>
-              )}
-            </button>
+            </div>
           )
         })}
       </div>
@@ -353,5 +471,13 @@ export function TabCartoes({
       </div>
 
     </div>
+    {editandoCartao && (
+      <ModalEditarCartaoPJ
+        conta={editandoCartao}
+        onClose={() => setEditandoCartao(null)}
+        onSave={() => { setEditandoCartao(null); onNovoGasto() }}
+      />
+    )}
+  </>
   )
 }
