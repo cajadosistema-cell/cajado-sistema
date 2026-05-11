@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TabAgenda } from '@/app/(dashboard)/pf-pessoal/_components/tabs/TabAgenda'
 
 export default async function AgendaPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 

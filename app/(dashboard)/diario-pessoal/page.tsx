@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TabDiario } from '@/app/(dashboard)/pf-pessoal/_components/tabs/TabDiarioPessoal'
 
 export default async function DiarioPessoalPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TabIdiomas } from '@/app/(dashboard)/pf-pessoal/_components/tabs/TabIdiomas'
 
 export default async function IdiomasPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
