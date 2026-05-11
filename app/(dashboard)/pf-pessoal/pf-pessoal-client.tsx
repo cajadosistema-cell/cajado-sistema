@@ -23,7 +23,7 @@ import { PainelComparativoMes }   from '@/components/shared/PainelComparativoMes
 import { PainelLimitesOrcamento } from '@/components/shared/LimitesOrcamento'
 import { VencimentosMesPF }       from './_components/VencimentosMesPF'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros' | 'contas'
 
 // ── 3 grupos visuais — reduz carga cognitiva ──────────────────
 const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; emoji: string }[] }[] = [
@@ -32,6 +32,7 @@ const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; emoji: stri
     tabs: [
       { id: 'resumo',      label: 'Resumo',      emoji: '📊' },
       { id: 'lancamentos', label: 'Lançamentos', emoji: '📋' },
+      { id: 'contas',      label: 'Contas',      emoji: '🏦' },
       { id: 'orcamentos',  label: 'Orçamentos',  emoji: '🎯' },
       { id: 'limites',     label: 'Limites',      emoji: '⚠️'  },
     ],
@@ -49,9 +50,10 @@ const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; emoji: stri
 export default function PfPessoalClient() {
   const supabase = createClient()
   const [tab, setTab] = useState<TabId>('resumo')
-  const [modalGasto,   setModalGasto]   = useState(false)
-  const [modalReceita, setModalReceita] = useState(false)
+  const [modalGasto,      setModalGasto]      = useState(false)
+  const [modalReceita,    setModalReceita]    = useState(false)
   const [modalVencimentosPF, setModalVencimentosPF] = useState(false)
+  const [modalNovaConta,  setModalNovaConta]  = useState(false)
   const [gastoEdit,    setGastoEdit]    = useState<any>(null)
   const [receitaEdit,  setReceitaEdit]  = useState<any>(null)
   const [authUserId,   setAuthUserId]   = useState('')
@@ -102,6 +104,9 @@ export default function PfPessoalClient() {
         <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">+ Receita</button>
         <button onClick={() => setModalGasto(true)}   className="btn-primary   text-xs h-8 px-3 whitespace-nowrap">+ Gasto</button>
       </>
+    )
+    if (tab === 'contas') return (
+      <button onClick={() => setModalNovaConta(true)} className="btn-primary text-xs h-8 px-4 whitespace-nowrap">🏦 Nova Conta</button>
     )
     if (tab === 'previsao') return (
       <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">+ Receita Recorrente</button>
@@ -232,6 +237,14 @@ export default function PfPessoalClient() {
         <TabCartoesPF userId={authUserId} gastos={gastos} receitas={receitas} onUpdate={refreshTudo} />
       )}
       {tab === 'registros' && <TabRegistros userId={authUserId} />}
+      {tab === 'contas' && (
+        <TabContasPFInline
+          userId={authUserId}
+          contas={contas}
+          modalAberto={modalNovaConta}
+          onModalClose={() => setModalNovaConta(false)}
+        />
+      )}
 
       <SecretariaFlutuante />
       <AlarmManager userId={authUserId} />
@@ -260,5 +273,179 @@ export default function PfPessoalClient() {
         />
       )}
     </>
+  )
+}
+
+// ── Aba Contas PF (inline no client para acessar refetch) ─────────
+function TabContasPFInline({
+  userId, contas, modalAberto, onModalClose
+}: { userId: string; contas: any[]; modalAberto: boolean; onModalClose: () => void }) {
+  const supabase = createClient()
+  const { data: todasContas, refetch } = useSupabaseQuery<any>('contas', {
+    filters: { ativo: true, categoria: 'pf', user_id: userId },
+    enabled: !!userId,
+  })
+
+  const [form, setForm] = useState({ nome: '', tipo: 'corrente', saldo_inicial: '' })
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const TIPOS = [
+    { id: 'corrente',    label: 'Conta Corrente', emoji: '🏦', desc: 'Bradesco, Itaú, BB...' },
+    { id: 'poupanca',   label: 'Poupança',        emoji: '🪙', desc: 'Reserva de emergência' },
+    { id: 'digital',    label: 'Conta Digital',   emoji: '📱', desc: 'C6, Nubank, Inter...' },
+    { id: 'cartao_credito', label: 'Cartão de Crédito', emoji: '💳', desc: 'Crédito PF' },
+    { id: 'cartao_debito',  label: 'Cartão Débito',     emoji: '💸', desc: 'Débito PF' },
+    { id: 'investimento',   label: 'Investimento',       emoji: '📈', desc: 'XP, Rico, etc.' },
+  ]
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.nome.trim()) return
+    setLoading(true); setErro('')
+    const { error } = await (supabase.from('contas') as any).insert({
+      user_id: userId,
+      nome: form.nome,
+      tipo: form.tipo,
+      categoria: 'pf',
+      saldo_inicial: form.saldo_inicial ? Number(form.saldo_inicial) : 0,
+      saldo_atual: form.saldo_inicial ? Number(form.saldo_inicial) : 0,
+      ativo: true,
+    })
+    setLoading(false)
+    if (error) { setErro(error.message); return }
+    setForm({ nome: '', tipo: 'corrente', saldo_inicial: '' })
+    onModalClose()
+    refetch()
+  }
+
+  const arquivar = async (id: string, nome: string) => {
+    if (!confirm(`Arquivar conta "${nome}"?`)) return
+    await (supabase.from('contas') as any).update({ ativo: false }).eq('id', id)
+    refetch()
+  }
+
+  const tipoConfig: Record<string, { emoji: string; cor: string; label: string }> = {
+    corrente:       { emoji: '🏦', cor: '#3b82f6', label: 'Corrente' },
+    poupanca:      { emoji: '🪙', cor: '#10b981', label: 'Poupança' },
+    digital:       { emoji: '📱', cor: '#8b5cf6', label: 'Digital' },
+    cartao_credito:{ emoji: '💳', cor: '#f59e0b', label: 'Crédito' },
+    cartao_debito: { emoji: '💸', cor: '#ef4444', label: 'Débito' },
+    investimento:  { emoji: '📈', cor: '#06b6d4', label: 'Investimento' },
+  }
+
+  const lista = todasContas || []
+
+  return (
+    <div className="space-y-4">
+      {/* Grid de contas */}
+      {lista.length === 0 ? (
+        <div className="text-center py-20 border-2 border-dashed border-border-subtle rounded-2xl">
+          <p className="text-5xl mb-4">🏦</p>
+          <p className="text-base font-bold text-fg mb-2">Nenhuma conta cadastrada</p>
+          <p className="text-sm text-fg-tertiary mb-6 max-w-sm mx-auto">
+            Adicione suas contas bancárias: Bradesco, C6 Bank, Nubank, Itaú, poupança... Elas aparecem como opção ao registrar um gasto ou receita.
+          </p>
+          <button onClick={() => { /* abre modal via prop */ }}
+            className="btn-primary mx-auto">🏦 Adicionar Primeira Conta</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {lista.map((c: any) => {
+            const cfg = tipoConfig[c.tipo] ?? { emoji: '🏦', cor: '#6b7280', label: c.tipo }
+            return (
+              <div key={c.id} className="bg-surface border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-all group">
+                {/* Header colorido */}
+                <div className="h-16 flex items-center justify-between px-4 relative overflow-hidden"
+                  style={{ background: `linear-gradient(135deg, ${cfg.cor}33, ${cfg.cor}11)`, borderBottom: `1px solid ${cfg.cor}22` }}>
+                  <div>
+                    <p className="text-sm font-bold text-fg">{c.nome}</p>
+                    <p className="text-[10px]" style={{ color: cfg.cor }}>{cfg.label} · PF</p>
+                  </div>
+                  <span className="text-2xl">{cfg.emoji}</span>
+                </div>
+                {/* Saldos */}
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-muted/30 rounded-xl p-2.5 text-center">
+                      <p className="text-[9px] text-fg-disabled uppercase tracking-wide">Saldo Inicial</p>
+                      <p className="text-sm font-bold text-fg">{(c.saldo_inicial ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-xl p-2.5 text-center">
+                      <p className="text-[9px] text-fg-disabled uppercase tracking-wide">Saldo Atual</p>
+                      <p className="text-sm font-bold text-emerald-400">{(c.saldo_atual ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => arquivar(c.id, c.nome)}
+                    className="w-full py-1.5 rounded-xl text-[11px] font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors opacity-0 group-hover:opacity-100">
+                    🗑️ Arquivar conta
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+          {/* Card para adicionar */}
+          <button onClick={onModalClose}
+            className="border-2 border-dashed border-border-subtle rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-fg-disabled hover:border-emerald-500/40 hover:text-emerald-400 transition-all min-h-[160px]">
+            <span className="text-4xl">+</span>
+            <div className="text-center">
+              <p className="text-xs font-bold">Adicionar Conta</p>
+              <p className="text-[10px] mt-0.5">C6, Nubank, Itaú, Bradesco...</p>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Modal */}
+      {modalAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#0a0d16] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+              <h2 className="text-sm font-bold text-white">🏦 Nova Conta Bancária PF</h2>
+              <button onClick={onModalClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+            </div>
+            <form onSubmit={handleSave} className="p-5 space-y-5">
+              <div>
+                <label className="label">Nome do Banco / Conta *</label>
+                <input className="input mt-1 w-full" required
+                  placeholder="Ex: C6 Bank, Bradesco Corrente, Nubank, Itaú Poupança..."
+                  value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label mb-2 block">Tipo de Conta *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {TIPOS.map(t => (
+                    <button key={t.id} type="button"
+                      onClick={() => setForm(f => ({ ...f, tipo: t.id }))}
+                      className={cn(
+                        'flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all',
+                        form.tipo === t.id
+                          ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300'
+                          : 'border-border-subtle text-fg-tertiary hover:text-fg hover:border-border'
+                      )}>
+                      <span className="text-base">{t.emoji} {t.label}</span>
+                      <span className="text-[9px] opacity-60">{t.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="label">Saldo Atual (R$)</label>
+                <input className="input mt-1 w-full" type="number" step="0.01" placeholder="0,00"
+                  value={form.saldo_inicial} onChange={e => setForm(f => ({ ...f, saldo_inicial: e.target.value }))} />
+                <p className="text-[10px] text-fg-tertiary mt-1">Informe o saldo atual para controle correto. Pode ser 0.</p>
+              </div>
+              {erro && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2">{erro}</p>}
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button type="button" onClick={onModalClose} className="btn-secondary">Cancelar</button>
+                <button type="submit" disabled={loading} className="btn-primary">
+                  {loading ? 'Salvando...' : '🏦 Cadastrar Conta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
