@@ -11,6 +11,7 @@ export type GastoPessoal = {
   recorrente: boolean
   notas: string | null
   parcelas?: number | null
+  conta_id?: string | null   // cartão ou conta associada (migration 035)
   created_at: string
 }
 

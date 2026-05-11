@@ -155,7 +155,7 @@ export function AlarmManager({ userId }: { userId: string }) {
   const salvarFired = (id: string) => {
     firedRef.current.add(id)
     try {
-      localStorage.setItem('cajado_alarms_fired', JSON.stringify([...firedRef.current]))
+      localStorage.setItem('cajado_alarms_fired', JSON.stringify(Array.from(firedRef.current)))
     } catch {}
   }
 
@@ -224,12 +224,15 @@ export function AlarmManager({ userId }: { userId: string }) {
   }, [userId, supabase])
 
   // Roda imediatamente e depois a cada 60 segundos
+  // IMPORTANTE: userId pode chegar vazio na primeira renderização (assíncrono).
+  // O effect re-executa quando userId muda, criando o intervalo apenas quando disponível.
   useEffect(() => {
     if (!userId) return
+    // Dispara imediatamente para não esperar 60s
     verificarAlarmes()
     const interval = setInterval(verificarAlarmes, 60_000)
     return () => clearInterval(interval)
-  }, [userId, verificarAlarmes])
+  }, [userId, verificarAlarmes]) // re-executa quando userId chega do auth
 
   // Solicita permissão de notificação se ainda não concedida
   const pedirPermissao = async () => {

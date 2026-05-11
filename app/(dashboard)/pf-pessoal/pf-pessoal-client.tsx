@@ -62,13 +62,20 @@ export default function PfPessoalClient() {
     })
   }, [supabase])
 
-  const { data: gastos,     refetch: refetchGastos     } = useSupabaseQuery<GastoPessoal>('gastos_pessoais',     { orderBy: { column: 'data',           ascending: false } })
-  const { data: receitas,   refetch: refetchReceitas   } = useSupabaseQuery<ReceitaPessoal>('receitas_pessoais', { orderBy: { column: 'data',           ascending: false } })
-  const { data: orcamentos, refetch: refetchOrcamentos } = useSupabaseQuery<OrcamentoPessoal>('orcamentos_pessoais', { orderBy: { column: 'mes_referencia', ascending: false } })
-  const { data: contas          } = useSupabaseQuery<any>('contas', { filters: { ativo: true, categoria: 'pf' } })
-  const { data: ativos          } = useSupabaseQuery<any>('ativos')
-  const { data: patrimonioFisico} = useSupabaseQuery<any>('projetos_patrimonio')
+  const { data: gastos,     refetch: refetchGastos     } = useSupabaseQuery<GastoPessoal>('gastos_pessoais',     { filters: { user_id: authUserId }, orderBy: { column: 'data',           ascending: false }, enabled: !!authUserId })
+  const { data: receitas,   refetch: refetchReceitas   } = useSupabaseQuery<ReceitaPessoal>('receitas_pessoais', { filters: { user_id: authUserId }, orderBy: { column: 'data',           ascending: false }, enabled: !!authUserId })
+  const { data: orcamentos, refetch: refetchOrcamentos } = useSupabaseQuery<OrcamentoPessoal>('orcamentos_pessoais', { filters: { user_id: authUserId }, orderBy: { column: 'mes_referencia', ascending: false }, enabled: !!authUserId })
+  const { data: contas          } = useSupabaseQuery<any>('contas', { filters: { ativo: true, categoria: 'pf', user_id: authUserId }, enabled: !!authUserId })
+  // ativos e projetos_patrimonio são isolados por empresa_id via RLS — sem filtro user_id
+  const { data: ativos          } = useSupabaseQuery<any>('ativos', { enabled: !!authUserId })
+  const { data: patrimonioFisico} = useSupabaseQuery<any>('projetos_patrimonio', { enabled: !!authUserId })
   const refreshTudo = () => { refetchGastos(); refetchReceitas(); refetchOrcamentos() }
+
+  // Quando o authUserId chega (assíncrono), força recarregar todos os dados
+  useEffect(() => {
+    if (authUserId) refreshTudo()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUserId])
 
   useEffect(() => {
     const handleElenaLancamento = () => refreshTudo()
@@ -204,7 +211,7 @@ export default function PfPessoalClient() {
       )}
       {tab === 'lancamentos' && (
         <TabLancamentos
-          gastos={gastos} receitas={receitas} onUpdate={refreshTudo}
+          gastos={gastos} receitas={receitas} contas={contas} onUpdate={refreshTudo}
           onNovoGasto={()   => { setGastoEdit(null);   setModalGasto(true)   }}
           onNovaReceita={()  => { setReceitaEdit(null); setModalReceita(true) }}
           onEditGasto={(g)   => { setGastoEdit(g);      setModalGasto(true)   }}

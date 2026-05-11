@@ -6,3 +6,6 @@ dist/
 build/
 .DS_Store
 *.tsbuildinfo
+
+# Backups de dados dos clientes — nunca comitar no git!
+backups/

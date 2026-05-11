@@ -48,7 +48,7 @@ function CardVisual({ conta, selected, onClick }: { conta: any; selected: boolea
 }
 
 // ── Modal Novo Cartão PF ────────────────────────────────────────
-function ModalNovoCarta({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+function ModalNovoCarta({ userId, onClose, onSave }: { userId: string; onClose: () => void; onSave: () => void }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
@@ -64,6 +64,7 @@ function ModalNovoCarta({ onClose, onSave }: { onClose: () => void; onSave: () =
     setLoading(true)
     setErro('')
     const { error } = await (supabase.from('contas') as any).insert({
+      user_id: userId,
       nome: form.nome_cartao,
       nome_cartao: form.nome_cartao,
       tipo: form.tipo,
@@ -740,7 +741,74 @@ function ModalFaturaPrevista({ conta, mesSel, faturas, onClose, onSave }: { cont
   )
 }
 
-// ── Tab Principal ───────────────────────────────────────────────
+// ── Input Inline de Fatura Real (no card) ──────────────────────────────────────
+function FaturaInlineInput({
+  conta, mesSel, valorAtual, onSaved,
+}: { conta: any; mesSel: string; valorAtual: number | null; onSaved: () => void }) {
+  const supabase = createClient()
+  const [editando, setEditando] = useState(false)
+  const [valor, setValor] = useState(valorAtual !== null ? String(valorAtual) : '')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setValor(valorAtual !== null ? String(valorAtual) : '')
+    setEditando(false)
+  }, [mesSel, valorAtual])
+
+  const handleSalvar = async () => {
+    setLoading(true)
+    const val = parseFloat(valor.replace(',', '.'))
+    if (isNaN(val) || valor.trim() === '') {
+      await (supabase.from('faturas_cartoes') as any)
+        .delete().match({ conta_id: conta.id, mes_referencia: mesSel })
+    } else {
+      await (supabase.from('faturas_cartoes') as any).upsert({
+        conta_id: conta.id,
+        mes_referencia: mesSel,
+        valor_fechado: val,
+      }, { onConflict: 'conta_id,mes_referencia' })
+    }
+    setLoading(false)
+    setEditando(false)
+    onSaved()
+  }
+
+  if (!editando) {
+    return (
+      <button
+        onClick={e => { e.stopPropagation(); setEditando(true) }}
+        className="w-full text-[10px] py-1 rounded-lg border border-white/10 text-fg-disabled hover:text-amber-400 hover:border-amber-500/30 transition-all text-center"
+      >
+        {valorAtual !== null ? '✏️ Alterar fatura real' : '+ Informar fatura real'}
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex gap-1.5 items-center" onClick={e => e.stopPropagation()}>
+      <input
+        type="number" step="0.01" autoFocus
+        className="input text-xs flex-1 py-1 h-7"
+        placeholder="Ex: 1250.00"
+        value={valor}
+        onChange={e => setValor(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') handleSalvar()
+          if (e.key === 'Escape') setEditando(false)
+        }}
+      />
+      <button onClick={handleSalvar} disabled={loading}
+        className="px-2 py-1 h-7 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold hover:bg-amber-500/30 transition-all shrink-0">
+        {loading ? '...' : '✓'}
+      </button>
+      <button onClick={() => setEditando(false)}
+        className="px-2 py-1 h-7 rounded-lg bg-white/5 text-fg-disabled border border-white/10 text-[10px] hover:text-fg transition-all shrink-0">
+        ✕
+      </button>
+    </div>
+  )
+}
+
 export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   userId: string
   gastos: any[]
@@ -764,16 +832,20 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   const [mesSel, setMesSel] = useState(mesAtual)
 
   const carregarContas = useCallback(async () => {
+    if (!userId) return
     const { data: contasData } = await (supabase.from('contas') as any)
       .select('*')
+      .eq('user_id', userId)
       .eq('categoria', 'pf')
       .in('tipo', ['cartao_credito', 'cartao_debito'])
       .eq('ativo', true)
     setContas(contasData || [])
 
-    const { data: faturasData } = await (supabase.from('faturas_cartoes') as any).select('*')
+    const { data: faturasData } = await (supabase.from('faturas_cartoes') as any)
+      .select('*')
+      .eq('user_id', userId)
     setFaturas(faturasData || [])
-  }, [supabase])
+  }, [userId, supabase])
 
   const handleExcluirCartao = async (c: any) => {
     if (!confirm(`Excluir o cartão "${c.nome_cartao || c.nome}"?\nOs lançamentos vinculados não serão removidos.`)) return
@@ -781,7 +853,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
     carregarContas()
   }
 
-  useEffect(() => { carregarContas() }, [carregarContas])
+  useEffect(() => { if (userId) carregarContas() }, [userId, carregarContas])
 
   // Filtro por mês e cartão
   const todosCombinados = [
@@ -1004,15 +1076,20 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {contas.map(c => {
             const band = getBand(c.bandeira)
-            const gasto = gastoCartaoMes(c.id)
+            const gastoMes = gastoCartaoMes(c.id)
+            const faturaObj = faturas.find(f => f.conta_id === c.id && f.mes_referencia === mesSel)
+            const valorFechado = faturaObj?.valor_fechado ?? null
+            const diff = valorFechado !== null ? gastoMes - valorFechado : null
+            const pctFatura = valorFechado ? Math.min((gastoMes / valorFechado) * 100, 999) : null
+
             return (
               <div key={c.id} className="bg-surface border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-all">
-                {/* Área clicável abre o modal de detalhe */}
+
+                {/* Área visual do cartão — clica para abrir detalhe */}
                 <div className="h-24 flex flex-col justify-between p-3 relative overflow-hidden cursor-pointer group"
                   style={{ background: `linear-gradient(135deg, ${band.cor}cc, ${band.cor}66)` }}
                   onClick={() => setModalDetalhe(c)}>
                   <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(45deg,white 0,white 1px,transparent 1px,transparent 10px)' }} />
-                  {/* Indicador visual de clique */}
                   <div className="absolute inset-0 bg-white/0 group-hover:bg-white/5 transition-all" />
                   <div className="flex justify-between items-start relative z-10">
                     <span className="text-white/70 text-[9px] font-bold uppercase tracking-wider">
@@ -1022,41 +1099,105 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
                   </div>
                   <div className="relative z-10">
                     <p className="text-white font-bold text-sm truncate">{c.nome_cartao || c.nome}</p>
-                    <p className="text-white/60 text-[9px]">{band.label} · <span className="opacity-70">ver fatura →</span></p>
+                    <p className="text-white/60 text-[9px]">{band.label} · <span className="opacity-70">ver lançamentos →</span></p>
                   </div>
-                </div>
-                <div className="p-3 space-y-1.5">
-                  {c.limite && (
-                    <div className="flex justify-between text-xs">
-                      <span className="text-fg-tertiary">Limite crédito</span>
-                      <span className="font-semibold text-fg">{fmt(c.limite)}</span>
+                  {/* Barra de progresso fatura */}
+                  {pctFatura !== null && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1">
+                      <div className="h-full transition-all duration-700"
+                        style={{ width: `${Math.min(pctFatura, 100)}%`, backgroundColor: diff! > 0 ? '#ef4444' : '#10b981' }} />
                     </div>
                   )}
-                  <GastoProgressBar gasto={gasto} limite={c.limite_gasto_mensal ?? null} />
+                </div>
+
+                <div className="p-3 space-y-2">
+
+                  {/* ── FATURA DO MÊS — campo inline ── */}
+                  <div className="rounded-xl border p-2.5 space-y-1.5"
+                    style={{
+                      background: diff === null ? 'rgba(255,255,255,0.03)' :
+                        diff > 0 ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
+                      borderColor: diff === null ? 'rgba(255,255,255,0.08)' :
+                        diff > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)',
+                    }}>
+
+                    {/* Linha: Sistema vs Real */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[9px] text-fg-disabled uppercase tracking-wider">Sistema ({labelMes(mesSel)})</p>
+                        <p className="text-sm font-bold text-fg">{fmt(gastoMes)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-fg-disabled uppercase tracking-wider">Fatura Real</p>
+                        {valorFechado !== null ? (
+                          <p className="text-sm font-bold text-amber-400">{fmt(valorFechado)}</p>
+                        ) : (
+                          <p className="text-xs text-fg-disabled italic">não informada</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Barra de comparação + diferença */}
+                    {valorFechado !== null && (
+                      <>
+                        <div className="w-full bg-muted rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full transition-all"
+                            style={{ width: `${Math.min(pctFatura!, 100)}%`, backgroundColor: diff! > 0 ? '#ef4444' : '#10b981' }} />
+                        </div>
+                        <p className={cn('text-[10px] font-bold text-center', diff! > 0 ? 'text-red-400' : 'text-emerald-400')}>
+                          {diff! > 0
+                            ? `⚠️ R$ ${fmt(diff!)} acima da fatura real`
+                            : diff! < -0.01
+                              ? `✅ R$ ${fmt(Math.abs(diff!))} abaixo — ok!`
+                              : '✅ Sistema e fatura batem!'
+                          }
+                        </p>
+                      </>
+                    )}
+
+                    {/* Input rápido de fatura real */}
+                    <FaturaInlineInput
+                      conta={c}
+                      mesSel={mesSel}
+                      valorAtual={valorFechado}
+                      onSaved={carregarContas}
+                    />
+                  </div>
+
+                  {/* GastoProgressBar (limite mensal) */}
+                  <GastoProgressBar gasto={gastoMes} limite={c.limite_gasto_mensal ?? null} />
+
+                  {/* Fechamento e vencimento */}
                   {(c.dia_fechamento || c.dia_vencimento) && (
                     <div className="flex justify-between text-[10px] text-fg-tertiary pt-1 border-t border-white/5">
                       <span>Fecha dia {c.dia_fechamento || '—'}</span>
                       <span>Vence dia {c.dia_vencimento || '—'}</span>
                     </div>
                   )}
-                  <div className="flex gap-1 mt-1">
-                    <button onClick={e => { e.stopPropagation(); setModalLimite(c) }}
+
+                  {/* Ações */}
+                  <div className="flex gap-1 pt-1">
+                    <button onClick={e => { e.stopPropagation(); setModalDetalhe(c) }}
                       className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">
-                      🎯 Definir Limite
+                      📊 Detalhe
                     </button>
                     <button onClick={e => { e.stopPropagation(); setModalLanc(true); setCartaoSel(c.id) }}
-                      className="flex-1 btn-ghost text-xs">
+                      className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">
                       + Lançar
                     </button>
                   </div>
                   <div className="flex gap-1">
+                    <button onClick={e => { e.stopPropagation(); setModalLimite(c) }}
+                      className="flex-1 py-1 rounded-lg text-[11px] font-medium text-amber-400 hover:bg-amber-500/10 border border-amber-500/20 transition-colors">
+                      🎯 Limite
+                    </button>
                     <button onClick={e => { e.stopPropagation(); setModalEditar(c) }}
                       className="flex-1 py-1 rounded-lg text-[11px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors">
                       ✏️ Editar
                     </button>
                     <button onClick={e => { e.stopPropagation(); handleExcluirCartao(c) }}
                       className="flex-1 py-1 rounded-lg text-[11px] font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors">
-                      🗑️ Excluir
+                      🗑️
                     </button>
                   </div>
                 </div>
@@ -1071,6 +1212,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
         </div>
       )}
 
+
       {/* Modais */}
       {modalLanc && (
         <ModalLancamentoPF
@@ -1081,6 +1223,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
       )}
       {modalCriar && (
         <ModalNovoCarta
+          userId={userId}
           onClose={() => setModalCriar(false)}
           onSave={() => { setModalCriar(false); carregarContas() }}
         />
