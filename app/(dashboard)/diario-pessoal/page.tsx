@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { TabDiario } from '@/app/(dashboard)/pf-pessoal/_components/tabs/TabDiario'
+import { TabDiario } from '@/app/(dashboard)/pf-pessoal/_components/tabs/TabDiarioPessoal'
 
 export default async function DiarioPessoalPage() {
   const supabase = createClient()
