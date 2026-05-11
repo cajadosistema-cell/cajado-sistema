@@ -59,8 +59,12 @@ const NAV_PESSOAL: Array<{
     group: '🎯 Minha Rotina', id: 'rotina',
     items: [
       { href: '/dashboard-pessoal', label: '🏠 Painel Pessoal',    tooltip: 'Visão geral dos seus KPIs, metas e agenda do dia.' },
+      { href: '/agenda',            label: '📅 Agenda',            tooltip: 'Sua agenda pessoal.' },
+      { href: '/ideias',            label: '💡 Banco de Ideias',   tooltip: 'Anote suas ideias e insights.' },
+      { href: '/diario-pessoal',    label: '📖 Diário Pessoal',    tooltip: 'Desenvolvimento pessoal e espiritual.' },
+      { href: '/idiomas',           label: '🇺🇸 Curso de Inglês',   tooltip: 'Aulas interativas com a IA.' },
       { href: '/expansao',          label: '🚀 Objetivos & OKRs',  tooltip: 'Defina e acompanhe metas pessoais e profissionais.' },
-      { href: '/diario',            label: '📓 Diário de Bordo',    tooltip: 'Registre reflexões, decisões e marcos pessoais.' },
+      { href: '/diario',            label: '📓 Diário de Bordo',   tooltip: 'Registre reflexões, decisões e marcos do negócio.' },
     ],
   },
   {
@@ -73,7 +77,6 @@ const NAV_PESSOAL: Array<{
       { href: '/gestao-pessoal',label: '👥 Equipe Pessoal',         tooltip: 'Gerencie colaboradores e equipe pessoal (doméstica, motorista etc).' },
       { href: '/cofre',         label: '🔐 Cofre de Senhas',        tooltip: 'Senhas criptografadas com AES-256. Só você tem acesso.' },
       { href: '/perfis',        label: '🧠 Perfis Comportamentais', tooltip: 'Descubra seu perfil DISC e temperamento pessoal.' },
-      { href: '/diario',        label: '📓 Diário Pessoal'   },
     ],
   },
 ]
