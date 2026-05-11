@@ -59,7 +59,7 @@ export function ModalNovoGasto({ userId, contas, onSave, onClose, gastoEdit }: P
       data:            form.data,
       recorrente:      form.recorrente,
       notas:           form.notas || null,
-      parcelas:        isCartaoCredito && numParcelas > 1 ? numParcelas : null,
+      parcelas:        numParcelas > 1 ? numParcelas : null,
       conta_id:        form.conta_id || null,
     }
 
@@ -186,8 +186,8 @@ export function ModalNovoGasto({ userId, contas, onSave, onClose, gastoEdit }: P
             )}
           </div>
 
-          {/* ── Parcelas — só aparece para Cartão Crédito ── */}
-          {isCartaoCredito && (
+          {/* ── Parcelas — disponível para qualquer forma de pagamento ── */}
+          {!form.recorrente && (
             <div className="bg-blue-500/8 border border-blue-500/20 rounded-xl p-3 space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">📅 Parcelamento</p>
               <div className="grid grid-cols-2 gap-3">
@@ -196,7 +196,7 @@ export function ModalNovoGasto({ userId, contas, onSave, onClose, gastoEdit }: P
                   <select className="input mt-1" value={form.parcelas}
                     onChange={e => set('parcelas', e.target.value)}>
                     {[1,2,3,4,5,6,7,8,9,10,11,12,15,18,21,24,30,36,48].map(n => (
-                      <option key={n} value={n}>{n}x</option>
+                      <option key={n} value={n}>{n === 1 ? '1x (à vista)' : `${n}x`}</option>
                     ))}
                   </select>
                 </div>
@@ -213,7 +213,7 @@ export function ModalNovoGasto({ userId, contas, onSave, onClose, gastoEdit }: P
               </div>
               {numParcelas > 1 && valorTotal > 0 && (
                 <p className="text-[10px] text-blue-300">
-                  💡 Total R$\u00a0{valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} dividido em {numParcelas} parcelas
+                  💡 Total R$\u00a0{valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} dividido em {numParcelas} parcelas de R$\u00a0{valorParcela.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
               )}
             </div>
