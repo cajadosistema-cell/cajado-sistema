@@ -785,6 +785,41 @@ function SecaoWhatsApp() {
   const [pollingVincular, setPollingVincular] = useState(false)
   const [showAdvancedVincular, setShowAdvancedVincular] = useState(false)
 
+  // ── Canais existentes (restaura estado ao reabrir a tela) ──
+  const [verificandoStatus, setVerificandoStatus] = useState(false)
+
+  // Carrega canais já salvos no banco ao montar — restaura estado sem re-vincular
+  useEffect(() => {
+    async function restaurarEstado() {
+      try {
+        const token = await ensureToken()
+        if (!token) return
+        const lista = await apiGet('/canais') as any[]
+        const canalEvo = (lista || []).find((c: any) => c.tipo === 'evolution' && c.dados_conexao?.instance_name)
+        if (canalEvo) {
+          const instanceName = canalEvo.dados_conexao.instance_name
+          const isConnected  = canalEvo.status === 'conectado' || canalEvo.dados_conexao?.ativo === true
+          setVinculado({ instanceName, isConnected, linkConexao: null })
+          if (!isConnected) iniciarPollingVincular(instanceName)
+        }
+      } catch { }
+    }
+    restaurarEstado()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function verificarStatusAgora(instanceName: string) {
+    setVerificandoStatus(true)
+    try {
+      const res = await apiGet(`/canais/${instanceName}/status`) as any
+      if (res?.connected) {
+        setVinculado(v => v ? { ...v, isConnected: true } : { instanceName, isConnected: true, linkConexao: null })
+        setPollingVincular(false)
+      }
+    } catch { }
+    setVerificandoStatus(false)
+  }
+
   // ── API Oficial Meta ──
   const [apiForm, setApiForm] = useState({
     phoneNumberId: '',
@@ -796,6 +831,8 @@ function SecaoWhatsApp() {
   const [showGuia, setShowGuia] = useState(false)
 
   const webhookUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://seu-backend.railway.app'
+
+
 
   async function handleCriarInstancia() {
     setLoading(true); setError('')
@@ -968,16 +1005,27 @@ function SecaoWhatsApp() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-2">
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-3">
                   <p className="text-xs font-semibold text-amber-400">⏳ Instância vinculada, aguardando conexão</p>
                   <p className="text-xs text-fg-secondary">A instância <strong className="text-fg">{vinculado.instanceName}</strong> foi registrada, mas ainda não está conectada ao WhatsApp.</p>
-                  <p className="text-xs text-fg-tertiary">Escaneie o QR Code no Evolution Manager. O sistema verificará o status a cada 10 segundos.</p>
+                  <p className="text-xs text-fg-tertiary">Escaneie o QR Code no Evolution Manager. O sistema verifica automaticamente a cada 10s.</p>
                   {pollingVincular && (
                     <p className="text-xs text-fg-disabled animate-pulse flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                      Verificando conexão...
+                      Verificando conexão automaticamente...
                     </p>
                   )}
+                  <button
+                    onClick={() => verificarStatusAgora(vinculado.instanceName)}
+                    disabled={verificandoStatus}
+                    className="flex items-center gap-2 text-xs px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all font-medium disabled:opacity-50"
+                  >
+                    {verificandoStatus ? (
+                      <><span className="w-3 h-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin inline-block" /> Verificando...</>
+                    ) : (
+                      <>🔄 Verificar Agora</>
+                    )}
+                  </button>
                 </div>
                 <button onClick={() => { setVinculado(null); setInstanceNameInput(''); setErroVincular('') }} className="btn-secondary text-xs">
                   ← Vincular outra instância
