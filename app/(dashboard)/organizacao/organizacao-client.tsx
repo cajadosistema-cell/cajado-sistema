@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatRelative, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { TabPendencias } from './_components/TabPendencias'
@@ -292,14 +293,22 @@ export default function OrganizacaoClient() {
   const [editandoIdeia, setEditandoIdeia] = useState<Ideia | null>(null)
   const [projetoSelecionado, setProjetoSelecionado] = useState<string>('todos')
 
+  const { empresaId } = useEmpresaId()
+
   const { data: projetosDB, refetch: refetchProjetos } = useSupabaseQuery<Projeto>('projetos', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
   const { data: ideiasDB, refetch: refetchIdeias } = useSupabaseQuery<Ideia>('ideias', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
   const { data: decisoesDB } = useSupabaseQuery<Decisao>('decisoes', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'data_decisao', ascending: false },
+    enabled: !!empresaId,
   })
 
   // Injetar mock data se o banco estiver vazio (para demonstração)

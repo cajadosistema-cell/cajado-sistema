@@ -3,6 +3,7 @@
 import { PageHeader, MetricCard } from '@/components/shared/ui'
 import React, { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 
 // Tipo do banco Supabase
 type Parceiro = {
@@ -37,7 +38,11 @@ const motivoLabel: Record<string, string> = {
 }
 
 export default function ComissoesClient() {
-  const { data: parceiros, refetch: refetchParceiros } = useSupabaseQuery<Parceiro>('parceiros')
+  const { empresaId } = useEmpresaId()
+  const { data: parceiros, refetch: refetchParceiros } = useSupabaseQuery<Parceiro>('parceiros', {
+    filters: { empresa_id: empresaId || undefined },
+    enabled: !!empresaId,
+  })
   
   const [modalPagamento, setModalPagamento] = useState(false)
   const [modalParceiro, setModalParceiro] = useState(false)

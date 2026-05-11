@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatRelative, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { TabAutomacoes } from './_components/TabAutomacoes'
@@ -358,11 +359,17 @@ COMO OPERAR:
     }
   }
 
+  const { empresaId } = useEmpresaId()
+
   const { data: analises, refetch: refetchAnalises } = useSupabaseQuery<Analise>('analises_mercado', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
   const { data: tendencias, refetch: refetchTendencias } = useSupabaseQuery<Tendencia>('tendencias', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
   const { update: updateTendencia } = useSupabaseMutation('tendencias')
 

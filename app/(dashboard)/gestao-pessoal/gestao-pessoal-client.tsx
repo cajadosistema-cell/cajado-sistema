@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { PageHeader } from '@/components/shared/ui'
 import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import type { Colaborador, RegistroPonto, Tarefa, Ocorrencia } from './_components/types'
@@ -28,22 +29,32 @@ export default function GestaoPessoalClient() {
   const [modalTarefa, setModalTarefa] = useState(false)
   const [modalOcorrencia, setModalOcorrencia] = useState(false)
 
-  // Queries — sem filtros para ver todos os dados da equipe
+  const { empresaId } = useEmpresaId()
+
+  // Queries — filtradas por empresa para isolamento multi-tenant
   const { data: perfis, refetch: refetchPerfis } = useSupabaseQuery<Colaborador>('perfis', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'nome', ascending: true },
+    enabled: !!empresaId,
   })
 
   const { data: registrosPonto, refetch: refetchPonto } = useSupabaseQuery<RegistroPonto>('registros_ponto', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'timestamp', ascending: false },
     limit: 100,
+    enabled: !!empresaId,
   })
 
   const { data: tarefas, refetch: refetchTarefas } = useSupabaseQuery<Tarefa>('tarefas', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
 
   const { data: ocorrencias, refetch: refetchOcorrencias } = useSupabaseQuery<Ocorrencia>('ocorrencias', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
 
   // Nota: colaboradores é alias para perfis (tabela perfis já contém todos os dados principais)

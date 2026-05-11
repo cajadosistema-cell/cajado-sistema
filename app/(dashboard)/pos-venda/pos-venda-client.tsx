@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatRelative, cn } from '@/lib/utils'
 
 type TemplatePosVenda = {
@@ -190,14 +191,19 @@ export default function PosVendaClient() {
   const [modalTemplate, setModalTemplate] = useState(false)
   const [modalDisparo, setModalDisparo] = useState(false)
   const [editarTemplate, setEditarTemplate] = useState<TemplatePosVenda | null>(null)
+  const { empresaId } = useEmpresaId()
 
   const { data: templates, refetch: refetchTemplates } = useSupabaseQuery<TemplatePosVenda>('templates_pos_venda', {
-    orderBy: { column: 'created_at', ascending: false }
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
   const { data: disparos, refetch: refetchDisparos } = useSupabaseQuery<DisparoHistorico>('disparos_pos_venda', {
     select: '*, template:template_id(nome)',
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
     limit: 50,
+    enabled: !!empresaId,
   })
   const { update: updateTemplate } = useSupabaseMutation('templates_pos_venda')
 

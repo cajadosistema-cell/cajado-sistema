@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatRelative } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -216,8 +217,12 @@ export default function DiarioEstrategicoClient() {
     setLoadingAnalise(false)
   }
 
+  const { empresaId } = useEmpresaId()
+
   const { data: entradas, refetch } = useSupabaseQuery<EntradaDiario>('diario_entradas', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
 
   const entradasFiltradas = entradas.filter(e => {

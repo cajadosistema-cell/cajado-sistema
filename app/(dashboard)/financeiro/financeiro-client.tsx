@@ -85,10 +85,11 @@ function BandeiraBadge({ bandeira }: { bandeira?: string }) {
 }
 
 // ── Modal Conta ───────────────────────────────────────────────
-function ModalConta({ onClose, onSave, isAdmin = false }: {
+function ModalConta({ onClose, onSave, isAdmin = false, empresaId = '' }: {
   onClose: () => void
   onSave: () => void
   isAdmin?: boolean
+  empresaId?: string
 }) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
@@ -131,7 +132,7 @@ function ModalConta({ onClose, onSave, isAdmin = false }: {
       payload.dia_fechamento = parseInt(form.dia_fechamento) || null
       payload.dia_vencimento = parseInt(form.dia_vencimento) || null
     }
-    const { data: contaCriada, error } = await (supabase.from('contas') as any).insert(payload).select().single()
+    const { data: contaCriada, error } = await (supabase.from('contas') as any).insert({ ...payload, empresa_id: empresaId || undefined }).select().single()
     if (!error && contaCriada && subContas.length > 0) {
       // Salva contas secundárias (outros bancos) vinculadas
       await Promise.all(subContas.map(sc =>
@@ -670,38 +671,49 @@ export default function FinanceiroClient() {
   const [busca, setBusca] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [authUserId, setAuthUserId] = useState('')
+  const [empresaId, setEmpresaId] = useState('')
   const { success, error: toastError } = useToast()
   const { update: updateLancamento, remove: removeLancamento } = useSupabaseMutation('lancamentos')
   const { remove: removeConta } = useSupabaseMutation('contas')
 
-  // Detecta se é admin (admin = email NÃO está em funcionarios)
-  useEffect(() => {
-    const checkAdmin = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: func } = await (supabase.from('funcionarios') as any)
-        .select('id')
-        .eq('email', user.email || '')
-        .maybeSingle()
-      setIsAdmin(!func) // admin = não está na tabela funcionarios
-    }
-    checkAdmin()
-  }, [])
-
-  // Carrega userId para a aba de registros
+  // Carrega userId + empresa_id do perfil logado
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setAuthUserId(data.user.id)
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      setAuthUserId(data.user.id)
+      // Busca empresa_id do perfil
+      const { data: perfil } = await (supabase.from('perfis') as any)
+        .select('empresa_id')
+        .eq('id', data.user.id)
+        .maybeSingle()
+      if (perfil?.empresa_id) setEmpresaId(perfil.empresa_id)
+      // Detecta se é admin
+      const { data: func } = await (supabase.from('funcionarios') as any)
+        .select('id').eq('email', data.user.email || '').maybeSingle()
+      setIsAdmin(!func)
     })
   }, [])
 
-  const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true, categoria: 'pj' } })
-  const { data: categorias } = useSupabaseQuery<CategoriaFinanceira>('categorias_financeiras', { orderBy: { column: 'nome', ascending: true } })
+  // Re-busca dados quando empresaId chegar
+  useEffect(() => {
+    if (empresaId) { refetchContas(); refetchLancamentos() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId])
+
+  // ── Queries isoladas por empresa_id ─────────────────────────────
+  const { data: contas, refetch: refetchContas } = useSupabaseQuery<Conta>('contas', {
+    filters: { ativo: true, categoria: 'pj', empresa_id: empresaId || undefined },
+    enabled: !!empresaId,
+  })
+  const { data: categorias } = useSupabaseQuery<CategoriaFinanceira>('categorias_financeiras', {
+    orderBy: { column: 'nome', ascending: true },
+  })
   const { data: lancamentos, refetch: refetchLancamentos } = useSupabaseQuery<Lancamento>('lancamentos', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'data_competencia', ascending: false },
-    limit: 100
+    limit: 200,
+    enabled: !!empresaId,
   })
 
   const validarLancamento = async (id: string, descricao: string) => {
@@ -1337,6 +1349,7 @@ export default function FinanceiroClient() {
           onClose={() => setModalConta(false)}
           onSave={refreshAll}
           isAdmin={isAdmin}
+          empresaId={empresaId}
         />
       )}
     </>

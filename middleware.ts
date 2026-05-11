@@ -29,29 +29,45 @@ export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') || ''
   const isSistema = host.includes('sistema.cajadosolucoes') || host.includes('localhost')
   
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login')
-  const isPublicRoute = request.nextUrl.pathname === '/' || request.nextUrl.pathname.startsWith('/api')
+  const isAuthPage     = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/cadastro')
+  const isPublicRoute  = request.nextUrl.pathname === '/' || request.nextUrl.pathname.startsWith('/api')
+  const isOnboarding   = request.nextUrl.pathname.startsWith('/onboarding')
 
-  // Redirecionamento de Domínios
-  // Se o usuário carregar a raiz (/) no subdomínio de SISTEMA, joga direto pro Login/Dashboard
+  // Redirecionamento de domínio: raiz → login ou início
   if (isSistema && request.nextUrl.pathname === '/') {
     const url = request.nextUrl.clone()
     url.pathname = user ? '/inicio' : '/login'
     return NextResponse.redirect(url)
   }
 
-  // Se o usuário estiver deslogado e tentar acessar o interior do sistema (Dashboard, etc)
-  if (!user && !isAuthPage && !isPublicRoute) {
+  // Deslogado tentando acessar área protegida
+  if (!user && !isAuthPage && !isPublicRoute && !isOnboarding) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Se já estiver logado e tentar abrir o login, manda pro dashboard do sistema
+  // Já logado tentando abrir login → vai pro início
   if (user && isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/inicio'
     return NextResponse.redirect(url)
+  }
+
+  // Usuário logado mas SEM empresa → redireciona para onboarding
+  // (exceto se já está no onboarding, na API ou em rotas públicas)
+  if (user && !isOnboarding && !isAuthPage && !isPublicRoute) {
+    const { data: perfil } = await supabase
+      .from('perfis')
+      .select('empresa_id')
+      .eq('id', user.id)
+      .single()
+
+    if (perfil && !perfil.empresa_id) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/onboarding'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

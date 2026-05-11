@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/shared/ui'
 import { createClient } from '@/lib/supabase/client'
 
 type Conta = { id: string; nome: string; tipo: string; categoria: string; saldo_atual: number; cor?: string }
-type Lancamento = { id: string; descricao: string; valor: number; tipo: string; status: string; data_competencia: string; conta_id: string; categoria_id?: string }
+type Lancamento = { id: string; descricao: string; valor: number; tipo: string; status: string; data_competencia: string; conta_id: string; categoria_id?: string | null }
 type Categoria = { id: string; nome: string; tipo: string }
 
 // ── Modal lançamento de conta ────────────────────────────────

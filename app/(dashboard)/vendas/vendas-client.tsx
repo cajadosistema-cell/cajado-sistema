@@ -3,6 +3,7 @@
 import { PageHeader, MetricCard, EmptyState } from '@/components/shared/ui'
 import React, { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { SecaoRanking } from './_components/SecaoRanking'
 import { useToast } from '@/components/shared/toast'
 import { cn } from '@/lib/utils'
@@ -545,16 +546,24 @@ export default function VendasClient() {
   const [vendaSelecionada, setVendaSelecionada] = useState<Venda | null>(null)
 
 
+  const { empresaId } = useEmpresaId()
+
   const { data: vendasDB, loading: loadingVendas, refetch: refetchVendas } = useSupabaseQuery<Venda>('vendas', {
     select: '*, cliente:clientes(nome)',
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
   
   const { data: produtosDB, refetch: refetchProdutos } = useSupabaseQuery<Produto>('produtos', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'nome', ascending: true },
+    enabled: !!empresaId,
   })
   const { data: clientesDB, refetch: refetchClientes } = useSupabaseQuery<Cliente>('clientes', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'nome', ascending: true },
+    enabled: !!empresaId,
   })
 
   const vendas = vendasDB

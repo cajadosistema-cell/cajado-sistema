@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatCurrency, formatDate, formatRelative, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
@@ -770,11 +771,16 @@ export default function TraderClient() {
   const [modalMentorIA, setModalMentorIA] = useState(false)
   const [filtroResultado, setFiltroResultado] = useState<string>('todos')
 
+  const { empresaId } = useEmpresaId()
+
   const { data: operacoesDB, refetch } = useSupabaseQuery<Operacao>('operacoes', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'data_entrada', ascending: false },
+    enabled: !!empresaId,
   })
   const { data: regrasDB } = useSupabaseQuery<RegraRisco>('regras_risco', {
-    filters: { ativo: true },
+    filters: { ativo: true, empresa_id: empresaId || undefined },
+    enabled: !!empresaId,
   })
   const { insert: insertRegra, loading: loadingRegra } = useSupabaseMutation('regras_risco')
 

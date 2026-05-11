@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
 import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
@@ -338,8 +339,11 @@ export default function InvestimentosClient() {
     refetch()
   }
 
+  const { empresaId } = useEmpresaId()
   const { data: ativosDB, refetch } = useSupabaseQuery<Ativo>('ativos', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'valor_investido', ascending: false },
+    enabled: !!empresaId,
   })
 
   const ativos = ativosDB.length > 0 ? ativosDB : MOCK_ATIVOS
