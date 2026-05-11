@@ -245,6 +245,28 @@ router.post("/vincular-instancia", authMiddleware, async (req, res) => {
   }
 });
 
+// ─── DIAGNÓSTICO: canais na memória vs banco (admin only) ─────────────────────
+router.get("/diagnostico", authMiddleware, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ erro: "Apenas admins" });
+  if (!supabase) return res.json({ erro: "Supabase indisponível" });
+
+  const { data: canaisBanco } = await supabase.from("canais").select("id, nome, empresa_id, tipo, status, dados_conexao");
+  const resultado = (canaisBanco || []).map(c => {
+    const idx = c.tipo === "evolution" ? c.dados_conexao?.instance_name : c.dados_conexao?.phone_number_id;
+    const memInfo = canaisMemoria.get(idx);
+    const memEmpresa = memInfo && typeof memInfo === "object" ? memInfo.empresa_id : memInfo;
+    return {
+      id: c.id, nome: c.nome, tipo: c.tipo, status: c.status,
+      instance_name: idx,
+      banco_empresa_id: c.empresa_id,
+      memoria_empresa_id: memEmpresa || null,
+      ok: !memEmpresa || memEmpresa === c.empresa_id,
+    };
+  });
+  const problemas = resultado.filter(r => !r.ok);
+  res.json({ total: resultado.length, problemas: problemas.length, canais: resultado });
+});
+
 // ─── LISTAR CANAIS ─────────────────────────────────────────────────────────────
 router.get("/", authMiddleware, async (req, res) => {
   if (!supabase) return res.json([]);
@@ -256,6 +278,7 @@ router.get("/", authMiddleware, async (req, res) => {
   }));
   res.json(resp);
 });
+
 
 // ─── CRIAR CANAL GENÉRICO ─────────────────────────────────────────────────────
 router.post("/", authMiddleware, async (req, res) => {

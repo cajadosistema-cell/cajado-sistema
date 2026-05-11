@@ -185,8 +185,39 @@ router.post(["/evolution", "/"], async (req, res) => {
   const nomeCliente = messageData.pushName || number;
   const instanceName = data.instance || INSTANCE;
   const canalInfo   = canaisMemoria.get(instanceName);
-  const empresa_id  = (canalInfo && typeof canalInfo === "object" ? canalInfo.empresa_id : canalInfo) || ADMIN_DEFAULT.empresa_id;
-  const instCreds   = (canalInfo && typeof canalInfo === "object") ? { api_key: canalInfo.api_key, evolution_url: canalInfo.evolution_url } : {};
+  let empresa_id  = (canalInfo && typeof canalInfo === "object" ? canalInfo.empresa_id : canalInfo) || null;
+  let instCreds   = (canalInfo && typeof canalInfo === "object") ? { api_key: canalInfo.api_key, evolution_url: canalInfo.evolution_url } : {};
+
+  // ⚠️ SEGURANÇA MULTI-TENANT: Se a instância não está na memória, busca no banco
+  // Evita fallback para ADMIN_DEFAULT que causaria mensagens do cliente X aparecendo na empresa Y
+  if (!empresa_id && supabase) {
+    try {
+      const { data: canalDb } = await supabase
+        .from("canais")
+        .select("empresa_id, dados_conexao")
+        .eq("dados_conexao->>instance_name", instanceName)
+        .single();
+      if (canalDb) {
+        empresa_id = canalDb.empresa_id;
+        instCreds  = {
+          api_key:       canalDb.dados_conexao?.api_key       || null,
+          evolution_url: canalDb.dados_conexao?.evolution_url || null,
+        };
+        // Atualiza memória para próximas mensagens (evita outra consulta ao banco)
+        canaisMemoria.set(instanceName, { empresa_id, ...instCreds });
+        console.log(`[Webhook] ✅ Instância ${instanceName} recuperada do banco → empresa ${empresa_id}`);
+      } else {
+        console.warn(`[Webhook] ⚠️ Instância "${instanceName}" não encontrada em nenhuma empresa. Mensagem descartada.`);
+        return; // DESCARTA — não roteia para empresa errada
+      }
+    } catch (dbErr) {
+      console.error(`[Webhook] Erro ao buscar instância ${instanceName} no banco:`, dbErr.message);
+      return; // DESCARTA em caso de erro — não roteia para empresa errada
+    }
+  } else if (!empresa_id) {
+    console.warn(`[Webhook] ⚠️ Supabase indisponível e instância "${instanceName}" não está em memória. Descartado.`);
+    return;
+  }
 
   if (messageData.key.fromMe) {
     if (!messageText) return;
