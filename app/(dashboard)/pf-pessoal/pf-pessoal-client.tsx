@@ -320,7 +320,7 @@ function TabContasPFInline({
   }
 
   const arquivar = async (id: string, nome: string) => {
-    if (!confirm(`Arquivar conta "${nome}"?`)) return
+    if (!confirm(`Arquivar a conta "${nome}"?\n\nOs lançamentos vinculados a ela NÃO serão apagados. A conta ficará inativa.`)) return
     await (supabase.from('contas') as any).update({ ativo: false }).eq('id', id)
     refetch()
   }
@@ -335,6 +335,28 @@ function TabContasPFInline({
   }
 
   const lista = todasContas || []
+  const [editando, setEditando] = useState<any>(null)
+  const [formEdit, setFormEdit] = useState({ nome: '', tipo: 'corrente', saldo_atual: '' })
+  const [salvandoEdit, setSalvandoEdit] = useState(false)
+
+  const abrirEditar = (c: any) => {
+    setFormEdit({ nome: c.nome, tipo: c.tipo, saldo_atual: c.saldo_atual != null ? String(c.saldo_atual) : '' })
+    setEditando(c)
+  }
+
+  const salvarEdicao = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editando) return
+    setSalvandoEdit(true)
+    await (supabase.from('contas') as any).update({
+      nome: formEdit.nome,
+      tipo: formEdit.tipo,
+      saldo_atual: formEdit.saldo_atual ? Number(formEdit.saldo_atual) : 0,
+    }).eq('id', editando.id)
+    setSalvandoEdit(false)
+    setEditando(null)
+    refetch()
+  }
 
   return (
     <div className="space-y-4">
@@ -346,8 +368,7 @@ function TabContasPFInline({
           <p className="text-sm text-fg-tertiary mb-6 max-w-sm mx-auto">
             Adicione suas contas bancárias: Bradesco, C6 Bank, Nubank, Itaú, poupança... Elas aparecem como opção ao registrar um gasto ou receita.
           </p>
-          <button onClick={() => { /* abre modal via prop */ }}
-            className="btn-primary mx-auto">🏦 Adicionar Primeira Conta</button>
+          <button onClick={onModalClose} className="btn-primary mx-auto">🏦 Adicionar Primeira Conta</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -376,10 +397,16 @@ function TabContasPFInline({
                       <p className="text-sm font-bold text-emerald-400">{(c.saldo_atual ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                     </div>
                   </div>
-                  <button onClick={() => arquivar(c.id, c.nome)}
-                    className="w-full py-1.5 rounded-xl text-[11px] font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors opacity-0 group-hover:opacity-100">
-                    🗑️ Arquivar conta
-                  </button>
+                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => abrirEditar(c)}
+                      className="flex-1 py-1.5 rounded-xl text-[11px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors">
+                      ✏️ Editar
+                    </button>
+                    <button onClick={() => arquivar(c.id, c.nome)}
+                      className="flex-1 py-1.5 rounded-xl text-[11px] font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors">
+                      🗂️ Arquivar
+                    </button>
+                  </div>
                 </div>
               </div>
             )
@@ -396,7 +423,7 @@ function TabContasPFInline({
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal Criar */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#0a0d16] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
@@ -446,6 +473,53 @@ function TabContasPFInline({
           </div>
         </div>
       )}
+
+      {/* Modal Editar Conta */}
+      {editando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#0a0d16] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+              <h2 className="text-sm font-bold text-white">✏️ Editar Conta — {editando.nome}</h2>
+              <button onClick={() => setEditando(null)} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+            </div>
+            <div className="bg-amber-500/5 border-b border-amber-500/10 px-5 py-2">
+              <p className="text-[10px] text-amber-400">⚠️ Os lançamentos vinculados a esta conta <strong>não serão alterados</strong>. Apenas os dados cadastrais serão atualizados.</p>
+            </div>
+            <form onSubmit={salvarEdicao} className="p-5 space-y-4">
+              <div>
+                <label className="label">Nome da Conta *</label>
+                <input className="input mt-1 w-full" required value={formEdit.nome}
+                  onChange={e => setFormEdit(f => ({ ...f, nome: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label mb-2 block">Tipo</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TIPOS.map(t => (
+                    <button key={t.id} type="button" onClick={() => setFormEdit(f => ({ ...f, tipo: t.id }))}
+                      className={cn('flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all',
+                        formEdit.tipo === t.id ? 'border-blue-500/60 bg-blue-500/10 text-blue-300' : 'border-border-subtle text-fg-tertiary hover:text-fg')}>
+                      {t.emoji} {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="label">Saldo Atual (R$)</label>
+                <input className="input mt-1 w-full" type="number" step="0.01"
+                  value={formEdit.saldo_atual} onChange={e => setFormEdit(f => ({ ...f, saldo_atual: e.target.value }))} />
+                <p className="text-[10px] text-fg-tertiary mt-1">Corrija se houve erro. Não reconstrói histórico automático.</p>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button type="button" onClick={() => setEditando(null)} className="btn-secondary">Cancelar</button>
+                <button type="submit" disabled={salvandoEdit} className="btn-primary">
+                  {salvandoEdit ? 'Salvando...' : '💾 Salvar Alterações'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+

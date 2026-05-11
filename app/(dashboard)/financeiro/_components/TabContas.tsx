@@ -166,6 +166,104 @@ function ModalLancamentoConta({ contas, categorias, onClose, onSave }: {
   )
 }
 
+// ── Modal editar/arquivar conta ──────────────────────────────
+const TIPOS_CONTA = [
+  { id: 'corrente',    label: 'Corrente',   emoji: '🏦' },
+  { id: 'poupanca',   label: 'Poupança',    emoji: '🪙' },
+  { id: 'dinheiro',   label: 'Dinheiro',   emoji: '💵' },
+  { id: 'investimento', label: 'Investimento', emoji: '📈' },
+  { id: 'cartao_credito', label: 'Crédito', emoji: '💳' },
+  { id: 'digital',    label: 'Digital',     emoji: '📱' },
+]
+
+function ModalEditarConta({ conta, onClose, onSave }: { conta: Conta; onClose: () => void; onSave: () => void }) {
+  const supabase = createClient()
+  const [form, setForm] = useState({ nome: conta.nome, tipo: conta.tipo, saldo_atual: String(conta.saldo_atual ?? 0), cor: conta.cor || '#6b7280' })
+  const [loading, setLoading] = useState(false)
+  const cfg = TIPOS_CONTA.find(t => t.id === form.tipo) ?? { emoji: '🏦', label: form.tipo }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    await (supabase.from('contas') as any).update({
+      nome: form.nome, tipo: form.tipo,
+      saldo_atual: Number(form.saldo_atual) || 0,
+      cor: form.cor,
+    }).eq('id', conta.id)
+    setLoading(false); onSave(); onClose()
+  }
+
+  const arquivar = async () => {
+    if (!confirm(`Arquivar a conta "${conta.nome}"?\n\nOs lançamentos vinculados NÃO serão apagados. A conta ficará inativa.`)) return
+    await (supabase.from('contas') as any).update({ ativo: false }).eq('id', conta.id)
+    onSave(); onClose()
+  }
+
+  const CORES = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#64748b']
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+          <h2 className="text-sm font-semibold text-fg">✏️ Editar Conta — {conta.nome}</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+        <div className="bg-amber-500/5 border-b border-amber-500/10 px-5 py-2">
+          <p className="text-[10px] text-amber-400">⚠️ Os lançamentos vinculados <strong>não serão alterados</strong>. Somente os dados cadastrais são atualizados.</p>
+        </div>
+        <form onSubmit={handleSave} className="p-5 space-y-4">
+          <div>
+            <label className="label">Nome da Conta *</label>
+            <input className="input mt-1 w-full" required value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label mb-2 block">Tipo</label>
+            <div className="grid grid-cols-3 gap-2">
+              {TIPOS_CONTA.map(t => (
+                <button key={t.id} type="button" onClick={() => setForm(f => ({ ...f, tipo: t.id }))}
+                  className={cn('flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-medium border transition-all',
+                    form.tipo === t.id ? 'border-amber-500/60 bg-amber-500/10 text-amber-300' : 'border-border-subtle text-fg-tertiary hover:text-fg')}>
+                  {t.emoji} {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Saldo Atual (R$)</label>
+              <input className="input mt-1 w-full" type="number" step="0.01" value={form.saldo_atual}
+                onChange={e => setForm(f => ({ ...f, saldo_atual: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label mb-2 block">Cor do card</label>
+              <div className="flex flex-wrap gap-1.5">
+                {CORES.map(cor => (
+                  <button key={cor} type="button" onClick={() => setForm(f => ({ ...f, cor }))}
+                    className={cn('w-6 h-6 rounded-full border-2 transition-all', form.cor === cor ? 'border-white scale-125' : 'border-transparent')}
+                    style={{ background: cor }} />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
+            <button type="button" onClick={arquivar}
+              className="text-xs px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors">
+              🗂️ Arquivar Conta
+            </button>
+            <div className="flex gap-2">
+              <button type="button" onClick={onClose} className="btn-secondary text-xs">Cancelar</button>
+              <button type="submit" disabled={loading} className="btn-primary text-xs">
+                {loading ? 'Salvando...' : '💾 Salvar'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── TabContas principal ──────────────────────────────────────
 export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImportar, onValidar, onEditLancamento, onDeleteLancamento, onDeleteConta }: {
   contas: Conta[]; lancamentos: Lancamento[]; categorias: Categoria[];
@@ -174,12 +272,14 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
   onEditLancamento: (l: any) => void
   onDeleteLancamento: (id: string) => void
   onDeleteConta: (id: string) => void
+
 }) {
   const contasBancarias = contas.filter(c => ['corrente', 'poupanca', 'dinheiro', 'investimento'].includes(c.tipo))
   const [contaSel, setContaSel] = useState<string>('todas')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [busca, setBusca] = useState('')
   const [modalLanc, setModalLanc] = useState(false)
+  const [editandoConta, setEditandoConta] = useState<Conta | null>(null)
   const today = new Date().toISOString().substring(0, 10)
   const mes = new Date().toISOString().substring(0, 7)
 
@@ -233,13 +333,18 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
               <span className="text-[9px] opacity-60">{formatCurrency(c.saldo_atual)}</span>
             </button>
             {contaSel === c.id && (
-              <button
-                onClick={() => onDeleteConta(c.id)}
-                className="hidden md:flex items-center justify-center px-2 border border-l-0 border-white/20 rounded-r-xl bg-white/10 text-red-400 hover:text-white hover:bg-red-500 transition-colors"
-                title="Excluir Conta Bancária"
-              >
-                🗑️
-              </button>
+              <div className="hidden md:flex">
+                <button
+                  onClick={() => setEditandoConta(c)}
+                  className="flex items-center justify-center px-2 border border-l-0 border-white/20 bg-white/10 text-blue-400 hover:text-white hover:bg-blue-500 transition-colors"
+                  title="Editar Conta"
+                >✏️</button>
+                <button
+                  onClick={() => onDeleteConta(c.id)}
+                  className="flex items-center justify-center px-2 border border-l-0 border-white/20 rounded-r-xl bg-white/10 text-red-400 hover:text-white hover:bg-red-500 transition-colors"
+                  title="Arquivar Conta"
+                >🗂️</button>
+              </div>
             )}
           </div>
         ))}
@@ -332,6 +437,13 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
         <ModalLancamentoConta
           contas={contas} categorias={categorias}
           onClose={() => setModalLanc(false)} onSave={() => setModalLanc(false)}
+        />
+      )}
+      {editandoConta && (
+        <ModalEditarConta
+          conta={editandoConta}
+          onClose={() => setEditandoConta(null)}
+          onSave={() => { setEditandoConta(null); onNovaConta() }}
         />
       )}
     </div>
