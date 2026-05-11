@@ -809,6 +809,79 @@ function FaturaInlineInput({
   )
 }
 
+// ── Modal Nova Conta Bancária PF ────────────────────────────────
+function ModalNovaConta({ userId, onClose, onSave }: { userId: string; onClose: () => void; onSave: () => void }) {
+  const supabase = createClient()
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+  const [form, setForm] = useState({ nome: '', tipo: 'corrente', saldo_inicial: '' })
+  const TIPOS = [
+    { id: 'corrente',     label: 'Conta Corrente', emoji: '🏦' },
+    { id: 'poupanca',    label: 'Poupança',        emoji: '🪙' },
+    { id: 'digital',     label: 'Conta Digital',   emoji: '📱' },
+    { id: 'investimento',label: 'Investimento',    emoji: '📈' },
+  ]
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.nome.trim()) return
+    setLoading(true); setErro('')
+    const { error } = await (supabase.from('contas') as any).insert({
+      user_id: userId, nome: form.nome, tipo: form.tipo, categoria: 'pf',
+      saldo_inicial: form.saldo_inicial ? Number(form.saldo_inicial) : 0,
+      saldo_atual: form.saldo_inicial ? Number(form.saldo_inicial) : 0,
+      ativo: true,
+    })
+    setLoading(false)
+    if (error) { setErro(error.message); return }
+    onSave(); onClose()
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-[#0a0d16] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+          <h2 className="text-sm font-bold text-white">🏦 Nova Conta Bancária PF</h2>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="label">Nome da Conta *</label>
+            <input className="input mt-1 w-full" required placeholder="Ex: Nubank, Itaú Corrente, C6 Bank..."
+              value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label mb-2 block">Tipo de Conta *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {TIPOS.map(t => (
+                <button key={t.id} type="button" onClick={() => setForm(f => ({ ...f, tipo: t.id }))}
+                  className={cn('flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all',
+                    form.tipo === t.id
+                      ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400'
+                      : 'border-border-subtle text-fg-tertiary hover:text-fg hover:border-border'
+                  )}>
+                  <span>{t.emoji}</span><span>{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="label">Saldo Atual (R$)</label>
+            <input className="input mt-1 w-full" type="number" step="0.01" placeholder="0,00"
+              value={form.saldo_inicial} onChange={e => setForm(f => ({ ...f, saldo_inicial: e.target.value }))} />
+            <p className="text-[10px] text-fg-tertiary mt-1">Informe o saldo atual para monitoramento correto.</p>
+          </div>
+          {erro && <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2">{erro}</p>}
+          <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-primary">
+              {loading ? 'Salvando...' : '🏦 Criar Conta'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   userId: string
   gastos: any[]
@@ -817,9 +890,11 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
 }) {
   const supabase = createClient()
   const [contas, setContas] = useState<any[]>([])
+  const [contasNormais, setContasNormais] = useState<any[]>([])
   const [faturas, setFaturas] = useState<any[]>([])
   const [cartaoSel, setCartaoSel] = useState('todos')
-  const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro'>('lancamentos')
+  const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro' | 'contas'>('lancamentos')
+  const [modalNovaConta, setModalNovaConta] = useState(false)
   const [modalLanc, setModalLanc] = useState(false)
   const [modalCriar, setModalCriar] = useState(false)
   const [modalImport, setModalImport] = useState(false)
@@ -840,6 +915,14 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
       .in('tipo', ['cartao_credito', 'cartao_debito'])
       .eq('ativo', true)
     setContas(contasData || [])
+
+    const { data: contasNormaisData } = await (supabase.from('contas') as any)
+      .select('*')
+      .eq('user_id', userId)
+      .eq('categoria', 'pf')
+      .in('tipo', ['corrente', 'poupanca', 'digital', 'investimento'])
+      .eq('ativo', true)
+    setContasNormais(contasNormaisData || [])
 
     const { data: faturasData } = await (supabase.from('faturas_cartoes') as any)
       .select('*')
@@ -889,6 +972,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           {([
             { id: 'lancamentos', label: '💸 Lançamentos' },
             { id: 'cadastro',    label: '💳 Meus Cartões' },
+            { id: 'contas',      label: '🏦 Contas PF' },
           ] as const).map(t => (
             <button key={t.id} onClick={() => setSubAba(t.id)}
               className={cn('px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors',
@@ -904,7 +988,9 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           </button>
           {subAba === 'lancamentos'
             ? <button onClick={() => setModalLanc(true)} disabled={contas.length === 0} className="btn-primary text-xs disabled:opacity-50">+ Lançar</button>
-            : <button onClick={() => setModalCriar(true)} className="btn-primary text-xs">+ Novo Cartão</button>
+            : subAba === 'cadastro'
+              ? <button onClick={() => setModalCriar(true)} className="btn-primary text-xs">+ Novo Cartão</button>
+              : <button onClick={() => setModalNovaConta(true)} className="btn-primary text-xs">+ Nova Conta</button>
           }
         </div>
       </div>
@@ -1211,9 +1297,62 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           </button>
         </div>
       )}
+      {/* Aba Contas PF (corrente, poupanca, digital) */}
+      {subAba === 'contas' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {contasNormais.length === 0 && (
+              <div className="col-span-full text-center py-16">
+                <p className="text-4xl mb-3">🏦</p>
+                <p className="text-sm font-bold text-fg mb-1">Nenhuma conta bancária PF cadastrada</p>
+                <p className="text-xs text-fg-tertiary mb-4">Adicione contas corrente, poupança ou digital para selecionar nos seus lançamentos.</p>
+                <button onClick={() => setModalNovaConta(true)} className="btn-primary mx-auto">+ Nova Conta</button>
+              </div>
+            )}
+            {contasNormais.map(c => (
+              <div key={c.id} className="bg-surface border border-white/5 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-fg">{c.nome}</p>
+                    <p className="text-[10px] text-fg-tertiary capitalize">{c.tipo?.replace('_', ' ')} · PF</p>
+                  </div>
+                  <span className="text-2xl">🏦</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-muted/30 rounded-xl p-2 text-center">
+                    <p className="text-[9px] text-fg-disabled uppercase">Saldo Inicial</p>
+                    <p className="text-sm font-bold text-fg">{fmt(c.saldo_inicial ?? 0)}</p>
+                  </div>
+                  <div className="bg-muted/30 rounded-xl p-2 text-center">
+                    <p className="text-[9px] text-fg-disabled uppercase">Saldo Atual</p>
+                    <p className="text-sm font-bold text-emerald-400">{fmt(c.saldo_atual ?? 0)}</p>
+                  </div>
+                </div>
+                <button onClick={async () => {
+                  if (!confirm(`Arquivar conta "${c.nome}"?`)) return
+                  await (supabase.from('contas') as any).update({ ativo: false }).eq('id', c.id)
+                  carregarContas()
+                }} className="w-full py-1 rounded-lg text-[11px] text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors">
+                  🗑️ Arquivar
+                </button>
+              </div>
+            ))}
+            <button onClick={() => setModalNovaConta(true)}
+              className="border-2 border-dashed border-border-subtle rounded-2xl p-6 flex flex-col items-center justify-center gap-2 text-fg-disabled hover:border-emerald-500/40 hover:text-emerald-400 transition-all min-h-[180px]">
+              <span className="text-3xl">+</span>
+              <span className="text-xs font-semibold">Adicionar Conta PF</span>
+            </button>
+          </div>
+        </div>
+      )}
 
-
-      {/* Modais */}
+      {modalNovaConta && (
+        <ModalNovaConta
+          userId={userId}
+          onClose={() => setModalNovaConta(false)}
+          onSave={() => { setModalNovaConta(false); carregarContas() }}
+        />
+      )}
       {modalLanc && (
         <ModalLancamentoPF
           cartoes={contas} userId={userId}
