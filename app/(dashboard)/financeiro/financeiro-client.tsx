@@ -889,10 +889,12 @@ export default function FinanceiroClient() {
         
         const avulsos = doMes.filter(l => (!l.total_parcelas || l.total_parcelas <= 1) && !l.is_fixo)
         const gastosFixos = lancamentos.filter(l => l.tipo === 'despesa' && l.is_fixo).slice(0, 50)
+        const gastosRecorrentes = lancamentos.filter(l => l.tipo === 'despesa' && !l.is_fixo && (l as any).recorrente).slice(0, 50)
         const gastosParcelados = lancamentos.filter(l => l.tipo === 'despesa' && (l.total_parcelas && l.total_parcelas > 1) && !l.is_fixo).slice(0, 50)
         
         const totalAvulsos = avulsos.reduce((s, l) => s + l.valor, 0)
         const totalFixos   = gastosFixos.reduce((s, l) => s + l.valor, 0)
+        const totalRecorrentes = gastosRecorrentes.reduce((s, l) => s + l.valor, 0)
         const totalParcelados = gastosParcelados.reduce((s, l) => s + l.valor, 0)
         
         const getNomeConta = (id: string) => contas.find(c => c.id === id)?.nome || '—'
@@ -901,7 +903,7 @@ export default function FinanceiroClient() {
         return (
           <div className="space-y-4">
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-page border border-border-subtle rounded-xl p-4">
                 <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💸 Avulsos do Mês</p>
                 <p className="text-2xl font-bold text-red-400">{formatCurrency(totalAvulsos)}</p>
@@ -913,14 +915,19 @@ export default function FinanceiroClient() {
                 <p className="text-xs text-fg-disabled mt-0.5">{gastosFixos.length} lançamento(s)</p>
               </div>
               <div className="bg-page border border-border-subtle rounded-xl p-4">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">🔁 Recorrentes</p>
+                <p className="text-2xl font-bold text-purple-400">{formatCurrency(totalRecorrentes)}</p>
+                <p className="text-xs text-fg-disabled mt-0.5">{gastosRecorrentes.length} lançamento(s)</p>
+              </div>
+              <div className="bg-page border border-border-subtle rounded-xl p-4">
                 <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💳 Parcelados</p>
                 <p className="text-2xl font-bold text-blue-400">{formatCurrency(totalParcelados)}</p>
                 <p className="text-xs text-fg-disabled mt-0.5">{gastosParcelados.length} lançamento(s)</p>
               </div>
             </div>
             {/* Split columns */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Coluna: avulsos do mês */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              {/* Avulsos */}
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-red-500/5">
                   <h3 className="text-sm font-semibold text-fg">💸 Gastos Avulsos</h3>
@@ -947,8 +954,8 @@ export default function FinanceiroClient() {
                     ))}
                 </div>
               </div>
-              
-              {/* Coluna: gastos fixos */}
+
+              {/* Fixos */}
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
                   <h3 className="text-sm font-semibold text-fg">📌 Gastos Fixos</h3>
@@ -963,6 +970,34 @@ export default function FinanceiroClient() {
                           <div className="flex gap-2 items-center">
                             <p className="text-[10px] text-fg-disabled">{getNomeConta(l.conta_id)}</p>
                           </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className={`text-xs ${valCls(l)}`}>{formatCurrency(l.valor)}</span>
+                          {l.status !== 'validado' && (
+                            <button onClick={() => validarLancamento(l.id, l.descricao)}
+                              className="hidden group-hover:block text-[10px] text-emerald-400 hover:text-emerald-300">✓</button>
+                          )}
+                          <button onClick={() => handleDeleteLancamento(l.id)}
+                            className="hidden group-hover:block text-[10px] text-fg-disabled hover:text-red-400 md:block">✕</button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Recorrentes */}
+              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-purple-500/5">
+                  <h3 className="text-sm font-semibold text-fg">🔁 Recorrentes</h3>
+                </div>
+                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
+                  {gastosRecorrentes.length === 0
+                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto recorrente.</p>
+                    : gastosRecorrentes.map(l => (
+                      <div key={l.id} className={rowCls}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-fg truncate">{l.descricao}</p>
+                          <p className="text-[10px] text-fg-disabled">{getNomeConta(l.conta_id)}</p>
                         </div>
                         <div className="flex items-center gap-2 ml-2">
                           <span className={`text-xs ${valCls(l)}`}>{formatCurrency(l.valor)}</span>

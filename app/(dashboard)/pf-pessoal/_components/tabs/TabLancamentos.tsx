@@ -58,9 +58,10 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
     onUpdate()
   }
 
-  const avulsos   = filtrados.filter(item => !item.recorrente && (!(item as any).parcelas || (item as any).parcelas <= 1))
-  const fixos     = filtrados.filter(item => item.recorrente)
-  const parcelados= filtrados.filter(item => !item.recorrente && (item as any).parcelas && (item as any).parcelas > 1)
+  const avulsos    = filtrados.filter(item => !item.recorrente && (!(item as any).parcelas || (item as any).parcelas <= 1))
+  const fixos      = filtrados.filter(item => item.recorrente && (item as any).is_fixo)
+  const recorrentes= filtrados.filter(item => item.recorrente && !(item as any).is_fixo)
+  const parcelados = filtrados.filter(item => !item.recorrente && (item as any).parcelas && (item as any).parcelas > 1)
 
   const renderItem = (item: any) => {
     const isGasto  = item._tipo === 'gasto'
@@ -162,7 +163,7 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
           {/* Avulsos */}
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-emerald-500/5">
@@ -179,13 +180,26 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
           {/* Fixos */}
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
-              <h3 className="text-sm font-semibold text-fg">📌 Fixos & Recorrentes</h3>
+              <h3 className="text-sm font-semibold text-fg">📌 Fixos</h3>
               <span className="text-xs text-fg-tertiary">{fixos.length} itens</span>
             </div>
             <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
               {fixos.length === 0
-                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item fixo.</p>
+                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo.</p>
                 : fixos.map(renderItem)}
+            </div>
+          </div>
+
+          {/* Recorrentes */}
+          <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-purple-500/5">
+              <h3 className="text-sm font-semibold text-fg">🔁 Recorrentes</h3>
+              <span className="text-xs text-fg-tertiary">{recorrentes.length} itens</span>
+            </div>
+            <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+              {recorrentes.length === 0
+                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item recorrente.</p>
+                : recorrentes.map(renderItem)}
             </div>
           </div>
 
