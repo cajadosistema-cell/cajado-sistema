@@ -191,10 +191,10 @@ export function useConversaDetalhe(numero: string | null) {
     
     setLoading(true)
     try {
-      const data = await apiGet<ConversaDetalhada>(`/inbox/conversas/${numero}`)
+      const data = await apiGet<ConversaDetalhada>(`/inbox/conversas/${encodeURIComponent(numero)}`)
       setConversa(data)
-    } catch {
-      // silencioso
+    } catch (e) {
+      console.error('[Inbox] Erro ao carregar conversa:', numero, e)
     } finally {
       setLoading(false)
     }
