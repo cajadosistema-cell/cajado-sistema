@@ -96,12 +96,29 @@ router.post("/inbox/webhook", webhookSecret, async (req, res) => {
   }
 
   // ── Resolve empresa_id pela instância (isolamento multi-tenant) ──────────
-  // 'data.instance' é o nome da instância Evolution que recebeu a msg.
-  // Mapeamos para empresa_id via canaisMemoria (carregado no boot).
   const instanceRecebida = data?.instance || data?.sender || "botwhatsapp01";
-  const canalInfo = canaisMemoria.get(instanceRecebida);
-  const empresaIdCanal = (typeof canalInfo === "object" ? canalInfo?.empresa_id : canalInfo)
-                         || ADMIN_DEFAULT.empresa_id;
+
+  // 1ª prioridade: se conversa já existe no banco, respeita o empresa_id gravado
+  let empresaIdCanal = null;
+  if (supabase) {
+    try {
+      const { data: convDb } = await supabase
+        .from("whatsapp_conversas")
+        .select("empresa_id")
+        .eq("numero", numero)
+        .single();
+      if (convDb?.empresa_id) empresaIdCanal = convDb.empresa_id;
+    } catch {}
+  }
+
+  // 2ª prioridade: canaisMemoria (instance_name → empresa_id)
+  if (!empresaIdCanal) {
+    const canalInfo = canaisMemoria.get(instanceRecebida);
+    empresaIdCanal = (typeof canalInfo === "object" ? canalInfo?.empresa_id : canalInfo) || null;
+  }
+
+  // 3ª prioridade: empresa do admin (fallback seguro)
+  if (!empresaIdCanal) empresaIdCanal = ADMIN_DEFAULT.empresa_id;
 
   const conv = await registrarNaConversa(numero, mensagem, nome, null, empresaIdCanal, instanceRecebida);
   conv.unread = (conv.unread || 0) + 1;
