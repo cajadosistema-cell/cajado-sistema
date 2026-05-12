@@ -6,7 +6,7 @@ module.exports = {
   EVOLUTION_KEY: process.env.API_KEY,
   INSTANCE: process.env.INSTANCE || "botwhatsapp01",
   OPENROUTER_KEY: process.env.OPENROUTER_API_KEY,
-  JWT_SECRET: process.env.JWT_SECRET || "visiopro-secret-2025",
+  JWT_SECRET: process.env.JWT_SECRET || "cajado-jwt-secret-2025-troque-em-producao",
   CHATWOOT_URL: process.env.CHATWOOT_URL || "https://app.chatwoot.com",
   CHATWOOT_TOKEN: process.env.CHATWOOT_TOKEN,
   CHATWOOT_ACCOUNT: process.env.CHATWOOT_ACCOUNT_ID,
