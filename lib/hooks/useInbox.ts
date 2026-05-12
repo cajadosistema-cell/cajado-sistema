@@ -102,7 +102,17 @@ async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 // Auto-login: obtém token via /api/inbox-token (server-side, usa sessão Supabase)
 async function ensureInboxToken(): Promise<string | null> {
   const existing = getToken()
-  if (existing) return existing
+  // Valida token existente — descarta se empresa_id for inválido
+  if (existing) {
+    try {
+      const payload = JSON.parse(atob(existing.split('.')[1]))
+      if (payload.empresa_id && payload.empresa_id !== 'empresa-padrao') return existing
+      // Token com empresa_id inválido → descarta para gerar novo
+      if (typeof window !== 'undefined') localStorage.removeItem(INBOX_TOKEN_KEY)
+    } catch {
+      if (typeof window !== 'undefined') localStorage.removeItem(INBOX_TOKEN_KEY)
+    }
+  }
   try {
     const res = await fetch('/api/inbox-token')
     if (!res.ok) return null

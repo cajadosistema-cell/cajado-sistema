@@ -24,6 +24,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Não autenticado no Supabase' }, { status: 401 })
     }
 
+    // Busca o empresa_id REAL do usuário na tabela usuarios do Supabase
+    const userEmail = session.user.email?.toLowerCase() || ''
+    let empresaId = 'empresa-padrao'
+    try {
+      const { data: usuario } = await supabase
+        .from('usuarios')
+        .select('empresa_id, role, setor, nome')
+        .eq('email', userEmail)
+        .single()
+      if (usuario?.empresa_id) empresaId = usuario.empresa_id
+    } catch {}
+
     // Gera o token do Inbox localmente para evitar 502/cross-project errors com o backend
     const userPayload = {
       id: session.user.id,
@@ -31,7 +43,7 @@ export async function GET(req: Request) {
       email: session.user.email,
       role: 'admin',
       setor: 'todos',
-      empresa_id: 'empresa-padrao',
+      empresa_id: empresaId,  // ← empresa_id REAL, não hardcoded
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60) // 7 dias
     }
