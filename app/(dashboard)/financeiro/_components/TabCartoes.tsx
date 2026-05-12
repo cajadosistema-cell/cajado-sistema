@@ -5,6 +5,7 @@ import { formatCurrency, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts'
 import { EmptyState } from '@/components/shared/ui'
+import { exportarLancamentos } from '@/lib/export-utils'
 
 const COLORS = ['#10b981', '#3b82f6', '#f5a623', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6', '#facc15']
 
@@ -308,9 +309,19 @@ export function TabCartoes({
           <h2 className="text-lg font-semibold text-fg">Gestão de Cartões de Crédito</h2>
           <p className="text-xs text-fg-tertiary">Controle faturas, veja onde gastou mais e centralize os gastos PF e PJ.</p>
         </div>
-        <button onClick={onNovoGasto} className="btn-primary whitespace-nowrap">
-          + Lançar no Cartão
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              const filtrados = gastosTudo.filter(l => cartaoSelecionado === 'todos' || l.conta_id === cartaoSelecionado)
+              exportarLancamentos(filtrados, [], cartoes, `cartoes_pj${cartaoSelecionado !== 'todos' ? '_' + (cartoes.find(c => c.id === cartaoSelecionado)?.nome_cartao || cartaoSelecionado) : ''}`)
+            }}
+            className="btn-secondary whitespace-nowrap text-xs">
+            📤 Exportar CSV
+          </button>
+          <button onClick={onNovoGasto} className="btn-primary whitespace-nowrap">
+            + Lançar no Cartão
+          </button>
+        </div>
       </div>
 
       {/* Seletor visual de cartões */}

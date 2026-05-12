@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { ModalImportarExtratoIA } from '@/components/shared/ModalImportarExtratoIA'
 import { PainelComparativoMes } from '@/components/shared/PainelComparativoMes'
+import { exportarLancamentos } from '@/lib/export-utils'
 
 const BANDEIRAS = [
   { id: 'visa',       label: 'Visa',       emoji: '💳', cor: '#1a1f71' },
@@ -1023,9 +1024,18 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setModalImport(true)} className="btn-secondary text-xs flex items-center gap-1">
             🤖 Importar Extrato (IA)
+          </button>
+          <button
+            onClick={() => {
+              const lancFiltrados = gastos.filter((l: any) => cartaoSel === 'todos' || l.conta_id === cartaoSel)
+              const cartaoNome = contas.find((c: any) => c.id === cartaoSel)?.nome_cartao || cartaoSel
+              exportarLancamentos(lancFiltrados, [], contas, `cartoes_pf${cartaoSel !== 'todos' ? '_' + cartaoNome : ''}`)
+            }}
+            className="btn-secondary text-xs flex items-center gap-1">
+            📤 Exportar CSV
           </button>
           {subAba === 'lancamentos'
             ? <button onClick={() => setModalLanc(true)} disabled={contas.length === 0} className="btn-primary text-xs disabled:opacity-50">+ Lançar</button>

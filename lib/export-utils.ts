@@ -15,6 +15,35 @@ export function exportCSV(filename: string, headers: string[], rows: (string | n
   URL.revokeObjectURL(url)
 }
 
+// ── Exportar Lançamentos (PF e PJ) ────────────────────────────
+export function exportarLancamentos(
+  lancamentos: any[],
+  categorias: any[],
+  contas: any[],
+  nomeArquivo = 'lancamentos'
+) {
+  if (!lancamentos.length) { alert('Nenhum lançamento para exportar.'); return }
+
+  const getCat  = (id: string) => categorias.find(c => c.id === id)?.nome  || ''
+  const getConta = (id: string) => contas.find(c => c.id === id)?.nome || contas.find(c => c.id === id)?.nome_cartao || ''
+
+  const headers = ['Data', 'Descrição', 'Tipo', 'Valor (R$)', 'Categoria', 'Conta/Cartão', 'Status', 'Parcela']
+
+  const rows = lancamentos.map(l => [
+    l.data_competencia || l.data || '',
+    l.descricao || '',
+    l.tipo === 'despesa' ? 'Despesa' : l.tipo === 'receita' ? 'Receita' : l.tipo || '',
+    Number(l.valor || 0).toFixed(2).replace('.', ','),
+    getCat(l.categoria_id),
+    getConta(l.conta_id),
+    l.status || l.pago ? 'Pago' : 'Pendente',
+    l.parcela_atual && l.total_parcelas ? `${l.parcela_atual}/${l.total_parcelas}` : '',
+  ])
+
+  const mes = new Date().toISOString().slice(0, 7)
+  exportCSV(`${nomeArquivo}_${mes}.csv`, headers, rows)
+}
+
 // ── CSV Import ────────────────────────────────────────────────
 export function parseCSV(text: string): Record<string, string>[] {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(Boolean)

@@ -8,6 +8,7 @@ import type { GastoPessoal, ReceitaPessoal, OrcamentoPessoal } from './_componen
 import { formatCurrency } from './_components/types'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { exportarLancamentos } from '@/lib/export-utils'
 
 import { TabResumo }      from './_components/tabs/TabResumo'
 import { TabLancamentos } from './_components/tabs/TabLancamentos'
@@ -106,7 +107,17 @@ export default function PfPessoalClient() {
       </>
     )
     if (tab === 'contas') return (
-      <button onClick={() => setModalNovaConta(true)} className="btn-primary text-xs h-8 px-4 whitespace-nowrap">🏦 Nova Conta</button>
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => {
+            const lancContas = [...gastos, ...receitas].filter((l: any) => contas?.some((c: any) => c.id === l.conta_id))
+            exportarLancamentos(lancContas, [], contas ?? [], 'contas_pf')
+          }}
+          className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">
+          📤 Exportar CSV
+        </button>
+        <button onClick={() => setModalNovaConta(true)} className="btn-primary text-xs h-8 px-4 whitespace-nowrap">🏦 Nova Conta</button>
+      </div>
     )
     if (tab === 'previsao') return (
       <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">+ Receita Recorrente</button>

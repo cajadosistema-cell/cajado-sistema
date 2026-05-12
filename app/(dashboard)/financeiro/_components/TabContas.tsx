@@ -5,6 +5,7 @@ import { formatCurrency, cn } from '@/lib/utils'
 import { useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { EmptyState } from '@/components/shared/ui'
 import { createClient } from '@/lib/supabase/client'
+import { exportarLancamentos } from '@/lib/export-utils'
 
 type Conta = { id: string; nome: string; tipo: string; categoria: string; saldo_atual: number; cor?: string }
 type Lancamento = { id: string; descricao: string; valor: number; tipo: string; status: string; data_competencia: string; conta_id: string; categoria_id?: string | null }
@@ -307,8 +308,16 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
           <h2 className="text-base font-semibold text-fg">Contas Bancárias</h2>
           <p className="text-xs text-fg-tertiary">Corrente · Poupança · Caixa · Importar extrato</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={onImportar} className="btn-secondary text-xs hidden md:flex">📥 Importar Extrato</button>
+          <button
+            onClick={() => {
+              const filtrados = lancamentosContas.filter(l => contaSel === 'todas' || l.conta_id === contaSel)
+              exportarLancamentos(filtrados, categorias, contas, `contas_pj${contaSel !== 'todas' ? '_' + (contas.find(c => c.id === contaSel)?.nome || contaSel) : ''}`)
+            }}
+            className="btn-secondary text-xs hidden md:flex">
+            📤 Exportar CSV
+          </button>
           <button onClick={onNovaConta} className="btn-ghost text-xs hidden md:flex">+ Conta</button>
           <button onClick={() => setModalLanc(true)} className="btn-primary text-xs">+ Lançamento</button>
         </div>
