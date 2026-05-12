@@ -157,10 +157,10 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
   const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
   const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.email?.toLowerCase() === "admin@visiopro.com";
 
-  // empresa_id efetivo: usa o do JWT ou ADMIN_DEFAULT para o admin master
-  const empresaIdEfetivo = isSuperAdmin
-    ? (ADMIN_DEFAULT.empresa_id || req.user.empresa_id)
-    : req.user.empresa_id;
+  // empresa_id efetivo: usa o do JWT (prioridade) ou ADMIN_DEFAULT se estiver vazio
+  const empresaIdEfetivo = req.user.empresa_id && req.user.empresa_id !== "vazia"
+    ? req.user.empresa_id
+    : ADMIN_DEFAULT.empresa_id;
 
   if (supabase) {
     let query = supabase.from("whatsapp_conversas").select("dados, empresa_id");
