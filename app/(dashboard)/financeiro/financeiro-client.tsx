@@ -457,6 +457,8 @@ function ModalLancamento({
         categoria_id: form.categoria_id || null,
         total_parcelas: parcelas,
         is_fixo: form.is_fixo,
+        // recorrente = true quando marcado como fixo (alinha com estrutura PF)
+        recorrente: form.is_fixo,
       } as any
 
       if (lancamentoEdit) {
@@ -882,66 +884,53 @@ export default function FinanceiroClient() {
         />
       )}
 
-      {/* ── ABA LANÇAMENTOS (split: avulsos | fixos | parcelas) ── */}
+      {/* ── ABA LANÇAMENTOS (split: avulsos | fixos+recorrentes | parcelados) ── */}
       {view === 'lancamentos' && (() => {
         const mes = new Date().toISOString().substring(0, 7)
         const doMes = lancamentos.filter(l => l.data_competencia?.startsWith(mes) && l.tipo === 'despesa')
-        
-        const avulsos = doMes.filter(l => (!l.total_parcelas || l.total_parcelas <= 1) && !l.is_fixo)
-        const gastosFixos = lancamentos.filter(l => l.tipo === 'despesa' && l.is_fixo).slice(0, 50)
-        const gastosRecorrentes = lancamentos.filter(l => l.tipo === 'despesa' && !l.is_fixo && (l as any).recorrente).slice(0, 50)
-        const gastosParcelados = lancamentos.filter(l => l.tipo === 'despesa' && (l.total_parcelas && l.total_parcelas > 1) && !l.is_fixo).slice(0, 50)
-        
-        const totalAvulsos = avulsos.reduce((s, l) => s + l.valor, 0)
-        const totalFixos   = gastosFixos.reduce((s, l) => s + l.valor, 0)
-        const totalRecorrentes = gastosRecorrentes.reduce((s, l) => s + l.valor, 0)
+
+        const avulsos           = doMes.filter(l => (!l.total_parcelas || l.total_parcelas <= 1) && !l.is_fixo && !(l as any).recorrente)
+        const fixosERecorrentes = lancamentos.filter(l => l.tipo === 'despesa' && (l.is_fixo || (l as any).recorrente)).slice(0, 50)
+        const gastosParcelados  = lancamentos.filter(l => l.tipo === 'despesa' && (l.total_parcelas && l.total_parcelas > 1) && !l.is_fixo).slice(0, 50)
+
+        const totalAvulsos    = avulsos.reduce((s, l) => s + l.valor, 0)
+        const totalFixos      = fixosERecorrentes.reduce((s, l) => s + l.valor, 0)
         const totalParcelados = gastosParcelados.reduce((s, l) => s + l.valor, 0)
-        
+        const somaTotal       = totalAvulsos + totalFixos + totalParcelados
+
         const getNomeConta = (id: string) => contas.find(c => c.id === id)?.nome || '—'
         const rowCls = 'flex items-center justify-between py-2 px-3 rounded-xl hover:bg-muted/50 transition-colors group'
         const valCls = (l: Lancamento) => l.status === 'validado' ? 'text-fg-disabled line-through' : 'text-red-400 font-semibold'
         return (
           <div className="space-y-4">
-            {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="bg-page border border-border-subtle rounded-xl p-4">
-                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💸 Avulsos do Mês</p>
-                <p className="text-2xl font-bold text-red-400">{formatCurrency(totalAvulsos)}</p>
-                <p className="text-xs text-fg-disabled mt-0.5">{avulsos.length} lançamento(s)</p>
-              </div>
-              <div className="bg-page border border-border-subtle rounded-xl p-4">
-                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">📌 Gastos Fixos</p>
-                <p className="text-2xl font-bold text-amber-400">{formatCurrency(totalFixos)}</p>
-                <p className="text-xs text-fg-disabled mt-0.5">{gastosFixos.length} lançamento(s)</p>
-              </div>
-              <div className="bg-page border border-border-subtle rounded-xl p-4">
-                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">🔁 Recorrentes</p>
-                <p className="text-2xl font-bold text-purple-400">{formatCurrency(totalRecorrentes)}</p>
-                <p className="text-xs text-fg-disabled mt-0.5">{gastosRecorrentes.length} lançamento(s)</p>
-              </div>
-              <div className="bg-page border border-border-subtle rounded-xl p-4">
-                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💳 Parcelados</p>
-                <p className="text-2xl font-bold text-blue-400">{formatCurrency(totalParcelados)}</p>
-                <p className="text-xs text-fg-disabled mt-0.5">{gastosParcelados.length} lançamento(s)</p>
-              </div>
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">📊 Total Gasto</p>
-                <p className="text-2xl font-bold text-red-300">{formatCurrency(totalAvulsos + totalFixos + totalRecorrentes + totalParcelados)}</p>
-                <p className="text-xs text-fg-disabled mt-0.5">{avulsos.length + gastosFixos.length + gastosRecorrentes.length + gastosParcelados.length} lançamento(s)</p>
-              </div>
+            {/* KPIs — 4 cards igual ao PF */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: '💸 Avulsos',          soma: totalAvulsos,    count: avulsos.length,           cor: 'text-red-400',          bg: 'bg-red-500/5   border-red-500/10'   },
+                { label: '📌 Fixos/Recorrentes', soma: totalFixos,      count: fixosERecorrentes.length, cor: 'text-amber-400',        bg: 'bg-amber-500/5 border-amber-500/10' },
+                { label: '💳 Parcelados',        soma: totalParcelados, count: gastosParcelados.length,  cor: 'text-blue-400',         bg: 'bg-blue-500/5  border-blue-500/10'  },
+                { label: '📊 Total Gasto',       soma: somaTotal,       count: avulsos.length + fixosERecorrentes.length + gastosParcelados.length, cor: 'text-red-300 font-bold', bg: 'bg-red-500/10 border-red-500/20' },
+              ].map(({ label, soma, count, cor, bg }) => (
+                <div key={label} className={`rounded-xl border px-3 py-3 ${bg}`}>
+                  <p className="text-[9px] text-fg-tertiary uppercase tracking-wider mb-0.5">{label}</p>
+                  <p className={`text-xl font-bold ${cor}`}>{formatCurrency(soma)}</p>
+                  <p className="text-[10px] text-fg-disabled">{count} item(s)</p>
+                </div>
+              ))}
             </div>
-            {/* Split columns */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+
+            {/* 3 colunas — igual ao PF */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Avulsos */}
-              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
+              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-red-500/5">
-                  <h3 className="text-sm font-semibold text-fg">💸 Gastos Avulsos</h3>
+                  <h3 className="text-sm font-semibold text-fg">💸 Avulsos</h3>
                   <div className="text-right">
                     <p className="text-xs font-bold text-red-400">{formatCurrency(totalAvulsos)}</p>
-                    <p className="text-[10px] text-fg-disabled">{avulsos.length} item(s)</p>
+                    <p className="text-[10px] text-fg-tertiary">{avulsos.length} itens</p>
                   </div>
                 </div>
-                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
+                <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
                   {avulsos.length === 0
                     ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto avulso este mês.</p>
                     : avulsos.map(l => (
@@ -964,53 +953,22 @@ export default function FinanceiroClient() {
                 </div>
               </div>
 
-              {/* Fixos */}
-              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
+              {/* Fixos / Recorrentes */}
+              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
-                  <h3 className="text-sm font-semibold text-fg">📌 Gastos Fixos</h3>
+                  <div>
+                    <h3 className="text-sm font-semibold text-fg">📌 Fixos / Recorrentes</h3>
+                    <p className="text-[10px] text-fg-disabled mt-0.5">Marcados como fixo ou recorrente</p>
+                  </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-amber-400">{formatCurrency(totalFixos)}</p>
-                    <p className="text-[10px] text-fg-disabled">{gastosFixos.length} item(s)</p>
+                    <p className="text-[10px] text-fg-tertiary">{fixosERecorrentes.length} itens</p>
                   </div>
                 </div>
-                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
-                  {gastosFixos.length === 0
-                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo registrado.</p>
-                    : gastosFixos.map(l => (
-                      <div key={l.id} className={rowCls}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-fg truncate">{l.descricao}</p>
-                          <div className="flex gap-2 items-center">
-                            <p className="text-[10px] text-fg-disabled">{getNomeConta(l.conta_id)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 ml-2">
-                          <span className={`text-xs ${valCls(l)}`}>{formatCurrency(l.valor)}</span>
-                          {l.status !== 'validado' && (
-                            <button onClick={() => validarLancamento(l.id, l.descricao)}
-                              className="hidden group-hover:block text-[10px] text-emerald-400 hover:text-emerald-300">✓</button>
-                          )}
-                          <button onClick={() => handleDeleteLancamento(l.id)}
-                            className="hidden group-hover:block text-[10px] text-fg-disabled hover:text-red-400 md:block">✕</button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-
-              {/* Recorrentes */}
-              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-purple-500/5">
-                  <h3 className="text-sm font-semibold text-fg">🔁 Recorrentes</h3>
-                  <div className="text-right">
-                    <p className="text-xs font-bold text-purple-400">{formatCurrency(totalRecorrentes)}</p>
-                    <p className="text-[10px] text-fg-disabled">{gastosRecorrentes.length} item(s)</p>
-                  </div>
-                </div>
-                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
-                  {gastosRecorrentes.length === 0
-                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto recorrente.</p>
-                    : gastosRecorrentes.map(l => (
+                <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+                  {fixosERecorrentes.length === 0
+                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo.{"\n"}Ao registrar, marque "Gasto Fixo".</p>
+                    : fixosERecorrentes.map(l => (
                       <div key={l.id} className={rowCls}>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-fg truncate">{l.descricao}</p>
@@ -1030,18 +988,18 @@ export default function FinanceiroClient() {
                 </div>
               </div>
 
-              {/* Coluna: parcelados */}
-              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
+              {/* Parcelados */}
+              <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-blue-500/5">
                   <h3 className="text-sm font-semibold text-fg">💳 Parcelados</h3>
                   <div className="text-right">
                     <p className="text-xs font-bold text-blue-400">{formatCurrency(totalParcelados)}</p>
-                    <p className="text-[10px] text-fg-disabled">{gastosParcelados.length} item(s)</p>
+                    <p className="text-[10px] text-fg-tertiary">{gastosParcelados.length} itens</p>
                   </div>
                 </div>
-                <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
+                <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
                   {gastosParcelados.length === 0
-                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto parcelado.</p>
+                    ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item parcelado.</p>
                     : gastosParcelados.map(l => (
                       <div key={l.id} className={rowCls}>
                         <div className="flex-1 min-w-0">
