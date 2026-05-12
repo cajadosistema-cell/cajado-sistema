@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { TabPermissoes } from './_components/TabPermissoes'
 import { useToast } from '@/components/shared/toast'
+import { BotaoPushNotification } from '@/components/shared/BotaoPushNotification'
 
 // ── Tipagens ──────────────────────────────────────────────────
 type Funcionario = {
@@ -955,7 +956,7 @@ function TabMinhaConta() {
 export default function ConfiguracoesClient() {
   const supabase = createClient()
   const { success, error: toastError, confirm: toastConfirm } = useToast()
-  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta' | 'limpeza' | 'backup'>('empresa')
+  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta' | 'limpeza' | 'backup' | 'notificacoes'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [editarLimitesFunc, setEditarLimitesFunc] = useState<{ id: string, nome: string, permissoes: string[] } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -1153,6 +1154,15 @@ export default function ConfiguracoesClient() {
             >
               ☁️ Backup / Google Drive
             </button>
+            <button
+              onClick={() => setActiveTab('notificacoes')}
+              className={cn(
+                "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
+                activeTab === 'notificacoes' ? "bg-surface text-white" : "text-fg-secondary hover:bg-white/5 hover:text-fg"
+              )}
+            >
+              🔔 Notificações Push
+            </button>
             <div className="my-1 border-t border-white/5" />
             <button 
               onClick={() => setActiveTab('limpeza')} 
@@ -1175,7 +1185,45 @@ export default function ConfiguracoesClient() {
 
         {/* Área Principal */}
         <div className="flex-1">
-          {activeTab === 'empresa' && (
+          {activeTab === 'notificacoes' && (
+          <div className="space-y-6">
+            <div className="card">
+              <h2 className="section-title mb-2">🔔 Notificações Push — iPhone &amp; Android</h2>
+              <p className="text-xs text-fg-tertiary mb-5 leading-relaxed">
+                Receba alertas de <strong>alarmes, lembretes e vencimentos</strong> diretamente no seu celular,
+                mesmo com o app fechado. Funciona no iPhone (iOS 16.4+) e Android.
+              </p>
+
+              {/* Passo a passo iOS */}
+              <div className="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4 mb-5">
+                <p className="text-xs font-bold text-blue-400 mb-2">📱 iPhone — Passo a passo:</p>
+                <ol className="space-y-1.5 text-xs text-fg-secondary list-decimal list-inside">
+                  <li>Abra o sistema no <strong>Safari</strong> (obrigatório)</li>
+                  <li>Toque em <strong>Compartilhar</strong> → <strong>Adicionar à Tela Inicial</strong></li>
+                  <li>Abra o app pela tela inicial (fica parecido com um app nativo)</li>
+                  <li>Toque no botão abaixo e aprove a permissão</li>
+                </ol>
+              </div>
+
+              {/* Botão de ativar */}
+              <div className="flex flex-col gap-3">
+                <BotaoPushNotification />
+              </div>
+
+              <div className="mt-5 p-4 rounded-xl bg-page/50 border border-white/5">
+                <p className="text-[11px] font-semibold text-fg-secondary mb-2">📢 Você receberá alertas de:</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {['⏰ Lembretes criados pela Elena', '🗓️ Vencimentos de contas', '📅 Compromissos agendados', '🔔 Alarmes sonoros', '⚠️ Alertas financeiros', '✅ Tarefas e prazos'].map(item => (
+                    <span key={item} className="text-[10px] text-fg-tertiary flex items-start gap-1.5">
+                      <span className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 shrink-0" />{item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'empresa' && (
             <div className="space-y-6">
               
               {/* Identidade e Documentação */}

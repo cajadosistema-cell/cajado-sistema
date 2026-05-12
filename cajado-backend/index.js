@@ -60,6 +60,10 @@ const { bootstrap, iniciarSyncPeriodico, agendarCronDiario } = require("./src/bo
 bootstrap().then(() => {
   iniciarSyncPeriodico();
   agendarCronDiario();
+
+  // ── Cron de Alarmes Push (iPhone/Android) ──────────────────
+  const { iniciarCronAlarmes } = require('./src/routes/push-alarmes.routes')
+  iniciarCronAlarmes()
 }).catch(console.error);
 
 // ─── CANAIS EM MEMÓRIA ───────────────────────────────────────────────────
@@ -99,10 +103,11 @@ app.use("/", require("./src/routes/inbox.routes"));
 // ─── WEBHOOKS ───────────────────
 app.use("/webhook", require("./src/routes/webhook.routes"));
 
-// ─── WHATSAPP (Envio automático CRM) ───────────────────
-app.use("/api/whatsapp", require("./src/routes/whatsapp.routes"));
+// ─── WHATSAPP (Envio automático CRM) ─────────────────
+app.use('/api/whatsapp', require('./src/routes/whatsapp.routes'));
 
-
+// ─── PUSH NOTIFICATIONS (alarmes iPhone/Android) ─────────────────
+app.use('/api', require('./src/routes/push-alarmes.routes').router);
 
 // O index.js agora atua apenas como orquestrador e ponto de entrada.
 // Todas as rotas foram modularizadas em src/routes/.

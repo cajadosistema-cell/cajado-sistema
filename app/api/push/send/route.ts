@@ -1,80 +1,68 @@
-import { NextResponse } from 'next/server'
-import webPush from 'web-push'
+import { NextRequest, NextResponse } from 'next/server'
+import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 
-// Envia push para um ou mais usuários destinatários
-export async function POST(req: Request) {
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+webpush.setVapidDetails(
+  'mailto:sistema@cajado.com',
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
+)
+
+// POST /api/push/send — envia notificação para um ou todos dispositivos do usuário
+export async function POST(req: NextRequest) {
   try {
-    if (process.env.VAPID_CONTACT && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-      webPush.setVapidDetails(
-        process.env.VAPID_CONTACT,
-        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-        process.env.VAPID_PRIVATE_KEY
-      )
+    const body = await req.json()
+    const { userId, title, message, url, tag, requireInteraction } = body
+
+    if (!userId || !title) {
+      return NextResponse.json({ error: 'userId e title são obrigatórios' }, { status: 400 })
     }
 
-    const { destinatarioId, remetenteNome, texto, url } = await req.json()
-
-    if (!destinatarioId) {
-      return NextResponse.json({ error: 'destinatarioId obrigatório' }, { status: 400 })
-    }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    // Busca todas as subscriptions do destinatário
-    const { data: subs, error } = await supabase
+    // Busca todas as subscriptions do usuário
+    const { data: subs, error } = await supabaseAdmin
       .from('push_subscriptions')
       .select('endpoint, p256dh, auth')
-      .eq('user_id', destinatarioId)
+      .eq('user_id', userId)
 
     if (error) throw error
     if (!subs || subs.length === 0) {
-      return NextResponse.json({ ok: true, sent: 0 })
+      return NextResponse.json({ ok: false, msg: 'Nenhum dispositivo registrado' })
     }
 
     const payload = JSON.stringify({
-      title: `💬 ${remetenteNome || 'Chat Cajado'}`,
-      body: texto || 'Nova mensagem',
-      tag: `chat-${destinatarioId}`,
-      url: url || '/comunicacao',
+      title,
+      body:               message || title,
+      url:                url || '/inicio',
+      tag:                tag || 'cajado-' + Date.now(),
+      requireInteraction: requireInteraction ?? true,
     })
 
-    // Envia para todos os dispositivos registrados
-    const results = await Promise.allSettled(
+    const resultados = await Promise.allSettled(
       subs.map(sub =>
-        webPush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
+        webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload
-        )
+        ).catch(async err => {
+          // Se o endpoint expirou, remove do banco
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            await supabaseAdmin.from('push_subscriptions')
+              .delete().eq('endpoint', sub.endpoint)
+          }
+          throw err
+        })
       )
     )
 
-    // Remove subscriptions expiradas (status 404 ou 410)
-    const expiredEndpoints: string[] = []
-    results.forEach((result, i) => {
-      if (
-        result.status === 'rejected' &&
-        result.reason &&
-        (result.reason.statusCode === 404 || result.reason.statusCode === 410)
-      ) {
-        expiredEndpoints.push(subs[i].endpoint)
-      }
-    })
+    const enviados = resultados.filter(r => r.status === 'fulfilled').length
+    return NextResponse.json({ ok: true, enviados, total: subs.length })
 
-    if (expiredEndpoints.length > 0) {
-      await supabase.from('push_subscriptions').delete().in('endpoint', expiredEndpoints)
-    }
-
-    const sent = results.filter(r => r.status === 'fulfilled').length
-    return NextResponse.json({ ok: true, sent })
-  } catch (err) {
-    console.error('[push/send]', err)
-    return NextResponse.json({ error: 'Erro ao enviar push' }, { status: 500 })
+  } catch (err: any) {
+    console.error('[Push Send]', err.message)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
