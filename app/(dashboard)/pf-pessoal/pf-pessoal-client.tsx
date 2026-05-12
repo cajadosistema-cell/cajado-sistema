@@ -288,6 +288,7 @@ export default function PfPessoalClient() {
 }
 
 // ── Aba Contas PF (inline no client para acessar refetch) ─────────
+// Sub-abas: 🏦 Contas Bancárias | 💳 Cartões PF
 function TabContasPFInline({
   userId, contas, modalAberto, onModalClose
 }: { userId: string; contas: any[]; modalAberto: boolean; onModalClose: () => void }) {
@@ -300,6 +301,10 @@ function TabContasPFInline({
   const [form, setForm] = useState({ nome: '', tipo: 'corrente', saldo_inicial: '' })
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
+  const [subAbaContas, setSubAbaContas] = useState<'bancarias' | 'cartoes'>('bancarias')
+
+  const TIPOS_BANCARIOS = ['corrente', 'poupanca', 'digital', 'investimento']
+  const TIPOS_CARTAO    = ['cartao_credito', 'cartao_debito']
 
   const TIPOS = [
     { id: 'corrente',    label: 'Conta Corrente', emoji: '🏦', desc: 'Bradesco, Itaú, BB...' },
@@ -345,7 +350,13 @@ function TabContasPFInline({
     investimento:  { emoji: '📈', cor: '#06b6d4', label: 'Investimento' },
   }
 
-  const lista = todasContas || []
+  const lista           = todasContas || []
+  const contasBancarias = lista.filter((c: any) => TIPOS_BANCARIOS.includes(c.tipo))
+  const cartoesPF       = lista.filter((c: any) => TIPOS_CARTAO.includes(c.tipo))
+  const listaAtiva      = subAbaContas === 'bancarias' ? contasBancarias : cartoesPF
+  const tiposModal      = subAbaContas === 'bancarias'
+    ? TIPOS.filter(t => TIPOS_BANCARIOS.includes(t.id))
+    : TIPOS.filter(t => TIPOS_CARTAO.includes(t.id))
   const [editando, setEditando] = useState<any>(null)
   const [formEdit, setFormEdit] = useState({ nome: '', tipo: 'corrente', saldo_atual: '' })
   const [salvandoEdit, setSalvandoEdit] = useState(false)
@@ -371,19 +382,59 @@ function TabContasPFInline({
 
   return (
     <div className="space-y-4">
-      {/* Grid de contas */}
-      {lista.length === 0 ? (
+
+      {/* ── Sub-abas: Bancárias vs Cartões ───────────────────── */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-1 bg-page border border-border-subtle rounded-xl p-1">
+          <button
+            onClick={() => { setSubAbaContas('bancarias'); setForm(f => ({ ...f, tipo: 'corrente' })) }}
+            className={cn(
+              'px-4 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5',
+              subAbaContas === 'bancarias'
+                ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                : 'text-fg-tertiary hover:text-fg-secondary'
+            )}
+          >
+            🏦 Contas Bancárias
+            <span className="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{contasBancarias.length}</span>
+          </button>
+          <button
+            onClick={() => { setSubAbaContas('cartoes'); setForm(f => ({ ...f, tipo: 'cartao_credito' })) }}
+            className={cn(
+              'px-4 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5',
+              subAbaContas === 'cartoes'
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                : 'text-fg-tertiary hover:text-fg-secondary'
+            )}
+          >
+            💳 Cartões PF
+            <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{cartoesPF.length}</span>
+          </button>
+        </div>
+        <button onClick={onModalClose} className="btn-primary text-xs h-8 px-3">
+          {subAbaContas === 'bancarias' ? '🏦 Nova Conta' : '💳 Novo Cartão'}
+        </button>
+      </div>
+
+      {/* ── Grid filtrado por sub-aba ──────────────────────── */}
+      {listaAtiva.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed border-border-subtle rounded-2xl">
-          <p className="text-5xl mb-4">🏦</p>
-          <p className="text-base font-bold text-fg mb-2">Nenhuma conta cadastrada</p>
-          <p className="text-sm text-fg-tertiary mb-6 max-w-sm mx-auto">
-            Adicione suas contas bancárias: Bradesco, C6 Bank, Nubank, Itaú, poupança... Elas aparecem como opção ao registrar um gasto ou receita.
+          <p className="text-5xl mb-4">{subAbaContas === 'bancarias' ? '🏦' : '💳'}</p>
+          <p className="text-base font-bold text-fg mb-2">
+            {subAbaContas === 'bancarias' ? 'Nenhuma conta bancária cadastrada' : 'Nenhum cartão PF cadastrado'}
           </p>
-          <button onClick={onModalClose} className="btn-primary mx-auto">🏦 Adicionar Primeira Conta</button>
+          <p className="text-sm text-fg-tertiary mb-6 max-w-sm mx-auto">
+            {subAbaContas === 'bancarias'
+              ? 'Adicione suas contas bancárias: Bradesco, C6 Bank, Nubank, Itaú, poupança...'
+              : 'Adicione seus cartões de crédito ou débito pessoais.'}
+          </p>
+          <button onClick={onModalClose} className="btn-primary mx-auto">
+            {subAbaContas === 'bancarias' ? '🏦 Adicionar Primeira Conta' : '💳 Adicionar Primeiro Cartão'}
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {lista.map((c: any) => {
+          {listaAtiva.map((c: any) => {
             const cfg = tipoConfig[c.tipo] ?? { emoji: '🏦', cor: '#6b7280', label: c.tipo }
             return (
               <div key={c.id} className="bg-surface border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-all group">
@@ -424,41 +475,54 @@ function TabContasPFInline({
           })}
           {/* Card para adicionar */}
           <button onClick={onModalClose}
-            className="border-2 border-dashed border-border-subtle rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-fg-disabled hover:border-emerald-500/40 hover:text-emerald-400 transition-all min-h-[160px]">
+            className={cn(
+              'border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 transition-all min-h-[160px]',
+              subAbaContas === 'bancarias'
+                ? 'border-border-subtle text-fg-disabled hover:border-blue-500/40 hover:text-blue-400'
+                : 'border-border-subtle text-fg-disabled hover:border-amber-500/40 hover:text-amber-400'
+            )}>
             <span className="text-4xl">+</span>
             <div className="text-center">
-              <p className="text-xs font-bold">Adicionar Conta</p>
-              <p className="text-[10px] mt-0.5">C6, Nubank, Itaú, Bradesco...</p>
+              <p className="text-xs font-bold">{subAbaContas === 'bancarias' ? 'Adicionar Conta' : 'Adicionar Cartão'}</p>
+              <p className="text-[10px] mt-0.5">{subAbaContas === 'bancarias' ? 'C6, Nubank, Itaú, Bradesco...' : 'Crédito ou débito PF'}</p>
             </div>
           </button>
         </div>
       )}
 
-      {/* Modal Criar */}
+      {/* Modal Criar — contexto muda por sub-aba */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-[#0a0d16] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-              <h2 className="text-sm font-bold text-white">🏦 Nova Conta Bancária PF</h2>
+              <h2 className="text-sm font-bold text-white">
+                {subAbaContas === 'bancarias' ? '🏦 Nova Conta Bancária PF' : '💳 Novo Cartão PF'}
+              </h2>
               <button onClick={onModalClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
             </div>
             <form onSubmit={handleSave} className="p-5 space-y-5">
               <div>
-                <label className="label">Nome do Banco / Conta *</label>
+                <label className="label">
+                  {subAbaContas === 'bancarias' ? 'Nome do Banco / Conta *' : 'Nome do Cartão *'}
+                </label>
                 <input className="input mt-1 w-full" required
-                  placeholder="Ex: C6 Bank, Bradesco Corrente, Nubank, Itaú Poupança..."
+                  placeholder={subAbaContas === 'bancarias'
+                    ? 'Ex: C6 Bank, Bradesco Corrente, Nubank, Itaú Poupança...'
+                    : 'Ex: Nubank PF, Inter Visa, Cartão Pessoal...'}
                   value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
               </div>
               <div>
-                <label className="label mb-2 block">Tipo de Conta *</label>
+                <label className="label mb-2 block">Tipo *</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {TIPOS.map(t => (
+                  {tiposModal.map(t => (
                     <button key={t.id} type="button"
                       onClick={() => setForm(f => ({ ...f, tipo: t.id }))}
                       className={cn(
                         'flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl text-xs font-medium border transition-all',
                         form.tipo === t.id
-                          ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300'
+                          ? subAbaContas === 'bancarias'
+                            ? 'border-blue-500/60 bg-blue-500/10 text-blue-300'
+                            : 'border-amber-500/60 bg-amber-500/10 text-amber-300'
                           : 'border-border-subtle text-fg-tertiary hover:text-fg hover:border-border'
                       )}>
                       <span className="text-base">{t.emoji} {t.label}</span>
@@ -477,7 +541,7 @@ function TabContasPFInline({
               <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
                 <button type="button" onClick={onModalClose} className="btn-secondary">Cancelar</button>
                 <button type="submit" disabled={loading} className="btn-primary">
-                  {loading ? 'Salvando...' : '🏦 Cadastrar Conta'}
+                  {loading ? 'Salvando...' : subAbaContas === 'bancarias' ? '🏦 Cadastrar Conta' : '💳 Cadastrar Cartão'}
                 </button>
               </div>
             </form>
