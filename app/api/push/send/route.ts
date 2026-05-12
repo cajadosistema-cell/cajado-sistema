@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import webpush from 'web-push'
-import { createClient } from '@supabase/supabase-js'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-webpush.setVapidDetails(
-  'mailto:sistema@cajado.com',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
-
-// POST /api/push/send — envia notificação para um ou todos dispositivos do usuário
+// POST /api/push/send — envia notificação para todos os dispositivos do usuário
 export async function POST(req: NextRequest) {
   try {
+    // Imports dinâmicos para evitar avaliação no build
+    const webpush = (await import('web-push')).default
+    const { createClient } = await import('@supabase/supabase-js')
+
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    webpush.setVapidDetails(
+      'mailto:contato@cajadosolucoes.com.br',
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+      process.env.VAPID_PRIVATE_KEY!
+    )
+
     const body = await req.json()
     const { userId, title, message, url, tag, requireInteraction } = body
 
@@ -23,7 +25,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'userId e title são obrigatórios' }, { status: 400 })
     }
 
-    // Busca todas as subscriptions do usuário
     const { data: subs, error } = await supabaseAdmin
       .from('push_subscriptions')
       .select('endpoint, p256dh, auth')
@@ -43,15 +44,13 @@ export async function POST(req: NextRequest) {
     })
 
     const resultados = await Promise.allSettled(
-      subs.map(sub =>
+      subs.map((sub: any) =>
         webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload
-        ).catch(async err => {
-          // Se o endpoint expirou, remove do banco
+        ).catch(async (err: any) => {
           if (err.statusCode === 410 || err.statusCode === 404) {
-            await supabaseAdmin.from('push_subscriptions')
-              .delete().eq('endpoint', sub.endpoint)
+            await supabaseAdmin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
           }
           throw err
         })
