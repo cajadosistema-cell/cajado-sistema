@@ -49,7 +49,7 @@ export async function GET(req: Request) {
     }
 
     // Mesmo secret usado no cajado-backend/.env
-    const jwtSecret = process.env.JWT_SECRET || 'cajado-jwt-secret-2025-troque-em-producao'
+    const jwtSecret = process.env.JWT_SECRET || 'visiopro-secret-2025'
     const token = signJwt(userPayload, jwtSecret)
 
     return NextResponse.json({ token, user: userPayload })
