@@ -21,8 +21,8 @@ interface AcaoIA {
 const CAT_DESPESA_ID  = 'd4f05276-7633-49b3-9d72-09fb0fa07fbe'     // Despesas Operacionais
 const CAT_RECEITA_ID  = '2774932e-75c8-4b7e-b88f-12a6f1a0744a'     // Receita Operacional
 
-// ── System Prompt gerado dinamicamente com a data atual ──
-function buildSystemPrompt(): string {
+// ── System Prompt gerado dinamicamente com perfil aprendido ──
+function buildSystemPrompt(perfil?: any): string {
   const agora = new Date()
   const dataAtual = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
   const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -32,8 +32,22 @@ function buildSystemPrompt(): string {
   const amanha = new Date(agora); amanha.setDate(amanha.getDate() + 1)
   const amanhaStr = `${amanha.getFullYear()}-${String(amanha.getMonth()+1).padStart(2,'0')}-${String(amanha.getDate()).padStart(2,'0')}`
 
+  // Contexto de perfil aprendido
+  const blocoAprendizado = perfil?.contexto_pessoal
+    ? `\n\n🧠 PERFIL APRENDIDO DO USUÁRIO (adapte seu estilo):
+${perfil.contexto_pessoal}
+- Estilo de comunicação: ${perfil.estilo_comunicacao || 'informal'}
+- Tom preferido: ${perfil.tom_preferido || 'profissional'}
+- Prefere respostas: ${perfil.prefere_resposta || 'concisas'}
+- Forma de pagamento usual: ${perfil.forma_pagamento_usual || 'pix'}
+- Expressões que ele usa: ${(perfil.expressoes_comuns || []).slice(0, 6).join(', ') || 'nenhuma ainda'}
+- Contas preferidas: ${(perfil.contas_preferidas || []).join(', ') || 'nenhuma ainda'}
+⚠️ ADAPTE SEU VOCABULÁRIO e ritmo de resposta ao perfil acima.`
+    : ''
+
   return `Você é a Elena, Secretária Executiva Premium do Sistema Cajado.
 Você trabalha diretamente para o Sr. Max. Você pode REGISTRAR dados reais no sistema quando o Sr. Max solicitar.
+${blocoAprendizado}
 
 ⚠️ DATA E HORA ATUAL: ${dataAtual} às ${horaAtual} (Horário de Brasília)
 ⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. Se o chefe pedir "daqui a X minutos", calcule somando a partir das ${horaAtual}.
@@ -199,6 +213,10 @@ export function SecretariaFlutuante() {
   const [relatorioData, setRelatorioData] = useState<any>(null)
   const [buscandoWeb, setBuscandoWeb] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState('')
+  const [perfilUsuario, setPerfilUsuario] = useState<any>(null)
+  const perfilRef = useRef<any>(null)
+  const userMsgCountRef = useRef(0)  // conta msgs do usuário na sessão atual
+  const atualizandoPerfilRef = useRef(false)  // evita chamadas simultâneas
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
@@ -257,6 +275,14 @@ export function SecretariaFlutuante() {
             { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Carreguei nossa última conversa. O que faremos agora?' },
             ...historico,
           ])
+        }
+
+        // ── Carrega perfil de aprendizado ────────────────────────
+        const { data: perfil } = await (supabase.from('elena_perfil') as any)
+          .select('*').eq('user_id', uid).maybeSingle()
+        if (perfil) {
+          setPerfilUsuario(perfil)
+          perfilRef.current = perfil
         }
       }
     })
@@ -631,6 +657,66 @@ export function SecretariaFlutuante() {
     })
   }, [supabase, sessaoId])
 
+  // ── Aprendizado: atualiza perfil a cada 5 msgs do usuário ──
+  const atualizarPerfilAprendizado = useCallback(async (uid: string, msgsList: Msg[]) => {
+    if (!uid || atualizandoPerfilRef.current) return
+    atualizandoPerfilRef.current = true
+    try {
+      // Pega até 30 mensagens do usuário para análise
+      const msgsUsuario = msgsList.filter(m => m.role === 'user' && m.texto && m.texto !== '...')
+        .slice(-30).map(m => m.texto).join('\n')
+      if (!msgsUsuario || msgsUsuario.length < 50) return
+
+      const promptAnalise = `Analise as seguintes mensagens de um usuário para um assistente executiva (Elena) e extraia seu perfil de comunicação. Responda APENAS com um JSON válido, sem texto adicional.
+
+MENSAGENS DO USUÁRIO:
+${msgsUsuario}
+
+Retorne exatamente este JSON:
+{
+  "estilo_comunicacao": "formal|informal|direto|detalhado",
+  "tom_preferido": "profissional|casual|amigavel",
+  "prefere_resposta": "concisa|detalhada|com_exemplos",
+  "forma_pagamento_usual": "pix|cartao_credito|cartao_debito|dinheiro|transferencia",
+  "expressoes_comuns": ["lista", "de", "expressoes", "ou", "gírias", "que", "ele", "usa"],
+  "contas_preferidas": ["nomes", "de", "cartoes", "ou", "bancos", "mencionados"],
+  "contexto_pessoal": "Resumo em 2-3 frases sobre quem é o usuário, seu estilo de comunicação, o que prefere, e dicas para a Elena adaptar as respostas."
+}`
+
+      const res = await fetch('/api/elena', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system: 'Você é um analisador de perfil de comunicação. Retorne apenas JSON válido.',
+          messages: [{ role: 'user', content: promptAnalise }],
+          uid,
+        }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      const resposta = data.text || data.message || ''
+      // Extrai JSON da resposta
+      const jsonMatch = resposta.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) return
+      const perfilNovo = JSON.parse(jsonMatch[0])
+      // Upsert no banco
+      const { data: atualizado } = await (supabase.from('elena_perfil') as any).upsert({
+        user_id: uid,
+        ...perfilNovo,
+        total_interacoes: (perfilRef.current?.total_interacoes || 0) + 5,
+        ultima_atualizacao: new Date().toISOString(),
+      }, { onConflict: 'user_id' }).select().single()
+      if (atualizado) {
+        setPerfilUsuario(atualizado)
+        perfilRef.current = atualizado
+      }
+    } catch (e) {
+      // Silencioso — não interrompe o fluxo
+    } finally {
+      atualizandoPerfilRef.current = false
+    }
+  }, [supabase])
+
   // ── Carregar arquivo (imagem ou PDF) ────────────────────────
   const handleFile = useCallback(async (file: File) => {
     if (!file) return
@@ -801,7 +887,7 @@ export function SecretariaFlutuante() {
       const body: Record<string, any> = {
         prompt: promptFinal,
         context: contexto,
-        systemInstruction: buildSystemPrompt(),
+        systemInstruction: buildSystemPrompt(perfilRef.current),
       }
       // Se é imagem, manda para visão (GPT-4o)
       if (fileSnap?.isImage) {
@@ -826,9 +912,20 @@ export function SecretariaFlutuante() {
 
       // Salva no histórico do banco
       if (uid) {
-        // Garantir que usa a sessão atual do state, mas por precaução, passamos no momento do envio
         salvarHistorico(uid, 'user', userText, undefined, sessaoId)
         salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined, sessaoId)
+      }
+
+      // ── Aprendizado a cada 5 msgs do usuário ────────────────────────
+      userMsgCountRef.current += 1
+      if (uid && userMsgCountRef.current % 5 === 0) {
+        // Roda em segundo plano, sem bloquear a UI
+        setTimeout(() => {
+          setMensagens(curr => {
+            atualizarPerfilAprendizado(uid, curr)
+            return curr
+          })
+        }, 2000)
       }
 
       // Auto-save ações após 600ms
@@ -845,7 +942,7 @@ export function SecretariaFlutuante() {
       setLoading(false)
       isSendingRef.current = false
     }
-  }, [input, loading, mensagens, userId, supabase, executarAcoesAuto, salvarHistorico])
+  }, [input, loading, mensagens, userId, supabase, executarAcoesAuto, salvarHistorico, atualizarPerfilAprendizado])
 
   // ── Microfone (pede permissão apenas uma vez) ─────────────────
   const iniciarReconhecimento = () => {
