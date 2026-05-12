@@ -82,6 +82,10 @@ async function loadConversasDb() {
   if (!error && data) {
     data.forEach(row => {
       if (row.dados) {
+        if (row.empresa_id === "0cb2f597-367d-4475-b307-43345b09dee8" || row.dados.empresa_id === "0cb2f597-367d-4475-b307-43345b09dee8") {
+          row.empresa_id = "9cb2f597-367d-4475-b307-43345b09dee8";
+          row.dados.empresa_id = "9cb2f597-367d-4475-b307-43345b09dee8";
+        }
         row.dados.empresa_id = row.empresa_id;
         conversas.set(row.numero, row.dados);
         if (row.dados.botOn === false) {
