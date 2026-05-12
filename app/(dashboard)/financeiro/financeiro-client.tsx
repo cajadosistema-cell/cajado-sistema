@@ -903,7 +903,7 @@ export default function FinanceiroClient() {
         return (
           <div className="space-y-4">
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="bg-page border border-border-subtle rounded-xl p-4">
                 <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">💸 Avulsos do Mês</p>
                 <p className="text-2xl font-bold text-red-400">{formatCurrency(totalAvulsos)}</p>
@@ -924,6 +924,11 @@ export default function FinanceiroClient() {
                 <p className="text-2xl font-bold text-blue-400">{formatCurrency(totalParcelados)}</p>
                 <p className="text-xs text-fg-disabled mt-0.5">{gastosParcelados.length} lançamento(s)</p>
               </div>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">📊 Total Gasto</p>
+                <p className="text-2xl font-bold text-red-300">{formatCurrency(totalAvulsos + totalFixos + totalRecorrentes + totalParcelados)}</p>
+                <p className="text-xs text-fg-disabled mt-0.5">{avulsos.length + gastosFixos.length + gastosRecorrentes.length + gastosParcelados.length} lançamento(s)</p>
+              </div>
             </div>
             {/* Split columns */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -931,6 +936,10 @@ export default function FinanceiroClient() {
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-red-500/5">
                   <h3 className="text-sm font-semibold text-fg">💸 Gastos Avulsos</h3>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-red-400">{formatCurrency(totalAvulsos)}</p>
+                    <p className="text-[10px] text-fg-disabled">{avulsos.length} item(s)</p>
+                  </div>
                 </div>
                 <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
                   {avulsos.length === 0
@@ -959,6 +968,10 @@ export default function FinanceiroClient() {
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
                   <h3 className="text-sm font-semibold text-fg">📌 Gastos Fixos</h3>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-amber-400">{formatCurrency(totalFixos)}</p>
+                    <p className="text-[10px] text-fg-disabled">{gastosFixos.length} item(s)</p>
+                  </div>
                 </div>
                 <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
                   {gastosFixos.length === 0
@@ -989,6 +1002,10 @@ export default function FinanceiroClient() {
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-purple-500/5">
                   <h3 className="text-sm font-semibold text-fg">🔁 Recorrentes</h3>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-purple-400">{formatCurrency(totalRecorrentes)}</p>
+                    <p className="text-[10px] text-fg-disabled">{gastosRecorrentes.length} item(s)</p>
+                  </div>
                 </div>
                 <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
                   {gastosRecorrentes.length === 0
@@ -1017,6 +1034,10 @@ export default function FinanceiroClient() {
               <div className="bg-page border border-border-subtle rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-blue-500/5">
                   <h3 className="text-sm font-semibold text-fg">💳 Parcelados</h3>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-blue-400">{formatCurrency(totalParcelados)}</p>
+                    <p className="text-[10px] text-fg-disabled">{gastosParcelados.length} item(s)</p>
+                  </div>
                 </div>
                 <div className="p-2 space-y-0.5 max-h-[500px] overflow-y-auto">
                   {gastosParcelados.length === 0

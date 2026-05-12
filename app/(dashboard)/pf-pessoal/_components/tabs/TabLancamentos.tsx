@@ -63,6 +63,13 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
   const recorrentes= filtrados.filter(item => item.recorrente && !(item as any).is_fixo)
   const parcelados = filtrados.filter(item => !item.recorrente && (item as any).parcelas && (item as any).parcelas > 1)
 
+  const somaAvulsos     = avulsos.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
+  const somaFixos       = fixos.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
+  const somaRecorrentes = recorrentes.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
+  const somaParcelados  = parcelados.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
+  const somaTotal       = somaAvulsos + somaFixos + somaRecorrentes + somaParcelados
+  const somaReceitas    = filtrados.filter(i => i._tipo === 'receita').reduce((s, i) => s + i.valor, 0)
+
   const renderItem = (item: any) => {
     const isGasto  = item._tipo === 'gasto'
     const catInfo  = isGasto ? CATEGORIAS_GASTO[item.categoria] : CATEGORIAS_RECEITA[item.categoria]
@@ -152,6 +159,23 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
         ))}
       </div>
 
+      {/* Barra de total geral */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        {[
+          { label: '💸 Avulsos',     soma: somaAvulsos,     count: avulsos.length,     cor: 'text-red-400',    bg: 'bg-red-500/5    border-red-500/10'    },
+          { label: '📌 Fixos',       soma: somaFixos,        count: fixos.length,       cor: 'text-amber-400',  bg: 'bg-amber-500/5  border-amber-500/10'  },
+          { label: '🔁 Recorrentes', soma: somaRecorrentes,  count: recorrentes.length, cor: 'text-purple-400', bg: 'bg-purple-500/5 border-purple-500/10' },
+          { label: '💳 Parcelados',  soma: somaParcelados,   count: parcelados.length,  cor: 'text-blue-400',   bg: 'bg-blue-500/5   border-blue-500/10'   },
+          { label: '📊 Total Gasto', soma: somaTotal,        count: avulsos.length + fixos.length + recorrentes.length + parcelados.length, cor: 'text-red-300 font-bold', bg: 'bg-red-500/10 border-red-500/20' },
+        ].map(({ label, soma, count, cor, bg }) => (
+          <div key={label} className={`rounded-xl border px-3 py-2 ${bg}`}>
+            <p className="text-[9px] text-fg-tertiary uppercase tracking-wider mb-0.5">{label}</p>
+            <p className={`text-sm font-bold ${cor}`}>{formatCurrency(soma)}</p>
+            <p className="text-[10px] text-fg-disabled">{count} item(s)</p>
+          </div>
+        ))}
+      </div>
+
       {/* Listas */}
       {filtrados.length === 0 ? (
         <div className="bg-page border border-border-subtle rounded-2xl overflow-hidden p-16 text-center">
@@ -168,7 +192,10 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-emerald-500/5">
               <h3 className="text-sm font-semibold text-fg">💸 Avulsos</h3>
-              <span className="text-xs text-fg-tertiary">{avulsos.length} itens</span>
+              <div className="text-right">
+                <p className="text-xs font-bold text-red-400">{formatCurrency(somaAvulsos)}</p>
+                <p className="text-[10px] text-fg-tertiary">{avulsos.length} itens</p>
+              </div>
             </div>
             <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
               {avulsos.length === 0
@@ -181,7 +208,10 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
               <h3 className="text-sm font-semibold text-fg">📌 Fixos</h3>
-              <span className="text-xs text-fg-tertiary">{fixos.length} itens</span>
+              <div className="text-right">
+                <p className="text-xs font-bold text-amber-400">{formatCurrency(somaFixos)}</p>
+                <p className="text-[10px] text-fg-tertiary">{fixos.length} itens</p>
+              </div>
             </div>
             <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
               {fixos.length === 0
@@ -194,7 +224,10 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-purple-500/5">
               <h3 className="text-sm font-semibold text-fg">🔁 Recorrentes</h3>
-              <span className="text-xs text-fg-tertiary">{recorrentes.length} itens</span>
+              <div className="text-right">
+                <p className="text-xs font-bold text-purple-400">{formatCurrency(somaRecorrentes)}</p>
+                <p className="text-[10px] text-fg-tertiary">{recorrentes.length} itens</p>
+              </div>
             </div>
             <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
               {recorrentes.length === 0
@@ -207,7 +240,10 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-blue-500/5">
               <h3 className="text-sm font-semibold text-fg">💳 Parcelados</h3>
-              <span className="text-xs text-fg-tertiary">{parcelados.length} itens</span>
+              <div className="text-right">
+                <p className="text-xs font-bold text-blue-400">{formatCurrency(somaParcelados)}</p>
+                <p className="text-[10px] text-fg-tertiary">{parcelados.length} itens</p>
+              </div>
             </div>
             <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
               {parcelados.length === 0
