@@ -95,10 +95,18 @@ router.post("/inbox/webhook", webhookSecret, async (req, res) => {
     }
   }
 
-  const conv = await registrarNaConversa(numero, mensagem, nome, null);
+  // ── Resolve empresa_id pela instância (isolamento multi-tenant) ──────────
+  // 'data.instance' é o nome da instância Evolution que recebeu a msg.
+  // Mapeamos para empresa_id via canaisMemoria (carregado no boot).
+  const instanceRecebida = data?.instance || data?.sender || "botwhatsapp01";
+  const canalInfo = canaisMemoria.get(instanceRecebida);
+  const empresaIdCanal = (typeof canalInfo === "object" ? canalInfo?.empresa_id : canalInfo)
+                         || ADMIN_DEFAULT.empresa_id;
+
+  const conv = await registrarNaConversa(numero, mensagem, nome, null, empresaIdCanal, instanceRecebida);
   conv.unread = (conv.unread || 0) + 1;
-  conv.lastInboundAt = new Date().toISOString(); // timestamp para cálculo de tempo de espera
-  console.log(`[INBOX] ${nome}: ${texto || 'Mídia recebida'}`);
+  conv.lastInboundAt = new Date().toISOString();
+  console.log(`[INBOX] ${nome} [tenant:${empresaIdCanal?.slice(0, 8)}] [inst:${instanceRecebida}]: ${texto || 'Mídia recebida'}`);
 });
 
 router.post("/inbox/mensagem", authMiddleware, async (req, res) => {
@@ -127,9 +135,11 @@ router.get("/debug/inbox", authMiddleware, async (req, res) => {
 });
 
 router.get("/inbox/conversas", authMiddleware, async (req, res) => {
-  const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
-  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.empresa_id === ADMIN_DEFAULT.empresa_id || req.user.empresa_id === "empresa-padrao";
-  
+  // SuperAdmin = apenas contas com flag de sistema global (env SUPER_ADMIN_EMAIL)
+  // admin@visiopro.com, max@cajado.com etc são admins normais da SUAS empresas
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || "").toLowerCase();
+  const isSuperAdmin = superAdminEmail && req.user.email?.toLowerCase() === superAdminEmail;
+
   if (supabase) {
     let query = supabase.from("whatsapp_conversas").select("dados, empresa_id");
     if (!isSuperAdmin) {
@@ -247,8 +257,8 @@ router.get("/inbox/contact-photo/:numero", authMiddleware, async (req, res) => {
 });
 
 router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
-  const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
-  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.empresa_id === ADMIN_DEFAULT.empresa_id || req.user.empresa_id === "empresa-padrao";
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || "").toLowerCase();
+  const isSuperAdmin = superAdminEmail && req.user.email?.toLowerCase() === superAdminEmail;
   const numero = req.params.numero;
   if (supabase) {
     let query = supabase.from("whatsapp_conversas").select("dados, empresa_id").eq("numero", numero);
