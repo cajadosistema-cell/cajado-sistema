@@ -152,16 +152,20 @@ router.get("/debug/inbox", authMiddleware, async (req, res) => {
 });
 
 router.get("/inbox/conversas", authMiddleware, async (req, res) => {
-  // SuperAdmin = apenas contas com flag de sistema global (env SUPER_ADMIN_EMAIL)
-  // admin@visiopro.com, max@cajado.com etc são admins normais da SUAS empresas
-  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || "").toLowerCase();
-  const isSuperAdmin = superAdminEmail && req.user.email?.toLowerCase() === superAdminEmail;
+  // isSuperAdmin = admin master do sistema (ADMIN_EMAIL env var)
+  // Mesmo sendo superAdmin, filtra pela própria empresa (não vê outros tenants)
+  const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
+  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail;
+
+  // empresa_id efetivo: usa o do JWT ou ADMIN_DEFAULT para o admin master
+  const empresaIdEfetivo = isSuperAdmin
+    ? (ADMIN_DEFAULT.empresa_id || req.user.empresa_id)
+    : req.user.empresa_id;
 
   if (supabase) {
     let query = supabase.from("whatsapp_conversas").select("dados, empresa_id");
-    if (!isSuperAdmin) {
-      query = query.eq("empresa_id", req.user.empresa_id);
-    }
+    // Sempre filtra pela empresa — admin usa empresaIdEfetivo (ADMIN_DEFAULT), outros usam JWT
+    query = query.eq("empresa_id", empresaIdEfetivo);
     const { data } = await query;
     if (data) {
       data.forEach(row => {
@@ -185,9 +189,9 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
 
   const lista = Array.from(conversas.values())
     .filter(c => {
-      if (isSuperAdmin) return true;
-      return c.empresa_id === req.user.empresa_id ||
-             (c.empresa_id === "empresa-padrao" && req.user.empresa_id === ADMIN_DEFAULT.empresa_id);
+      // Filtra sempre por empresa — sem exceção para nenhum nível de admin
+      return c.empresa_id === empresaIdEfetivo ||
+             (c.empresa_id === "empresa-padrao" && isSuperAdmin);
     })
     .map(c => ({
       numero: c.numero,

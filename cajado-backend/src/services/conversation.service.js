@@ -45,15 +45,21 @@ async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, in
   // PERSISTÊNCIA NO SUPABASE — resolve empresa_id real antes de salvar
   let empresaIdFinal = conv.empresa_id === "empresa-padrao" ? ADMIN_DEFAULT.empresa_id : conv.empresa_id;
 
-  // Resolução lazy: se ainda é placeholder, busca primeiro UUID real da tabela empresas
+  // Resolução lazy: se ainda é placeholder, busca pelo ADMIN_DEFAULT (sem sobrescrever)
   if (supabase && (!empresaIdFinal || empresaIdFinal === "empresa-padrao" || empresaIdFinal === "vazia")) {
     try {
-      const { data: emp } = await supabase.from("empresas").select("id").limit(1).single();
-      if (emp?.id) {
-        ADMIN_DEFAULT.empresa_id = emp.id; // cacheia para próximas chamadas
-        empresaIdFinal = emp.id;
-        conv.empresa_id = emp.id;
-        console.log(`[Conv] Empresa resolvida lazy: ${emp.id}`);
+      // Usa ADMIN_DEFAULT se já foi carregado corretamente no boot
+      if (ADMIN_DEFAULT.empresa_id && ADMIN_DEFAULT.empresa_id !== "empresa-padrao" && ADMIN_DEFAULT.empresa_id !== "vazia") {
+        empresaIdFinal = ADMIN_DEFAULT.empresa_id;
+        conv.empresa_id = empresaIdFinal;
+      } else {
+        // Fallback extremo: pega primeira empresa ordenada por criação (mais antiga = admin)
+        const { data: emp } = await supabase.from("empresas").select("id").order("created_at", { ascending: true }).limit(1).single();
+        if (emp?.id) {
+          empresaIdFinal = emp.id;
+          conv.empresa_id = emp.id;
+          console.log(`[Conv] Empresa resolvida lazy (fallback): ${emp.id}`);
+        }
       }
     } catch {}
   }
