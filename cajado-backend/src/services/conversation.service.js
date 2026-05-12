@@ -68,7 +68,18 @@ async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, in
   const isRealUuid = empresaIdFinal && empresaIdFinal !== "empresa-padrao" && empresaIdFinal !== "vazia";
   if (supabase && isRealUuid) {
     const { error } = await supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: empresaIdFinal, dados: conv });
-    if (error && error.code !== "42P01") console.error("[DB] Erro salvando conversa:", error.message);
+    if (error) {
+      if (error.code === "42P01") {
+        // Tabela não existe ainda — ignora
+      } else if (error.code === "42501" || error.message?.includes("policy") || error.message?.includes("RLS")) {
+        console.error(`[DB] ❌ ERRO RLS ao salvar conversa ${numero}: ${error.message} — verifique SUPABASE_SERVICE_ROLE_KEY no Railway`);
+      } else {
+        console.error(`[DB] ❌ Erro salvando conversa ${numero}: [${error.code}] ${error.message}`);
+      }
+    } else {
+      // Apenas loga em debug (remover em produção se muito verboso)
+      // console.log(`[DB] ✅ Conversa ${numero} salva (${conv.mensagens?.length || 0} msgs)`);
+    }
   }
 
   return conv;
