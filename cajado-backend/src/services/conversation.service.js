@@ -35,6 +35,7 @@ async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, in
   if (instanceName) conv.instanceName = instanceName;
 
   if (mensagem) {
+    if (!conv.mensagens) conv.mensagens = [];
     conv.mensagens.push(mensagem);
     // Limita histórico a 300 mensagens para evitar blob gigante
     if (conv.mensagens.length > 300) conv.mensagens = conv.mensagens.slice(-300);
@@ -106,7 +107,7 @@ async function syncConversasDb() {
     const isReal = eid && eid !== "empresa-padrao" && eid !== "vazia";
     if (!isReal) continue;
     conv.empresa_id = eid;
-    if (conv.mensagens.length > 300) conv.mensagens = conv.mensagens.slice(-300);
+    if (conv.mensagens && conv.mensagens.length > 300) conv.mensagens = conv.mensagens.slice(-300);
     const { error } = await supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: eid, dados: conv });
     if (!error) saved++;
   }
