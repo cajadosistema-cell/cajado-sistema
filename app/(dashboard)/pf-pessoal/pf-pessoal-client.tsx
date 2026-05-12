@@ -397,7 +397,7 @@ function TabContasPFInline({
                       <p className="text-sm font-bold text-emerald-400">{(c.saldo_atual ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-2 mt-1">
                     <button onClick={() => abrirEditar(c)}
                       className="flex-1 py-1.5 rounded-xl text-[11px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors">
                       ✏️ Editar

@@ -935,7 +935,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   const [contasNormais, setContasNormais] = useState<any[]>([])
   const [faturas, setFaturas] = useState<any[]>([])
   const [cartaoSel, setCartaoSel] = useState('todos')
-  const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro' | 'contas'>('lancamentos')
+  const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro'>('lancamentos')
   const [modalNovaConta, setModalNovaConta] = useState(false)
   const [modalLanc, setModalLanc] = useState(false)
   const [modalCriar, setModalCriar] = useState(false)
@@ -1014,7 +1014,6 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           {([
             { id: 'lancamentos', label: '💸 Lançamentos' },
             { id: 'cadastro',    label: '💳 Meus Cartões' },
-            { id: 'contas',      label: '🏦 Contas PF' },
           ] as const).map(t => (
             <button key={t.id} onClick={() => setSubAba(t.id)}
               className={cn('px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors',
@@ -1030,9 +1029,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           </button>
           {subAba === 'lancamentos'
             ? <button onClick={() => setModalLanc(true)} disabled={contas.length === 0} className="btn-primary text-xs disabled:opacity-50">+ Lançar</button>
-            : subAba === 'cadastro'
-              ? <button onClick={() => setModalCriar(true)} className="btn-primary text-xs">+ Novo Cartão</button>
-              : <button onClick={() => setModalNovaConta(true)} className="btn-primary text-xs">+ Nova Conta</button>
+            : <button onClick={() => setModalCriar(true)} className="btn-primary text-xs">+ Novo Cartão</button>
           }
         </div>
       </div>
