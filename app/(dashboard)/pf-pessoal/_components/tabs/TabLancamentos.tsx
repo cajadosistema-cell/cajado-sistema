@@ -59,15 +59,13 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
   }
 
   const avulsos    = filtrados.filter(item => !item.recorrente && (!(item as any).parcelas || (item as any).parcelas <= 1))
-  const fixos      = filtrados.filter(item => item.recorrente && (item as any).is_fixo)
-  const recorrentes= filtrados.filter(item => item.recorrente && !(item as any).is_fixo)
+  const fixos      = filtrados.filter(item => item.recorrente)   // todos recorrentes = fixos
   const parcelados = filtrados.filter(item => !item.recorrente && (item as any).parcelas && (item as any).parcelas > 1)
 
   const somaAvulsos     = avulsos.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
   const somaFixos       = fixos.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
-  const somaRecorrentes = recorrentes.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
   const somaParcelados  = parcelados.filter(i => i._tipo === 'gasto').reduce((s, i) => s + i.valor, 0)
-  const somaTotal       = somaAvulsos + somaFixos + somaRecorrentes + somaParcelados
+  const somaTotal       = somaAvulsos + somaFixos + somaParcelados
   const somaReceitas    = filtrados.filter(i => i._tipo === 'receita').reduce((s, i) => s + i.valor, 0)
 
   const renderItem = (item: any) => {
@@ -160,13 +158,12 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
       </div>
 
       {/* Barra de total geral */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[
-          { label: '💸 Avulsos',     soma: somaAvulsos,     count: avulsos.length,     cor: 'text-red-400',    bg: 'bg-red-500/5    border-red-500/10'    },
-          { label: '📌 Fixos',       soma: somaFixos,        count: fixos.length,       cor: 'text-amber-400',  bg: 'bg-amber-500/5  border-amber-500/10'  },
-          { label: '🔁 Recorrentes', soma: somaRecorrentes,  count: recorrentes.length, cor: 'text-purple-400', bg: 'bg-purple-500/5 border-purple-500/10' },
-          { label: '💳 Parcelados',  soma: somaParcelados,   count: parcelados.length,  cor: 'text-blue-400',   bg: 'bg-blue-500/5   border-blue-500/10'   },
-          { label: '📊 Total Gasto', soma: somaTotal,        count: avulsos.length + fixos.length + recorrentes.length + parcelados.length, cor: 'text-red-300 font-bold', bg: 'bg-red-500/10 border-red-500/20' },
+          { label: '💸 Avulsos',     soma: somaAvulsos,   count: avulsos.length,   cor: 'text-red-400',          bg: 'bg-red-500/5   border-red-500/10'   },
+          { label: '📌 Fixos',       soma: somaFixos,     count: fixos.length,     cor: 'text-amber-400',        bg: 'bg-amber-500/5 border-amber-500/10' },
+          { label: '💳 Parcelados',  soma: somaParcelados,count: parcelados.length, cor: 'text-blue-400',         bg: 'bg-blue-500/5  border-blue-500/10'  },
+          { label: '📊 Total Gasto', soma: somaTotal,     count: avulsos.length + fixos.length + parcelados.length, cor: 'text-red-300 font-bold', bg: 'bg-red-500/10 border-red-500/20' },
         ].map(({ label, soma, count, cor, bg }) => (
           <div key={label} className={`rounded-xl border px-3 py-2 ${bg}`}>
             <p className="text-[9px] text-fg-tertiary uppercase tracking-wider mb-0.5">{label}</p>
@@ -187,10 +184,10 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Avulsos */}
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-emerald-500/5">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-red-500/5">
               <h3 className="text-sm font-semibold text-fg">💸 Avulsos</h3>
               <div className="text-right">
                 <p className="text-xs font-bold text-red-400">{formatCurrency(somaAvulsos)}</p>
@@ -199,15 +196,18 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
             </div>
             <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
               {avulsos.length === 0
-                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item avulso.</p>
+                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto avulso.</p>
                 : avulsos.map(renderItem)}
             </div>
           </div>
 
-          {/* Fixos */}
+          {/* Fixos / Recorrentes — todos com recorrente: true */}
           <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-amber-500/5">
-              <h3 className="text-sm font-semibold text-fg">📌 Fixos</h3>
+              <div>
+                <h3 className="text-sm font-semibold text-fg">📌 Fixos / Recorrentes</h3>
+                <p className="text-[10px] text-fg-disabled mt-0.5">Gastos marcados como recorrentes</p>
+              </div>
               <div className="text-right">
                 <p className="text-xs font-bold text-amber-400">{formatCurrency(somaFixos)}</p>
                 <p className="text-[10px] text-fg-tertiary">{fixos.length} itens</p>
@@ -215,24 +215,8 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
             </div>
             <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
               {fixos.length === 0
-                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo.</p>
+                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum gasto fixo.{"\n"}Ao registrar um gasto, marque "Gasto recorrente".</p>
                 : fixos.map(renderItem)}
-            </div>
-          </div>
-
-          {/* Recorrentes */}
-          <div className="bg-page border border-border-subtle rounded-xl overflow-hidden flex flex-col max-h-[600px]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-purple-500/5">
-              <h3 className="text-sm font-semibold text-fg">🔁 Recorrentes</h3>
-              <div className="text-right">
-                <p className="text-xs font-bold text-purple-400">{formatCurrency(somaRecorrentes)}</p>
-                <p className="text-[10px] text-fg-tertiary">{recorrentes.length} itens</p>
-              </div>
-            </div>
-            <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
-              {recorrentes.length === 0
-                ? <p className="text-xs text-fg-disabled text-center py-8">Nenhum item recorrente.</p>
-                : recorrentes.map(renderItem)}
             </div>
           </div>
 
