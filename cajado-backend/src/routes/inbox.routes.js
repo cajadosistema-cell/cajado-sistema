@@ -98,33 +98,39 @@ router.post("/inbox/webhook", webhookSecret, async (req, res) => {
   // ── Resolve empresa_id pela instância (isolamento multi-tenant) ──────────
   const instanceRecebida = data?.instance || data?.sender || "botwhatsapp01";
 
-  // 1ª prioridade: se conversa já existe no banco, respeita o empresa_id gravado
-  let empresaIdCanal = null;
-  if (supabase) {
+  // 1ª prioridade: canaisMemoria (instance_name → empresa_id) — mais confiável
+  const canalInfo = canaisMemoria.get(instanceRecebida);
+  let empresaIdCanal = (typeof canalInfo === "object" ? canalInfo?.empresa_id : canalInfo) || null;
+
+  // 2ª prioridade: banco de dados (canais)
+  if (!empresaIdCanal && supabase) {
     try {
-      const { data: convDb } = await supabase
-        .from("whatsapp_conversas")
-        .select("empresa_id")
-        .eq("numero", numero)
+      const { data: canalDb } = await supabase
+        .from("canais")
+        .select("empresa_id, dados_conexao")
+        .eq("dados_conexao->>instance_name", instanceRecebida)
         .single();
-      if (convDb?.empresa_id) empresaIdCanal = convDb.empresa_id;
+      if (canalDb?.empresa_id) {
+        empresaIdCanal = canalDb.empresa_id;
+        // Atualiza memória para próximas mensagens
+        canaisMemoria.set(instanceRecebida, { empresa_id: empresaIdCanal, ...canalDb.dados_conexao });
+        console.log(`[INBOX-WH] ✅ Instância ${instanceRecebida} recuperada do banco → empresa ${empresaIdCanal}`);
+      }
     } catch {}
   }
 
-  // 2ª prioridade: canaisMemoria (instance_name → empresa_id)
+  // Se ainda sem empresa_id, DESCARTA (não usa ADMIN_DEFAULT para não contaminar)
   if (!empresaIdCanal) {
-    const canalInfo = canaisMemoria.get(instanceRecebida);
-    empresaIdCanal = (typeof canalInfo === "object" ? canalInfo?.empresa_id : canalInfo) || null;
+    console.warn(`[INBOX-WH] ⚠️ Instância "${instanceRecebida}" sem empresa mapeada. Mensagem descartada.`);
+    return;
   }
-
-  // 3ª prioridade: empresa do admin (fallback seguro)
-  if (!empresaIdCanal) empresaIdCanal = ADMIN_DEFAULT.empresa_id;
 
   const conv = await registrarNaConversa(numero, mensagem, nome, null, empresaIdCanal, instanceRecebida);
   conv.unread = (conv.unread || 0) + 1;
   conv.lastInboundAt = new Date().toISOString();
   console.log(`[INBOX] ${nome} [tenant:${empresaIdCanal?.slice(0, 8)}] [inst:${instanceRecebida}]: ${texto || 'Mídia recebida'}`);
 });
+
 
 router.post("/inbox/mensagem", authMiddleware, async (req, res) => {
   const { numero, texto, tipo, nome, setor } = req.body;
@@ -208,10 +214,10 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
   // Adiciona as conversas do Webchat (Vivi site)
   let listaVivi = [];
   if (supabase) {
-    let qVivi = supabase.from("vivi_conversas").select("*").order("created_at", { ascending: false });
-    if (!isSuperAdmin) {
-      qVivi = qVivi.or(`empresa_id.eq.${req.user.empresa_id},empresa_id.is.null`);
-    }
+    // Webchat: filtra por empresa_id (ambos admin e usuários normais)
+    let qVivi = supabase.from("vivi_conversas").select("*")
+      .eq("empresa_id", empresaIdEfetivo)
+      .order("created_at", { ascending: false });
     const { data: dataVivi } = await qVivi;
     if (dataVivi) {
       const mapVivi = new Map();
