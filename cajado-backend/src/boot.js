@@ -118,6 +118,51 @@ async function bootstrap() {
 }
 
 /**
+ * Keep-alive: pinga todas as instâncias Evolution API a cada 4 minutos.
+ * Evita que o Railway adormeça o serviço Evolution API e perca sessões Baileys.
+ */
+async function iniciarKeepAlive() {
+  const { EVOLUTION_URL, EVOLUTION_KEY } = require("./config/env");
+
+  const pingInstancias = async () => {
+    const canais = await sbFetch("canais", "select=*&tipo=eq.evolution");
+    if (!canais.length) return;
+
+    for (const c of canais) {
+      const instanceName = c.dados_conexao?.instance_name;
+      if (!instanceName) continue;
+
+      const evoUrl  = c.dados_conexao?.evolution_url || EVOLUTION_URL;
+      const evoKey  = c.dados_conexao?.api_key       || EVOLUTION_KEY;
+
+      try {
+        const ctrl = new AbortController();
+        setTimeout(() => ctrl.abort(), 8000);
+        const r = await fetch(
+          `${evoUrl}/instance/connectionState/${instanceName}`,
+          { headers: { apikey: evoKey }, signal: ctrl.signal }
+        );
+        const data = await r.json();
+        const state = data?.instance?.state || data?.state || "unknown";
+
+        if (state === "open") {
+          // Instância OK — apenas mantém o serviço acordado
+        } else {
+          console.warn(`[KeepAlive] ⚠️ Instância "${instanceName}" estado: ${state} — verifique conexão no Evolution Manager.`);
+        }
+      } catch (e) {
+        console.warn(`[KeepAlive] ⚠️ Falha ao pingar "${instanceName}": ${e.message}`);
+      }
+    }
+  };
+
+  // Pinga imediatamente e depois a cada 4 minutos
+  await pingInstancias();
+  setInterval(pingInstancias, 4 * 60 * 1000);
+  console.log("[Boot] 🏓 Keep-alive Evolution API iniciado (4 min).");
+}
+
+/**
  * Inicia o sync periódico a cada 5 minutos.
  */
 function iniciarSyncPeriodico() {
@@ -164,4 +209,4 @@ function agendarCronDiario() {
   console.log(`[Boot] Cron billing: próxima verificação em ${horas}h`);
 }
 
-module.exports = { bootstrap, iniciarSyncPeriodico, agendarCronDiario, carregarUsuariosMemoria };
+module.exports = { bootstrap, iniciarSyncPeriodico, agendarCronDiario, carregarUsuariosMemoria, iniciarKeepAlive };

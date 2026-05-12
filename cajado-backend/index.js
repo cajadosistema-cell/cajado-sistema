@@ -54,12 +54,13 @@ const {
 } = require("./src/config/memory");
 
 // O estado em memória agora é gerenciado pelo src/config/memory.js
-const { bootstrap, iniciarSyncPeriodico, agendarCronDiario } = require("./src/boot");
+const { bootstrap, iniciarSyncPeriodico, agendarCronDiario, iniciarKeepAlive } = require("./src/boot");
 
 // Dispara o boot central da aplicação
 bootstrap().then(() => {
   iniciarSyncPeriodico();
   agendarCronDiario();
+  iniciarKeepAlive(); // 🏓 Mantém Evolution API acordado (evita sleep no Railway)
 
   // ── Cron de Alarmes Push (iPhone/Android) ──────────────────
   const { iniciarCronAlarmes } = require('./src/routes/push-alarmes.routes')
