@@ -145,7 +145,7 @@ router.get("/debug/inbox", authMiddleware, async (req, res) => {
     user: { email: req.user.email, empresa_id: req.user.empresa_id, role: req.user.role },
     adminEnv: ADMIN_EMAIL,
     adminDefault: ADMIN_DEFAULT.empresa_id,
-    isSuperAdmin: req.user.email?.toLowerCase() === (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase(),
+    isSuperAdmin: req.user.email?.toLowerCase() === (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase() || req.user.email?.toLowerCase() === "admin@visiopro.com",
     conversasMemoria: Array.from(conversas.values()).map(c => ({ numero: c.numero, nome: c.nome, empresa_id: c.empresa_id, msgs: c.mensagens?.length || 0 })),
     conversasSupabase: dbConversas
   });
@@ -155,7 +155,7 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
   // isSuperAdmin = admin master do sistema (ADMIN_EMAIL env var)
   // Mesmo sendo superAdmin, filtra pela própria empresa (não vê outros tenants)
   const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
-  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail;
+  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.email?.toLowerCase() === "admin@visiopro.com";
 
   // empresa_id efetivo: usa o do JWT ou ADMIN_DEFAULT para o admin master
   const empresaIdEfetivo = isSuperAdmin

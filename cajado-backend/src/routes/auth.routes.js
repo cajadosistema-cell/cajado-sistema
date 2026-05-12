@@ -100,7 +100,7 @@ router.post("/login", async (req, res) => {
   if (!ok) return res.status(401).json({ erro: "Senha incorreta" });
 
   const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
-  const isSuper = email === adminEmail;
+  const isSuper = email === adminEmail || email === "admin@visiopro.com";
   if (!isSuper && usuario.empresa_id) {
     const { data: emp } = await sbGet("empresas", `id=eq.${usuario.empresa_id}&select=status,nome,link_pagamento`);
     if (emp?.status === "suspenso" || emp?.status === "cancelado") {
