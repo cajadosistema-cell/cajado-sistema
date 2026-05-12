@@ -290,7 +290,8 @@ router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
   if (supabase) {
     let query = supabase.from("whatsapp_conversas").select("dados, empresa_id").eq("numero", numero);
     if (!isSuperAdmin) query = query.eq("empresa_id", req.user.empresa_id);
-    const { data } = await query.single();
+    const { data, error: dbErr } = await query.single();
+    console.log(`[Detalhe] ${numero} | user.empresa_id=${req.user.empresa_id} | dbFound=${!!data} | dbMsgs=${data?.dados?.mensagens?.length ?? 'N/A'} | dbErr=${dbErr?.message || 'none'}`);
     if (data && data.dados) {
       data.dados.empresa_id = data.dados.empresa_id || "empresa-padrao";
       const current = conversas.get(numero);

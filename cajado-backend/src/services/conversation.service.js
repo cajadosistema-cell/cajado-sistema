@@ -87,6 +87,8 @@ async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, in
 
 /**
  * Carrega todas as conversas do Supabase para memória no boot.
+ * Em multi-tenant com mesmo número em duas empresas, a última linha carregada vence na chave simples.
+ * O controle correto de tenant é feito pelo filtro de empresa_id no endpoint de detalhe.
  */
 async function loadConversasDb() {
   if (!supabase) return;
@@ -94,7 +96,6 @@ async function loadConversasDb() {
   if (!error && data) {
     data.forEach(row => {
       if (row.dados) {
-
         row.dados.empresa_id = row.empresa_id;
         conversas.set(row.numero, row.dados);
         if (row.dados.botOn === false) {
