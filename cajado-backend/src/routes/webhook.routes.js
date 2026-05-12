@@ -238,7 +238,7 @@ router.post(["/evolution", "/"], async (req, res) => {
        c.botOn = false;
        c.assumido_nome = "Atendente (App WhatsApp)";
        if (supabase && c.empresa_id && c.empresa_id !== "empresa-padrao" && c.empresa_id !== "vazia") {
-         supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: c.empresa_id, dados: c }).then(()=>{});
+         supabase.from("whatsapp_conversas").upsert({ numero: number, empresa_id: c.empresa_id, dados: c }).then(()=>{});
        }
     }
     console.log(`[HUMANO APP] Assumiu pelo celular ${number} e enviou: ${messageText}`);
