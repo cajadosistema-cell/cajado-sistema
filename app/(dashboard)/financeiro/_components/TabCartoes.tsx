@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts'
 import { EmptyState } from '@/components/shared/ui'
 import { exportarLancamentos } from '@/lib/export-utils'
+import { PainelMilhas, ModalEditarMilhas } from '@/components/shared/PainelMilhas'
 
 const COLORS = ['#10b981', '#3b82f6', '#f5a623', '#8b5cf6', '#ec4899', '#f43f5e', '#14b8a6', '#facc15']
 
@@ -250,6 +251,19 @@ export function TabCartoes({
   const [cartaoSelecionado, setCartaoSelecionado] = useState<string>(cartoes[0]?.id || 'todos')
   const [mesSel] = useState(mesAtualYM())
   const [editandoCartao, setEditandoCartao] = useState<any>(null)
+  const [editandoMilhas, setEditandoMilhas] = useState<any>(null)
+  const [listaCartoes, setListaCartoes] = useState<any[]>(cartoes)
+
+  // Recarregar cartões ao salvar milhas
+  const supabasePJ = createClient()
+  const recarregarCartoes = useCallback(async () => {
+    const ids = cartoes.map(c => c.id)
+    if (!ids.length) return
+    const { data } = await (supabasePJ.from('contas') as any).select('*').in('id', ids)
+    if (data) setListaCartoes(data)
+  }, [cartoes, supabasePJ])
+
+  useEffect(() => { setListaCartoes(cartoes) }, [cartoes])
 
   if (cartoes.length === 0) {
     return (
@@ -268,7 +282,7 @@ export function TabCartoes({
 
   const gastosTudo = lancamentos.filter(l =>
     l.tipo === 'despesa' &&
-    cartoes.some(c => c.id === l.conta_id) &&
+    listaCartoes.some(c => c.id === l.conta_id) &&
     (cartaoSelecionado === 'todos' || l.conta_id === cartaoSelecionado)
   )
 
@@ -337,7 +351,7 @@ export function TabCartoes({
         >
           🗂️ Todos ({cartoes.length})
         </button>
-        {cartoes.map(c => {
+        {listaCartoes.map(c => {
           const band = c.bandeira || 'outras'
           const cor = BAND_CORES[band] ?? '#6b7280'
           const emoji = BAND_EMOJI[band] ?? '💳'
@@ -374,6 +388,22 @@ export function TabCartoes({
           )
         })}
       </div>
+
+      {/* ── Painel de Milhas (cartão selecionado) ──────────────── */}
+      {cartaoSelecionado !== 'todos' && (() => {
+        const cartaoAtual = listaCartoes.find(c => c.id === cartaoSelecionado)
+        if (!cartaoAtual) return null
+        const gastoCartao = lancamentos
+          .filter(l => l.tipo === 'despesa' && l.conta_id === cartaoSelecionado)
+          .reduce((a: number, l: any) => a + l.valor, 0)
+        return (
+          <PainelMilhas
+            conta={cartaoAtual}
+            gastoMes={gastoCartao}
+            onEditar={() => setEditandoMilhas(cartaoAtual)}
+          />
+        )
+      })()}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Painel de Fatura — Prévia + Real */}
@@ -487,6 +517,13 @@ export function TabCartoes({
         conta={editandoCartao}
         onClose={() => setEditandoCartao(null)}
         onSave={() => { setEditandoCartao(null); onNovoGasto() }}
+      />
+    )}
+    {editandoMilhas && (
+      <ModalEditarMilhas
+        conta={editandoMilhas}
+        onClose={() => setEditandoMilhas(null)}
+        onSave={() => { recarregarCartoes(); setEditandoMilhas(null) }}
       />
     )}
   </>

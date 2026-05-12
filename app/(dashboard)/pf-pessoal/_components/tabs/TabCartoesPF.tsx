@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { ModalImportarExtratoIA } from '@/components/shared/ModalImportarExtratoIA'
 import { PainelComparativoMes } from '@/components/shared/PainelComparativoMes'
 import { exportarLancamentos } from '@/lib/export-utils'
+import { PainelMilhas, ModalEditarMilhas } from '@/components/shared/PainelMilhas'
 
 const BANDEIRAS = [
   { id: 'visa',       label: 'Visa',       emoji: '💳', cor: '#1a1f71' },
@@ -945,6 +946,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   const [modalEditar, setModalEditar] = useState<any>(null)
   const [modalDetalhe, setModalDetalhe] = useState<any>(null)
   const [modalFatura, setModalFatura] = useState<any>(null)
+  const [modalMilhas, setModalMilhas] = useState<any>(null)
   const [busca, setBusca] = useState('')
   const mesAtual = new Date().toISOString().substring(0, 7)
   const [mesSel, setMesSel] = useState(mesAtual)
@@ -1111,6 +1113,19 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           )
         })()}
       </div>
+
+      {/* ── Painel de Milhas (cartão selecionado) ────────────── */}
+      {cartaoSel !== 'todos' && (() => {
+        const cartaoAtual = contas.find((c: any) => c.id === cartaoSel)
+        if (!cartaoAtual) return null
+        return (
+          <PainelMilhas
+            conta={cartaoAtual}
+            gastoMes={totalGastosFiltrados}
+            onEditar={() => setModalMilhas(cartaoAtual)}
+          />
+        )
+      })()}
 
       {/* ── Comparativo Mensal Geral dos Cartões PF ── */}
       <PainelComparativoMes
@@ -1428,6 +1443,13 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
             carregarContas()
             setModalFatura(null)
           }}
+        />
+      )}
+      {modalMilhas && (
+        <ModalEditarMilhas
+          conta={modalMilhas}
+          onClose={() => setModalMilhas(null)}
+          onSave={() => { carregarContas(); setModalMilhas(null) }}
         />
       )}
     </div>
