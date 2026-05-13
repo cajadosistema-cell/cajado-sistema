@@ -1036,19 +1036,33 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                       onSaved={fetchFaturas}
                     />
                     <GastoBar gasto={gastoMes} limite={c.limite_gasto_mensal ?? null} />
+
+                    {/* ── Painel de Milhas ── */}
+                    {c.programa_milhas && (
+                      <div className="-mx-2 scale-95 origin-top">
+                        <PainelMilhas 
+                          conta={c}
+                          gastoMes={gastoMes}
+                          onEditar={() => setModalMilhas(c)}
+                        />
+                      </div>
+                    )}
+
                     {(c.dia_fechamento || c.dia_vencimento) && (
                       <div className="flex justify-between text-[10px] text-fg-tertiary pt-1 border-t border-border-subtle">
                         <span>Fecha dia {c.dia_fechamento || '—'}</span>
                         <span>Vence dia {c.dia_vencimento || '—'}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-1 mt-1">
                       <button onClick={e => { e.stopPropagation(); setCartaoSel(c.id); setSubAba('lancamentos'); setModalLanc(true) }}
-                        className="flex-1 btn-ghost text-xs">+ Lançar</button>
+                        className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">+ Lançar</button>
                       <button onClick={e => { e.stopPropagation(); setModalLimite(c) }}
-                        className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">🎯 Limite</button>
+                        className="flex-1 py-1 rounded-lg text-[11px] font-medium text-amber-400 hover:bg-amber-500/10 border border-amber-500/20 transition-colors">🎯 Limite</button>
+                      <button onClick={e => { e.stopPropagation(); setModalMilhas(c) }}
+                        className="flex-1 py-1 rounded-lg text-[11px] font-medium text-purple-400 hover:bg-purple-500/10 border border-purple-500/20 transition-colors">✈️ Milhas</button>
                       <button onClick={e => { e.stopPropagation(); setModalFatura(c) }}
-                        className="flex-1 btn-ghost text-xs border border-border-subtle rounded-lg py-1">📊 Fatura</button>
+                        className="p-1.5 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors border border-transparent hover:border-blue-500/30" title="Editar Fatura Manual">📊</button>
                       <button onClick={e => { e.stopPropagation(); onDeleteConta(c.id) }}
                         className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30" title="Excluir">🗑️</button>
                     </div>

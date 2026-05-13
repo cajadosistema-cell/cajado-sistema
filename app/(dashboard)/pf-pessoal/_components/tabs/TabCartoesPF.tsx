@@ -1274,6 +1274,17 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
                   {/* GastoProgressBar (limite mensal) */}
                   <GastoProgressBar gasto={gastoMes} limite={c.limite_gasto_mensal ?? null} />
 
+                  {/* ── Painel de Milhas ── */}
+                  {c.programa_milhas && (
+                    <div className="-mx-2 scale-95 origin-top">
+                      <PainelMilhas 
+                        conta={c}
+                        gastoMes={gastoMes}
+                        onEditar={() => setModalMilhas(c)}
+                      />
+                    </div>
+                  )}
+
                   {/* Fechamento e vencimento */}
                   {(c.dia_fechamento || c.dia_vencimento) && (
                     <div className="flex justify-between text-[10px] text-fg-tertiary pt-1 border-t border-white/5">
@@ -1297,6 +1308,10 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
                     <button onClick={e => { e.stopPropagation(); setModalLimite(c) }}
                       className="flex-1 py-1 rounded-lg text-[11px] font-medium text-amber-400 hover:bg-amber-500/10 border border-amber-500/20 transition-colors">
                       🎯 Limite
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); setModalMilhas(c) }}
+                      className="flex-1 py-1 rounded-lg text-[11px] font-medium text-purple-400 hover:bg-purple-500/10 border border-purple-500/20 transition-colors">
+                      ✈️ Milhas
                     </button>
                     <button onClick={e => { e.stopPropagation(); setModalEditar(c) }}
                       className="flex-1 py-1 rounded-lg text-[11px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors">
