@@ -5,6 +5,7 @@ import { formatCurrency, cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { EmptyState } from '@/components/shared/ui'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { PainelMilhas, ModalEditarMilhas } from '@/components/shared/PainelMilhas'
 
 function getAnoMes(d: string) { return d ? d.substring(0, 7) : '' }
 function labelMes(ym: string) {
@@ -508,6 +509,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
   const [modalCriar, setModalCriar] = useState(false)
   const [modalLimite, setModalLimite] = useState<any>(null)
   const [modalFatura, setModalFatura] = useState<any>(null)
+  const [modalMilhas, setModalMilhas] = useState<any>(null)
   const [subAba, setSubAba] = useState<'lancamentos' | 'cadastro' | 'parcelas'>('lancamentos')
   const [busca, setBusca] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
@@ -679,6 +681,19 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
               )
             })()}
           </div>
+
+          {/* ── Painel de Milhas (cartão selecionado) ────────────── */}
+          {cartaoSel !== 'todos' && (() => {
+            const cartaoAtual = cartoes.find((c: any) => c.id === cartaoSel)
+            if (!cartaoAtual) return null
+            return (
+              <PainelMilhas
+                conta={cartaoAtual}
+                gastoMes={gastoCartaoMes(cartaoAtual.id)}
+                onEditar={() => setModalMilhas(cartaoAtual)}
+              />
+            )
+          })()}
 
           {/* Gráfico + Lista */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -966,6 +981,13 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
         <ModalLimiteMensal
           conta={modalLimite}
           onClose={() => setModalLimite(null)}
+          onSave={() => { onRefresh?.() }}
+        />
+      )}
+      {modalMilhas && (
+        <ModalEditarMilhas
+          conta={modalMilhas}
+          onClose={() => setModalMilhas(null)}
           onSave={() => { onRefresh?.() }}
         />
       )}
