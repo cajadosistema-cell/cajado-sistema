@@ -25,6 +25,108 @@ const BANDEIRAS = [
   { id: 'outras',     label: 'Outras',      emoji: '💳', cor: '#6b7280' },
 ]
 
+// ── Painel duplo: Prévia + Fatura Real ────────────────────────
+function FaturaDupla({
+  conta, mesSel, faturaObj, gastoSistema, onSaved,
+}: { conta: any; mesSel: string; faturaObj: any; gastoSistema: number; onSaved: () => void }) {
+  const supabase = createClient()
+  const [editPrev, setEditPrev] = useState(false)
+  const [editReal, setEditReal] = useState(false)
+  const [valPrev, setValPrev] = useState(faturaObj?.valor_previsto != null ? String(faturaObj.valor_previsto) : '')
+  const [valReal, setValReal] = useState(faturaObj?.valor_fechado  != null ? String(faturaObj.valor_fechado)  : '')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setValPrev(faturaObj?.valor_previsto != null ? String(faturaObj.valor_previsto) : '')
+    setValReal(faturaObj?.valor_fechado  != null ? String(faturaObj.valor_fechado)  : '')
+    setEditPrev(false); setEditReal(false)
+  }, [mesSel, faturaObj])
+
+  const salvar = async (campo: 'valor_previsto' | 'valor_fechado', raw: string) => {
+    setLoading(true)
+    const val = parseFloat(raw.replace(',', '.'))
+    await (supabase.from('faturas_cartoes') as any).upsert({
+      conta_id: conta.id,
+      mes_referencia: mesSel,
+      [campo]: isNaN(val) ? null : val,
+    }, { onConflict: 'conta_id,mes_referencia' })
+    setLoading(false)
+    setEditPrev(false); setEditReal(false)
+    onSaved()
+  }
+
+  const prev  = faturaObj?.valor_previsto != null ? Number(faturaObj.valor_previsto) : null
+  const real  = faturaObj?.valor_fechado  != null ? Number(faturaObj.valor_fechado)  : null
+  const diff  = real != null ? gastoSistema - real : null
+
+  return (
+    <div className="space-y-2" onClick={e => e.stopPropagation()}>
+      {/* Linha: Prévia */}
+      <div className="flex items-center justify-between gap-2 bg-blue-500/5 border border-blue-500/20 rounded-xl px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[9px] text-blue-400 font-bold uppercase tracking-wider">📋 Prévia (antes de fechar)</p>
+          {editPrev ? (
+            <div className="flex gap-1 mt-1">
+              <input type="number" step="0.01" autoFocus className="input text-xs flex-1 py-0.5 h-6"
+                placeholder="Ex: 2000.00" value={valPrev} onChange={e => setValPrev(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvar('valor_previsto', valPrev); if (e.key === 'Escape') setEditPrev(false) }} />
+              <button onClick={() => salvar('valor_previsto', valPrev)} disabled={loading}
+                className="px-2 h-6 rounded bg-blue-500/20 text-blue-400 text-[10px] font-bold">{loading ? '...' : '✓'}</button>
+              <button onClick={() => setEditPrev(false)} className="px-2 h-6 rounded bg-white/5 text-fg-disabled text-[10px]">✕</button>
+            </div>
+          ) : (
+            <p className={`text-sm font-bold mt-0.5 ${prev != null ? 'text-blue-300' : 'text-fg-disabled italic text-xs'}`}>
+              {prev != null ? formatCurrency(prev) : 'não informada'}
+            </p>
+          )}
+        </div>
+        {!editPrev && (
+          <button onClick={() => setEditPrev(true)} className="shrink-0 text-[10px] text-blue-400 hover:text-blue-300 border border-blue-500/20 rounded px-2 py-0.5">
+            {prev != null ? '✏️' : '+ Definir'}
+          </button>
+        )}
+      </div>
+
+      {/* Linha: Fatura Real */}
+      <div className="flex items-center justify-between gap-2 bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[9px] text-amber-400 font-bold uppercase tracking-wider">🧾 Fatura Real (após fechar)</p>
+          {editReal ? (
+            <div className="flex gap-1 mt-1">
+              <input type="number" step="0.01" autoFocus className="input text-xs flex-1 py-0.5 h-6"
+                placeholder="Ex: 1850.00" value={valReal} onChange={e => setValReal(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') salvar('valor_fechado', valReal); if (e.key === 'Escape') setEditReal(false) }} />
+              <button onClick={() => salvar('valor_fechado', valReal)} disabled={loading}
+                className="px-2 h-6 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">{loading ? '...' : '✓'}</button>
+              <button onClick={() => setEditReal(false)} className="px-2 h-6 rounded bg-white/5 text-fg-disabled text-[10px]">✕</button>
+            </div>
+          ) : (
+            <p className={`text-sm font-bold mt-0.5 ${real != null ? 'text-amber-300' : 'text-fg-disabled italic text-xs'}`}>
+              {real != null ? formatCurrency(real) : 'não informada'}
+            </p>
+          )}
+        </div>
+        {!editReal && (
+          <button onClick={() => setEditReal(true)} className="shrink-0 text-[10px] text-amber-400 hover:text-amber-300 border border-amber-500/20 rounded px-2 py-0.5">
+            {real != null ? '✏️' : '+ Definir'}
+          </button>
+        )}
+      </div>
+
+      {/* Comparativo */}
+      {real != null && (
+        <div className={`rounded-xl px-3 py-1.5 text-center text-[10px] font-bold ${Math.abs(diff!) <= 0.5 ? 'bg-emerald-500/10 text-emerald-400' : diff! > 0 ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+          {Math.abs(diff!) <= 0.5
+            ? '✅ Sistema e fatura real batem!'
+            : diff! > 0
+              ? `⚠️ ${formatCurrency(diff!)} a mais no sistema vs fatura`
+              : `✅ ${formatCurrency(Math.abs(diff!))} a menos — ok`}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Modal Limite Mensal ─────────────────────────────────────────
 function ModalLimiteMensal({ conta, onClose, onSave }: { conta: any; onClose: () => void; onSave: () => void }) {
   const supabase = createClient()
@@ -897,6 +999,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
               const band = BANDEIRAS.find(b => b.id === c.bandeira) ?? BANDEIRAS[BANDEIRAS.length - 1]
               const gastos = lancamentos.filter(l => l.conta_id === c.id && l.tipo === 'despesa').reduce((a: number, l: any) => a + l.valor, 0)
               const gastoMes = gastoCartaoMes(c.id)
+              const faturaObj = faturas.find(f => f.conta_id === c.id && f.mes_referencia === mesSel)
               return (
                 <div key={c.id} className="bg-surface border border-white/5 rounded-2xl overflow-hidden cursor-pointer hover:border-white/10 transition-all"
                   onClick={() => { setCartaoSel(c.id); setSubAba('lancamentos') }}>
@@ -925,6 +1028,13 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                         <span className="font-semibold text-fg">{formatCurrency(c.limite)}</span>
                       </div>
                     )}
+                    <FaturaDupla 
+                      conta={c}
+                      mesSel={mesSel}
+                      faturaObj={faturaObj}
+                      gastoSistema={gastoMes}
+                      onSaved={fetchFaturas}
+                    />
                     <GastoBar gasto={gastoMes} limite={c.limite_gasto_mensal ?? null} />
                     {(c.dia_fechamento || c.dia_vencimento) && (
                       <div className="flex justify-between text-[10px] text-fg-tertiary pt-1 border-t border-border-subtle">
