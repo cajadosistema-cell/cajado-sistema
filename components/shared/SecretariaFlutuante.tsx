@@ -556,28 +556,7 @@ export function SecretariaFlutuante() {
     if (userId) getPendentes(userId).then(setOfflineQueue)
   }, [userId, isOnline])
 
-  // ── Sugestão Automática de Backup de Chat ─────────────────
-  useEffect(() => {
-    if (mensagens.length >= 40) {
-      const jaSugeriu = sessionStorage.getItem('elena_backup_suggested')
-      if (!jaSugeriu) {
-        sessionStorage.setItem('elena_backup_suggested', '1')
-        setTimeout(() => {
-          setMensagens(prev => [...prev, {
-            id: 'backup-suggest-' + Date.now(),
-            role: 'ai',
-            texto: 'Sr. Max, chegamos a 40 mensagens acumuladas! Gostaria que eu fizesse um backup completo do nosso histórico em um arquivo de texto e iniciasse uma conversa limpa para continuarmos?',
-            acoes: [{
-              tipo: 'backup_chat',
-              dados: {},
-              label: '💾 Baixar Backup (TXT)',
-              status: 'pending'
-            }]
-          }])
-        }, 1500)
-      }
-    }
-  }, [mensagens])
+
 
   // ── Drag ─────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -1239,6 +1218,65 @@ export function SecretariaFlutuante() {
       sessao_id: currentSessao || sessaoId,
     })
   }, [supabase, sessaoId])
+
+  // ── Executar Backup Automático e Reiniciar Chat ─────────────
+  const executarBackupAutomatico = useCallback((msgsList: Msg[]) => {
+    try {
+      // 1. Gera o arquivo de texto formatado com o histórico
+      const textoBackup = msgsList
+        .filter(m => m.texto && m.texto !== '...')
+        .map(m => {
+          const data = m.created_at ? new Date(m.created_at).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')
+          return `[${data}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}:\n${m.texto}`
+        })
+        .join('\n\n----------------------------------------\n\n')
+      
+      const blob = new Blob([`=== BACKUP AUTOMÁTICO DA CONVERSA - ELENA ===\nGerado em: ${new Date().toLocaleString('pt-BR')}\n\n` + textoBackup], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Backup_Automatico_Elena_${new Date().toISOString().split('T')[0]}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('[Elena Backup Automático]', err)
+    }
+
+    // 2. Cria uma nova sessão no chat
+    const novoSessaoId = Date.now().toString()
+    setSessaoId(novoSessaoId)
+    
+    // 3. Define a mensagem informativa na interface
+    const msgExplicativaTexto = '📊 **Elena Informa:** Realizei o **backup automático** da nossa conversa anterior (o arquivo `.txt` foi baixado no seu dispositivo) e iniciei um novo assunto limpo para mantermos o desempenho e velocidade ideais! Como posso ajudar você agora, Sr. Max? 🚀'
+    
+    setMensagens([
+      initialGreeting,
+      {
+        id: 'backup-auto-' + Date.now(),
+        role: 'ai',
+        texto: msgExplicativaTexto
+      }
+    ])
+
+    // 4. Persiste a mensagem informativa no banco de dados sob a nova sessão
+    if (userId) {
+      salvarHistorico(userId, 'ai', msgExplicativaTexto, undefined, novoSessaoId)
+    }
+  }, [userId, initialGreeting, salvarHistorico])
+
+  // ── Monitoramento e Execução do Backup Automático (40 mensagens) ──
+  useEffect(() => {
+    const msgsValidas = mensagens.filter(m => m.texto && m.texto !== '...')
+    if (msgsValidas.length >= 40) {
+      // Pequeno timeout para não travar a UI ou atrapalhar animações de resposta
+      const timer = setTimeout(() => {
+        executarBackupAutomatico(mensagens)
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [mensagens, executarBackupAutomatico])
 
   // ── Aprendizado: atualiza perfil a cada 5 msgs do usuário ──
   const atualizarPerfilAprendizado = useCallback(async (uid: string, msgsList: Msg[]) => {
@@ -2037,27 +2075,13 @@ Retorne exatamente este JSON:
     r.start()
   }
 
-  const handlePressMic = async () => {
+  const handlePressMic = () => {
     // Verifica suporte ao SpeechRecognition
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) { alert('Use Google Chrome ou Edge para usar o microfone.'); return }
 
-    // Verifica via Permissions API sem abrir nenhum popup
-    if (navigator.permissions) {
-      try {
-        const status = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-        if (status.state === 'denied') {
-          alert('Microfone bloqueado pelo navegador. Clique no 🔒 na barra de endereços e permita o microfone.')
-          return
-        }
-        // Se 'granted' ou 'prompt': inicia direto — o browser gerencia a permissão internamente
-      } catch {
-        // Permissions API não suportada — continua normalmente
-      }
-    }
-
-    // Inicia o reconhecimento — na primeira vez o browser pede permissão UMA única vez
-    // e lembra permanentemente sem precisar de getUserMedia
+    // Inicia o reconhecimento de forma estritamente síncrona
+    // preservando o contexto do User Gesture para evitar prompts redundantes no iOS Safari
     iniciarReconhecimento()
   }
 
@@ -2473,6 +2497,11 @@ Aqui está tudo o que você pode me pedir para fazer:
                 {/* Botão Modo Voz Contínua */}
                 <button
                   onClick={() => {
+                    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+                    if (isIOS) {
+                      alert('O Modo Mãos-Livres (Voz Contínua) não é suportado no iPhone devido a restrições de privacidade da Apple (o iOS exige um clique físico para ativar o microfone a cada resposta). Por favor, use o botão do microfone comum para falar!')
+                      return
+                    }
                     const novo = !modoVozContinuo
                     setModoVozContinuo(novo)
                     modoVozRef.current = novo
