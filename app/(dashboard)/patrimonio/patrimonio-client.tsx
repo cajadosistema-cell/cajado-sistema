@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
@@ -522,16 +522,26 @@ export default function PatrimonioClient() {
   const [modalImport, setModalImport] = useState(false)
   const [modalCusto, setModalCusto] = useState<string | null>(null)
   const [projetoAberto, setProjetoAberto] = useState<string | null>(null)
-  const { remove: removeProjeto } = useSupabaseMutation('projetos_patrimonio')
-  const { remove: removeImovel } = useSupabaseMutation('imoveis')
+  const supabase = createClient()
 
   const handleDeleteProjeto = async (p: ProjetoPatrimonio) => {
     if (!confirm(`Excluir "${p.titulo}"? Esta ação removerá o bem e todos os custos associados.`)) return
+    const tabela = p.tabelaOrigem === 'imoveis' ? 'imoveis' : 'projetos_patrimonio'
+    console.log('[Patrimônio] Deletando', tabela, 'id=', p.id)
+    const { error, data } = await (supabase.from(tabela) as any).delete().eq('id', p.id).select()
+    console.log('[Patrimônio] Resultado:', { error, data })
+    if (error) {
+      alert(`❌ Erro ao excluir: ${error.message}`)
+      return
+    }
+    if (!data || data.length === 0) {
+      alert('⚠️ Nenhum item deletado. Verifique as permissões no banco de dados.')
+      return
+    }
+    // Atualiza a lista após deletar com sucesso
     if (p.tabelaOrigem === 'imoveis') {
-      await removeImovel(p.id)
       refetchImoveis()
     } else {
-      await removeProjeto(p.id)
       refetch()
     }
     refetchCustos()
