@@ -1,9 +1,23 @@
-// public/sw.js — Service Worker completo: Push + Notificações + Click
+// public/sw.js — Service Worker completo: Push + Notificações + Click + Background Sync
 
-const CACHE_NAME = 'cajado-v2'
+const CACHE_NAME = 'cajado-v3'
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()))
+
+// ── Background Sync — processa fila offline da Elena ──────────────────────
+self.addEventListener('sync', event => {
+  if (event.tag === 'elena-sync') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: false }).then(clients => {
+        // Notifica todas as abas abertas para processarem a fila IndexedDB
+        clients.forEach(client => {
+          client.postMessage({ type: 'ELENA_SYNC_QUEUE' })
+        })
+      })
+    )
+  }
+})
 
 // ── Push recebido ──────────────────────────────────────────────────────────
 self.addEventListener('push', event => {

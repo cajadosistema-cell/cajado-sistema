@@ -138,7 +138,15 @@ function ModalEvento({
 
   const toLocalDateTime = (iso?: string) => {
     if (!iso) return ''
-    return new Date(iso).toISOString().slice(0, 16)
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    // Usa hora LOCAL (não UTC) para preencher o campo datetime-local corretamente
+    const y  = d.getFullYear()
+    const mo = String(d.getMonth() + 1).padStart(2, '0')
+    const da = String(d.getDate()).padStart(2, '0')
+    const h  = String(d.getHours()).padStart(2, '0')
+    const mi = String(d.getMinutes()).padStart(2, '0')
+    return `${y}-${mo}-${da}T${h}:${mi}`
   }
 
   const [form, setForm] = useState({

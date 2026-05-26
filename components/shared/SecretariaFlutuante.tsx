@@ -5,12 +5,13 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ModalRelatorio, buscarDadosRelatorio } from './ModalRelatorio'
 import type { } from './ModalRelatorio'
+import { getPendentes, marcarProcessado, limparProcessados, registrarBackgroundSync, enqueueOffline } from '@/lib/elena-offline'
 
 // ── Types ────────────────────────────────────────────────────
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
 interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -22,7 +23,7 @@ const CAT_DESPESA_ID  = 'd4f05276-7633-49b3-9d72-09fb0fa07fbe'     // Despesas O
 const CAT_RECEITA_ID  = '2774932e-75c8-4b7e-b88f-12a6f1a0744a'     // Receita Operacional
 
 // ── System Prompt gerado dinamicamente com perfil aprendido ──
-function buildSystemPrompt(perfil?: any): string {
+function buildSystemPrompt(perfil?: any, resumoFinanceiro?: string): string {
   const agora = new Date()
   const dataAtual = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
   const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -31,6 +32,17 @@ function buildSystemPrompt(perfil?: any): string {
   const diaAtual = String(agora.getDate()).padStart(2, '0')
   const amanha = new Date(agora); amanha.setDate(amanha.getDate() + 1)
   const amanhaStr = `${amanha.getFullYear()}-${String(amanha.getMonth()+1).padStart(2,'0')}-${String(amanha.getDate()).padStart(2,'0')}`
+  // Calendário dinâmico: evita que a IA erre o cálculo de dias da semana
+  const DIAS_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
+  const ultimoDiaMes = new Date(anoAtual, agora.getMonth() + 1, 0).getDate()
+  const primeiroDiaProxMes = `${anoAtual}-${String(agora.getMonth() + 2 > 12 ? 1 : agora.getMonth() + 2).padStart(2,'0')}-01`
+  const ultimoDiaMesStr = `${anoAtual}-${mesAtual}-${String(ultimoDiaMes).padStart(2,'0')}`
+  const calendarioProx8 = Array.from({ length: 8 }, (_, i) => {
+    const d = new Date(agora); d.setDate(d.getDate() + i)
+    const label = i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : DIAS_PT[d.getDay()]
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    return `  • ${label} (${DIAS_PT[d.getDay()]}): ${ds}`
+  }).join('\n')
 
   // Contexto de perfil aprendido
   const blocoAprendizado = perfil?.contexto_pessoal
@@ -45,31 +57,48 @@ ${perfil.contexto_pessoal}
 ⚠️ ADAPTE SEU VOCABULÁRIO e ritmo de resposta ao perfil acima.`
     : ''
 
+  const blocoFinanceiro = resumoFinanceiro
+    ? `\n\n💰 CONTEXTO FINANCEIRO DO MÊS ATUAL (use para respostas mais inteligentes):\n${resumoFinanceiro}\n⚠️ Use esses dados quando o chefe perguntar sobre gastos, saldo ou padrões.`
+    : ''
+
   return `Você é a Elena, Secretária Executiva Premium do Sistema Cajado.
 Você trabalha diretamente para o Sr. Max. Você pode REGISTRAR dados reais no sistema quando o Sr. Max solicitar.
-${blocoAprendizado}
+${blocoAprendizado}${blocoFinanceiro}
 
 ⚠️ DATA E HORA ATUAL: ${dataAtual} às ${horaAtual} (Horário de Brasília)
 ⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. Se o chefe pedir "daqui a X minutos", calcule somando a partir das ${horaAtual}.
+
+📅 CALENDÁRIO DOS PRÓXIMOS 8 DIAS — use EXATAMENTE estas datas, não calcule por conta própria:
+${calendarioProx8}
+  • Fim do mês atual: ${ultimoDiaMesStr}
+  • Início do próximo mês: ${primeiroDiaProxMes}
 
 AÇÕES ESTRUTURADAS — inclua ao final da resposta:
 
 GASTO PESSOAL (pessoa física do chefe):
 \`\`\`json
-{"acao":"gasto","valor":50.00,"descricao":"Almoço","categoria":"alimentacao","forma_pagamento":"pix","conta_nome":""}
+{"acao":"gasto","valor":50.00,"descricao":"Almoço","categoria":"alimentacao","forma_pagamento":"pix","conta_nome":"","data":"","parcelas":1}
 \`\`\`
+- O campo "parcelas" é OPCIONAL (padrão = 1). Use APENAS quando o chefe mencionar parcelamento.
+- REGRA PARCELAS: "parcelas" = número de vezes (ex: 12). "valor" = valor TOTAL da compra (ex: 6000). O sistema calcula automaticamente a parcela mensal.
+- Exemplos: "parcelei em 12x" → parcelas:12 | "3 parcelas de 200" → valor:600, parcelas:3 | "à vista" → parcelas:1
 
 RECEITA PESSOAL:
 \`\`\`json
-{"acao":"receita","valor":1500.00,"descricao":"Freelance","categoria":"pro_labore","conta_nome":""}
+{"acao":"receita","valor":1500.00,"descricao":"Freelance","categoria":"pro_labore","forma_pagamento":"pix","conta_nome":"","data":""}
 \`\`\`
 
 GASTO DA EMPRESA (pessoa jurídica / Cajado):
 \`\`\`json
 {"acao":"gasto_empresa","valor":300.00,"descricao":"Aluguel escritório","categoria":"operacional","conta_nome":""}
 \`\`\`
-- O campo "conta_nome" é OPCIONAL. Preencha APENAS se o usuário mencionar um cartão ou conta específica (ex: "Visa", "C6", "Nubank", "Bradesco", "Caixa Físico", "cartão da esposa"). Se não mencionar, deixe vazio.
-- Exemplos de conta_nome: "visa", "mastercard", "c6", "nubank", "bradesco", "caixa", "cartão esposa"
+- O campo "conta_nome" é OPCIONAL. Preencha APENAS se o usuário mencionar um cartão ou conta específica.
+- Exemplos PF: "nubank", "c6", "itaú", "bradesco", "inter", "santander", "cartão esposa", "meu visa"
+- Exemplos PJ: "visa", "mastercard", "c6 pj", "nubank pj", "bradesco pj", "caixa"
+- O campo "data" é OPCIONAL. Preencha APENAS se o usuário mencionar uma data diferente de hoje.
+  - "ontem" → data de ontem no formato YYYY-MM-DD
+  - "segunda passada", "dia 20" → calcule com base no calendário acima
+  - Se não mencionar data, deixe "data" vazio ou omita o campo.
 
 RECEITA DA EMPRESA:
 \`\`\`json
@@ -88,6 +117,9 @@ ALARME / LEMBRETE SONORO (use tipo="lembrete" — o sistema tocará som 15 min a
 - Use tipo="lembrete" SEMPRE que o chefe pedir: "me avisa", "toca um alarme", "lembra de mim às X horas", "cria um alerta"
 - TIPOS de agenda: reuniao, lembrete, tarefa, prazo, pessoal, vencimento
 - Para lembretes de vencimento de cartão, use tipo="vencimento"
+- ⚠️ REGRA CRÍTICA: SEMPRE inclua hora na data_inicio (ex: "T14:00:00"). NUNCA use apenas "2026-05-27" sem hora.
+- ⚠️ REGRA CRÍTICA: Use EXATAMENTE as datas do calendário acima. NUNCA calcule dias da semana manualmente.
+- Expressões relativas de data: "semana que vem" = próxima segunda do calendário; "amanhã cedo" = amanhã T08:00:00; "à tarde" = T14:00:00; "à noite" = T20:00:00; "mês que vem" = ${primeiroDiaProxMes}T09:00:00; "fim do mês" = ${ultimoDiaMesStr}T09:00:00
 
 OCORRÊNCIA DA EQUIPE:
 \`\`\`json
@@ -134,6 +166,25 @@ REGRAS GERAIS:
 - Responda SEMPRE em português brasileiro, tom profissional e conciso
 - Quando tiver todos os dados, inclua o bloco JSON e diga que vai registrar agora
 - Nas datas, SEMPRE use o ano ${anoAtual}
+- VALORES INFORMAIS: "quinze conto" = 15.00; "uma nota" = 100.00; "duas notas" = 200.00; "uns 50 real" = 50.00; "uma grana de X" = X; "meio" após valor = metade do valor anterior
+- CONFIRMAÇÃO: Se o valor for acima de R$ 500,00, repita o valor e peça confirmação antes de gerar o JSON
+- ANÁLISE: Se o chefe perguntar "o que você acha?", "como estou indo?", "tenho feito bem?" → responda com uma análise dos padrões que identificou nas conversas
+
+🧠 INTELIGÊNCIA EMOCIONAL — Leia o humor do Sr. Max e reaja com empatia:
+- MAL-HUMORADO / ESTRESSADO: Se perceber palavras como "droga", "que saco", "não aguento", "cansado", "estressado", "odeio", "problema", tom curto e agressivo → Antes de responder ao pedido, diga algo como: "Percebi que você pode estar com um dia pesado, Sr. Max. Está tudo bem? Pode contar comigo." Depois responda normalmente.
+- PREOCUPADO / ANSIOSO: Se perceber "preocupado", "não sei", "complicado", "apertado", "não consigo", "dívida", "negativo" → Ofereça ajuda proativa: "Parece que algo está te preocupando. Quer que eu faça um resumo financeiro para entendermos melhor a situação?" 
+- FELIZ / ANIMADO: Se perceber "ótimo", "perfeito", "show", "demais", "arrasou", "excelente", emojis positivos → Corresponda com entusiasmo leve: "Que ótimo ouvir isso, Sr. Max! 😊" — sem exagerar.
+- FRUSTRADO COM A ELENA: Se o usuário disser "não entendeu", "errou", "não era isso", "de novo?" → Peça desculpas brevemente e peça para explicar de novo: "Peço desculpas pela confusão! Pode me explicar de novo com mais detalhes?"
+- NEUTRO / PROFISSIONAL: Mantenha tom prestativo e objetivo — não force simpatia.
+
+💡 COACH DE FUNCIONALIDADES — Sugira formas mais inteligentes de pedir quando perceber oportunidade:
+- Se o usuário digitar manualmente um gasto longo → sugira: "💡 Dica: da próxima vez pode dizer 'gastei R$X em Y no cartão Z' que registro em segundos!"
+- Se mencionar parcelamento mas não usar o formato → sugira: "💡 Posso registrar parcelado! Diga 'parcelei em 12x' que calculo a parcela mensal automaticamente."
+- Se mencionar transferência de forma verbal → sugira: "💡 Posso registrar isso! Diga 'transferi R$X do Nubank pro C6' que lanço nos dois lugares."
+- Se o usuário pedir para "apagar" ou "cancelar" → lembre: "💡 Você pode dizer 'cancela' logo após um registro e eu desfaço automaticamente."
+- Se o usuário perguntar "quanto gastei?" → sugira: "💡 Posso gerar um relatório completo! É só dizer 'me mostra um relatório do mês'."
+- Se mencionar uma data passada sem usar → sugira: "💡 Posso registrar com a data correta! Diga 'ontem gastei R$X' ou 'dia 20 paguei R$Y'."
+- Não sugira dicas repetidamente — apenas quando for claramente útil e não foi sugerida nos últimos 3 turnos.
 
 RELATÓRIO / RESUMO (quando o chefe pedir um relatório, resumo ou visão geral):
 \`\`\`json
@@ -141,7 +192,137 @@ RELATÓRIO / RESUMO (quando o chefe pedir um relatório, resumo ou visão geral)
 \`\`\`
 PERÍODOS válidos: mes_atual, ultimos_7_dias, ultimos_30_dias, ano_atual
 - Use relatorio SEMPRE que o chefe pedir: "resumo", "relatório", "como estou financeiramente", "visão geral", "quanto gastei", "mostre meus lançamentos"
-- O sistema irá buscar os dados reais e abrir um painel visual automáticamente`
+- O sistema irá buscar os dados reais e abrir um painel visual automáticamente
+
+TRANSFERÊNCIA ENTRE CONTAS (quando o chefe mover dinheiro de uma conta para outra):
+\`\`\`json
+{"acao":"transferencia","valor":500.00,"conta_origem":"nubank","conta_destino":"c6","descricao":"Reserva mensal"}
+\`\`\`
+- Use SEMPRE que o chefe disser: "transferi", "mandei", "passei dinheiro de X para Y", "movi R$X do/para"
+- "conta_origem" = conta de onde saiu o dinheiro; "conta_destino" = conta de destino
+
+CANCELAR ÚLTIMO REGISTRO (quando o chefe quiser desfazer o que acabou de ser salvo):
+\`\`\`json
+{"acao":"cancelar","motivo":"duplicidade"}
+\`\`\`
+- Use APENAS quando o chefe disser: "cancela", "apaga esse gasto", "desfaz", "não era isso", "erriei"
+- Só funciona para o ÚLTIMO registro da sessão atual
+
+📄 ANÁLISE DE DOCUMENTOS FISCAIS (NF-e, boletos, cupons, recibos):
+Quando o Sr. Max enviar uma IMAGEM de nota fiscal, boleto, cupom ou recibo, EXTRAIA automaticamente:
+1. **Valor total** → campo "valor" no JSON
+2. **Nome do estabelecimento/empresa** → campo "descricao"
+3. **Data da emissão/vencimento** → campo "data" (formato YYYY-MM-DD)
+4. **Tipo de documento** → NF-e, boleto, cupom fiscal, recibo
+5. **Categoria sugerida** → baseado no tipo de estabelecimento:
+   - Supermercado/mercado → alimentacao
+   - Farmácia/drogaria → saude
+   - Posto de gasolina → transporte
+   - Restaurante/lanchonete → alimentacao
+   - Loja de roupas → vestuario
+   - Loja de tecnologia/eletrônicos → tecnologia
+   - Academia/esporte → saude
+   - Hotel/hospedagem → lazer
+   - Escola/faculdade → educacao
+   - Aluguel/condomínio → moradia
+   - Outros → outros
+
+Após extrair, informe: "📄 Identifiquei: **[Nome]** — R$ [valor] em [data]. É um gasto pessoal ou da empresa?"
+Aguarde a confirmação antes de gerar o JSON de gasto.
+Se não conseguir identificar algum campo, pergunte ao Sr. Max.
+
+🎯 METAS FINANCEIRAS — Quando o chefe definir um limite de gasto:
+\`\`\`json
+{"acao":"definir_meta","categoria":"alimentacao","valor_limite":2000,"periodo":"mes"}
+\`\`\`
+- Use quando ouvir: "quero gastar no máximo X em Y", "minha meta é", "limite de X por mês", "não quero gastar mais que X em Z"
+- Categorias válidas: alimentacao, transporte, saude, lazer, educacao, moradia, vestuario, tecnologia, outros, total
+- "total" = meta para todos os gastos pessoais somados
+- Quando o contexto financeiro mostrar ALERTAS DE METAS, mencione proativamente: "Sr. Max, você está em X% da sua meta de Y."
+- Se uma meta ESTOUROU, avise com urgência antes de registrar novos gastos naquela categoria
+
+🤝 COMPROMISSOS INFORMAIS — Detecte promessas e ofereça criar lembretes:
+- Quando o chefe disser "vou pagar X na sexta", "preciso ligar para Y amanhã", "combinei entregar Z até quinta", "tenho que fazer W semana que vem" → pergunte: "Quer que eu crie um lembrete para isso?"
+- Se confirmado, gere um JSON de agenda com tipo "lembrete" e a data mencionada
+- Exemplos de frases-gatilho: "vou...", "preciso...", "tenho que...", "prometei...", "combinei...", "não posso esquecer..."
+- NUNCA crie lembretes de compromissos informais sem confirmação explícita
+
+📊 PREVISÃO DE FLUXO DE CAIXA — Quando o chefe perguntar sobre o futuro financeiro:
+- Use os dados da seção PREVISÃO DO MÊS no contexto financeiro para responder
+- "Quanto vou gastar esse mês?" → use a projeção de gastos calculada
+- "Como vai ficar meu caixa?" → saldo atual - projeção de gastos restantes
+- "Vou fechar o mês no positivo?" → compare projeção total vs receitas do mês
+- "Tem vencimento essa semana?" → consulte os vencimentos citados no contexto
+- Seja específico com números, não genérico. Use os dados reais do contexto.
+
+✅ CHECKLIST EXECUTIVO — Quando o chefe pedir uma lista de prioridades do dia:
+\`\`\`json
+{"acao":"gerar_checklist"}
+\`\`\`
+- Use quando ouvir: "meu checklist", "o que tenho hoje", "minhas prioridades", "o que fazer hoje", "to-do do dia"
+- O sistema busca a agenda do dia + vencimentos da semana e monta a lista automaticamente
+- Após gerar, pergunte se quer adicionar alguma tarefa extra
+
+⚡ MODO EXECUTIVO — Quando o chefe estiver com pressa ou pedir respostas curtas:
+- Ativado por: "seja breve", "modo rápido", "resposta curta", "sem rodeios", "direto ao ponto", "to the point"
+- No modo executivo: máximo 1-2 linhas por resposta, sem explicações, só o essencial
+- Desativado por: "pode detalhar", "me explica melhor", "com mais detalhes"
+- Exemplo normal: "Registrei seu gasto de R$ 50 em alimentação hoje via Pix. ✅"
+- Exemplo modo executivo: "✅ R$ 50 alimentação — salvo."
+
+🔴 RISCO DE CONCENTRAÇÃO — Quando contexto mostrar ALERTAS DE RISCO:
+- Mencione proativamente na primeira oportunidade: "Sr. Max, notei que X% das suas receitas vêm de uma única fonte. Isso pode ser um risco."
+- Sugira diversificação: "Vale considerar novos clientes ou fontes de receita para reduzir essa dependência."
+- Só mencione uma vez por sessão — não repita
+
+📊 DASHBOARD VISUAL INLINE — Quando o chefe quiser ver os números de forma visual:
+\`\`\`json
+{"acao":"gerar_dashboard"}
+\`\`\`
+- Use quando ouvir: "meu dashboard", "painel financeiro", "visão visual", "barra de gastos", "gráfico do mês"
+- O sistema gera barras visuais com █ proporcional ao valor de cada categoria
+- Mostra: receitas, gastos, saldo, projeção e top categorias com barras visuais
+
+👥 PERFORMANCE DE COLABORADORES — Quando o chefe quiser ver como a equipe foi:
+\`\`\`json
+{"acao":"relatorio_colaboradores"}
+\`\`\`
+- Use quando ouvir: "como minha equipe foi", "performance do time", "quem se saiu bem", "relatório de colaboradores", "ocorrências do time"
+- O sistema busca todas as ocorrências do mês e calcula uma pontuação por pessoa
+- ⭐ excelente, 🟢 bom, 🟡 atenção, 🔴 preocupante
+
+📈 ANÁLISE DE TENDÊNCIAS — Use os dados do contexto (↑ e ↓ vs mês passado):
+- Quando o contexto mostrar "↑X% vs mês passado" em alguma categoria, mencione proativamente
+- "Sr. Max, seus gastos em alimentação subiram 40% vs o mês passado. Quer investigar?"
+- "Boa notícia: seus gastos em transporte caíram 25% este mês!"
+- Use o símbolo ↑ para alta e ↓ para queda ao falar de tendências
+
+🏦 IMPORTAÇÃO DE EXTRATO BANCÁRIO — Quando o chefe colar um extrato:
+Quando o Sr. Max colar um bloco de texto com transações bancárias (data + descrição + valor), extraia cada linha no formato:
+\`\`\`json
+{"acao":"importar_extrato","itens":[
+  {"data":"2024-05-01","descricao":"Supermercado Extra","valor":87.50,"categoria":"alimentacao","forma_pagamento":"debito"},
+  {"data":"2024-05-02","descricao":"Posto Shell","valor":200.00,"categoria":"transporte","forma_pagamento":"debito"}
+]}
+\`\`\`
+- Identifique a categoria de cada lançamento automaticamente pela descrição
+- Ignore linhas de saldo, total, crédito de salário (essas são receitas, pergunte antes de importar)
+- Mostre um resumo antes de gerar o JSON: "Identifiquei X lançamentos, total R$ Y. Posso importar?"
+- Aguarde confirmação antes de gerar o JSON
+
+✅ APROVAÇÃO DE DESPESAS EMPRESARIAIS — Para gastos PJ acima de R$1.000:
+- NUNCA registre automaticamente um gasto_empresa acima de R$ 1.000,00
+- Sempre pergunte antes: "Vou registrar R$ X,XX em [descrição] para [empresa]. Confirma?"
+- Aguarde o Sr. Max dizer "sim", "confirma", "pode" ou equivalente
+- Para gastos PJ abaixo de R$1.000, pode registrar diretamente (comportamento normal)
+
+🎙️ MODO MÃOS-LIVRES / VOZ CONTÍNUA:
+- Quando o CEO estiver usando voz contínua (modo oral), prefira respostas ainda mais curtas
+- Termine com uma pergunta curta para manter o diálogo: "Mais alguma coisa?" ou "Ok, o que mais?"
+- Evite listas longas em modo voz — use narrativa corrida`
+
+
+
 }
 
 // ── Extrai JSONs da resposta da IA ──────────────────────────
@@ -154,7 +335,10 @@ function extrairAcoes(texto: string): AcaoIA[] {
       const d = JSON.parse(match[1].trim())
       if (d.acao === 'gasto') {
         const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
-        acoes.push({ tipo: 'gasto', dados: d, label: `💸 Gasto PF R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
+        const parcelasInfo = d.parcelas && Number(d.parcelas) > 1
+          ? ` • ${d.parcelas}x R$ ${(Number(d.valor) / Number(d.parcelas)).toFixed(2)}/mês`
+          : ''
+        acoes.push({ tipo: 'gasto', dados: d, label: `💸 Gasto PF R$ ${Number(d.valor).toFixed(2)}${parcelasInfo} — ${d.descricao}${contaInfo}`, status: 'pending' })
       } else if (d.acao === 'receita') {
         const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
         acoes.push({ tipo: 'receita', dados: d, label: `💰 Receita PF R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
@@ -174,6 +358,22 @@ function extrairAcoes(texto: string): AcaoIA[] {
         acoes.push({ tipo: 'registro', dados: d, label: `🗂️ Registro: ${d.titulo || d.descricao?.substring(0, 40)}`, status: 'pending' })
       } else if (d.acao === 'relatorio') {
         acoes.push({ tipo: 'relatorio', dados: d, label: `\uD83D\uDCC8 Gerar Relat\u00f3rio: ${d.periodo || 'mes_atual'}`, status: 'pending' })
+      } else if (d.acao === 'transferencia') {
+        acoes.push({ tipo: 'transferencia', dados: d, label: `🔄 Transferência R$ ${Number(d.valor).toFixed(2)} de ${d.conta_origem} → ${d.conta_destino}`, status: 'pending' })
+      } else if (d.acao === 'cancelar') {
+        acoes.push({ tipo: 'cancelar', dados: d, label: `❌ Cancelar último registro`, status: 'pending' })
+      } else if (d.acao === 'definir_meta') {
+        const cat = d.categoria === 'total' ? 'total geral' : d.categoria
+        acoes.push({ tipo: 'definir_meta', dados: d, label: `🎯 Meta: R$ ${Number(d.valor_limite).toFixed(2)}/mês em ${cat}`, status: 'pending' })
+      } else if (d.acao === 'gerar_checklist') {
+        acoes.push({ tipo: 'gerar_checklist', dados: d, label: `✅ Gerar checklist executivo do dia`, status: 'pending' })
+      } else if (d.acao === 'relatorio_colaboradores') {
+        acoes.push({ tipo: 'relatorio_colaboradores', dados: d, label: `👥 Relatório de performance dos colaboradores`, status: 'pending' })
+      } else if (d.acao === 'gerar_dashboard') {
+        acoes.push({ tipo: 'gerar_dashboard', dados: d, label: `📊 Dashboard financeiro do mês`, status: 'pending' })
+      } else if (d.acao === 'importar_extrato') {
+        const n = Array.isArray(d.itens) ? d.itens.length : 0
+        acoes.push({ tipo: 'importar_extrato', dados: d, label: `🏦 Importar extrato: ${n} lançamento(s)`, status: 'pending' })
       } else if (d.acao) {
         // Fallback: qualquer acao desconhecida vira um registro generico
         acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `🗂️ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
@@ -185,6 +385,18 @@ function extrairAcoes(texto: string): AcaoIA[] {
 
 function formatarTexto(texto: string) {
   return texto.replace(/```json[\s\S]*?```/g, '').trim()
+}
+
+// Converte markdown simples para HTML seguro (bold, italic, listas, quebras de linha)
+function renderMarkdownHtml(texto: string): string {
+  return texto
+    .replace(/```json[\s\S]*?```/g, '')   // remove blocos JSON
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')  // **bold**
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')               // *italic*
+    .replace(/^#{1,3} (.+)$/gm, '<strong class="block text-amber-400">$1</strong>') // # heading
+    .replace(/^[-•] (.+)$/gm, '<span style="display:flex;gap:4px"><span style="color:#f5a623">•</span><span>$1</span></span>') // - lista
+    .replace(/\n/g, '<br/>')              // quebras de linha
+    .trim()
 }
 
 export function SecretariaFlutuante() {
@@ -207,6 +419,8 @@ export function SecretariaFlutuante() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [isListening, setIsListening] = useState(false)
+  const [modoVozContinuo, setModoVozContinuo] = useState(false)
+  const modoVozRef = useRef(false)
   const [attachedFile, setAttachedFileState] = useState<AttachedFile | null>(null)
   const attachedFileRef = useRef<AttachedFile | null>(null)
   const [processingFile, setProcessingFile] = useState(false)
@@ -217,6 +431,22 @@ export function SecretariaFlutuante() {
   const perfilRef = useRef<any>(null)
   const userMsgCountRef = useRef(0)  // conta msgs do usuário na sessão atual
   const atualizandoPerfilRef = useRef(false)  // evita chamadas simultâneas
+  const sugestaoCountRef = useRef(0)   // contador separado para sugestões proativas
+  const gerandoSugestaoRef = useRef(false) // evita sugestões simultâneas
+  const [isOnline, setIsOnline] = useState(true) // status de conectividade
+  const [offlineQueue, setOfflineQueue] = useState<any[]>([])
+  const [offlineForm, setOfflineForm] = useState({
+    tipo: 'gasto' as 'gasto' | 'receita' | 'agenda',
+    valor: '',
+    descricao: '',
+    categoria: 'alimentacao',
+    data: new Date().toISOString().split('T')[0],
+    hora: '12:00',
+  })
+  const [offlineSaved, setOfflineSaved] = useState(false)
+  const [resumoFinanceiro, setResumoFinanceiro] = useState('') // contexto financeiro para o prompt
+  const alertasDisparadosRef = useRef<Set<string>>(new Set()) // evita alertas duplicados na sessão
+  const ultimoRegistroRef = useRef<{ tabela: string; id: string } | null>(null) // para cancelar
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
@@ -250,7 +480,7 @@ export function SecretariaFlutuante() {
         historyLoadedRef.current = true
         
         // Pega a última sessão
-        const { data: lastMsg } = await supabase.from('elena_conversas').select('sessao_id').eq('user_id', uid).order('created_at', { ascending: false }).limit(1)
+        const { data: lastMsg } = await (supabase.from('elena_conversas') as any).select('sessao_id').eq('user_id', uid).order('created_at', { ascending: false }).limit(1)
         const currentSessaoId = lastMsg && lastMsg.length > 0 ? lastMsg[0].sessao_id : Date.now().toString()
         setSessaoId(currentSessaoId)
         
@@ -294,6 +524,33 @@ export function SecretariaFlutuante() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensagens, isOpen])
+
+  // ── Online/Offline detection ──────────────────────────────────────
+  useEffect(() => {
+    const goOnline  = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online',  goOnline)
+    window.addEventListener('offline', goOffline)
+    setIsOnline(navigator.onLine)
+
+    // Listener de mensagens do SW (Background Sync)
+    const swListener = (event: MessageEvent) => {
+      if (event.data?.type === 'ELENA_SYNC_QUEUE') setIsOnline(true)
+    }
+    navigator.serviceWorker?.addEventListener('message', swListener)
+    registrarBackgroundSync()
+
+    return () => {
+      window.removeEventListener('online',  goOnline)
+      window.removeEventListener('offline', goOffline)
+      navigator.serviceWorker?.removeEventListener('message', swListener)
+    }
+  }, [])
+
+  // Carrega fila offline ao montar e ao reconectar
+  useEffect(() => {
+    if (userId) getPendentes(userId).then(setOfflineQueue)
+  }, [userId, isOnline])
 
   // ── Sugestão Automática de Backup de Chat ─────────────────
   useEffect(() => {
@@ -392,6 +649,47 @@ export function SecretariaFlutuante() {
     return id
   }, [resolverContaPj])
 
+  // Busca conta PF por nome/bandeira mencionada pelo usuário (ex: "Nubank", "C6", "cartão esposa")
+  const resolverContaPf = useCallback(async (contaNome?: string): Promise<{ id: string; nome: string }> => {
+    if (!contaNome?.trim()) return { id: '', nome: '' }
+    const { data: contas } = await (supabase.from('contas') as any)
+      .select('id, nome, bandeira, tipo')
+      .eq('categoria', 'pf')
+      .eq('ativo', true)
+      .order('created_at', { ascending: true })
+
+    if (!contas || contas.length === 0) return { id: '', nome: '' }
+
+    const busca = contaNome.toLowerCase().trim()
+    // Match por bandeira (visa, mastercard, elo, hipercard...)
+    const porBandeira = contas.find((c: any) => c.bandeira && c.bandeira.toLowerCase().includes(busca))
+    if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
+    // Match por nome (Nubank, C6, Itaú, cartão esposa...)
+    const porNome = contas.find((c: any) => {
+      const nome = (c.nome || '').toLowerCase()
+      return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
+    })
+    if (porNome) return { id: porNome.id, nome: porNome.nome }
+
+    return { id: '', nome: '' }
+  }, [supabase])
+
+  // Resolve qualquer conta (PF ou PJ) por nome/bandeira — usado em transferências
+  const resolverContaQualquer = useCallback(async (contaNome: string): Promise<{ id: string; nome: string; categoria: string }> => {
+    if (!contaNome?.trim()) return { id: '', nome: '', categoria: '' }
+    const { data: contas } = await (supabase.from('contas') as any)
+      .select('id, nome, bandeira, categoria').eq('ativo', true)
+    if (!contas?.length) return { id: '', nome: '', categoria: '' }
+    const busca = contaNome.toLowerCase().trim()
+    const match = contas.find((c: any) => {
+      const nome = (c.nome || '').toLowerCase()
+      const bandeira = (c.bandeira || '').toLowerCase()
+      return nome.includes(busca) || bandeira.includes(busca) ||
+        busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
+    })
+    return match ? { id: match.id, nome: match.nome, categoria: match.categoria } : { id: '', nome: '', categoria: '' }
+  }, [supabase])
+
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA, uid: string) => {
     try {
       if (acao.tipo === 'gasto') {
@@ -412,17 +710,40 @@ export function SecretariaFlutuante() {
           notasAdicionais = `Cartão/Conta: ${acao.dados.conta_nome} | Registrado pela Elena`
         }
 
-        const { error } = await (supabase.from('gastos_pessoais') as any).insert({
+        // Data flexível: aceita data informada pela IA (ex: 'ontem') ou usa hoje
+        const dataGasto = acao.dados.data && /^\d{4}-\d{2}-\d{2}$/.test(String(acao.dados.data))
+          ? String(acao.dados.data) : hoje
+
+        // Resolve conta PF se mencionada
+        const contaPfResolvida = await resolverContaPf(acao.dados.conta_nome)
+
+        // Suporte a parcelas: salva o valor da parcela mensal
+        const numParcelas = Number(acao.dados.parcelas) || 1
+        const valorTotal = valor
+        const valorParcela = numParcelas > 1 ? Math.round((valorTotal / numParcelas) * 100) / 100 : valorTotal
+
+        const notasParcelas = numParcelas > 1
+          ? `Parcela 1/${numParcelas} — Total R$ ${valorTotal.toFixed(2)} | `
+          : ''
+        const notasFinais = contaPfResolvida.nome
+          ? `${notasParcelas}Cartão/Conta: ${contaPfResolvida.nome} | Registrado pela Elena`
+          : `${notasParcelas}${notasAdicionais}`
+
+        const { data: novoGasto, error } = await (supabase.from('gastos_pessoais') as any).insert({
           user_id: uid,
-          descricao: acao.dados.descricao || 'Gasto via Elena',
-          valor,
+          descricao: numParcelas > 1
+            ? `${acao.dados.descricao || 'Gasto via Elena'} (${numParcelas}x)`
+            : (acao.dados.descricao || 'Gasto via Elena'),
+          valor: valorParcela,
           categoria: acao.dados.categoria || 'outros',
           forma_pagamento: forma,
-          data: hoje,
+          data: dataGasto,
           recorrente: false,
-          notas: notasAdicionais,
-        })
+          conta_id: contaPfResolvida.id || null,
+          notas: notasFinais,
+        }).select('id').single()
         if (error) throw new Error(error.message)
+        if (novoGasto?.id) ultimoRegistroRef.current = { tabela: 'gastos_pessoais', id: novoGasto.id }
         setAcaoStatus(msgId, acaoIdx, 'saved')
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
@@ -440,14 +761,26 @@ export function SecretariaFlutuante() {
           notasAdicionais = `Conta: ${acao.dados.conta_nome} | Registrado pela Elena`
         }
 
+        // Data flexível
+        const dataReceita = acao.dados.data && /^\d{4}-\d{2}-\d{2}$/.test(String(acao.dados.data))
+          ? String(acao.dados.data) : hoje
+
+        const contaPfReceitaResolvida = await resolverContaPf(acao.dados.conta_nome)
+        const formaRecPessoal = (['pix','cartao_debito','cartao_credito','dinheiro','transferencia'].includes(acao.dados.forma_pagamento)
+          ? acao.dados.forma_pagamento : 'pix')
+
         const { error } = await (supabase.from('receitas_pessoais') as any).insert({
           user_id: uid,
           descricao: acao.dados.descricao || 'Receita via Elena',
           valor,
           categoria: acao.dados.categoria || 'outros',
-          data: hoje,
+          forma_pagamento: formaRecPessoal,
+          data: dataReceita,
           recorrente: false,
-          notas: notasAdicionais,
+          conta_id: contaPfReceitaResolvida.id || null,
+          notas: contaPfReceitaResolvida.nome
+            ? `Conta: ${contaPfReceitaResolvida.nome} | Registrado pela Elena`
+            : notasAdicionais,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
@@ -509,9 +842,19 @@ export function SecretariaFlutuante() {
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       } else if (acao.tipo === 'agenda') {
-        let dataInicio = acao.dados.data_inicio
-          ? new Date(acao.dados.data_inicio)
-          : new Date(Date.now() + 86400000)
+        // ⚠️ FIX TIMEZONE: new Date("YYYY-MM-DD") interpreta como UTC midnight.
+        // Em Brasília (UTC-3) isso vira o dia anterior → evento agendado no dia errado.
+        // Corrigimos adicionando T12:00:00 em strings sem hora, forçando hora local.
+        let dataInicio: Date
+        if (acao.dados.data_inicio) {
+          const strData = String(acao.dados.data_inicio)
+          const strCorrigida = /^\d{4}-\d{2}-\d{2}$/.test(strData.trim())
+            ? strData.trim() + 'T12:00:00'
+            : strData
+          dataInicio = new Date(strCorrigida)
+        } else {
+          dataInicio = new Date(Date.now() + 86400000)
+        }
         // Corrige o ano se a IA gerou errado (ex: 2025 ao invés de 2026)
         const anoCorreto = new Date().getFullYear()
         if (dataInicio.getFullYear() < anoCorreto) {
@@ -519,11 +862,12 @@ export function SecretariaFlutuante() {
         }
         const dataInicioStr = dataInicio.toISOString()
         // Normaliza tipo para valores válidos da tabela
-        const tiposValidos = ['compromisso', 'lembrete', 'nota', 'tarefa', 'aniversario', 'reuniao']
+        const tiposValidos = ['compromisso', 'lembrete', 'nota', 'tarefa', 'aniversario', 'reuniao', 'vencimento', 'prazo', 'pessoal']
         const tipoEvento = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'compromisso'
         const corMap: Record<string, string> = {
           compromisso: '#3b82f6', lembrete: '#f5a623', nota: '#8b5cf6',
           tarefa: '#10b981', aniversario: '#ec4899', reuniao: '#06b6d4',
+          vencimento: '#ef4444', prazo: '#f97316', pessoal: '#a78bfa',
         }
         const { error } = await (supabase.from('agenda_eventos') as any).insert({
           user_id: uid,
@@ -628,11 +972,246 @@ export function SecretariaFlutuante() {
         URL.revokeObjectURL(url)
         
         setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'transferencia') {
+        // ── Transferência entre contas (PF ou PJ) ───────────────────
+        const valor = Number(acao.dados.valor) || 0
+        const hoje = new Date().toISOString().split('T')[0]
+        const descr = acao.dados.descricao || 'Transferência'
+        const [contaOrig, contaDest] = await Promise.all([
+          resolverContaQualquer(acao.dados.conta_origem || ''),
+          resolverContaQualquer(acao.dados.conta_destino || ''),
+        ])
+        if (!contaOrig.id && !contaDest.id)
+          throw new Error('Contas não encontradas. Verifique os nomes das contas cadastradas.')
+        // Saída da conta origem
+        if (contaOrig.id) {
+          if (contaOrig.categoria === 'pf') {
+            await (supabase.from('gastos_pessoais') as any).insert({
+              user_id: uid, descricao: `Transf. para ${contaDest.nome || acao.dados.conta_destino}`,
+              valor, categoria: 'outros', forma_pagamento: 'transferencia', data: hoje,
+              conta_id: contaOrig.id, notas: `${descr} | Registrado pela Elena`,
+            })
+          } else {
+            await (supabase.from('lancamentos') as any).insert({
+              conta_id: contaOrig.id, descricao: `Transf. para ${contaDest.nome || acao.dados.conta_destino}`,
+              valor, tipo: 'despesa', regime: 'caixa', status: 'validado',
+              data_competencia: hoje, data_caixa: hoje, created_by: uid,
+              observacoes: `${descr} | Transferência via Elena`,
+            })
+          }
+        }
+        // Entrada na conta destino
+        if (contaDest.id) {
+          if (contaDest.categoria === 'pf') {
+            await (supabase.from('receitas_pessoais') as any).insert({
+              user_id: uid, descricao: `Transf. de ${contaOrig.nome || acao.dados.conta_origem}`,
+              valor, categoria: 'outros', forma_pagamento: 'transferencia', data: hoje,
+              conta_id: contaDest.id, notas: `${descr} | Registrado pela Elena`,
+            })
+          } else {
+            await (supabase.from('lancamentos') as any).insert({
+              conta_id: contaDest.id, descricao: `Transf. de ${contaOrig.nome || acao.dados.conta_origem}`,
+              valor, tipo: 'receita', regime: 'caixa', status: 'validado',
+              data_competencia: hoje, data_caixa: hoje, created_by: uid,
+              observacoes: `${descr} | Transferência via Elena`,
+            })
+          }
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      } else if (acao.tipo === 'cancelar') {
+        // ── Cancela último registro salvo na sessão ────────────────
+        if (!ultimoRegistroRef.current)
+          throw new Error('⚠️ Nenhum registro recente para cancelar nesta sessão.')
+        const { tabela, id } = ultimoRegistroRef.current
+        const { error: errDel } = await (supabase.from(tabela) as any).delete().eq('id', id)
+        if (errDel) throw new Error(errDel.message)
+        ultimoRegistroRef.current = null
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      } else if (acao.tipo === 'definir_meta') {
+        // ── Salva meta financeira no localStorage ──────────────────
+        const chaveMetas = `elena_metas_${uid}`
+        const metasStr = localStorage.getItem(chaveMetas)
+        const metas: Record<string, number> = metasStr ? JSON.parse(metasStr) : {}
+        const categoria = acao.dados.categoria || 'total'
+        metas[categoria] = Number(acao.dados.valor_limite) || 0
+        localStorage.setItem(chaveMetas, JSON.stringify(metas))
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'gerar_checklist') {
+        // ── Checklist Executivo do Dia ──────────────────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const hoje = new Date()
+        const hojeStr = hoje.toISOString().split('T')[0]
+        const em7d = new Date(hoje.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+
+        const [{ data: agendaHoje }, { data: vencSemana }] = await Promise.all([
+          (supabase.from('agenda_eventos') as any)
+            .select('titulo, data_inicio, tipo, prioridade')
+            .eq('user_id', uid)
+            .gte('data_inicio', `${hojeStr}T00:00:00`)
+            .lte('data_inicio', `${hojeStr}T23:59:59`)
+            .neq('status', 'cancelado')
+            .order('data_inicio', { ascending: true }),
+          (supabase.from('agenda_eventos') as any)
+            .select('titulo, data_inicio, tipo')
+            .eq('user_id', uid)
+            .eq('tipo', 'vencimento')
+            .gte('data_inicio', hoje.toISOString())
+            .lte('data_inicio', em7d)
+            .neq('status', 'cancelado')
+            .order('data_inicio', { ascending: true }),
+        ])
+
+        const linhas: string[] = ['**📋 Checklist Executivo — ' + hoje.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }) + '**', '']
+
+        // Compromissos do dia
+        if (agendaHoje && agendaHoje.length > 0) {
+          linhas.push('**🗓️ Agenda de hoje:**')
+          agendaHoje.forEach((ev: any) => {
+            const h = new Date(ev.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+            const icon = ev.tipo === 'vencimento' ? '🔴' : ev.prioridade === 'alta' ? '🟠' : '🟡'
+            linhas.push(`${icon} ${h} — ${ev.titulo}`)
+          })
+          linhas.push('')
+        }
+
+        // Vencimentos urgentes
+        if (vencSemana && vencSemana.length > 0) {
+          linhas.push('**💳 Vencimentos para resolver:**')
+          vencSemana.slice(0, 5).forEach((v: any) => {
+            const dv = new Date(v.data_inicio)
+            const diff = Math.floor((dv.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24))
+            const quando = diff === 0 ? '⚠️ Hoje' : diff === 1 ? 'Amanhã' : `Em ${diff} dias`
+            linhas.push(`🔴 ${quando} — ${v.titulo}`)
+          })
+          linhas.push('')
+        }
+
+        if (linhas.length <= 2) linhas.push('✅ Agenda limpa! Dia livre para focar no estratégico.')
+
+        setMensagens(prev => [...prev, {
+          id: `checklist-${Date.now()}`,
+          role: 'ai' as const,
+          texto: linhas.join('\n'),
+        }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'relatorio_colaboradores') {
+        // ── Performance de Colaboradores ─────────────────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0)
+        const { data: ocorrencias } = await (supabase.from('ocorrencias') as any)
+          .select('colaborador_id, tipo, impacto, descricao, created_at')
+          .gte('created_at', inicioMes.toISOString())
+          .order('created_at', { ascending: false })
+        const { data: colabs } = await (supabase.from('colaboradores') as any).select('id, nome')
+        const mapaColabs: Record<string, string> = {}
+        ;(colabs || []).forEach((c: any) => { mapaColabs[c.id] = c.nome })
+
+        // Agrupa por colaborador
+        const perf: Record<string, Record<string, number>> = {}
+        ;(ocorrencias || []).forEach((o: any) => {
+          const nome = mapaColabs[o.colaborador_id] || o.colaborador_id || 'Sem nome'
+          if (!perf[nome]) perf[nome] = { acerto: 0, erro: 0, alerta: 0, elogio: 0 }
+          perf[nome][o.tipo] = (perf[nome][o.tipo] || 0) + 1
+        })
+
+        const linhas = ['**👥 Performance dos Colaboradores — ' + inicioMes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) + '**', '']
+        if (Object.keys(perf).length === 0) {
+          linhas.push('Nenhuma ocorrência registrada este mês.')
+        } else {
+          Object.entries(perf).forEach(([nome, tipos]) => {
+            const total = Object.values(tipos).reduce((s, v) => s + v, 0)
+            const score = ((tipos.acerto || 0) + (tipos.elogio || 0)) - ((tipos.erro || 0) * 2 + (tipos.alerta || 0))
+            const estrela = score >= 3 ? '⭐' : score >= 0 ? '🟢' : score >= -2 ? '🟡' : '🔴'
+            linhas.push(`${estrela} **${nome}** — ${total} ocorrência(s): ✅${tipos.acerto||0} 🏆${tipos.elogio||0} ⚠️${tipos.alerta||0} ❌${tipos.erro||0}`)
+          })
+        }
+        setMensagens(prev => [...prev, { id: `perf-${Date.now()}`, role: 'ai' as const, texto: linhas.join('\n') }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'gerar_dashboard') {
+        // ── Dashboard Visual Inline ────────────────────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const agora = new Date()
+        const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString().split('T')[0]
+        const [{ data: gastos }, { data: receitas }] = await Promise.all([
+          (supabase.from('gastos_pessoais') as any).select('valor, categoria').eq('user_id', uid).gte('data', inicioMes),
+          (supabase.from('receitas_pessoais') as any).select('valor').eq('user_id', uid).gte('data', inicioMes),
+        ])
+        const totalG = (gastos || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+        const totalR = (receitas || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+        const cats: Record<string, number> = {}
+        ;(gastos || []).forEach((g: any) => { cats[g.categoria] = (cats[g.categoria] || 0) + Number(g.valor) })
+        const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 6)
+        const maxVal = sorted[0]?.[1] || 1
+        const barLen = 12 // max bar length in chars
+        const bar = (v: number) => '█'.repeat(Math.round((v / maxVal) * barLen)).padEnd(barLen, '░')
+
+        const diaAtual = agora.getDate()
+        const diasNoMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).getDate()
+        const projecao = totalG > 0 ? (totalG / diaAtual) * diasNoMes : 0
+
+        const linhas = [
+          `**📊 Dashboard — ${agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}**`,
+          '',
+          `💰 Receitas: **R$ ${totalR.toFixed(2)}**`,
+          `💸 Gastos: **R$ ${totalG.toFixed(2)}**`,
+          `📈 Saldo: **R$ ${(totalR - totalG).toFixed(2)}** ${totalR >= totalG ? '✅' : '⚠️'}`,
+          `🔮 Projeção fim do mês: R$ ${projecao.toFixed(2)}`,
+          '',
+          '**Gastos por categoria:**',
+          ...sorted.map(([cat, val]) => `\`${bar(val)}\` **${cat}** R$ ${val.toFixed(2)}`),
+        ]
+        setMensagens(prev => [...prev, { id: `dash-${Date.now()}`, role: 'ai' as const, texto: linhas.join('\n') }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'importar_extrato') {
+        // ── Importação de Extrato Bancário em Lote ─────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const itens: any[] = Array.isArray(acao.dados.itens) ? acao.dados.itens : []
+        if (itens.length === 0) throw new Error('Nenhum item para importar.')
+        let importados = 0
+        let totalImportado = 0
+        const erros: string[] = []
+        for (const item of itens) {
+          try {
+            await (supabase.from('gastos_pessoais') as any).insert({
+              user_id: uid,
+              descricao: item.descricao || 'Extrato importado',
+              valor: Math.abs(Number(item.valor)) || 0,
+              categoria: item.categoria || 'outros',
+              forma_pagamento: item.forma_pagamento || 'debito',
+              data: item.data || new Date().toISOString().split('T')[0],
+              notas: 'Importado do extrato via Elena',
+            })
+            importados++
+            totalImportado += Math.abs(Number(item.valor))
+          } catch { erros.push(item.descricao || '?') }
+        }
+        setMensagens(prev => [...prev, {
+          id: `extrato-${Date.now()}`,
+          role: 'ai' as const,
+          texto: [
+            `🏦 **Extrato importado com sucesso!**`,
+            `• ${importados} de ${itens.length} lançamentos registrados`,
+            `• Total: **R$ ${totalImportado.toFixed(2)}**`,
+            erros.length ? `⚠️ Erro em: ${erros.join(', ')}` : '✅ Todos importados sem erros!',
+          ].join('\n'),
+        }])
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+        setAcaoStatus(msgId, acaoIdx, 'saved')
       }
+
     } catch (err: any) {
       setAcaoStatus(msgId, acaoIdx, 'error', err.message)
     }
-  }, [supabase, colaboradores, resolverContaPj, getContaPjId])
+  }, [supabase, colaboradores, resolverContaPj, resolverContaPf, resolverContaQualquer, getContaPjId])
 
   const executarAcoesAuto = useCallback((msgId: string, acoes: AcaoIA[], uid: string) => {
     acoes.forEach((acao, idx) => {
@@ -716,6 +1295,390 @@ Retorne exatamente este JSON:
       atualizandoPerfilRef.current = false
     }
   }, [supabase])
+
+  // ── Análise Proativa: sugere melhorias com base nos dados financeiros reais ──
+  const gerarSugestaoProativa = useCallback(async (uid: string) => {
+    if (!uid || gerandoSugestaoRef.current) return
+    gerandoSugestaoRef.current = true
+    try {
+      const inicioMes = new Date()
+      inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0)
+      const inicioMesStr = inicioMes.toISOString().split('T')[0]
+
+      const [{ data: gastosPF }, { data: receitasPF }] = await Promise.all([
+        (supabase.from('gastos_pessoais') as any)
+          .select('valor, categoria')
+          .eq('user_id', uid)
+          .gte('data', inicioMesStr),
+        (supabase.from('receitas_pessoais') as any)
+          .select('valor, categoria')
+          .eq('user_id', uid)
+          .gte('data', inicioMesStr),
+      ])
+
+      const totalGasto = (gastosPF || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+      const totalReceita = (receitasPF || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+      if (totalGasto === 0 && totalReceita === 0) return
+
+      const porCategoria: Record<string, number> = {}
+      ;(gastosPF || []).forEach((g: any) => {
+        porCategoria[g.categoria] = (porCategoria[g.categoria] || 0) + Number(g.valor)
+      })
+      const topCats = Object.entries(porCategoria)
+        .sort(([, a], [, b]) => b - a).slice(0, 3)
+        .map(([cat, val]) => `${cat}: R$ ${Number(val).toFixed(2)}`).join(', ')
+
+      const resumo = `Mês atual — Gastos: R$ ${totalGasto.toFixed(2)} | Receitas: R$ ${totalReceita.toFixed(2)} | Saldo: R$ ${(totalReceita - totalGasto).toFixed(2)} | Top categorias: ${topCats || 'sem dados'}`
+
+      const res = await fetch('/api/openrouter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `Dados financeiros do mês atual do Sr. Max: ${resumo}\n\nGere UMA sugestão inteligente, prática e personalizada (máx. 2 frases). Seja direto e útil. Comece com um emoji relevante.`,
+          systemInstruction: 'Você é Elena, secretária executiva do Sr. Max. Dê uma sugestão proativa curta baseada nos dados financeiros reais do mês.',
+        }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      const sugestao = (data.result || '').trim()
+      if (sugestao.length < 20) return
+
+      setMensagens(prev => [...prev, {
+        id: 'sugestao-' + Date.now(),
+        role: 'ai' as const,
+        texto: `💡 **Análise da Elena:**\n\n${sugestao}`,
+      }])
+    } catch {
+      // Silencioso — não interrompe o fluxo
+    } finally {
+      gerandoSugestaoRef.current = false
+    }
+  }, [supabase])
+
+  // ── Carrega resumo financeiro do mês para injetar no prompt ──
+  const carregarResumoFinanceiro = useCallback(async (uid: string) => {
+    try {
+      const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0)
+      const inicioMesStr = inicioMes.toISOString().split('T')[0]
+      const [{ data: gastos }, { data: receitas }, { data: vencFuturos }, { data: gastosMesAnterior }] = await Promise.all([
+        (supabase.from('gastos_pessoais') as any).select('valor, categoria, data').eq('user_id', uid).gte('data', inicioMesStr),
+        (supabase.from('receitas_pessoais') as any).select('valor, categoria').eq('user_id', uid).gte('data', inicioMesStr),
+        // Vencimentos agendados no restante do mês
+        (supabase.from('agenda_eventos') as any)
+          .select('titulo, data_inicio').eq('user_id', uid).eq('tipo', 'vencimento')
+          .gte('data_inicio', new Date().toISOString())
+          .lte('data_inicio', new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString())
+          .neq('status', 'cancelado'),
+        // Mês anterior para comparação de tendências
+        (supabase.from('gastos_pessoais') as any).select('valor, categoria')
+          .eq('user_id', uid)
+          .gte('data', new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().split('T')[0])
+          .lt('data', inicioMesStr),
+      ])
+      const totalG = (gastos || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+      const totalR = (receitas || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+      if (totalG === 0 && totalR === 0) return
+
+      // Top categorias de gasto + análise de tendências vs mês anterior
+      const cats: Record<string, number> = {}
+      ;(gastos || []).forEach((g: any) => { cats[g.categoria] = (cats[g.categoria] || 0) + Number(g.valor) })
+      const catsAnt: Record<string, number> = {}
+      ;(gastosMesAnterior || []).forEach((g: any) => { catsAnt[g.categoria] = (catsAnt[g.categoria] || 0) + Number(g.valor) })
+      const tendencias = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cat, val]) => {
+        const ant = catsAnt[cat] || 0
+        if (ant === 0) return `${cat}: R$ ${val.toFixed(2)} (novo)`
+        const variacao = Math.round(((val - ant) / ant) * 100)
+        const seta = variacao > 0 ? `↑${variacao}%` : `↓${Math.abs(variacao)}%`
+        return `${cat}: R$ ${val.toFixed(2)} (${seta} vs mês passado)`
+      }).join(' | ')
+      const top = tendencias
+
+      // ── Metas vs Gastos Reais ──────────────────────────────────
+      const metasStr = localStorage.getItem(`elena_metas_${uid}`)
+      const metas: Record<string, number> = metasStr ? JSON.parse(metasStr) : {}
+      const alertasMetas: string[] = []
+      Object.entries(metas).forEach(([cat, limite]) => {
+        if (cat === 'total') {
+          const pct = Math.round((totalG / limite) * 100)
+          if (pct >= 70) alertasMetas.push(`- META TOTAL: ${pct}% usado (R$ ${totalG.toFixed(2)} / R$ ${limite.toFixed(2)})${pct >= 100 ? ' ⚠️ ESTOUROU!' : pct >= 90 ? ' ⚠️ quase no limite' : ''}`)
+        } else {
+          const gasto = cats[cat] || 0
+          const pct = Math.round((gasto / limite) * 100)
+          if (pct >= 70) alertasMetas.push(`- META ${cat}: ${pct}% (R$ ${gasto.toFixed(2)} / R$ ${limite.toFixed(2)})${pct >= 100 ? ' ⚠️ ESTOUROU!' : ''}`)
+        }
+      })
+
+      // ── Previsão de Fluxo de Caixa ─────────────────────────────
+      const hoje = new Date()
+      const diaAtual = hoje.getDate()
+      const diasNoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
+      const diasRestantes = diasNoMes - diaAtual
+      const ritmodiario = diaAtual > 0 ? totalG / diaAtual : 0
+      const projecaoGastos = totalG + (ritmodiario * diasRestantes)
+      const numVenc = (vencFuturos || []).length
+      const previsao = `- Ritmo de gasto: R$ ${ritmodiario.toFixed(2)}/dia\n` +
+        `- Projeção de gastos ao fim do mês: R$ ${projecaoGastos.toFixed(2)}\n` +
+        (numVenc > 0 ? `- Vencimentos restantes no mês: ${numVenc} (verifique agenda)\n` : '')
+
+      // ── Análise de Risco de Concentração de Receitas ────────────
+      const catReceitas: Record<string, number> = {}
+      ;(receitas || []).forEach((r: any) => {
+        const src = r.categoria || 'outros'
+        catReceitas[src] = (catReceitas[src] || 0) + Number(r.valor)
+      })
+      let riscoConcentracao = ''
+      if (totalR > 0) {
+        const topReceita = Object.entries(catReceitas).sort((a, b) => b[1] - a[1])[0]
+        if (topReceita) {
+          const pctConc = Math.round((topReceita[1] / totalR) * 100)
+          if (pctConc >= 60) {
+            riscoConcentracao = `RISCO: ${pctConc}% da receita vem de "${topReceita[0]}" (R$ ${topReceita[1].toFixed(2)}) — concentração ${pctConc >= 80 ? 'CRÍTICA' : 'ALTA'}\n`
+          }
+        }
+      }
+
+      setResumoFinanceiro(
+        `- Gastos PF mês: R$ ${totalG.toFixed(2)}\n` +
+        `- Receitas PF mês: R$ ${totalR.toFixed(2)}\n` +
+        `- Saldo estimado: R$ ${(totalR - totalG).toFixed(2)}\n` +
+        (top ? `- Top categorias gasto: ${top}\n` : '') +
+        (alertasMetas.length ? `ALERTAS DE METAS:\n${alertasMetas.join('\n')}\n` : '') +
+        (riscoConcentracao ? `ALERTAS DE RISCO:\n${riscoConcentracao}` : '') +
+        `PREVISÃO DO MÊS:\n${previsao}`
+      )
+    } catch { /* silencioso */ }
+  }, [supabase])
+
+  // ── Alertas sonoros: verifica eventos dos próximos 15 min ────
+  const verificarAlertas = useCallback(async (uid: string) => {
+    try {
+      const agora = new Date()
+      const em15 = new Date(agora.getTime() + 15 * 60 * 1000)
+      const { data: eventos } = await (supabase.from('agenda_eventos') as any)
+        .select('id, titulo, data_inicio, tipo')
+        .eq('user_id', uid)
+        .in('tipo', ['lembrete', 'vencimento'])
+        .gte('data_inicio', agora.toISOString())
+        .lte('data_inicio', em15.toISOString())
+        .eq('status', 'pendente')
+
+      if (!eventos || eventos.length === 0) return
+
+      for (const ev of eventos) {
+        const chave = `${ev.id}-${new Date(ev.data_inicio).getMinutes()}`
+        if (alertasDisparadosRef.current.has(chave)) continue
+        alertasDisparadosRef.current.add(chave)
+
+        const diffMin = Math.round((new Date(ev.data_inicio).getTime() - agora.getTime()) / 60000)
+        const corpo = diffMin <= 1 ? 'Agora!' : `Em ${diffMin} minuto(s)`
+
+        // Som de alerta via AudioContext (beep triplo)
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+          const osc = ctx.createOscillator(); const gain = ctx.createGain()
+          osc.connect(gain); gain.connect(ctx.destination)
+          osc.frequency.setValueAtTime(880, ctx.currentTime)
+          osc.frequency.setValueAtTime(660, ctx.currentTime + 0.2)
+          osc.frequency.setValueAtTime(880, ctx.currentTime + 0.4)
+          gain.gain.setValueAtTime(0.3, ctx.currentTime)
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6)
+          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6)
+        } catch {}
+
+        // Push Notification se permitida
+        if (typeof Notification !== 'undefined') {
+          if (Notification.permission === 'granted') {
+            new Notification(`⏰ ${ev.titulo}`, { body: corpo, icon: '/favicon.ico', tag: ev.id })
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(p => {
+              if (p === 'granted') new Notification(`⏰ ${ev.titulo}`, { body: corpo, tag: ev.id })
+            })
+          }
+        }
+
+        // Mensagem visual no chat
+        setMensagens(prev => [...prev, {
+          id: `alerta-${ev.id}-${Date.now()}`,
+          role: 'ai' as const,
+          texto: `⏰ Lembrete: **${ev.titulo}** — ${corpo}`,
+        }])
+      }
+    } catch { /* silencioso */ }
+  }, [supabase])
+
+  // ── Lembretes de Vencimentos Inteligentes (1 dia e 3 dias antes) ──
+  const verificarVencimentos = useCallback(async (uid: string) => {
+    const chave = `elena_venc_${new Date().toISOString().split('T')[0]}`
+    if (localStorage.getItem(chave)) return
+    localStorage.setItem(chave, '1')
+    try {
+      const agora = new Date()
+      const em3dias = new Date(agora.getTime() + 3 * 24 * 60 * 60 * 1000)
+      const hoje = agora.toISOString().split('T')[0]
+      const { data: vencimentos } = await (supabase.from('agenda_eventos') as any)
+        .select('id, titulo, data_inicio')
+        .eq('user_id', uid).eq('tipo', 'vencimento')
+        .gte('data_inicio', `${hoje}T00:00:00`)
+        .lte('data_inicio', em3dias.toISOString())
+        .neq('status', 'cancelado')
+        .order('data_inicio', { ascending: true })
+      if (!vencimentos?.length) return
+      for (const v of vencimentos) {
+        const dataVenc = new Date(v.data_inicio)
+        const diffDias = Math.floor((dataVenc.getTime() - agora.getTime()) / (1000 * 60 * 60 * 24))
+        const chaveV = `venc_${v.id}_${hoje}`
+        if (localStorage.getItem(chaveV)) continue
+        localStorage.setItem(chaveV, '1')
+        const emoji = diffDias === 0 ? '🔴' : diffDias === 1 ? '🟠' : '🟡'
+        const urgencia = diffDias === 0 ? '**HOJE!**' : diffDias === 1 ? '**amanhã**' : `em **${diffDias} dias**`
+        // Som escalonado por urgência
+        try {
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+          const osc = ctx.createOscillator(); const gain = ctx.createGain()
+          osc.connect(gain); gain.connect(ctx.destination)
+          const freq = diffDias === 0 ? 1050 : diffDias === 1 ? 880 : 660
+          osc.frequency.setValueAtTime(freq, ctx.currentTime)
+          osc.frequency.setValueAtTime(freq * 0.8, ctx.currentTime + 0.15)
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + 0.3)
+          gain.gain.setValueAtTime(0.25, ctx.currentTime)
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5)
+        } catch {}
+        setMensagens(prev => [...prev, {
+          id: `venc-${v.id}-${Date.now()}`,
+          role: 'ai' as const,
+          texto: `${emoji} **Vencimento próximo:** ${v.titulo} — vence ${urgencia}!\nSepare o pagamento para não perder o prazo, Sr. Max.`,
+        }])
+      }
+    } catch { /* silencioso */ }
+  }, [supabase])
+
+  // Verifica vencimentos ao abrir (após 3s para não sobrecarregar)
+  useEffect(() => {
+    if (!userId) return
+    const t = setTimeout(() => verificarVencimentos(userId), 3000)
+    return () => clearTimeout(t)
+  }, [userId, verificarVencimentos])
+
+  // Carrega resumo financeiro ao abrir (e atualiza a cada 5 min)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!userId) return
+    carregarResumoFinanceiro(userId)
+    const t = setInterval(() => carregarResumoFinanceiro(userId), 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [userId, carregarResumoFinanceiro])
+
+  // Verifica alertas sonoros a cada 60 segundos
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!userId) return
+    const t = setInterval(() => verificarAlertas(userId), 60_000)
+    return () => clearInterval(t)
+  }, [userId, verificarAlertas])
+
+  // ── Briefing Matinal — exibe ao abrir pela primeira vez no dia ──
+  const gerarBriefingMatinal = useCallback(async (uid: string) => {
+    const chave = `elena_briefing_${new Date().toISOString().split('T')[0]}`
+    if (localStorage.getItem(chave)) return // já exibiu hoje
+    localStorage.setItem(chave, '1')
+
+    try {
+      const agora = new Date()
+      const hoje = agora.toISOString().split('T')[0]
+      const em7dias = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      const diaSemana = agora.toLocaleDateString('pt-BR', { weekday: 'long' })
+      const dataFormatada = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
+
+      // Hora do dia → saudação
+      const hora = agora.getHours()
+      const saudacao = hora < 12 ? '☀️ Bom dia' : hora < 18 ? '🌤️ Boa tarde' : '🌙 Boa noite'
+
+      const [{ data: eventosHoje }, { data: vencimentos }, { data: gastos }, { data: receitas }] = await Promise.all([
+        // Compromissos de hoje
+        (supabase.from('agenda_eventos') as any)
+          .select('titulo, data_inicio, tipo')
+          .eq('user_id', uid)
+          .gte('data_inicio', `${hoje}T00:00:00`)
+          .lte('data_inicio', `${hoje}T23:59:59`)
+          .neq('status', 'cancelado')
+          .order('data_inicio', { ascending: true }),
+        // Vencimentos nos próximos 7 dias
+        (supabase.from('agenda_eventos') as any)
+          .select('titulo, data_inicio')
+          .eq('user_id', uid)
+          .eq('tipo', 'vencimento')
+          .gte('data_inicio', agora.toISOString())
+          .lte('data_inicio', em7dias)
+          .neq('status', 'cancelado')
+          .order('data_inicio', { ascending: true }),
+        // Gastos do mês
+        (supabase.from('gastos_pessoais') as any)
+          .select('valor').eq('user_id', uid)
+          .gte('data', hoje.substring(0, 7) + '-01'),
+        // Receitas do mês
+        (supabase.from('receitas_pessoais') as any)
+          .select('valor').eq('user_id', uid)
+          .gte('data', hoje.substring(0, 7) + '-01'),
+      ])
+
+      const linhas: string[] = [
+        `${saudacao}, **Sr. Max!**`,
+        `Hoje é ${diaSemana}, ${dataFormatada}.`,
+        '',
+      ]
+
+      // Agenda do dia
+      if (eventosHoje && eventosHoje.length > 0) {
+        linhas.push('📅 **Agenda de hoje:**')
+        eventosHoje.forEach((ev: any) => {
+          const horario = new Date(ev.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          linhas.push(`• ${horario} — ${ev.titulo}`)
+        })
+      } else {
+        linhas.push('📅 **Agenda:** Nenhum compromisso hoje. Dia livre! ✨')
+      }
+
+      // Vencimentos
+      if (vencimentos && vencimentos.length > 0) {
+        linhas.push('')
+        linhas.push('💳 **Vencimentos esta semana:**')
+        vencimentos.slice(0, 4).forEach((v: any) => {
+          const dataVenc = new Date(v.data_inicio)
+          const eHoje = dataVenc.toISOString().split('T')[0] === hoje
+          const label = eHoje ? '⚠️ Hoje' : dataVenc.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+          linhas.push(`• ${label} — ${v.titulo}`)
+        })
+      }
+
+      // Financeiro
+      const totalG = (gastos || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+      const totalR = (receitas || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+      if (totalG > 0 || totalR > 0) {
+        linhas.push('')
+        linhas.push('💰 **Financeiro do mês:**')
+        linhas.push(`• Gastos: R$ ${totalG.toFixed(2)}`)
+        linhas.push(`• Receitas: R$ ${totalR.toFixed(2)}`)
+        const saldo = totalR - totalG
+        linhas.push(`• Saldo estimado: **R$ ${saldo.toFixed(2)}** ${saldo >= 0 ? '✅' : '⚠️'}`)
+      }
+
+      linhas.push('')
+      linhas.push('Pronto para começar, Sr. Max! Como posso ajudar? 🚀')
+
+      setMensagens(prev => [...prev, {
+        id: `briefing-${Date.now()}`,
+        role: 'ai' as const,
+        texto: linhas.join('\n'),
+      }])
+    } catch { /* silencioso */ }
+  }, [supabase])
+
+  // Dispara briefing matinal na primeira abertura do dia
+  useEffect(() => {
+    if (!userId) return
+    gerarBriefingMatinal(userId)
+  }, [userId, gerarBriefingMatinal])
 
   // ── Carregar arquivo (imagem ou PDF) ────────────────────────
   const handleFile = useCallback(async (file: File) => {
@@ -887,12 +1850,26 @@ Retorne exatamente este JSON:
       const body: Record<string, any> = {
         prompt: promptFinal,
         context: contexto,
-        systemInstruction: buildSystemPrompt(perfilRef.current),
+        systemInstruction: buildSystemPrompt(perfilRef.current, resumoFinanceiro),
       }
       // Se é imagem, manda para visão (GPT-4o)
       if (fileSnap?.isImage) {
         body.imageBase64 = fileSnap.base64
         body.imageMime = fileSnap.mime
+      }
+
+      // ── Aprendizado (cada 5 msgs) + Sugestão Proativa (cada 10 msgs) ──
+      userMsgCountRef.current += 1
+      sugestaoCountRef.current += 1
+      if (uid && userMsgCountRef.current % 5 === 0) {
+        // Atualiza perfil em background
+        setTimeout(() => {
+          setMensagens(curr => { atualizarPerfilAprendizado(uid, curr); return curr })
+        }, 2000)
+      }
+      if (uid && sugestaoCountRef.current % 10 === 0) {
+        // Sugestão proativa a cada 10 msgs — analisa dados reais do banco
+        setTimeout(() => gerarSugestaoProativa(uid), 4000)
       }
 
       const res = await fetch('/api/openrouter', {
@@ -916,18 +1893,6 @@ Retorne exatamente este JSON:
         salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined, sessaoId)
       }
 
-      // ── Aprendizado a cada 5 msgs do usuário ────────────────────────
-      userMsgCountRef.current += 1
-      if (uid && userMsgCountRef.current % 5 === 0) {
-        // Roda em segundo plano, sem bloquear a UI
-        setTimeout(() => {
-          setMensagens(curr => {
-            atualizarPerfilAprendizado(uid, curr)
-            return curr
-          })
-        }, 2000)
-      }
-
       // Auto-save ações após 600ms
       if (acoesComStatus.length > 0 && uid) {
         setTimeout(() => executarAcoesAuto(aiMsgId, acoesComStatus, uid), 600)
@@ -941,8 +1906,79 @@ Retorne exatamente este JSON:
     } finally {
       setLoading(false)
       isSendingRef.current = false
+      // Modo Voz Contínua: reativa mic após Elena responder
+      if (modoVozRef.current) {
+        setTimeout(() => {
+          if (modoVozRef.current) handlePressMic()
+        }, 1200)
+      }
     }
-  }, [input, loading, mensagens, userId, supabase, executarAcoesAuto, salvarHistorico, atualizarPerfilAprendizado])
+  }, [input, loading, mensagens, userId, supabase, executarAcoesAuto, salvarHistorico, atualizarPerfilAprendizado, gerarSugestaoProativa])
+
+  // ── Processar Fila Offline ao reconectar ──────────────────────────
+  const processarFilaOffline = useCallback(async () => {
+    if (!userId || !navigator.onLine) return
+    const pendentes = await getPendentes(userId)
+    if (pendentes.length === 0) return
+
+    setMensagens(prev => [...prev, {
+      id: 'sync-' + Date.now(),
+      role: 'ai' as const,
+      texto: `📶 **Conexão restabelecida!** Encontrei ${pendentes.length} registro(s) salvo(s) offline. Sincronizando agora...`,
+    }])
+
+    let sucesso = 0
+    for (const reg of pendentes) {
+      try {
+        const msgId = 'offline-sync-' + reg.id
+        await executarAcoesAuto(msgId, [{ tipo: reg.tipo as any, dados: reg.acao, label: '', status: 'pending' }], userId)
+        await marcarProcessado(reg.id!)
+        sucesso++
+      } catch {
+        // Mantém na fila — tentará novamente na próxima conexão
+      }
+    }
+
+    if (sucesso > 0) {
+      await limparProcessados()
+      setMensagens(prev => [...prev, {
+        id: 'sync-ok-' + Date.now(),
+        role: 'ai' as const,
+        texto: `✅ ${sucesso} registro(s) sincronizado(s) com sucesso!`,
+      }])
+    }
+  }, [userId, executarAcoesAuto])
+
+  // Dispara processamento quando volta online
+  useEffect(() => {
+    if (isOnline && userId) {
+      const timer = setTimeout(processarFilaOffline, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [isOnline, userId, processarFilaOffline])
+
+  // ── Registrar offline: salva na fila IndexedDB ────────────────
+  const handleRegistrarOffline = useCallback(async () => {
+    if (!userId) return
+    const { tipo, valor, descricao, categoria, data, hora } = offlineForm
+    if (!descricao.trim()) return
+
+    let acao: Record<string, unknown> = {}
+    if (tipo === 'agenda') {
+      acao = { acao: 'agenda', titulo: descricao, data_inicio: `${data}T${hora}:00`, tipo: 'lembrete' }
+    } else {
+      const v = parseFloat(valor.replace(',', '.'))
+      if (isNaN(v) || v <= 0) return
+      acao = { acao: tipo, valor: v, descricao, categoria, forma_pagamento: 'pix' }
+    }
+
+    await enqueueOffline(userId, tipo, acao)
+    const pendentes = await getPendentes(userId)
+    setOfflineQueue(pendentes)
+    setOfflineForm(prev => ({ ...prev, valor: '', descricao: '' }))
+    setOfflineSaved(true)
+    setTimeout(() => setOfflineSaved(false), 2500)
+  }, [userId, offlineForm])
 
   // ── Microfone (pede permissão apenas uma vez) ─────────────────
   const iniciarReconhecimento = () => {
@@ -978,13 +2014,11 @@ Retorne exatamente este JSON:
       setInterimTranscript('')
       transcriptRef.current = ''
       if (e.error === 'not-allowed') {
-        localStorage.removeItem('elena_mic_ok')
-        micPermitidoRef.current = false
-        alert('Permissão de microfone negada. Clique no 🔒 cadeado e permita o microfone.')
+        alert('Microfone não acessível. Se persistir, clique no 🔒 na barra de endereços e permita o microfone.')
       } else if (e.error === 'audio-capture') {
-        alert('Nenhum microfone encontrado.')
+        alert('Nenhum microfone encontrado. Conecte um e tente novamente.')
       } else if (e.error !== 'no-speech') {
-        console.error('Erro no microfone:', e.error)
+        console.error('[Elena mic]', e.error)
       }
     }
 
@@ -1000,55 +2034,27 @@ Retorne exatamente este JSON:
   }
 
   const handlePressMic = async () => {
-    // 1. Verifica via Permissions API se o microfone já foi autorizado
-    //    sem abrir nenhum popup — esse é o comportamento correto e persistente
+    // Verifica suporte ao SpeechRecognition
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) { alert('Use Google Chrome ou Edge para usar o microfone.'); return }
+
+    // Verifica via Permissions API sem abrir nenhum popup
     if (navigator.permissions) {
       try {
         const status = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-        if (status.state === 'granted') {
-          // Permissão já concedida — vai direto, sem pedir de novo
-          micPermitidoRef.current = true
-          localStorage.setItem('elena_mic_ok', '1')
-          iniciarReconhecimento()
-          return
-        }
         if (status.state === 'denied') {
-          alert('Permissão de microfone bloqueada. Clique no 🔒 cadeado na barra de endereços e permita o microfone.')
+          alert('Microfone bloqueado pelo navegador. Clique no 🔒 na barra de endereços e permita o microfone.')
           return
         }
-        // state === 'prompt' → primeira vez, precisa pedir
+        // Se 'granted' ou 'prompt': inicia direto — o browser gerencia a permissão internamente
       } catch {
-        // Navegador não suporta Permissions API — tenta pelo localStorage
-        const jaPermitido = typeof window !== 'undefined' && localStorage.getItem('elena_mic_ok') === '1'
-        if (jaPermitido) {
-          micPermitidoRef.current = true
-          iniciarReconhecimento()
-          return
-        }
-      }
-    } else {
-      // Fallback: verifica localStorage (compatibilidade)
-      const jaPermitido = typeof window !== 'undefined' && localStorage.getItem('elena_mic_ok') === '1'
-      micPermitidoRef.current = jaPermitido
-      if (jaPermitido) {
-        iniciarReconhecimento()
-        return
+        // Permissions API não suportada — continua normalmente
       }
     }
 
-    // 2. Primeira vez: solicita permissão via getUserMedia
-    //    (browser mostrará o popup UMA ÚNICA VEZ — depois fica permanente)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      stream.getTracks().forEach(t => t.stop()) // libera stream de teste imediatamente
-      micPermitidoRef.current = true
-      localStorage.setItem('elena_mic_ok', '1')
-      iniciarReconhecimento()
-    } catch {
-      localStorage.removeItem('elena_mic_ok')
-      micPermitidoRef.current = false
-      alert('Permissão de microfone negada. Permita nas configurações do navegador.')
-    }
+    // Inicia o reconhecimento — na primeira vez o browser pede permissão UMA única vez
+    // e lembra permanentemente sem precisar de getUserMedia
+    iniciarReconhecimento()
   }
 
   const handleReleaseMic = () => {
@@ -1087,8 +2093,8 @@ Retorne exatamente este JSON:
     const agrupado = new Map<string, { data: string, resumo: string }>()
     if (data) {
       // Varre de trás pra frente para pegar a primeira mensagem do usuário como título da sessão
-      const dataReversa = [...data].reverse()
-      dataReversa.forEach(m => {
+      const dataReversa = [...(data as any[])].reverse()
+      dataReversa.forEach((m: any) => {
          if (!agrupado.has(m.sessao_id)) {
            agrupado.set(m.sessao_id, { data: m.created_at, resumo: m.texto })
          } else if (m.role === 'user' && (!agrupado.get(m.sessao_id)?.resumo || agrupado.get(m.sessao_id)!.resumo.includes('Olá, Sr. Max'))) {
@@ -1173,6 +2179,14 @@ Retorne exatamente este JSON:
               </div>
             </div>
 
+            {/* Banner Offline */}
+            {!isOnline && (
+              <div className="px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2 shrink-0">
+                <span className="text-amber-400 text-xs">⚡</span>
+                <p className="text-[10px] text-amber-400 font-semibold">Sem internet — registros serão salvos ao reconectar</p>
+              </div>
+            )}
+
             {/* View do Histórico de Conversas */}
             {showHistory ? (
               <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#0a0d16]">
@@ -1193,7 +2207,133 @@ Retorne exatamente este JSON:
               </div>
             ) : (
               <>
-                {/* Chat Normal */}
+                {/* Offline Form ou Chat Normal */}
+                {!isOnline ? (
+                  <div className="flex-1 overflow-y-auto p-4 bg-[#0a0d16] flex flex-col gap-3">
+                    {/* Header offline */}
+                    <div className="text-center pt-2 pb-1">
+                      <div className="w-11 h-11 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-2xl mx-auto mb-2">📵</div>
+                      <p className="text-sm font-bold text-fg">Modo Offline</p>
+                      <p className="text-[11px] text-fg-tertiary mt-0.5">Registre aqui — sincroniza ao reconectar</p>
+                    </div>
+
+                    {/* Tipo */}
+                    <div className="flex gap-1.5">
+                      {(['gasto', 'receita', 'agenda'] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => setOfflineForm(prev => ({ ...prev, tipo: t }))}
+                          className={cn(
+                            'flex-1 py-2 rounded-lg text-[11px] font-bold transition-all',
+                            offlineForm.tipo === t
+                              ? t === 'gasto'   ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              : t === 'receita' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                              : 'bg-white/5 text-fg-tertiary border border-white/5 hover:border-white/10'
+                          )}
+                        >
+                          {t === 'gasto' ? '💸 Gasto' : t === 'receita' ? '💰 Receita' : '📅 Agenda'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Valor */}
+                    {offlineForm.tipo !== 'agenda' && (
+                      <input
+                        type="number" inputMode="decimal"
+                        placeholder="Valor (R$)"
+                        value={offlineForm.valor}
+                        onChange={e => setOfflineForm(prev => ({ ...prev, valor: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-zinc-600 focus:outline-none focus:border-amber-400/50 transition-colors"
+                      />
+                    )}
+
+                    {/* Descrição / Título */}
+                    <input
+                      type="text"
+                      placeholder={offlineForm.tipo === 'agenda' ? 'Título do evento' : 'Descrição'}
+                      value={offlineForm.descricao}
+                      onChange={e => setOfflineForm(prev => ({ ...prev, descricao: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-zinc-600 focus:outline-none focus:border-amber-400/50 transition-colors"
+                    />
+
+                    {/* Data+Hora ou Categoria */}
+                    {offlineForm.tipo === 'agenda' ? (
+                      <div className="flex gap-2">
+                        <input type="date" value={offlineForm.data}
+                          onChange={e => setOfflineForm(prev => ({ ...prev, data: e.target.value }))}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-fg focus:outline-none focus:border-amber-400/50"
+                        />
+                        <input type="time" value={offlineForm.hora}
+                          onChange={e => setOfflineForm(prev => ({ ...prev, hora: e.target.value }))}
+                          className="w-[90px] bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-fg focus:outline-none focus:border-amber-400/50"
+                        />
+                      </div>
+                    ) : (
+                      <select value={offlineForm.categoria}
+                        onChange={e => setOfflineForm(prev => ({ ...prev, categoria: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-fg focus:outline-none focus:border-amber-400/50"
+                      >
+                        {offlineForm.tipo === 'gasto' ? (<>
+                          <option value="alimentacao">🍽️ Alimentação</option>
+                          <option value="transporte">🚗 Transporte</option>
+                          <option value="saude">❤️ Saúde</option>
+                          <option value="lazer">🎮 Lazer</option>
+                          <option value="moradia">🏠 Moradia</option>
+                          <option value="tecnologia">💻 Tecnologia</option>
+                          <option value="outros">📦 Outros</option>
+                        </>) : (<>
+                          <option value="pro_labore">💼 Pró-labore</option>
+                          <option value="freelance">🔧 Freelance</option>
+                          <option value="investimentos">📈 Investimentos</option>
+                          <option value="aluguel">🏠 Aluguel</option>
+                          <option value="vendas">🛒 Vendas</option>
+                          <option value="outros">📦 Outros</option>
+                        </>)}
+                      </select>
+                    )}
+
+                    {/* Botão salvar */}
+                    <button
+                      onClick={handleRegistrarOffline}
+                      disabled={!offlineForm.descricao.trim() || (offlineForm.tipo !== 'agenda' && !offlineForm.valor)}
+                      className={cn(
+                        'w-full py-2.5 rounded-xl text-sm font-bold transition-all',
+                        offlineSaved
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 disabled:opacity-30 disabled:cursor-not-allowed'
+                      )}
+                    >
+                      {offlineSaved ? '✅ Salvo na fila!' : '📥 Salvar na Fila Offline'}
+                    </button>
+
+                    {/* Fila pendente */}
+                    {offlineQueue.length > 0 && (
+                      <div className="bg-white/3 rounded-xl p-3 border border-white/5">
+                        <p className="text-[10px] text-fg-tertiary uppercase tracking-wider font-semibold mb-2">
+                          ⏳ Aguardando sync ({offlineQueue.length})
+                        </p>
+                        <div className="space-y-1.5">
+                          {offlineQueue.slice(0, 6).map((item: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-[11px]">
+                              <span className="shrink-0">
+                                {item.tipo === 'gasto' ? '💸' : item.tipo === 'receita' ? '💰' : '📅'}
+                              </span>
+                              <span className="flex-1 text-fg-secondary truncate">
+                                {String(item.acao.descricao || item.acao.titulo || item.tipo)}
+                              </span>
+                              {item.acao.valor && (
+                                <span className="text-amber-400 shrink-0 font-semibold">
+                                  R$ {Number(item.acao.valor).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
               {mensagens.map(msg => {
                 const isAi = msg.role === 'ai'
@@ -1208,7 +2348,11 @@ Retorne exatamente este JSON:
                       ) : (
                         <>
                           {msg.anexo && <img src={msg.anexo} alt="anexo" className="max-w-full rounded-lg mb-1 max-h-32 object-contain" />}
-                          {msg.texto}
+                          {isAi ? (
+                            <span dangerouslySetInnerHTML={{ __html: renderMarkdownHtml(msg.texto) }} />
+                          ) : (
+                            msg.texto
+                          )}
                         </>
                       )}
                     </div>
@@ -1237,6 +2381,7 @@ Retorne exatamente este JSON:
               })}
               <div ref={chatEndRef} />
             </div>
+                )} {/* fim offline/online */}
 
             {/* Preview do Anexo */}
             {attachedFile && (
@@ -1256,7 +2401,15 @@ Retorne exatamente este JSON:
               </div>
             )}
 
-            {/* Input */}
+            {/* Input — desativado quando offline */}
+            {!isOnline ? (
+              <div className="p-3 border-t border-border-subtle shrink-0">
+                <div className="flex items-center justify-center gap-2 bg-white/3 rounded-xl py-2.5 border border-white/5">
+                  <span className="text-xs">📵</span>
+                  <p className="text-[11px] text-fg-tertiary">Chat indisponível offline — use o formulário acima</p>
+                </div>
+              </div>
+            ) : (
             <div className="p-3 border-t border-border-subtle shrink-0">
               {/* Input oculto para arquivo */}
               <input
@@ -1275,6 +2428,21 @@ Retorne exatamente este JSON:
                   title={isListening ? 'Parar e enviar' : 'Clique para falar'}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                </button>
+                {/* Botão Modo Voz Contínua */}
+                <button
+                  onClick={() => {
+                    const novo = !modoVozContinuo
+                    setModoVozContinuo(novo)
+                    modoVozRef.current = novo
+                    if (novo && !isListening) handlePressMic()
+                    if (!novo && isListening) handleReleaseMic()
+                  }}
+                  className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all text-[10px] font-bold',
+                    modoVozContinuo ? 'bg-emerald-500 text-white animate-pulse' : 'text-fg-tertiary hover:text-emerald-400 opacity-60')}
+                  title={modoVozContinuo ? 'Modo mãos-livres ATIVO — clique para desativar' : 'Ativar modo mãos-livres (Elena ouve automaticamente)'}
+                >
+                  ∞
                 </button>
                 {/* Botão Anexar */}
                 <button
@@ -1318,6 +2486,7 @@ Retorne exatamente este JSON:
                 </button>
               </div>
             </div>
+            )} {/* fim input offline/online */}
             </>
           )}
           </div>
