@@ -25,6 +25,7 @@ type ProjetoPatrimonio = {
   status: 'ativo' | 'pausado' | 'concluido' | 'cancelado'
   parcelas_total: number | null
   parcelas_pagas: number | null
+  tabelaOrigem?: 'imoveis' | 'projetos_patrimonio'
 }
 
 type CustoPatrimonio = {
@@ -47,9 +48,9 @@ const TIPO_COLORS: Record<string, string> = {
 
 // ── Mock Data Fallbacks ─────────────────────────────────────
 const MOCK_PROJETOS: ProjetoPatrimonio[] = [
-  { id: '1', titulo: 'Apartamento Centro', tipo: 'imovel', descricao: 'Imóvel para locação', valor_investido_total: 350000, valor_mercado_atual: 420000, roi_percentual: 20, data_aquisicao: '2023-01-15', status: 'ativo' },
-  { id: '2', titulo: 'Gol 2022', tipo: 'veiculo', descricao: 'Carro para uso do escritório', valor_investido_total: 65000, valor_mercado_atual: 58000, roi_percentual: -10.7, data_aquisicao: '2024-05-20', status: 'ativo' },
-  { id: '3', titulo: 'Reforma Fachada', tipo: 'reforma', descricao: 'Reforma do prédio da empresa', valor_investido_total: 45000, valor_mercado_atual: 45000, roi_percentual: 0, data_aquisicao: '2025-10-10', status: 'concluido' },
+  { id: '1', titulo: 'Apartamento Centro', tipo: 'imovel', descricao: 'Imóvel para locação', valor_investido_total: 350000, valor_mercado_atual: 420000, roi_percentual: 20, data_aquisicao: '2023-01-15', status: 'ativo', parcelas_total: null, parcelas_pagas: null },
+  { id: '2', titulo: 'Gol 2022', tipo: 'veiculo', descricao: 'Carro para uso do escritório', valor_investido_total: 65000, valor_mercado_atual: 58000, roi_percentual: -10.7, data_aquisicao: '2024-05-20', status: 'ativo', parcelas_total: null, parcelas_pagas: null },
+  { id: '3', titulo: 'Reforma Fachada', tipo: 'reforma', descricao: 'Reforma do prédio da empresa', valor_investido_total: 45000, valor_mercado_atual: 45000, roi_percentual: 0, data_aquisicao: '2025-10-10', status: 'concluido', parcelas_total: null, parcelas_pagas: null },
 ]
 
 const MOCK_CUSTOS: CustoPatrimonio[] = [
@@ -119,8 +120,8 @@ function ModalImportarPatrimonio({
           const { data: userData } = await supabase.auth.getUser()
           let userId: string | null = null
           if (userData.user) {
-            const { data: perf } = await supabase
-              .from('perfis').select('empresa_id').eq('id', userData.user.id).single()
+            const { data: perf } = await (supabase
+              .from('perfis').select('empresa_id').eq('id', userData.user.id).single() as any)
             userId = perf?.empresa_id ?? null
           }
 
@@ -248,7 +249,10 @@ function ModalProjeto({
   onSave: () => void
   editando?: ProjetoPatrimonio
 }) {
-  const { insert, update, loading } = useSupabaseMutation('projetos_patrimonio')
+  const { insert: insertProj, update: updateProj, loading: loadingProj } = useSupabaseMutation('projetos_patrimonio')
+  const { update: updateImovel, loading: loadingImovel } = useSupabaseMutation('imoveis')
+  const loading = loadingProj || loadingImovel
+
   const [form, setForm] = useState({
     titulo:               editando?.titulo               ?? '',
     tipo:                (editando?.tipo                ?? 'imovel') as ProjetoPatrimonio['tipo'],
@@ -267,21 +271,46 @@ function ModalProjeto({
     const vm = form.valor_mercado_atual ? parseFloat(form.valor_mercado_atual) : null
     const pt = form.parcelas_total ? parseInt(form.parcelas_total) : null
     const pp = form.parcelas_pagas ? parseInt(form.parcelas_pagas) : null
-    const payload = {
-      titulo: form.titulo, tipo: form.tipo,
-      descricao: form.descricao || null,
-      valor_investido_total: vi,
-      valor_mercado_atual: vm,
-      roi_percentual: vm && vi > 0 ? ((vm - vi) / vi) * 100 : null,
-      data_aquisicao: form.data_aquisicao || null,
-      status: form.status,
-      parcelas_total: pt,
-      parcelas_pagas: pp,
-    }
+    
     if (editando) {
-      await update(editando.id, payload)
+      if (editando.tabelaOrigem === 'imoveis') {
+        const payloadImovel = {
+          titulo: form.titulo,
+          valor_compra: vi,
+          valor_total_contrato: vi,
+          valor_mercado: vm,
+          data_aquisicao: form.data_aquisicao || null,
+          parcelas_total: pt,
+          parcelas_pagas: pp,
+        }
+        await updateImovel(editando.id, payloadImovel)
+      } else {
+        const payload = {
+          titulo: form.titulo, tipo: form.tipo,
+          descricao: form.descricao || null,
+          valor_investido_total: vi,
+          valor_mercado_atual: vm,
+          roi_percentual: vm && vi > 0 ? ((vm - vi) / vi) * 100 : null,
+          data_aquisicao: form.data_aquisicao || null,
+          status: form.status,
+          parcelas_total: pt,
+          parcelas_pagas: pp,
+        }
+        await updateProj(editando.id, payload)
+      }
     } else {
-      await insert({ ...payload, status: 'ativo' })
+      const payload = {
+        titulo: form.titulo, tipo: form.tipo,
+        descricao: form.descricao || null,
+        valor_investido_total: vi,
+        valor_mercado_atual: vm,
+        roi_percentual: vm && vi > 0 ? ((vm - vi) / vi) * 100 : null,
+        data_aquisicao: form.data_aquisicao || null,
+        status: form.status,
+        parcelas_total: pt,
+        parcelas_pagas: pp,
+      }
+      await insertProj({ ...payload, status: 'ativo' })
     }
     onSave(); onClose()
   }
@@ -493,12 +522,19 @@ export default function PatrimonioClient() {
   const [modalImport, setModalImport] = useState(false)
   const [modalCusto, setModalCusto] = useState<string | null>(null)
   const [projetoAberto, setProjetoAberto] = useState<string | null>(null)
-  const { remove } = useSupabaseMutation('projetos_patrimonio')
+  const { remove: removeProjeto } = useSupabaseMutation('projetos_patrimonio')
+  const { remove: removeImovel } = useSupabaseMutation('imoveis')
 
   const handleDeleteProjeto = async (p: ProjetoPatrimonio) => {
     if (!confirm(`Excluir "${p.titulo}"? Esta ação removerá o bem e todos os custos associados.`)) return
-    await remove(p.id)
-    refetch(); refetchCustos()
+    if (p.tabelaOrigem === 'imoveis') {
+      await removeImovel(p.id)
+      refetchImoveis()
+    } else {
+      await removeProjeto(p.id)
+      refetch()
+    }
+    refetchCustos()
   }
 
   const { data: projetosDB, refetch } = useSupabaseQuery<ProjetoPatrimonio>('projetos_patrimonio', {
@@ -508,7 +544,7 @@ export default function PatrimonioClient() {
     orderBy: { column: 'data', ascending: false },
   })
   // Busca imóveis da tabela dedicada para exibir na Visão Geral
-  const { data: imoveisDB } = useSupabaseQuery<any>('imoveis', {
+  const { data: imoveisDB, refetch: refetchImoveis } = useSupabaseQuery<any>('imoveis', {
     orderBy: { column: 'criado_em', ascending: false },
   } as any)
 
@@ -527,12 +563,17 @@ export default function PatrimonioClient() {
     status: 'ativo' as const,
     parcelas_total: im.parcelas_total ?? null,
     parcelas_pagas: im.parcelas_pagas ?? null,
+    tabelaOrigem: 'imoveis' as const,
   }))
 
   // Fallback para exibir na tela caso banco esteja vazio
   const projetosBase = projetosDB.length > 0 ? projetosDB : MOCK_PROJETOS
+  const projetosBaseMapped = projetosBase.map(p => ({
+    ...p,
+    tabelaOrigem: 'projetos_patrimonio' as const
+  }))
   // Combina projetos_patrimonio + imoveis para Visão Geral
-  const projetos = [...projetosBase, ...imoveisComoProjetoGeral]
+  const projetos = [...projetosBaseMapped, ...imoveisComoProjetoGeral]
   const custos = custosDB.length > 0 ? custosDB : MOCK_CUSTOS
 
   // Filtra projetos por aba (veiculos e outros filtram dentro do tab Geral)
@@ -831,7 +872,7 @@ export default function PatrimonioClient() {
       {modal && (
         <ModalProjeto
           onClose={() => { setModal(false); setEditandoProjeto(null) }}
-          onSave={refetch}
+          onSave={() => { refetch(); refetchImoveis() }}
           editando={editandoProjeto ?? undefined}
         />
       )}
