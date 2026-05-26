@@ -705,7 +705,17 @@ export function TabImoveis() {
 
   const handleExcluir = async (id: string, titulo: string) => {
     if (!confirm(`Excluir o imóvel "${titulo}"?`)) return
-    await (supabase.from('imoveis') as any).delete().eq('id', id)
+    console.log('[TabImoveis] Tentando deletar imóvel id=', id)
+    const { error, data } = await (supabase.from('imoveis') as any).delete().eq('id', id).select()
+    console.log('[TabImoveis] Resultado delete:', { error, data })
+    if (error) {
+      alert(`❌ Erro ao excluir: ${error.message}\n\nCódigo: ${error.code}`)
+      return
+    }
+    if (!data || data.length === 0) {
+      alert(`⚠️ Nenhum registro deletado. Possível restrição de permissão (RLS) no banco.\n\nID: ${id}`)
+      return
+    }
     refetch()
   }
 
