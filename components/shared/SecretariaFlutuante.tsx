@@ -319,7 +319,11 @@ Quando o Sr. Max colar um bloco de texto com transações bancárias (data + des
 🎙️ MODO MÃOS-LIVRES / VOZ CONTÍNUA:
 - Quando o CEO estiver usando voz contínua (modo oral), prefira respostas ainda mais curtas
 - Termine com uma pergunta curta para manter o diálogo: "Mais alguma coisa?" ou "Ok, o que mais?"
-- Evite listas longas em modo voz — use narrativa corrida`
+- Evite listas longas em modo voz — use narrativa corrida
+
+ℹ️ RESPOSTAS SOBRE SUAS HABILIDADES / AJUDA:
+- Sempre que o chefe perguntar "o que você sabe fazer?", "como você funciona?", "quais suas funções?", "ajuda" ou similar:
+  Apresente um resumo altamente elegante, executivo e estruturado de suas HABILIDADES PREMIUM (Briefing matinal, Extrator de NF-e, Vencimentos, Metas, Fluxo de Caixa, Extrato em Lote, Aprovação PJ, Voz Contínua, Checklist Executivo, Dashboard Visual, Ocorrências, etc.) em formato de tópicos amigáveis e profissionais, convidando-o a testar alguma delas.`
 
 
 
@@ -2173,6 +2177,43 @@ Retorne exatamente este JSON:
                 </div>
               </div>
               <div className="flex gap-2 items-center">
+                <button onClick={() => {
+                  // Injeta uma mensagem de ajuda se o cliente clicar no botão de interrogação ou abre o painel visual
+                  setMensagens(prev => [
+                    ...prev,
+                    {
+                      id: String(Date.now()),
+                      role: 'ai',
+                      texto: `📖 **Guia Rápido de Comandos da Elena Premium** 🚀
+
+Aqui está tudo o que você pode me pedir para fazer:
+
+📅 **Agenda & Lembretes**
+* *"Agendar reunião amanhã às 14h"*
+* *"Me lembra de ligar pro fornecedor dia 28 às 10h"* (cria alarme)
+
+💰 **Controle Financeiro**
+* *"Gastei R$ 150 no mercadinho no pix"*
+* *"Recebi R$ 5.000 de pro-labore"*
+* *"Transferir R$ 200 do Itaú para o Bradesco"*
+* *"Definir meta de gastos de R$ 2.000 em alimentação"*
+
+🏢 **Gestão Empresarial (PJ)**
+* *"Gasto de 500 no escritório"*
+* *"Faturamento de 15.000 da consultoria"*
+* *Nota: Gastos PJ acima de R$ 1.000 exigem sua aprovação verbal!*
+
+📊 **Visão de Negócios & Equipe**
+* *"Gerar meu checklist executivo"* (cria tarefas prioritárias)
+* *"Como está a performance da equipe?"* (busca ocorrências)
+* *"Mostrar meu dashboard financeiro"* (exibe gráficos de barras)
+* *"Extrato bancário"* (pode colar o extrato direto no chat!)
+
+🎙️ **Modo Hands-Free (Voz Contínua)**
+* Clique no ícone **🎙️∞** para ativar o modo contínuo de voz (ótimo para usar no trânsito!).`
+                    }
+                  ])
+                }} title="Ver guia de recursos da Elena" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-amber-400 hover:bg-amber-400/10 transition-colors text-xs">❓</button>
                 <button onClick={loadSessoes} title="Ver conversas passadas" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-blue-400 hover:bg-blue-400/10 transition-colors text-xs">🗂️</button>
                 <button onClick={handleClearChat} title="Nova conversa (iniciar novo assunto)" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-emerald-400 hover:bg-emerald-400/10 transition-colors text-xs">✨</button>
                 <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-red-400 hover:bg-red-400/10 text-sm">✕</button>
