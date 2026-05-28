@@ -11,7 +11,7 @@ import { getPendentes, marcarProcessado, limparProcessados, registrarBackgroundS
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
 interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato' | 'projecao_mes'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato' | 'projecao_mes' | 'registro_livre'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -340,7 +340,26 @@ Quando o Sr. Max colar um bloco de texto com transações bancárias (data + des
   • Média de receitas dos últimos 3 meses
   • Despesas fixas (recorrentes)
   • Vencimentos agendados para o próximo mês
-- Mostra: receita projetada, gastos projetados, saldo estimado, alertas de risco e recomendações`
+- Mostra: receita projetada, gastos projetados, saldo estimado, alertas de risco e recomendações
+
+🧠 MEMÓRIA UNIVERSAL — REGISTRO LIVRE (use quando não souber onde salvar algo):
+```json
+{"acao":"registro_livre","tipo":"preferencia","chave":"banco_preferido","titulo":"Banco preferido do Sr. Max","conteudo":"Nubank","importante":true}
+```
+- Use SEMPRE que o usuário mencionar algo que vale lembrar e que NÃO tem ação específica:
+  • Preferências pessoais: "gosto de...", "prefiro...", "sempre uso...", "não gosto de..."
+  • Dados pessoais importantes: nomes de familiares, datas especiais, documentos
+  • Regras de negócio: "nunca dê desconto acima de X", "prazo padrão é 30 dias"
+  • Acordos informais: "combinei com Carlos que...", "ficou acertado que..."
+  • Contatos: "o eletricista é o João - (88) 99999-9999"
+  • Qualquer outra informação que o chefe queira que você LEMBRE no futuro
+- Quando o usuário pedir para LEMBRAR algo explicitamente, SEMPRE gere este JSON
+- Campo "chave": identificador único curto sem espaços (ex: banco_preferido, nome_esposa, desconto_maximo)
+  Se for uma anotação única (sem chave fixa), omita o campo "chave"
+- Campo "importante": true se a informação deve ser lembrada sempre (preferências, regras). false para anotações avulsas
+- Tipos válidos: preferencia, dado_pessoal, regra_negocio, anotacao, contato, acordo, lembrete
+- Exemplos de gatilhos: "lembra que...", "anota aí...", "não esqueça que...", "fica sabendo que...", "meu X é Y", "sempre que..."
+- Se já existir um registro com essa chave, o sistema ATUALIZA automaticamente (não duplica)`
 
 
 
@@ -397,6 +416,9 @@ function extrairAcoes(texto: string): AcaoIA[] {
         acoes.push({ tipo: 'importar_extrato', dados: d, label: `🏦 Importar extrato: ${n} lançamento(s)`, status: 'pending' })
       } else if (d.acao === 'projecao_mes') {
         acoes.push({ tipo: 'projecao_mes', dados: d, label: `📅 Projeção financeira do próximo mês`, status: 'pending' })
+      } else if (d.acao === 'registro_livre') {
+        const icon = d.tipo === 'preferencia' ? '⭐' : d.tipo === 'regra_negocio' ? '📋' : d.tipo === 'contato' ? '📞' : d.tipo === 'acordo' ? '🤝' : d.tipo === 'dado_pessoal' ? '👤' : '🧠'
+        acoes.push({ tipo: 'registro_livre', dados: d, label: `${icon} Lembrar: ${d.titulo || d.conteudo?.substring(0, 50) || d.chave || 'nova informação'}`, status: 'pending' })
       } else if (d.acao) {
         // Fallback: qualquer acao desconhecida vira um registro generico
         acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `🗂️ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
@@ -1366,6 +1388,65 @@ export function SecretariaFlutuante() {
           texto: linhas.join('\n'),
         }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'registro_livre') {
+        // ── Memória Universal: salva na elena_registro ─────────────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const { chave, titulo, conteudo, tipo: tipoReg, dados: dadosReg, importante, tags } = acao.dados
+
+        if (!titulo && !conteudo) {
+          setAcaoStatus(msgId, acaoIdx, 'error', 'Sem conteúdo para salvar')
+          return
+        }
+
+        const payload: Record<string, any> = {
+          user_id: uid,
+          tipo: tipoReg || 'anotacao',
+          titulo: titulo || conteudo?.substring(0, 80) || 'Registro',
+          conteudo: conteudo || null,
+          dados: dadosReg && Object.keys(dadosReg).length > 0 ? dadosReg : null,
+          importante: importante === true || importante === 'true',
+          tags: Array.isArray(tags) ? tags : [],
+          atualizado_em: new Date().toISOString(),
+        }
+
+        // Inclui chave apenas se fornecida (permite upsert inteligente)
+        if (chave) payload.chave = chave
+
+        let salvo = false
+        let isUpdate = false
+
+        try {
+          if (chave) {
+            // Com chave: faz upsert (atualiza se já existe)
+            const { data: existing } = await (supabase.from('elena_registro') as any)
+              .select('id').eq('user_id', uid).eq('chave', chave).maybeSingle()
+            isUpdate = !!existing
+
+            const { error } = await (supabase.from('elena_registro') as any)
+              .upsert(payload, { onConflict: 'user_id,chave' })
+            if (!error) salvo = true
+          } else {
+            // Sem chave: insere novo registro
+            const { error } = await (supabase.from('elena_registro') as any).insert(payload)
+            if (!error) salvo = true
+          }
+        } catch (e) {
+          console.error('[Elena Registro] Erro ao salvar:', e)
+        }
+
+        const icon = tipoReg === 'preferencia' ? '⭐' : tipoReg === 'regra_negocio' ? '📋'
+          : tipoReg === 'contato' ? '📞' : tipoReg === 'acordo' ? '🤝'
+          : tipoReg === 'dado_pessoal' ? '👤' : '🧠'
+
+        setMensagens(prev => [...prev, {
+          id: `reg-${Date.now()}`,
+          role: 'ai' as const,
+          texto: salvo
+            ? `${icon} **${isUpdate ? 'Atualizado' : 'Anotado'}:** _${titulo || conteudo?.substring(0, 60)}_\nGuardei isso na minha memória, Sr. Max. Pode perguntar a qualquer momento! 💾`
+            : `${icon} **Anotado localmente:** _${titulo || conteudo?.substring(0, 60)}_\n_(Houve um problema ao salvar no banco — tentarei novamente mais tarde)_`,
+        }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
       }
 
     } catch (err: any) {
@@ -1661,6 +1742,25 @@ Retorne exatamente este JSON:
         }
       }
 
+      // ── Carrega memória importante da Elena (registros marcados como importantes) ──
+      let blocoMemoria = ''
+      try {
+        const { data: memoriaImportante } = await (supabase.from('elena_registro') as any)
+          .select('tipo, chave, titulo, conteudo')
+          .eq('user_id', uid)
+          .eq('importante', true)
+          .order('atualizado_em', { ascending: false })
+          .limit(20)
+
+        if (memoriaImportante && memoriaImportante.length > 0) {
+          blocoMemoria = '\n🧠 MEMÓRIA DA ELENA (informações importantes lembradas):\n'
+          blocoMemoria += memoriaImportante
+            .map((r: any) => `- ${r.titulo}: ${r.conteudo || ''}`)
+            .join('\n')
+          blocoMemoria += '\n'
+        }
+      } catch { /* silencioso */ }
+
       setResumoFinanceiro(
         `- Gastos PF mês: R$ ${totalG.toFixed(2)}\n` +
         `- Receitas PF mês: R$ ${totalR.toFixed(2)}\n` +
@@ -1668,7 +1768,8 @@ Retorne exatamente este JSON:
         (top ? `- Top categorias gasto: ${top}\n` : '') +
         (alertasMetas.length ? `ALERTAS DE METAS:\n${alertasMetas.join('\n')}\n` : '') +
         (riscoConcentracao ? `ALERTAS DE RISCO:\n${riscoConcentracao}` : '') +
-        `PREVISÃO DO MÊS:\n${previsao}`
+        `PREVISÃO DO MÊS:\n${previsao}` +
+        blocoMemoria
       )
     } catch { /* silencioso */ }
   }, [supabase])

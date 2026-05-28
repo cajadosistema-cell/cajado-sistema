@@ -59,19 +59,31 @@ export async function POST(req: NextRequest) {
     // e filtra as demais no código
     const termoPrincipal = palavras[0]
 
-    const { data: msgs, error } = await supabase
-      .from('elena_conversas')
-      .select('id, role, texto, sessao_id, created_at')
-      .eq('user_id', user.id)
-      .ilike('texto', `%${termoPrincipal}%`)
-      .order('created_at', { ascending: false })
-      .limit(limite * 3)  // Busca mais e filtra abaixo
+    // Busca em paralelo: conversas históricas + memória universal
+    const [{ data: msgs, error }, { data: registros }] = await Promise.all([
+      // 1. Conversas históricas (elena_conversas)
+      supabase
+        .from('elena_conversas')
+        .select('id, role, texto, sessao_id, created_at')
+        .eq('user_id', user.id)
+        .ilike('texto', `%${termoPrincipal}%`)
+        .order('created_at', { ascending: false })
+        .limit(limite * 3),
+
+      // 2. Memória universal (elena_registro)
+      (supabase.from('elena_registro') as any)
+        .select('id, tipo, chave, titulo, conteudo, importante, criado_em')
+        .eq('user_id', user.id)
+        .or(`titulo.ilike.%${termoPrincipal}%,conteudo.ilike.%${termoPrincipal}%,chave.ilike.%${termoPrincipal}%`)
+        .order('importante', { ascending: false })
+        .limit(10),
+    ])
 
     if (error || !msgs) {
       return NextResponse.json({ mensagens: [] })
     }
 
-    // Filtra por relevância: mensagens que contenham mais palavras do termo
+    // Pontua e filtra conversas
     const pontuadas = msgs
       .map((m: any) => {
         const textoLower = (m.texto || '').toLowerCase()
@@ -82,15 +94,26 @@ export async function POST(req: NextRequest) {
       .sort((a: any, b: any) => b.pontos - a.pontos)
       .slice(0, limite)
 
-    // Formata para o contexto da Elena
+    // Formata conversas
     const mensagens = pontuadas.map((m: any) => ({
       role: m.role,
-      texto: m.texto?.substring(0, 400) || '',  // limita tamanho
+      texto: m.texto?.substring(0, 400) || '',
       created_at: m.created_at,
       sessao_id: m.sessao_id,
     }))
 
-    return NextResponse.json({ mensagens, total: mensagens.length })
+    // Formata registros da memória universal
+    const memoriaEncontrada = (registros || []).map((r: any) => ({
+      role: 'ai' as const,
+      texto: `[MEMÓRIA ${(r.tipo || '').toUpperCase()}] ${r.titulo}: ${r.conteudo || ''}`,
+      created_at: r.criado_em,
+      sessao_id: 'memoria',
+    }))
+
+    // Junta: memória primeiro (mais relevante), depois conversas
+    const todos = [...memoriaEncontrada, ...mensagens].slice(0, limite)
+
+    return NextResponse.json({ mensagens: todos, total: todos.length, memoria: memoriaEncontrada.length })
   } catch (err: any) {
     console.error('[Elena Busca]', err)
     return NextResponse.json({ mensagens: [], error: err.message })
