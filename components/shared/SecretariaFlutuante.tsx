@@ -457,6 +457,9 @@ export function SecretariaFlutuante() {
   const historyLoadedRef = useRef(false)
   const isSendingRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Conta apenas mensagens ENVIADAS nesta sessão (não as carregadas do histórico)
+  // Usado para disparar backup automático apenas por msgs novas, não pelo histórico
+  const sessionMsgCountRef = useRef(0)
 
   // Helper: mantém ref e state sincronizados
   const setAttachedFile = (f: AttachedFile | null) => {
@@ -1220,57 +1223,62 @@ export function SecretariaFlutuante() {
   }, [supabase, sessaoId])
 
   // ── Executar Backup Automático e Reiniciar Chat ─────────────
-  const executarBackupAutomatico = useCallback((msgsList: Msg[]) => {
-    try {
-      // 1. Gera o arquivo de texto formatado com o histórico
-      const textoBackup = msgsList
-        .filter(m => m.texto && m.texto !== '...')
-        .map(m => {
-          const data = m.created_at ? new Date(m.created_at).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')
-          return `[${data}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}:\n${m.texto}`
+  // CORREÇÃO: salva no Supabase (elena_backups) em vez de forçar download .txt.
+  // Permite que a Elena busque conversas antigas quando perguntada.
+  const executarBackupAutomatico = useCallback(async (msgsList: Msg[]) => {
+    const msgsParaBackup = msgsList.filter(m => m.texto && m.texto !== '...')
+
+    const textoBackup = msgsParaBackup
+      .map(m => {
+        const data = m.created_at ? new Date(m.created_at).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')
+        return `[${data}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}:\n${m.texto}`
+      })
+      .join('\n\n----------------------------------------\n\n')
+
+    const conteudoCompleto = `=== BACKUP AUTOMÁTICO DA CONVERSA - ELENA ===\nGerado em: ${new Date().toLocaleString('pt-BR')}\n\n${textoBackup}`
+
+    // 1. Salva no Supabase para busca futura
+    let backupSalvoNoBanco = false
+    if (userId) {
+      try {
+        const { error } = await (supabase.from('elena_backups') as any).insert({
+          user_id: userId,
+          sessao_id: sessaoId,
+          conteudo: conteudoCompleto,
+          total_mensagens: msgsParaBackup.length,
         })
-        .join('\n\n----------------------------------------\n\n')
-      
-      const blob = new Blob([`=== BACKUP AUTOMÁTICO DA CONVERSA - ELENA ===\nGerado em: ${new Date().toLocaleString('pt-BR')}\n\n` + textoBackup], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Backup_Automatico_Elena_${new Date().toISOString().split('T')[0]}.txt`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      console.error('[Elena Backup Automático]', err)
+        if (!error) backupSalvoNoBanco = true
+      } catch (err) {
+        console.error('[Elena Backup] Erro ao salvar no banco:', err)
+      }
     }
 
-    // 2. Cria uma nova sessão no chat
+    // 2. Nova sessão + reseta contador
     const novoSessaoId = Date.now().toString()
     setSessaoId(novoSessaoId)
-    
-    // 3. Define a mensagem informativa na interface
-    const msgExplicativaTexto = '📊 **Elena Informa:** Realizei o **backup automático** da nossa conversa anterior (o arquivo `.txt` foi baixado no seu dispositivo) e iniciei um novo assunto limpo para mantermos o desempenho e velocidade ideais! Como posso ajudar você agora, Sr. Max? 🚀'
-    
+    sessionMsgCountRef.current = 0
+
+    // 3. Mensagem informativa
+    const msgExplicativaTexto = backupSalvoNoBanco
+      ? '📊 **Elena Informa:** Conversa arquivada com segurança! Iniciei uma nova sessão para manter o desempenho ideal. Posso buscar conversas anteriores a qualquer momento se precisar, Sr. Max! 🚀'
+      : '📊 **Elena Informa:** Realizei o **backup automático** da nossa conversa e iniciei um novo assunto limpo para mantermos o desempenho e velocidade ideais! Como posso ajudar você agora, Sr. Max? 🚀'
+
     setMensagens([
       initialGreeting,
-      {
-        id: 'backup-auto-' + Date.now(),
-        role: 'ai',
-        texto: msgExplicativaTexto
-      }
+      { id: 'backup-auto-' + Date.now(), role: 'ai', texto: msgExplicativaTexto }
     ])
 
-    // 4. Persiste a mensagem informativa no banco de dados sob a nova sessão
+    // 4. Persiste sob a nova sessão
     if (userId) {
       salvarHistorico(userId, 'ai', msgExplicativaTexto, undefined, novoSessaoId)
     }
-  }, [userId, initialGreeting, salvarHistorico])
+  }, [userId, sessaoId, supabase, initialGreeting, salvarHistorico])
 
-  // ── Monitoramento e Execução do Backup Automático (40 mensagens) ──
+  // ── Monitoramento do Backup Automático ──
+  // CORREÇÃO CRÍTICA: usa sessionMsgCountRef para contar APENAS msgs enviadas
+  // nesta sessão, não as carregadas do histórico. Evita backup toda hora.
   useEffect(() => {
-    const msgsValidas = mensagens.filter(m => m.texto && m.texto !== '...')
-    if (msgsValidas.length >= 40) {
-      // Pequeno timeout para não travar a UI ou atrapalhar animações de resposta
+    if (sessionMsgCountRef.current >= 40) {
       const timer = setTimeout(() => {
         executarBackupAutomatico(mensagens)
       }, 1000)
@@ -1550,13 +1558,25 @@ Retorne exatamente este JSON:
 
   // ── Lembretes de Vencimentos Inteligentes (1 dia e 3 dias antes) ──
   const verificarVencimentos = useCallback(async (uid: string) => {
-    const chave = `elena_venc_${new Date().toISOString().split('T')[0]}`
-    if (localStorage.getItem(chave)) return
-    localStorage.setItem(chave, '1')
+    const hoje = new Date().toISOString().split('T')[0]
+
+    // CORREÇÃO: usa banco (ultima_vez_vencimentos) em vez de localStorage.
+    // A marcação agora acontece APÓS buscar os dados (não antes),
+    // evitando silenciar vencimentos em caso de erro de rede.
+    try {
+      const { data: perfil } = await (supabase.from('elena_perfil') as any)
+        .select('ultima_vez_vencimentos')
+        .eq('user_id', uid)
+        .maybeSingle()
+      if (perfil?.ultima_vez_vencimentos === hoje) return // já verificou hoje
+    } catch {
+      // Fallback: localStorage
+      const chave = `elena_venc_${hoje}`
+      if (localStorage.getItem(chave)) return
+    }
     try {
       const agora = new Date()
       const em3dias = new Date(agora.getTime() + 3 * 24 * 60 * 60 * 1000)
-      const hoje = agora.toISOString().split('T')[0]
       const { data: vencimentos } = await (supabase.from('agenda_eventos') as any)
         .select('id, titulo, data_inicio')
         .eq('user_id', uid).eq('tipo', 'vencimento')
@@ -1592,6 +1612,13 @@ Retorne exatamente este JSON:
           texto: `${emoji} **Vencimento próximo:** ${v.titulo} — vence ${urgencia}!\nSepare o pagamento para não perder o prazo, Sr. Max.`,
         }])
       }
+      // Marca no banco APÓS exibir os vencimentos com sucesso
+      await (supabase.from('elena_perfil') as any).upsert(
+        { user_id: uid, ultima_vez_vencimentos: hoje, ultima_atualizacao: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
+      // Fallback: marca no localStorage também
+      try { localStorage.setItem(`elena_venc_${hoje}`, '1') } catch {}
     } catch { /* silencioso */ }
   }, [supabase])
 
@@ -1621,9 +1648,25 @@ Retorne exatamente este JSON:
 
   // ── Briefing Matinal — exibe ao abrir pela primeira vez no dia ──
   const gerarBriefingMatinal = useCallback(async (uid: string) => {
-    const chave = `elena_briefing_${new Date().toISOString().split('T')[0]}`
-    if (localStorage.getItem(chave)) return // já exibiu hoje
-    localStorage.setItem(chave, '1')
+    const hoje = new Date().toISOString().split('T')[0]
+
+    // CORREÇÃO: verifica no banco (elena_perfil.ultima_vez_briefing) em vez de localStorage.
+    // Isso funciona em múltiplos dispositivos e não some ao limpar o cache.
+    try {
+      const { data: perfil } = await (supabase.from('elena_perfil') as any)
+        .select('ultima_vez_briefing')
+        .eq('user_id', uid)
+        .maybeSingle()
+
+      if (perfil?.ultima_vez_briefing === hoje) return // já exibiu hoje
+
+      // Marca no banco APÓS exibir (não antes — evita silenciar em caso de erro)
+    } catch {
+      // Se falhar a verificação, usa localStorage como fallback
+      const chave = `elena_briefing_${hoje}`
+      if (localStorage.getItem(chave)) return
+      localStorage.setItem(chave, '1')
+    }
 
     try {
       const agora = new Date()
@@ -1713,6 +1756,12 @@ Retorne exatamente este JSON:
         role: 'ai' as const,
         texto: linhas.join('\n'),
       }])
+
+      // Marca no banco DEPOIS de exibir com sucesso
+      await (supabase.from('elena_perfil') as any).upsert(
+        { user_id: uid, ultima_vez_briefing: hoje, ultima_atualizacao: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
     } catch { /* silencioso */ }
   }, [supabase])
 
@@ -1871,6 +1920,49 @@ Retorne exatamente este JSON:
       let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
         promptFinal = `${promptFinal}\n\n[CONTEÚDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
+      }
+
+      // ── Incrementa contador de msgs da sessão (para backup automático) ──
+      sessionMsgCountRef.current += 1
+
+      // ── Busca em conversas históricas ──────────────────────────────────
+      // Detecta perguntas sobre conversas passadas e injeta resultados do banco
+      const KEYWORDS_HISTORICO = [
+        'conversamos', 'falamos', 'disse', 'comentei', 'registrei', 'anotei',
+        'que você disse', 'que eu disse', 'lembra quando', 'semana passada',
+        'mês passado', 'conversa anterior', 'histórico', 'sessão anterior',
+        'o que conversamos', 'já falei', 'você lembra', 'busca nas conversas',
+      ]
+      const precisaBuscarHistorico = (t: string) => {
+        const tl = t.toLowerCase()
+        return KEYWORDS_HISTORICO.some(kw => tl.includes(kw))
+      }
+      if (userText && precisaBuscarHistorico(userText) && !fileSnap) {
+        try {
+          setMensagens(prev => prev.map(m =>
+            m.id === aiMsgId ? { ...m, texto: '🔍 Buscando nas conversas anteriores...' } : m
+          ))
+          const resBusca = await fetch('/api/elena-busca', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ termo: userText, limite: 8 }),
+          })
+          if (resBusca.ok) {
+            const { mensagens: msgsHistorico } = await resBusca.json()
+            if (msgsHistorico && msgsHistorico.length > 0) {
+              const blocoHistorico = msgsHistorico
+                .map((m: any) => {
+                  const dt = m.created_at ? new Date(m.created_at).toLocaleDateString('pt-BR') : ''
+                  return `[${dt}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto}`
+                })
+                .join('\n---\n')
+              promptFinal = `${promptFinal}\n\n[CONVERSAS HISTÓRICAS RELEVANTES ENCONTRADAS NO BANCO - use para responder]\n${blocoHistorico}`
+            }
+          }
+          setMensagens(prev => prev.map(m =>
+            m.id === aiMsgId ? { ...m, texto: '...' } : m
+          ))
+        } catch { /* silencioso */ }
       }
 
       // Busca web automática se o usuário perguntar sobre preços/mercado
