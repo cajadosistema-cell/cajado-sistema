@@ -1812,7 +1812,6 @@ Retorne exatamente este JSON:
 
     try {
       const agora = new Date()
-      const hoje = agora.toISOString().split('T')[0]
       const em7dias = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
       const diaSemana = agora.toLocaleDateString('pt-BR', { weekday: 'long' })
       const dataFormatada = agora.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
