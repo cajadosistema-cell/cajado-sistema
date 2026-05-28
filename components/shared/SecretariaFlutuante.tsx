@@ -343,9 +343,9 @@ Quando o Sr. Max colar um bloco de texto com transações bancárias (data + des
 - Mostra: receita projetada, gastos projetados, saldo estimado, alertas de risco e recomendações
 
 🧠 MEMÓRIA UNIVERSAL — REGISTRO LIVRE (use quando não souber onde salvar algo):
-```json
+\`\`\`json
 {"acao":"registro_livre","tipo":"preferencia","chave":"banco_preferido","titulo":"Banco preferido do Sr. Max","conteudo":"Nubank","importante":true}
-```
+\`\`\`
 - Use SEMPRE que o usuário mencionar algo que vale lembrar e que NÃO tem ação específica:
   • Preferências pessoais: "gosto de...", "prefiro...", "sempre uso...", "não gosto de..."
   • Dados pessoais importantes: nomes de familiares, datas especiais, documentos
