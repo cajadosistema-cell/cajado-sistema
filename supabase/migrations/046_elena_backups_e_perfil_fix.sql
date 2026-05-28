@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS public.elena_backups (
 CREATE INDEX IF NOT EXISTS idx_elena_backups_user ON public.elena_backups(user_id, gerado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_elena_backups_sessao ON public.elena_backups(sessao_id);
 
--- RLS
-ALTER TABLE public.elena_backups ENABLE ROW LEVEL SECURITY;
+-- RLS — DROP primeiro para evitar erro se já existir
+DROP POLICY IF EXISTS "Usuario ve proprio backup Elena" ON public.elena_backups;
 
 CREATE POLICY "Usuario ve proprio backup Elena"
   ON public.elena_backups FOR ALL TO authenticated
