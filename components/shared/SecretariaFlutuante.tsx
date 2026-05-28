@@ -75,6 +75,11 @@ ${calendarioProx8}
 
 AÇÕES ESTRUTURADAS — inclua ao final da resposta:
 
+🚨 REGRA CRÍTICA DE CONFIRMAÇÃO — LEIA ANTES DE QUALQUER COISA:
+Quando você perguntou algo ao Sr. Max na mensagem anterior (ex: "Quer que eu crie uma meta?", "Posso registrar?", "Quer que eu agende?") e ele respondeu com confirmação ("Sim", "Pode", "Faz isso", "Vai lá", "Claro", "Ok", "s", "yes", "sim", "pode ser", "faz", "registra"), você DEVE OBRIGATORIAMENTE gerar o bloco JSON da ação imediatamente — NÃO repita a pergunta, NÃO diga que houve erro, NÃO diga "vou fazer". EXECUTE agora com o JSON.
+Exemplo: se você sugeriu criar uma meta de gastos de R$ 2.000 em alimentação e o chefe disse "Sim" → gere: \`\`\`json\n{"acao":"definir_meta","categoria":"alimentacao","valor_limite":2000,"periodo":"mes"}\`\`\`
+Se não tiver todos os dados para completar o JSON (ex: não sabe o valor da meta), pergunte APENAS o que falta, de forma direta e curta.
+
 GASTO PESSOAL (pessoa física do chefe):
 \`\`\`json
 {"acao":"gasto","valor":50.00,"descricao":"Almoço","categoria":"alimentacao","forma_pagamento":"pix","conta_nome":"","data":"","parcelas":1}
@@ -2061,6 +2066,26 @@ Retorne exatamente este JSON:
       let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
         promptFinal = `${promptFinal}\n\n[CONTEÚDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
+      }
+
+      // ── Detecção de confirmação (Sim/Pode/Faz) ──────────────────────
+      // Quando o usuário confirma uma sugestão anterior da Elena,
+      // injeta instrução explícita para forçar geração do JSON imediatamente.
+      const PALAVRAS_CONFIRMACAO = [
+        'sim', 'pode', 'faz', 'vai lá', 'vai la', 'claro', 'ok', 'certo',
+        'isso', 'confirmo', 'confirma', 'registra', 'registre', 'salva',
+        'pode fazer', 'pode ser', 'faz isso', 'vai', 's', 'yes', 'yep',
+        'exato', 'correto', 'isso mesmo', 'manda ver', 'bora', 'pode mandar',
+      ]
+      const textoLower = userText?.trim().toLowerCase() || ''
+      const eConfirmacao = PALAVRAS_CONFIRMACAO.some(p => textoLower === p || textoLower === p + '!' || textoLower === p + '.')
+
+      if (eConfirmacao && mensagens.length >= 2) {
+        // Pega a última mensagem da Elena para entender o que foi sugerido
+        const ultimaElena = [...mensagens].reverse().find(m => m.role === 'ai' && m.texto && m.texto !== '...')
+        if (ultimaElena) {
+          promptFinal = `[INSTRUÇÃO PRIORITÁRIA DO SISTEMA]: O usuário está CONFIRMANDO a ação que você sugeriu na mensagem anterior. Você DEVE gerar o bloco JSON da ação agora — EXECUTE imediatamente, não repita a pergunta, não peça confirmação novamente, não diga "vou fazer". Gere o JSON agora e confirme ao Sr. Max que foi feito.\n\nMensagem anterior da Elena (referência do que foi sugerido): "${ultimaElena.texto.substring(0, 300)}"\n\nResposta do usuário confirmando: "${userText}"\n\nEXECUTE a ação agora.`
+        }
       }
 
       // ── Incrementa contador de msgs da sessão (para backup automático) ──
