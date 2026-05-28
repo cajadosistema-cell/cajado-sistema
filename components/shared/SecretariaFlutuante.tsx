@@ -11,7 +11,7 @@ import { getPendentes, marcarProcessado, limparProcessados, registrarBackgroundS
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
 interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato' | 'projecao_mes'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -323,7 +323,19 @@ Quando o Sr. Max colar um bloco de texto com transações bancárias (data + des
 
 ℹ️ RESPOSTAS SOBRE SUAS HABILIDADES / AJUDA:
 - Sempre que o chefe perguntar "o que você sabe fazer?", "como você funciona?", "quais suas funções?", "ajuda" ou similar:
-  Apresente um resumo altamente elegante, executivo e estruturado de suas HABILIDADES PREMIUM (Briefing matinal, Extrator de NF-e, Vencimentos, Metas, Fluxo de Caixa, Extrato em Lote, Aprovação PJ, Voz Contínua, Checklist Executivo, Dashboard Visual, Ocorrências, etc.) em formato de tópicos amigáveis e profissionais, convidando-o a testar alguma delas.`
+  Apresente um resumo altamente elegante, executivo e estruturado de suas HABILIDADES PREMIUM (Briefing matinal, Extrator de NF-e, Vencimentos, Metas, Fluxo de Caixa, Extrato em Lote, Aprovação PJ, Voz Contínua, Checklist Executivo, Dashboard Visual, Ocorrências, Projeção do Próximo Mês, etc.) em formato de tópicos amigáveis e profissionais, convidando-o a testar alguma delas.
+
+📅 PROJEÇÃO DO MÊS SEGUINTE — Quando o chefe quiser saber como ficará o próximo mês:
+\`\`\`json
+{"acao":"projecao_mes"}
+\`\`\`
+- Use quando ouvir: "como vai ser o mês que vem", "projeção do próximo mês", "previsão do mês seguinte", "quanto vou gastar mês que vem", "como vai ficar meu financeiro no próximo mês", "projeto financeiro", "planejamento do próximo mês", "estimativa do mês que vem"
+- O sistema busca automaticamente:
+  • Média de gastos por categoria dos últimos 3 meses
+  • Média de receitas dos últimos 3 meses
+  • Despesas fixas (recorrentes)
+  • Vencimentos agendados para o próximo mês
+- Mostra: receita projetada, gastos projetados, saldo estimado, alertas de risco e recomendações`
 
 
 
@@ -378,6 +390,8 @@ function extrairAcoes(texto: string): AcaoIA[] {
       } else if (d.acao === 'importar_extrato') {
         const n = Array.isArray(d.itens) ? d.itens.length : 0
         acoes.push({ tipo: 'importar_extrato', dados: d, label: `🏦 Importar extrato: ${n} lançamento(s)`, status: 'pending' })
+      } else if (d.acao === 'projecao_mes') {
+        acoes.push({ tipo: 'projecao_mes', dados: d, label: `📅 Projeção financeira do próximo mês`, status: 'pending' })
       } else if (d.acao) {
         // Fallback: qualquer acao desconhecida vira um registro generico
         acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `🗂️ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
@@ -1191,6 +1205,134 @@ export function SecretariaFlutuante() {
           ].join('\n'),
         }])
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'projecao_mes') {
+        // ── Projeção Financeira do Mês Seguinte ─────────────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const agora = new Date()
+        const anoAtual = agora.getFullYear()
+        const mesAtual = agora.getMonth()  // 0-indexed
+
+        const proxMes = mesAtual === 11 ? 0 : mesAtual + 1
+        const proxAno = mesAtual === 11 ? anoAtual + 1 : anoAtual
+        const proxMesNome = new Date(proxAno, proxMes, 1)
+          .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        const proxMesInicio = `${proxAno}-${String(proxMes + 1).padStart(2, '0')}-01`
+        const diasProxMes = new Date(proxAno, proxMes + 1, 0).getDate()
+        const proxMesFimStr = `${proxAno}-${String(proxMes + 1).padStart(2, '0')}-${String(diasProxMes).padStart(2, '0')}`
+
+        // Últimos 3 meses completos para média
+        const m3inicio = new Date(anoAtual, mesAtual - 3, 1).toISOString().split('T')[0]
+        const m3fim    = new Date(anoAtual, mesAtual, 0).toISOString().split('T')[0]
+        const mesAtualStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}-01`
+
+        const [
+          { data: gastos3m },
+          { data: receitas3m },
+          { data: gastosFixos },
+          { data: vencProxMes },
+          { data: gastosMesAtual },
+        ] = await Promise.all([
+          (supabase.from('gastos_pessoais') as any).select('valor, categoria')
+            .eq('user_id', uid).gte('data', m3inicio).lte('data', m3fim),
+          (supabase.from('receitas_pessoais') as any).select('valor')
+            .eq('user_id', uid).gte('data', m3inicio).lte('data', m3fim),
+          (supabase.from('gastos_pessoais') as any).select('valor, descricao, categoria')
+            .eq('user_id', uid).eq('recorrente', true),
+          (supabase.from('agenda_eventos') as any).select('titulo, data_inicio')
+            .eq('user_id', uid).eq('tipo', 'vencimento')
+            .gte('data_inicio', `${proxMesInicio}T00:00:00`)
+            .lte('data_inicio', `${proxMesFimStr}T23:59:59`)
+            .neq('status', 'cancelado').order('data_inicio', { ascending: true }),
+          (supabase.from('gastos_pessoais') as any).select('valor, categoria')
+            .eq('user_id', uid).gte('data', mesAtualStr),
+        ])
+
+        // Média de receitas (3 meses)
+        const mediaReceita = (receitas3m || []).reduce((s: number, r: any) => s + Number(r.valor), 0) / 3
+
+        // Média de gastos por categoria
+        const catsPorValor: Record<string, number> = {}
+        ;(gastos3m || []).forEach((g: any) => {
+          const cat = g.categoria || 'outros'
+          catsPorValor[cat] = (catsPorValor[cat] || 0) + Number(g.valor)
+        })
+        const mediasPorCat: Record<string, number> = {}
+        Object.entries(catsPorValor).forEach(([cat, total]) => {
+          mediasPorCat[cat] = total / 3
+        })
+
+        const totalGastoProjetado = Object.values(mediasPorCat).reduce((s, v) => s + v, 0)
+        const totalFixas = (gastosFixos || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+        const gastoAtualTotal = (gastosMesAtual || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+        const saldoProjetado = mediaReceita - totalGastoProjetado
+
+        // Barras visuais por categoria
+        const topCats = Object.entries(mediasPorCat).sort(([, a], [, b]) => b - a).slice(0, 6)
+        const maxCat = topCats[0]?.[1] || 1
+        const barLen = 10
+        const bar = (v: number) => '█'.repeat(Math.round((v / maxCat) * barLen)).padEnd(barLen, '░')
+
+        // Alertas de risco
+        const alertas: string[] = []
+        if (saldoProjetado < 0)
+          alertas.push(`🔴 **ATENÇÃO:** Projeção indica saldo NEGATIVO de **R$ ${Math.abs(saldoProjetado).toFixed(2)}**!`)
+        else if (mediaReceita > 0 && saldoProjetado < mediaReceita * 0.1)
+          alertas.push(`🟠 Saldo projetado muito baixo (${((saldoProjetado / mediaReceita) * 100).toFixed(0)}% da receita).`)
+        if (mediaReceita > 0 && totalFixas > mediaReceita * 0.5)
+          alertas.push(`⚠️ Despesas fixas representam ${((totalFixas / mediaReceita) * 100).toFixed(0)}% da receita média.`)
+        if ((vencProxMes || []).length > 0)
+          alertas.push(`💳 ${(vencProxMes as any[]).length} vencimento(s) agendado(s) para ${proxMesNome}.`)
+
+        // Monta o painel
+        const tituloMes = proxMesNome.charAt(0).toUpperCase() + proxMesNome.slice(1)
+        const linhas: string[] = [
+          `**📅 Projeção Financeira — ${tituloMes}**`,
+          `_Média baseada nos últimos 3 meses completos_`,
+          '',
+          `💰 **Receita projetada:** R$ ${mediaReceita.toFixed(2)}`,
+          `💸 **Gastos projetados:** R$ ${totalGastoProjetado.toFixed(2)}`,
+          `📊 **Saldo estimado:** **R$ ${saldoProjetado.toFixed(2)}** ${saldoProjetado >= 0 ? '✅' : '🔴'}`,
+          '',
+        ]
+        if (totalFixas > 0) {
+          linhas.push(`🔒 **Despesas fixas/recorrentes:** R$ ${totalFixas.toFixed(2)}/mês`)
+          linhas.push('')
+        }
+        if (topCats.length > 0) {
+          linhas.push('**Gastos por categoria (projetado):**')
+          topCats.forEach(([cat, val]) => {
+            linhas.push(`\`${bar(val)}\` **${cat}** R$ ${val.toFixed(2)}`)
+          })
+          linhas.push('')
+        }
+        if (vencProxMes && (vencProxMes as any[]).length > 0) {
+          linhas.push('**💳 Vencimentos do mês:**')
+          ;(vencProxMes as any[]).slice(0, 5).forEach((v: any) => {
+            const d = new Date(v.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+            linhas.push(`• ${d} — ${v.titulo}`)
+          })
+          linhas.push('')
+        }
+        if (alertas.length > 0) {
+          linhas.push('**⚠️ Alertas:**')
+          alertas.forEach(a => linhas.push(a))
+          linhas.push('')
+        }
+        if (gastoAtualTotal > 0) {
+          const diff = totalGastoProjetado - gastoAtualTotal
+          const seta = diff > 0
+            ? `↑ R$ ${diff.toFixed(2)} a mais que o mês atual`
+            : `↓ R$ ${Math.abs(diff).toFixed(2)} a menos que o mês atual`
+          linhas.push(`_Comparado ao mês atual (R$ ${gastoAtualTotal.toFixed(2)}): ${seta}_`)
+        }
+
+        setMensagens(prev => [...prev, {
+          id: `proj-${Date.now()}`,
+          role: 'ai' as const,
+          texto: linhas.join('\n'),
+        }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
       }
 
