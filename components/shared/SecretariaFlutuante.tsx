@@ -1038,13 +1038,40 @@ export function SecretariaFlutuante() {
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'definir_meta') {
-        // ── Salva meta financeira no localStorage ──────────────────
-        const chaveMetas = `elena_metas_${uid}`
-        const metasStr = localStorage.getItem(chaveMetas)
-        const metas: Record<string, number> = metasStr ? JSON.parse(metasStr) : {}
+        // ── Salva meta no Supabase (elena_metas) + localStorage fallback ──────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
         const categoria = acao.dados.categoria || 'total'
-        metas[categoria] = Number(acao.dados.valor_limite) || 0
-        localStorage.setItem(chaveMetas, JSON.stringify(metas))
+        const valorLimite = Number(acao.dados.valor_limite) || 0
+        const periodo = acao.dados.periodo || 'mes'
+
+        // 1. Tenta salvar no Supabase (persistência real, verificável)
+        let salvoNoBanco = false
+        if (uid) {
+          try {
+            const { error: errMeta } = await (supabase.from('elena_metas') as any).upsert(
+              { user_id: uid, categoria, valor_limite: valorLimite, periodo, ativa: true, atualizado_em: new Date().toISOString() },
+              { onConflict: 'user_id,categoria' }
+            )
+            if (!errMeta) salvoNoBanco = true
+          } catch { /* cai no fallback */ }
+        }
+
+        // 2. localStorage como fallback (compatibilidade com código de alertas)
+        try {
+          const chaveMetas = `elena_metas_${uid}`
+          const metas: Record<string, number> = JSON.parse(localStorage.getItem(chaveMetas) || '{}')
+          metas[categoria] = valorLimite
+          localStorage.setItem(chaveMetas, JSON.stringify(metas))
+        } catch {}
+
+        // 3. Mensagem de confirmação
+        setMensagens(prev => [...prev, {
+          id: `meta-ok-${Date.now()}`,
+          role: 'ai' as const,
+          texto: salvoNoBanco
+            ? `✅ **Meta salva no banco!** Limite de **R$ ${valorLimite.toFixed(2)}/mês** para **${categoria}** registrado com segurança. Vou monitorar e te alertar quando chegar perto do limite, Sr. Max! 💪`
+            : `✅ **Meta definida:** R$ ${valorLimite.toFixed(2)}/mês em **${categoria}**. Salvo localmente — vou monitorar seus gastos!`,
+        }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       } else if (acao.tipo === 'gerar_checklist') {
