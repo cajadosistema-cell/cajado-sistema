@@ -2254,7 +2254,15 @@ Retorne exatamente este JSON:
         'que você disse', 'que eu disse', 'lembra quando', 'semana passada',
         'mês passado', 'conversa anterior', 'histórico', 'sessão anterior',
         'o que conversamos', 'já falei', 'você lembra', 'busca nas conversas',
+        'relatório', 'relatorio', 'resumo das conversas', 'últimas conversas',
+        'o que fizemos', 'o que tratamos', 'recap', 'resumo do dia',
+        'conversas de hoje', 'conversas de ontem', 'resuma nossas conversas',
       ]
+      const isRelatorio = (t: string) => {
+        const tl = t.toLowerCase()
+        return ['relatório', 'relatorio', 'resumo das conversas', 'últimas conversas',
+          'o que conversamos', 'o que fizemos', 'o que tratamos', 'recap', 'resumo do dia'].some(kw => tl.includes(kw))
+      }
       const precisaBuscarHistorico = (t: string) => {
         const tl = t.toLowerCase()
         return KEYWORDS_HISTORICO.some(kw => tl.includes(kw))
@@ -2264,21 +2272,25 @@ Retorne exatamente este JSON:
           setMensagens(prev => prev.map(m =>
             m.id === aiMsgId ? { ...m, texto: '🔍 Buscando nas conversas anteriores...' } : m
           ))
+          const limite = isRelatorio(userText) ? 30 : 8
           const resBusca = await fetch('/api/elena-busca', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ termo: userText, limite: 8 }),
+            body: JSON.stringify({ termo: userText, limite }),
           })
           if (resBusca.ok) {
             const { mensagens: msgsHistorico } = await resBusca.json()
             if (msgsHistorico && msgsHistorico.length > 0) {
               const blocoHistorico = msgsHistorico
                 .map((m: any) => {
-                  const dt = m.created_at ? new Date(m.created_at).toLocaleDateString('pt-BR') : ''
+                  const dt = m.created_at ? new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
                   return `[${dt}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto}`
                 })
                 .join('\n---\n')
-              promptFinal = `${promptFinal}\n\n[CONVERSAS HISTÓRICAS RELEVANTES ENCONTRADAS NO BANCO - use para responder]\n${blocoHistorico}`
+              const instrucao = isRelatorio(userText)
+                ? '[HISTÓRICO COMPLETO DE CONVERSAS - gere um relatório organizado por data com resumo dos assuntos tratados, ações realizadas e pontos importantes]'
+                : '[CONVERSAS HISTÓRICAS RELEVANTES ENCONTRADAS NO BANCO - use para responder]'
+              promptFinal = `${promptFinal}\n\n${instrucao}\n${blocoHistorico}`
             }
           }
           setMensagens(prev => prev.map(m =>
