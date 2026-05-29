@@ -2449,67 +2449,117 @@ Retorne exatamente este JSON:
     setTimeout(() => setOfflineSaved(false), 2500)
   }, [userId, offlineForm])
 
-  // ── Microfone — SOLUÇÃO DEFINITIVA anti-duplicação ────────────────
-  // Problema raiz: continuous=true acumula TODOS os resultados desde o início.
-  // Cada evento onresult contém todo histórico, causando texto exponencial.
-  // Solução: continuous=false — cada frase é uma sessão independente.
-  // Para frases longas: reinício automático a cada pausa detectada.
+  // ── Microfone — Mãos Livres + Zero Duplicação ─────────────────────
+  // continuous=false: cada sentença é sessão independente → sem acumulação histórica
+  // onend com texto → auto-envia + reinicia para próxima fala (mãos livres)
+  // onend sem texto → apenas reinicia (usuário fez pausa antes de falar)
+  // Timeout de 8s sem fala → para automaticamente
+  const silenceTimerRef = useRef<any>(null)
+
   const iniciarReconhecimento = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) { alert('Use o Google Chrome para usar o microfone.'); return }
     if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
 
-    // Zera acumuladores a cada nova sessão
     transcriptRef.current = ''
     setInput('')
     setInterimTranscript('')
 
+    // Reinicia o timer de silêncio a cada nova sessão
+    const resetSilenceTimer = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        // 8 segundos sem fala → para o microfone automaticamente
+        if (isListeningRef.current) {
+          isListeningRef.current = false
+          if (recognitionRef.current) {
+            try { recognitionRef.current.stop() } catch {}
+            recognitionRef.current = null
+          }
+          setIsListening(false)
+          setInterimTranscript('')
+        }
+      }, 8000)
+    }
+
     const criarInstancia = () => {
       const r = new SR()
       r.lang = 'pt-BR'
-      r.continuous = false       // DEFINITIVO: sem acumulação entre sessões
-      r.interimResults = true    // Mostra texto em tempo real
+      r.continuous = false       // ANTI-DUPLICAÇÃO: cada sentença é independente
+      r.interimResults = true
       r.maxAlternatives = 1
 
-      r.onstart = () => setIsListening(true)
+      r.onstart = () => {
+        setIsListening(true)
+        resetSilenceTimer()
+      }
 
       r.onresult = (e: any) => {
-        // Com continuous=false, e.results sempre tem exatamente 1 resultado
-        // Sem risco de acumulação histórica
+        // Com continuous=false: e.results tem 1 resultado (a sentença atual)
+        // Sem risco de acumulação histórica → zero duplicação
         let textoFinal = ''
         let textoInterim = ''
         for (let i = 0; i < e.results.length; i++) {
           if (e.results[i].isFinal) textoFinal += e.results[i][0].transcript
           else textoInterim += e.results[i][0].transcript
         }
-        // Exibe: tudo que já foi finalizado + o interim atual
-        const display = (transcriptRef.current + textoFinal + textoInterim).trim()
-        if (textoFinal) transcriptRef.current = (transcriptRef.current + textoFinal + ' ').trimStart()
+        if (textoFinal) {
+          transcriptRef.current = (transcriptRef.current + textoFinal + ' ').trimStart()
+          resetSilenceTimer() // usuário falou algo → reseta o timer
+        }
+        const display = (transcriptRef.current + textoInterim).trim()
         setInterimTranscript(display || transcriptRef.current.trim())
       }
 
       r.onerror = (e: any) => {
         if (e.error === 'not-allowed') {
+          isListeningRef.current = false
           setIsListening(false)
           alert('Microfone não acessível. Clique no 🔒 na barra de endereços e permita o microfone.')
         } else if (e.error === 'audio-capture') {
+          isListeningRef.current = false
           setIsListening(false)
           alert('Nenhum microfone encontrado. Conecte um e tente novamente.')
         }
-        // 'no-speech' e 'aborted' são ignorados (ocorrem ao parar manualmente)
+        // 'no-speech' e 'aborted' → silenciosos (pausa normal ou stop manual)
       }
 
       r.onend = () => {
-        // Se ainda está ouvindo (usuário não soltou o botão), reinicia automaticamente
-        // para capturar a próxima sentença sem perder o texto já acumulado
-        if (recognitionRef.current === r && isListeningRef.current) {
-          try {
-            const novaInstancia = criarInstancia()
-            recognitionRef.current = novaInstancia
-            novaInstancia.start()
-          } catch {}
-        } else {
+        if (!isListeningRef.current) {
+          // Usuário parou manualmente → envia o que tiver
+          const texto = transcriptRef.current.trim()
+          transcriptRef.current = ''
+          setInterimTranscript('')
           setIsListening(false)
+          if (texto) setTimeout(() => handleEnviar(texto), 100)
+          return
+        }
+
+        // Ainda no modo escuta (mãos livres)
+        const texto = transcriptRef.current.trim()
+        if (texto) {
+          // Tem texto acumulado → auto-envia e continua escutando
+          transcriptRef.current = ''
+          setInterimTranscript('🎤 Enviado! Pode falar novamente...')
+          handleEnviar(texto)
+          // Reinicia após breve pausa para o usuário perceber que foi enviado
+          setTimeout(() => {
+            if (isListeningRef.current) {
+              setInterimTranscript('')
+              const nova = criarInstancia()
+              recognitionRef.current = nova
+              try { nova.start() } catch {}
+            }
+          }, 600)
+        } else {
+          // Sem texto (pausa antes de falar) → reinicia imediatamente
+          setTimeout(() => {
+            if (isListeningRef.current) {
+              const nova = criarInstancia()
+              recognitionRef.current = nova
+              try { nova.start() } catch {}
+            }
+          }, 100)
         }
       }
 
@@ -2529,27 +2579,28 @@ Retorne exatamente este JSON:
   }
 
   const handleReleaseMic = () => {
+    // Para o modo mãos-livres (toggle off)
     isListeningRef.current = false
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
     const textCapturado = transcriptRef.current.trim()
     transcriptRef.current = ''
     setInterimTranscript('')
     if (recognitionRef.current) {
-      recognitionRef.current.onend = () => setIsListening(false)
+      // onend vai capturar e enviar o texto se houver
       try { recognitionRef.current.stop() } catch {}
+    }
+    // Se não houver texto para o onend enviar, garante estado limpo
+    if (!textCapturado) {
+      setIsListening(false)
       recognitionRef.current = null
     }
-    setIsListening(false)
-    setInput('')
-    if (textCapturado) {
-      setTimeout(() => handleEnviar(textCapturado), 150)
-    }
   }
-
 
   const toggleMic = () => {
     if (isListening) handleReleaseMic()
     else handlePressMic()
   }
+
 
   const handleClearChat = () => {
     if (!confirm('Deseja iniciar um NOVO assunto? O assunto atual ficará salvo no banco para consultas futuras.')) return
