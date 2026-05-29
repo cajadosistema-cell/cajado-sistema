@@ -1450,8 +1450,15 @@ export function SecretariaFlutuante() {
       }
 
     } catch (err: any) {
-      setAcaoStatus(msgId, acaoIdx, 'error', err.message)
-    }
+      const errMsg = err?.message || 'Erro desconhecido ao salvar'
+      setAcaoStatus(msgId, acaoIdx, 'error', errMsg)
+      // Mostra o erro no chat para o usuário saber o que aconteceu
+      setMensagens(prev => [...prev, {
+        id: `err-acao-${Date.now()}`,
+        role: 'ai' as const,
+        texto: `❌ **Erro ao registrar:** ${errMsg}\n\nSe quiser, me diga para tentar novamente ou registre manualmente em Lançamentos.`,
+      }])
+      console.error('[Elena salvarAcao]', errMsg, acao)
   }, [supabase, colaboradores, resolverContaPj, resolverContaPf, resolverContaQualquer, getContaPjId])
 
   const executarAcoesAuto = useCallback((msgId: string, acoes: AcaoIA[], uid: string) => {
@@ -1461,7 +1468,8 @@ export function SecretariaFlutuante() {
           ? { ...m, acoes: m.acoes?.map((a, i) => i === idx ? { ...a, status: 'saving' as const } : a) }
           : m
       ))
-      salvarAcao(msgId, idx, acao, uid).catch(() => {})
+      // Não engole erros — o salvarAcao já mostra no chat
+      salvarAcao(msgId, idx, acao, uid)
     })
   }, [salvarAcao])
 
