@@ -2465,15 +2465,19 @@ Retorne exatamente este JSON:
     r.onstart = () => setIsListening(true)
 
     r.onresult = (e: any) => {
-      let final = ''
+      // CORREÇÃO: iterar APENAS a partir de e.resultIndex (novos resultados)
+      // e.results acumula TODOS desde o início da sessão — sem isso, cada evento
+      // repete todo o histórico causando texto duplicado
+      let novosFinal = ''
       let interim = ''
-      for (let i = 0; i < e.results.length; i++) {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) final += t
+        if (e.results[i].isFinal) novosFinal += t
         else interim += t
       }
-      const display = (final + interim).trim()
-      transcriptRef.current = display
+      // Acumula finais no ref e exibe interim separado
+      if (novosFinal) transcriptRef.current += novosFinal
+      const display = (transcriptRef.current + interim).trim()
       setInterimTranscript(display)
     }
 
