@@ -504,6 +504,7 @@ export function SecretariaFlutuante() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
+  const isListeningRef = useRef(false)   // ref síncrono para controle do mic (state é assíncrono)
   const historyLoadedRef = useRef(false)
   const isSendingRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -2448,80 +2449,91 @@ Retorne exatamente este JSON:
     setTimeout(() => setOfflineSaved(false), 2500)
   }, [userId, offlineForm])
 
-  // ── Microfone (pede permissão apenas uma vez) ─────────────────
+  // ── Microfone — SOLUÇÃO DEFINITIVA anti-duplicação ────────────────
+  // Problema raiz: continuous=true acumula TODOS os resultados desde o início.
+  // Cada evento onresult contém todo histórico, causando texto exponencial.
+  // Solução: continuous=false — cada frase é uma sessão independente.
+  // Para frases longas: reinício automático a cada pausa detectada.
   const iniciarReconhecimento = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) { alert('Use o Google Chrome para usar o microfone.'); return }
     if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
+
+    // Zera acumuladores a cada nova sessão
     transcriptRef.current = ''
     setInput('')
     setInterimTranscript('')
-    const r = new SR()
-    recognitionRef.current = r
-    r.lang = 'pt-BR'
-    r.continuous = true        // Mantém gravando mesmo se o usuário pausar para pensar
-    r.interimResults = true    // mostra texto em tempo real enquanto fala
 
-    r.onstart = () => setIsListening(true)
+    const criarInstancia = () => {
+      const r = new SR()
+      r.lang = 'pt-BR'
+      r.continuous = false       // DEFINITIVO: sem acumulação entre sessões
+      r.interimResults = true    // Mostra texto em tempo real
+      r.maxAlternatives = 1
 
-    r.onresult = (e: any) => {
-      // CORREÇÃO: iterar APENAS a partir de e.resultIndex (novos resultados)
-      // e.results acumula TODOS desde o início da sessão — sem isso, cada evento
-      // repete todo o histórico causando texto duplicado
-      let novosFinal = ''
-      let interim = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) novosFinal += t
-        else interim += t
+      r.onstart = () => setIsListening(true)
+
+      r.onresult = (e: any) => {
+        // Com continuous=false, e.results sempre tem exatamente 1 resultado
+        // Sem risco de acumulação histórica
+        let textoFinal = ''
+        let textoInterim = ''
+        for (let i = 0; i < e.results.length; i++) {
+          if (e.results[i].isFinal) textoFinal += e.results[i][0].transcript
+          else textoInterim += e.results[i][0].transcript
+        }
+        // Exibe: tudo que já foi finalizado + o interim atual
+        const display = (transcriptRef.current + textoFinal + textoInterim).trim()
+        if (textoFinal) transcriptRef.current = (transcriptRef.current + textoFinal + ' ').trimStart()
+        setInterimTranscript(display || transcriptRef.current.trim())
       }
-      // Acumula finais no ref e exibe interim separado
-      if (novosFinal) transcriptRef.current += novosFinal
-      const display = (transcriptRef.current + interim).trim()
-      setInterimTranscript(display)
-    }
 
-    r.onerror = (e: any) => {
-      setIsListening(false)
-      setInterimTranscript('')
-      transcriptRef.current = ''
-      if (e.error === 'not-allowed') {
-        alert('Microfone não acessível. Se persistir, clique no 🔒 na barra de endereços e permita o microfone.')
-      } else if (e.error === 'audio-capture') {
-        alert('Nenhum microfone encontrado. Conecte um e tente novamente.')
-      } else if (e.error !== 'no-speech') {
-        console.error('[Elena mic]', e.error)
+      r.onerror = (e: any) => {
+        if (e.error === 'not-allowed') {
+          setIsListening(false)
+          alert('Microfone não acessível. Clique no 🔒 na barra de endereços e permita o microfone.')
+        } else if (e.error === 'audio-capture') {
+          setIsListening(false)
+          alert('Nenhum microfone encontrado. Conecte um e tente novamente.')
+        }
+        // 'no-speech' e 'aborted' são ignorados (ocorrem ao parar manualmente)
       }
+
+      r.onend = () => {
+        // Se ainda está ouvindo (usuário não soltou o botão), reinicia automaticamente
+        // para capturar a próxima sentença sem perder o texto já acumulado
+        if (recognitionRef.current === r && isListeningRef.current) {
+          try {
+            const novaInstancia = criarInstancia()
+            recognitionRef.current = novaInstancia
+            novaInstancia.start()
+          } catch {}
+        } else {
+          setIsListening(false)
+        }
+      }
+
+      return r
     }
 
-    r.onend = () => {
-      setIsListening(false)
-      const text = transcriptRef.current.trim()
-      if (text) handleEnviar(text)
-      setInterimTranscript('')
-      transcriptRef.current = ''
-    }
-
-    r.start()
+    const instancia = criarInstancia()
+    recognitionRef.current = instancia
+    instancia.start()
   }
 
   const handlePressMic = () => {
-    // Verifica suporte ao SpeechRecognition
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) { alert('Use Google Chrome ou Edge para usar o microfone.'); return }
-
-    // Inicia o reconhecimento de forma estritamente síncrona
-    // preservando o contexto do User Gesture para evitar prompts redundantes no iOS Safari
+    isListeningRef.current = true
     iniciarReconhecimento()
   }
 
   const handleReleaseMic = () => {
-    // Para o reconhecimento mas captura o texto ANTES do onend disparar
+    isListeningRef.current = false
     const textCapturado = transcriptRef.current.trim()
     transcriptRef.current = ''
     setInterimTranscript('')
     if (recognitionRef.current) {
-      // Remove onend temporariamente para evitar envio duplo
       recognitionRef.current.onend = () => setIsListening(false)
       try { recognitionRef.current.stop() } catch {}
       recognitionRef.current = null
@@ -2532,6 +2544,7 @@ Retorne exatamente este JSON:
       setTimeout(() => handleEnviar(textCapturado), 150)
     }
   }
+
 
   const toggleMic = () => {
     if (isListening) handleReleaseMic()
