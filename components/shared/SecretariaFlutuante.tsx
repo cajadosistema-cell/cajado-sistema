@@ -761,11 +761,12 @@ export function SecretariaFlutuante() {
           descricao: numParcelas > 1
             ? `${acao.dados.descricao || 'Gasto via Elena'} (${numParcelas}x)`
             : (acao.dados.descricao || 'Gasto via Elena'),
-          valor: valorParcela,
+          valor: valorTotal,           // valor TOTAL (igual ao modal)
           categoria: acao.dados.categoria || 'outros',
           forma_pagamento: forma,
           data: dataGasto,
           recorrente: false,
+          parcelas: numParcelas > 1 ? numParcelas : null,  // campo separado
           conta_id: contaPfResolvida.id || null,
           notas: notasFinais,
         }).select('id').single()
@@ -816,18 +817,18 @@ export function SecretariaFlutuante() {
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
-
-
       } else if (acao.tipo === 'gasto_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
+        const dataCompetencia = acao.dados.data && /^\d{4}-\d{2}-\d{2}$/.test(String(acao.dados.data))
+          ? String(acao.dados.data) : hoje
         const valor = Number(acao.dados.valor) || 0
         // Resolve a conta: usa o nome/bandeira mencionado ou fallback para primeira PJ
         const { id: contaId, nome: contaNomeResolvido } = await resolverContaPj(acao.dados.conta_nome)
         if (!contaId) throw new Error('Nenhuma conta PJ cadastrada. Cadastre uma conta PJ em Financeiro > Contas.')
         const { data: dups } = await supabase.from('lancamentos').select('id')
-          .eq('conta_id', contaId).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'despesa')
+          .eq('conta_id', contaId).eq('data_competencia', dataCompetencia).eq('valor', valor).eq('tipo', 'despesa')
         if (dups && dups.length > 0 && !acao.dados.forcar) {
-          throw new Error(`⚠️ Duplicidade! Já existe uma despesa de R$ ${valor} na conta ${contaNomeResolvido} hoje.`)
+          throw new Error(`⚠️ Duplicidade! Já existe uma despesa de R$ ${valor} na conta ${contaNomeResolvido} nesta data.`)
         }
         const formasPagValidas = ['pix','cartao_debito','cartao_credito','dinheiro','transferencia']
         const formaPag = formasPagValidas.includes(acao.dados.forma_pagamento) ? acao.dados.forma_pagamento : 'pix'
@@ -838,24 +839,27 @@ export function SecretariaFlutuante() {
           tipo: 'despesa',
           regime: 'caixa',
           status: 'validado',
-          data_competencia: hoje,
-          data_caixa: hoje,
+          data_competencia: dataCompetencia,
+          data_caixa: dataCompetencia,
           categoria_id: CAT_DESPESA_ID,
           created_by: uid,
           observacoes: `Conta: ${contaNomeResolvido} | Pagamento: ${formaPag} | Registrado pela Elena`,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'receita_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
+        const dataCompetencia = acao.dados.data && /^\d{4}-\d{2}-\d{2}$/.test(String(acao.dados.data))
+          ? String(acao.dados.data) : hoje
         const valor = Number(acao.dados.valor) || 0
         const { id: contaId, nome: contaNomeResolvido } = await resolverContaPj(acao.dados.conta_nome)
         if (!contaId) throw new Error('Nenhuma conta PJ cadastrada. Cadastre uma conta PJ em Financeiro > Contas.')
         const { data: dups } = await supabase.from('lancamentos').select('id')
-          .eq('conta_id', contaId).eq('data_competencia', hoje).eq('valor', valor).eq('tipo', 'receita')
+          .eq('conta_id', contaId).eq('data_competencia', dataCompetencia).eq('valor', valor).eq('tipo', 'receita')
         if (dups && dups.length > 0 && !acao.dados.forcar) {
-          throw new Error(`⚠️ Duplicidade! Já existe uma receita de R$ ${valor} na conta ${contaNomeResolvido} hoje.`)
+          throw new Error(`⚠️ Duplicidade! Já existe uma receita de R$ ${valor} na conta ${contaNomeResolvido} nesta data.`)
         }
         const { error } = await (supabase.from('lancamentos') as any).insert({
           conta_id: contaId,
@@ -864,14 +868,15 @@ export function SecretariaFlutuante() {
           tipo: 'receita',
           regime: 'caixa',
           status: 'validado',
-          data_competencia: hoje,
-          data_caixa: hoje,
+          data_competencia: dataCompetencia,
+          data_caixa: dataCompetencia,
           categoria_id: CAT_RECEITA_ID,
           created_by: uid,
           observacoes: `Conta: ${contaNomeResolvido} | Registrado pela Elena`,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'agenda') {
         // ⚠️ FIX TIMEZONE: new Date("YYYY-MM-DD") interpreta como UTC midnight.
