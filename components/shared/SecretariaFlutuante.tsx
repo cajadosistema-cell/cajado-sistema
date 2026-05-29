@@ -796,22 +796,27 @@ export function SecretariaFlutuante() {
         const formaRecPessoal = (['pix','cartao_debito','cartao_credito','dinheiro','transferencia'].includes(acao.dados.forma_pagamento)
           ? acao.dados.forma_pagamento : 'pix')
 
+        // Nota: receitas_pessoais não tem coluna forma_pagamento — salva em notas
+        const notaReceita = [
+          contaPfReceitaResolvida.nome ? `Conta: ${contaPfReceitaResolvida.nome}` : null,
+          `Forma: ${formaRecPessoal}`,
+          'Registrado pela Elena',
+        ].filter(Boolean).join(' | ')
+
         const { error } = await (supabase.from('receitas_pessoais') as any).insert({
           user_id: uid,
           descricao: acao.dados.descricao || 'Receita via Elena',
           valor,
-          categoria: acao.dados.categoria || 'outros',
-          forma_pagamento: formaRecPessoal,
+          categoria: acao.dados.categoria || 'pro_labore',
           data: dataReceita,
           recorrente: false,
           conta_id: contaPfReceitaResolvida.id || null,
-          notas: contaPfReceitaResolvida.nome
-            ? `Conta: ${contaPfReceitaResolvida.nome} | Registrado pela Elena`
-            : notasAdicionais,
+          notas: notaReceita,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
 
       } else if (acao.tipo === 'gasto_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
@@ -1033,8 +1038,8 @@ export function SecretariaFlutuante() {
           if (contaDest.categoria === 'pf') {
             await (supabase.from('receitas_pessoais') as any).insert({
               user_id: uid, descricao: `Transf. de ${contaOrig.nome || acao.dados.conta_origem}`,
-              valor, categoria: 'outros', forma_pagamento: 'transferencia', data: hoje,
-              conta_id: contaDest.id, notas: `${descr} | Registrado pela Elena`,
+              valor, categoria: 'outros', data: hoje,
+              conta_id: contaDest.id, notas: `${descr} | Forma: transferencia | Registrado pela Elena`,
             })
           } else {
             await (supabase.from('lancamentos') as any).insert({
