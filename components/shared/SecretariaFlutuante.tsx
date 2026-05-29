@@ -1464,6 +1464,7 @@ export function SecretariaFlutuante() {
         texto: `❌ **Erro ao registrar:** ${errMsg}\n\nSe quiser, me diga para tentar novamente ou registre manualmente em Lançamentos.`,
       }])
       console.error('[Elena salvarAcao]', errMsg, acao)
+    }   // fecha catch
   }, [supabase, colaboradores, resolverContaPj, resolverContaPf, resolverContaQualquer, getContaPjId])
 
   const executarAcoesAuto = useCallback((msgId: string, acoes: AcaoIA[], uid: string) => {
