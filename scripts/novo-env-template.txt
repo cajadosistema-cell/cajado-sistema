@@ -1,0 +1,39 @@
+# ============================================================
+# TEMPLATE .env.local — NOVA CONTA SUPABASE
+# Copie para .env.local e preencha com os valores da nova conta
+# ============================================================
+# Onde encontrar: Supabase Dashboard → Settings → API
+
+# --- SUPABASE (NOVA CONTA) ---
+NEXT_PUBLIC_SUPABASE_URL=https://SEU_NOVO_PROJECT_ID.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...nova_anon_key
+SUPABASE_SERVICE_ROLE_KEY=eyJ...nova_service_role_key
+
+# --- APP ---
+NEXT_PUBLIC_APP_URL=https://SEU_DOMINIO.com
+
+# --- RAILWAY (se usar backend separado) ---
+INBOX_BACKEND_URL=https://SEU_BACKEND.railway.app
+
+# --- EMAIL (Resend ou SMTP) ---
+RESEND_API_KEY=re_...
+
+# --- PUSH NOTIFICATIONS ---
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+
+# --- OPENAI (Elena AI) ---
+OPENAI_API_KEY=sk-...
+
+# ============================================================
+# CHECKLIST NOVA CONTA SUPABASE
+# ============================================================
+# [ ] Criar projeto novo em supabase.com
+# [ ] Rodar script migrar-para-nova-conta-supabase.ps1
+# [ ] Configurar Auth → URL Configuration (seu domínio)
+# [ ] Criar bucket "avatars" (público)
+# [ ] Criar bucket "inbox-media" (público)  
+# [ ] Habilitar Realtime nas tabelas necessárias
+# [ ] Atualizar variáveis no Railway
+# [ ] Testar login e criar primeiro usuário admin
+# ============================================================

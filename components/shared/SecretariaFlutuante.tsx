@@ -677,7 +677,8 @@ export function SecretariaFlutuante() {
   }
 
   // Busca conta PJ por nome/bandeira mencionada pelo usuário, ou a primeira PJ ativa como fallback
-  const resolverContaPj = useCallback(async (contaNome?: string): Promise<{ id: string; nome: string }> => {
+  // Se autocriar=true e não encontrar pelo nome, cria a conta automaticamente
+  const resolverContaPj = useCallback(async (contaNome?: string, autocriar = true): Promise<{ id: string; nome: string }> => {
     // Busca todas as contas PJ ativas
     const { data: contas } = await (supabase.from('contas') as any)
       .select('id, nome, bandeira, tipo')
@@ -699,6 +700,33 @@ export function SecretariaFlutuante() {
         return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
       })
       if (porNome) return { id: porNome.id, nome: porNome.nome }
+
+      // ── Auto-criar conta PJ se não encontrada ──────────────────
+      if (autocriar && contaNome.trim().length >= 2) {
+        try {
+          const nomeNovo = contaNome.trim()
+          // Detecta bandeira automaticamente pelo nome
+          const bandeiras: Record<string, string> = {
+            visa: 'visa', master: 'mastercard', mastercard: 'mastercard',
+            elo: 'elo', hipercard: 'hipercard', amex: 'amex', american: 'amex',
+          }
+          const bandeira = Object.entries(bandeiras).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
+          const tipo = bandeira ? 'cartao_credito' : 'corrente'
+          const { data: nova, error } = await (supabase.from('contas') as any).insert({
+            nome: nomeNovo,
+            tipo,
+            categoria: 'pj',
+            bandeira,
+            saldo_inicial: 0,
+            saldo_atual: 0,
+            ativo: true,
+          }).select('id, nome').single()
+          if (!error && nova) {
+            console.log(`[Elena] Conta PJ criada automaticamente: ${nomeNovo}`)
+            return { id: nova.id, nome: nova.nome }
+          }
+        } catch { /* silencioso — cai no fallback */ }
+      }
     }
 
     // Fallback: primeira conta PJ (cacheia)
@@ -713,7 +741,8 @@ export function SecretariaFlutuante() {
   }, [resolverContaPj])
 
   // Busca conta PF por nome/bandeira mencionada pelo usuário (ex: "Nubank", "C6", "cartão esposa")
-  const resolverContaPf = useCallback(async (contaNome?: string): Promise<{ id: string; nome: string }> => {
+  // Se autocriar=true e não encontrar, cria a conta automaticamente
+  const resolverContaPf = useCallback(async (contaNome?: string, autocriar = true): Promise<{ id: string; nome: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '' }
     const { data: contas } = await (supabase.from('contas') as any)
       .select('id, nome, bandeira, tipo')
@@ -721,18 +750,46 @@ export function SecretariaFlutuante() {
       .eq('ativo', true)
       .order('created_at', { ascending: true })
 
-    if (!contas || contas.length === 0) return { id: '', nome: '' }
-
     const busca = contaNome.toLowerCase().trim()
-    // Match por bandeira (visa, mastercard, elo, hipercard...)
-    const porBandeira = contas.find((c: any) => c.bandeira && c.bandeira.toLowerCase().includes(busca))
-    if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
-    // Match por nome (Nubank, C6, Itaú, cartão esposa...)
-    const porNome = contas.find((c: any) => {
-      const nome = (c.nome || '').toLowerCase()
-      return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
-    })
-    if (porNome) return { id: porNome.id, nome: porNome.nome }
+
+    if (contas && contas.length > 0) {
+      // Match por bandeira (visa, mastercard, elo, hipercard...)
+      const porBandeira = contas.find((c: any) => c.bandeira && c.bandeira.toLowerCase().includes(busca))
+      if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
+      // Match por nome (Nubank, C6, Itaú, cartão esposa...)
+      const porNome = contas.find((c: any) => {
+        const nome = (c.nome || '').toLowerCase()
+        return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
+      })
+      if (porNome) return { id: porNome.id, nome: porNome.nome }
+    }
+
+    // ── Auto-criar conta PF se não encontrada ─────────────────────
+    if (autocriar && contaNome.trim().length >= 2) {
+      try {
+        const nomeNovo = contaNome.trim()
+        // Detecta bandeira automaticamente pelo nome
+        const bandeiras: Record<string, string> = {
+          visa: 'visa', master: 'mastercard', mastercard: 'mastercard',
+          elo: 'elo', hipercard: 'hipercard', amex: 'amex', american: 'amex',
+        }
+        const bandeira = Object.entries(bandeiras).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
+        const tipo = bandeira ? 'cartao_credito' : 'corrente'
+        const { data: nova, error } = await (supabase.from('contas') as any).insert({
+          nome: nomeNovo,
+          tipo,
+          categoria: 'pf',
+          bandeira,
+          saldo_inicial: 0,
+          saldo_atual: 0,
+          ativo: true,
+        }).select('id, nome').single()
+        if (!error && nova) {
+          console.log(`[Elena] Conta PF criada automaticamente: ${nomeNovo}`)
+          return { id: nova.id, nome: nova.nome }
+        }
+      } catch { /* silencioso */ }
+    }
 
     return { id: '', nome: '' }
   }, [supabase])
@@ -1816,6 +1873,30 @@ Retorne exatamente este JSON:
         }
       } catch { /* silencioso */ }
 
+      // ── Carrega contas cadastradas (PF e PJ) para Elena saber o que existe ──
+      let blocoContas = ''
+      try {
+        const { data: contasCadastradas } = await (supabase.from('contas') as any)
+          .select('nome, tipo, categoria, bandeira')
+          .eq('ativo', true)
+          .order('categoria', { ascending: true })
+          .order('nome', { ascending: true })
+        if (contasCadastradas && contasCadastradas.length > 0) {
+          const pfList = contasCadastradas
+            .filter((c: any) => c.categoria === 'pf')
+            .map((c: any) => `${c.nome}${c.bandeira ? ` (${c.bandeira})` : ''}`)
+            .join(', ')
+          const pjList = contasCadastradas
+            .filter((c: any) => c.categoria === 'pj')
+            .map((c: any) => `${c.nome}${c.bandeira ? ` (${c.bandeira})` : ''}`)
+            .join(', ')
+          blocoContas = '\n💳 CONTAS/CARTÕES CADASTRADOS (use esses nomes ao registrar):\n'
+          if (pfList) blocoContas += `- PF (pessoal): ${pfList}\n`
+          if (pjList) blocoContas += `- PJ (empresa): ${pjList}\n`
+          blocoContas += '⚠️ Se o Sr. Max mencionar uma conta/cartão diferente desses, o sistema vai criar automaticamente. Não precisa perguntar se a conta existe.\n'
+        }
+      } catch { /* silencioso */ }
+
       setResumoFinanceiro(
         `- Gastos PF mês: R$ ${totalG.toFixed(2)}\n` +
         `- Receitas PF mês: R$ ${totalR.toFixed(2)}\n` +
@@ -1824,6 +1905,7 @@ Retorne exatamente este JSON:
         (alertasMetas.length ? `ALERTAS DE METAS:\n${alertasMetas.join('\n')}\n` : '') +
         (riscoConcentracao ? `ALERTAS DE RISCO:\n${riscoConcentracao}` : '') +
         `PREVISÃO DO MÊS:\n${previsao}` +
+        blocoContas +
         blocoMemoria
       )
     } catch { /* silencioso */ }
