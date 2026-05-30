@@ -156,6 +156,17 @@ Quando o chefe enviar uma imagem ou PDF, analise o conteúdo e:
 - COMPROVANTE DE PAGAMENTO: registre como gasto ou receita conforme o documento.
 - CRONOGRAMA: quando pedir cronograma de cartões, monte uma tabela organizada com: Cartão | Vencimento | Valor estimado | Parcelas ativas — e gere um evento de agenda por cartão.
 
+💳 REGRA VENCIMENTO DE CARTÃO — DOIS LEMBRETES OBRIGATÓRIOS:
+SEMPRE que o chefe pedir para lançar ou agendar o vencimento de um cartão, crie DOIS eventos para o mesmo dia:
+  1. Lembrete da MANHÃ (T09:00:00) — para lembrar de pagar:
+     {"acao":"agenda","titulo":"💳 Pagar [Cartão] — R$ [valor]","data_inicio":"YYYY-MM-DDT09:00:00","tipo":"vencimento"}
+  2. Lembrete da NOITE (T20:00:00) — para confirmar se pagou:
+     {"acao":"agenda","titulo":"✅ Confirmação: Pagou o [Cartão]? R$ [valor]","data_inicio":"YYYY-MM-DDT20:00:00","tipo":"lembrete","descricao":"Confirme se o pagamento foi realizado ou reagende"}
+- Aplique esta regra para: "vencimento do cartão", "pagar cartão", "data de vencimento", "lança o vencimento do [banco]"
+- Exemplo: Sr. Max diz "lança o vencimento do Nubank dia 15 - R$850"
+  → JSON 1: {"acao":"agenda","titulo":"💳 Pagar Nubank — R$ 850","data_inicio":"2026-06-15T09:00:00","tipo":"vencimento"}
+  → JSON 2: {"acao":"agenda","titulo":"✅ Confirmação: Pagou o Nubank? R$ 850","data_inicio":"2026-06-15T20:00:00","tipo":"lembrete","descricao":"Confirme se o pagamento foi realizado ou reagende para a próxima data"}
+
 REGRAS DE DECISÃO IMEDIATA — NÃO PERGUNTE se já tiver as informações:
 - Se o Sr. Max disser "lançar na PJ", "lança na empresa", "é da empresa", "é PJ" → use acao=gasto_empresa ou receita_empresa (NUNCA pergunte de novo)
 - Se disser "é pessoal", "é meu", "é PF", "é da minha conta", "é da conta pessoal" → use acao=gasto ou receita (NUNCA pergunte de novo)
@@ -1402,8 +1413,13 @@ export function SecretariaFlutuante() {
             .gte('data_inicio', `${proxMesInicio}T00:00:00`)
             .lte('data_inicio', `${proxMesFimStr}T23:59:59`)
             .neq('status', 'cancelado').order('data_inicio', { ascending: true }),
+          // ⚠️ CORREÇÃO: usa intervalo EXATO do mês atual para evitar misturar
+          // parcelas parceladas (lançadas no final do mês como "próximo mês")
+          // com os gastos reais do mês corrente.
           (supabase.from('gastos_pessoais') as any).select('valor, categoria')
-            .eq('user_id', uid).gte('data', mesAtualStr),
+            .eq('user_id', uid)
+            .gte('data', mesAtualStr)
+            .lte('data', `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}-${String(new Date(anoAtual, mesAtual + 1, 0).getDate()).padStart(2, '0')}`),
         ])
 
         // Média de receitas (3 meses)
