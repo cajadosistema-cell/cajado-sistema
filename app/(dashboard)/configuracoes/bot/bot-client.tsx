@@ -829,9 +829,98 @@ function SecaoWhatsApp() {
   })
   const [salvandoApi, setSalvandoApi] = useState(false)
   const [showGuia, setShowGuia] = useState(false)
+  const [showManualApi, setShowManualApi] = useState(false)
 
-  const webhookUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://seu-backend.railway.app'
+  const webhookUrl = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://scintillating-freedom-production.up.railway.app'
 
+  // Carrega o Facebook SDK uma vez ao entrar na aba "oficial"
+  useEffect(() => {
+    if (metodo !== 'oficial') return
+    if ((window as any).FB) return
+    const script = document.createElement('script')
+    script.src = 'https://connect.facebook.net/pt_BR/sdk.js'
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+    ;(window as any).fbAsyncInit = () => {
+      (window as any).FB.init({ appId: '887363490968366', cookie: true, xfbml: true, version: 'v21.0' })
+    }
+  }, [metodo])
+
+  function handleEmbeddedSignup() {
+    if (!(window as any).FB) { setApiErro('SDK do Facebook ainda carregando. Aguarde um instante e tente novamente.'); return }
+    setSalvandoApi(true); setApiErro('')
+    let signupCode: string | null = null
+    let signupWabaId: string | null = null
+    let signupPhoneId: string | null = null
+
+    const msgHandler = (event: MessageEvent) => {
+      const originOk = event.origin?.includes('facebook.com') || event.origin?.includes('meta.com')
+      if (!originOk) return
+      try {
+        const d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+        if (d.type === 'WA_EMBEDDED_SIGNUP' && (d.event || '').includes('FINISH')) {
+          signupWabaId = d.data?.waba_id || d.data?.business_id || null
+          signupPhoneId = d.data?.phone_number_id || null
+          if (signupCode && signupWabaId && signupPhoneId) {
+            window.removeEventListener('message', msgHandler)
+            conectarEmbedded(signupCode, signupWabaId, signupPhoneId)
+            signupCode = null
+          }
+        }
+      } catch {}
+    }
+    window.addEventListener('message', msgHandler)
+
+    ;(window as any).FB.login((response: any) => {
+      if (response.authResponse) {
+        signupCode = response.authResponse.code || response.authResponse.accessToken || null
+        if (signupCode && signupWabaId && signupPhoneId) {
+          window.removeEventListener('message', msgHandler)
+          conectarEmbedded(signupCode, signupWabaId, signupPhoneId)
+          signupCode = null
+        }
+        setTimeout(() => {
+          if (signupCode) {
+            window.removeEventListener('message', msgHandler)
+            conectarEmbedded(signupCode, null, null)
+            signupCode = null
+          }
+        }, 5000)
+      } else {
+        window.removeEventListener('message', msgHandler)
+        setSalvandoApi(false)
+        setApiErro('Login cancelado ou janela fechada antes de concluir.')
+      }
+    }, {
+      config_id: '1288306029938207',
+      extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' },
+      scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
+    })
+  }
+
+  async function conectarEmbedded(token: string | null, wabaId: string | null, phoneId: string | null) {
+    try {
+      const isCode = token && token.length < 200 && !token.startsWith('EAA')
+      const body: any = isCode ? { code: token } : { access_token: token }
+      if (wabaId) body.waba_id = wabaId
+      if (phoneId) body.phone_number_id = phoneId
+      const res = await fetch('/api/inbox-proxy/api/waba/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (data.ok || data.success) {
+        setApiConectada({ numero: data.phone_number || data.numero || '', nome: data.verified_name || data.nome_verificado || '' })
+      } else {
+        setApiErro(data.erro || data.error || 'Erro ao conectar. Verifique as permissões na Meta.')
+      }
+    } catch (e: any) {
+      setApiErro('Erro de rede: ' + e.message)
+    }
+    setSalvandoApi(false)
+  }
 
 
   async function handleCriarInstancia() {
@@ -1157,127 +1246,165 @@ function SecaoWhatsApp() {
         </div>
       )}
 
-      {/* ── API Oficial Meta ── */}
+      {/* ── API Oficial Meta (Embedded Signup) ── */}
       {showGuia && <GuiaMeta webhookUrl={webhookUrl} onClose={() => setShowGuia(false)} />}
 
       {metodo === 'oficial' && (
-        <div className="card space-y-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-fg">API Oficial WhatsApp Business (Meta)</h3>
-              <p className="text-xs text-fg-tertiary mt-0.5">
-                Requer conta Meta Business verificada com número aprovado.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowGuia(true)}
-              className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-colors font-medium"
-            >
-              📋 Ver guia passo a passo
-            </button>
-          </div>
-
-          {/* Passo a passo */}
-          <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 space-y-2">
-            <p className="text-xs font-semibold text-blue-400">📋 Pré-requisitos</p>
-            <div className="space-y-1 text-xs text-fg-secondary">
-              <p>1. Acesse <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">developers.facebook.com</a> e crie um app do tipo <strong className="text-fg">Business</strong></p>
-              <p>2. Adicione o produto <strong className="text-fg">WhatsApp</strong> ao seu app</p>
-              <p>3. Gere um <strong className="text-fg">Token de Acesso Permanente</strong> no Painel de API</p>
-              <p>4. Copie o <strong className="text-fg">Phone Number ID</strong> do número verificado</p>
-              <p>5. Configure o Webhook com a URL abaixo e o token de verificação escolhido</p>
-            </div>
-          </div>
-
-          {/* URL do webhook */}
-          <div className="bg-muted/50 rounded-lg p-3">
-            <p className="text-[10px] text-fg-tertiary mb-1 uppercase tracking-wide">URL do Webhook para configurar na Meta</p>
-            <p className="text-xs font-mono text-amber-400 break-all select-all">
-              {process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://seu-backend.railway.app'}/webhook/oficial
-            </p>
-          </div>
-
-          {/* Formulário */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-4">
+          {/* Card principal: Embedded Signup */}
+          <div className="card space-y-5">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <label className="label block mb-1">Phone Number ID *</label>
-                <input
-                  className="input text-xs"
-                  placeholder="Ex: 123456789012345"
-                  value={apiForm.phoneNumberId}
-                  onChange={e => setApiForm(f => ({ ...f, phoneNumberId: e.target.value }))}
-                />
+                <h3 className="text-sm font-semibold text-fg">🏢 API Oficial WhatsApp Business (Meta)</h3>
+                <p className="text-xs text-fg-tertiary mt-0.5">
+                  Conecte seu número oficial da Meta via <strong className="text-fg-secondary">Embedded Signup</strong> — sem risco de ban, sem QR Code.
+                </p>
               </div>
-              <div>
-                <label className="label block mb-1">Business Account ID</label>
-                <input
-                  className="input text-xs"
-                  placeholder="Ex: 987654321098765"
-                  value={apiForm.businessAccountId}
-                  onChange={e => setApiForm(f => ({ ...f, businessAccountId: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div>
-              <label className="label block mb-1">Token de Acesso (permanente) *</label>
-              <input
-                className="input text-xs font-mono"
-                type="password"
-                placeholder="EAAxxxxxxxxxxxxx..."
-                value={apiForm.accessToken}
-                onChange={e => setApiForm(f => ({ ...f, accessToken: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="label block mb-1">Token de Verificação do Webhook *</label>
-              <input
-                className="input text-xs"
-                placeholder="Crie uma senha para verificar o webhook (ex: cajado-2025)"
-                value={apiForm.webhookVerifyToken}
-                onChange={e => setApiForm(f => ({ ...f, webhookVerifyToken: e.target.value }))}
-              />
+              <button
+                onClick={() => setShowGuia(true)}
+                className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-colors font-medium"
+              >
+                📋 Ver guia
+              </button>
             </div>
 
-            <div className="flex items-center gap-3">
-            {/* Estado: Conectada com sucesso */}
+            {/* Botão Embedded Signup ou status conectado */}
             {apiConectada ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center shrink-0">
-                  <span className="text-emerald-400 text-lg">✓</span>
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-5 flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center shrink-0">
+                  <span className="text-emerald-400 text-2xl">✓</span>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-emerald-400">API Oficial Meta conectada!</p>
+                  <p className="text-sm font-semibold text-emerald-400">WhatsApp Oficial conectado!</p>
                   <p className="text-xs text-fg-secondary mt-0.5">
                     Número: <strong className="text-fg">{apiConectada.numero}</strong>
                     {apiConectada.nome && <span className="text-fg-tertiary"> · {apiConectada.nome}</span>}
                   </p>
                   <p className="text-xs text-fg-disabled mt-1">Sem risco de banimento — conexão 100% oficial Meta ✅</p>
                 </div>
+                <button
+                  onClick={() => setApiConectada(null)}
+                  className="ml-auto btn-secondary text-xs"
+                >
+                  Reconectar
+                </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {apiErro && (
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                    <p className="text-xs text-red-400">❌ {apiErro}</p>
+              <>
+                {/* Botão azul Facebook */}
+                <div className="flex flex-col items-center gap-3 py-2">
+                  <p className="text-xs text-fg-tertiary text-center max-w-xs">
+                    Clique abaixo e faça login com o Facebook da conta que administra o WhatsApp Business da Cajado.
+                  </p>
+                  <button
+                    onClick={handleEmbeddedSignup}
+                    disabled={salvandoApi}
+                    className="flex items-center justify-center gap-3 w-full max-w-xs py-3.5 px-6 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-60 shadow-lg"
+                    style={{ background: '#1877F2' }}
+                  >
+                    {salvandoApi ? (
+                      <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Conectando com a Meta...</>
+                    ) : (
+                      <><svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>Continuar com o Facebook</>
+                    )}
+                  </button>
+
+                  {apiErro && (
+                    <div className="w-full max-w-xs p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-xs text-red-400">
+                      ⚠️ {apiErro}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 w-full max-w-xs">
+                    <div className="flex-1 h-px bg-white/5" />
+                    <span className="text-[10px] text-fg-disabled uppercase tracking-widest">OU</span>
+                    <div className="flex-1 h-px bg-white/5" />
+                  </div>
+
+                  <button
+                    onClick={() => setShowManualApi(!showManualApi)}
+                    className="text-xs text-amber-400 underline underline-offset-2"
+                  >
+                    Conectar manualmente (dados do painel Meta) {showManualApi ? '▲' : '▼'}
+                  </button>
+                </div>
+
+                {/* Formulário manual (fallback) */}
+                {showManualApi && (
+                  <div className="bg-muted/50 rounded-xl p-4 space-y-3 border border-border-subtle">
+                    <p className="text-xs font-semibold text-fg-secondary">⚙️ Conexão Manual</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="label block mb-1">Phone Number ID *</label>
+                        <input
+                          className="input text-xs"
+                          placeholder="Ex: 123456789012345"
+                          value={apiForm.phoneNumberId}
+                          onChange={e => setApiForm(f => ({ ...f, phoneNumberId: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="label block mb-1">Business Account ID</label>
+                        <input
+                          className="input text-xs"
+                          placeholder="Ex: 987654321098765"
+                          value={apiForm.businessAccountId}
+                          onChange={e => setApiForm(f => ({ ...f, businessAccountId: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Token de Acesso (permanente) *</label>
+                      <input
+                        className="input text-xs font-mono"
+                        type="password"
+                        placeholder="EAAxxxxxxxxxxxxx..."
+                        value={apiForm.accessToken}
+                        onChange={e => setApiForm(f => ({ ...f, accessToken: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="label block mb-1">Token de Verificação do Webhook *</label>
+                      <input
+                        className="input text-xs"
+                        placeholder="Ex: cajado-2025"
+                        value={apiForm.webhookVerifyToken}
+                        onChange={e => setApiForm(f => ({ ...f, webhookVerifyToken: e.target.value }))}
+                      />
+                    </div>
+                    <button
+                      onClick={handleSalvarApiOficial}
+                      disabled={salvandoApi || !apiForm.phoneNumberId || !apiForm.accessToken || !apiForm.webhookVerifyToken}
+                      className="btn-primary text-xs w-full"
+                    >
+                      {salvandoApi ? '⏳ Validando...' : '🔗 Ativar API Oficial'}
+                    </button>
                   </div>
                 )}
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleSalvarApiOficial}
-                    disabled={salvandoApi || !apiForm.phoneNumberId || !apiForm.accessToken || !apiForm.webhookVerifyToken}
-                    className="btn-primary text-xs"
-                  >
-                    {salvandoApi ? '⏳ Validando com a Meta...' : '🔗 Ativar API Oficial'}
-                  </button>
-                  <p className="text-xs text-fg-disabled">O sistema vai validar o token com a Meta antes de salvar</p>
-                </div>
-              </div>
+              </>
             )}
           </div>
-        </div>
+
+          {/* Info webhook */}
+          <div className="card space-y-3">
+            <h4 className="text-xs font-semibold text-fg">🔗 Dados do Webhook (configure na Meta após conectar)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="bg-page/60 border border-white/5 rounded-xl p-3">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">URL do Callback</p>
+                <code className="text-xs font-mono text-emerald-400 break-all select-all">
+                  {process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://scintillating-freedom-production.up.railway.app'}/webhook/oficial
+                </code>
+              </div>
+              <div className="bg-page/60 border border-white/5 rounded-xl p-3">
+                <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Verify Token</p>
+                <code className="text-xs font-mono text-amber-400 select-all">visiopro2025</code>
+              </div>
+            </div>
+          </div>
         </div>
       )}
+
+
     </div>
   )
 }
