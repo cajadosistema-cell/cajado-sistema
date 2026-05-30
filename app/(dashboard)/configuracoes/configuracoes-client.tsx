@@ -993,8 +993,8 @@ function TabWhatsAppMeta() {
       if (wabaId) body.waba_id = wabaId
       if (phoneId) body.phone_number_id = phoneId
 
-      const BACKEND = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://scintillating-freedom-production.up.railway.app'
-      const res = await fetch(`${BACKEND}/api/waba/connect`, {
+      // Usa o proxy interno do Next.js — evita CORS em produção
+      const res = await fetch('/api/inbox-proxy/api/waba/connect', {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
