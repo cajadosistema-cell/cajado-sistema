@@ -1070,18 +1070,18 @@ export function SecretariaFlutuante() {
         window.dispatchEvent(new CustomEvent('elena:ideia-salva'))
 
       } else if (acao.tipo === 'registro') {
-        // Registro GENÉRICO — tabela elena_registros (fallback universal)
-        const tiposValidos = ['contrato', 'emprestimo', 'nota', 'lembrete', 'compra', 'venda', 'outro', 'geral']
-        const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'geral'
-        const { error } = await (supabase.from('elena_registros') as any).insert({
+        // Registro GENÉRICO — tabela elena_registro (memória universal)
+        const tiposValidosReg = ['contrato', 'emprestimo', 'nota', 'lembrete', 'compra', 'venda', 'outro', 'geral',
+          'preferencia', 'dado_pessoal', 'regra_negocio', 'anotacao', 'contato', 'acordo']
+        const tipo = tiposValidosReg.includes(acao.dados.tipo) ? acao.dados.tipo : 'geral'
+        // ✅ CORREÇÃO: nome correto da tabela (era 'elena_registros' com 's' — bug silencioso)
+        const { error } = await (supabase.from('elena_registro') as any).insert({
           user_id: uid,
           tipo,
+          chave: acao.dados.chave || null,
           titulo: acao.dados.titulo || acao.dados.descricao?.substring(0, 100) || 'Registro via Elena',
-          descricao: acao.dados.descricao || null,
-          valor: acao.dados.valor ? Number(acao.dados.valor) : null,
-          data: new Date().toISOString().split('T')[0],
-          metadados: acao.dados, // salva o JSON completo da IA para não perder dados
-          origem: 'elena',
+          conteudo: acao.dados.descricao || acao.dados.conteudo || null,
+          importante: acao.dados.importante ?? false,
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
@@ -2334,14 +2334,17 @@ Retorne exatamente este JSON:
 
     try {
       // Contexto: usa todas as mensagens em memória, formatadas com data para evitar confusão de tempo
+      const colaboradoresCtx = colaboradores.length > 0
+        ? `\n[COLABORADORES ATIVOS: ${colaboradores.map((c: any) => c.nome).join(', ')}]`
+        : ''
       const contexto = mensagens
         .filter(m => m.texto && m.texto !== '...' && m.texto !== initialGreeting.texto)
-        .slice(-20) // envia as últimas 20 interações para contexto
+        .slice(-30) // aumentado de 20 para 30 interações para contexto mais rico
         .map(m => {
           const dtStr = m.created_at ? new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Agora'
-          return `[${dtStr}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto.substring(0, 300)}`
+          return `[${dtStr}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto.substring(0, 500)}`
         })
-        .join('\n')
+        .join('\n') + colaboradoresCtx
 
       // ── Busca em conversas históricas ──────────────────────────────────────────────
       // Detecta perguntas sobre conversas passadas e injeta resultados do banco
@@ -2387,6 +2390,11 @@ Retorne exatamente este JSON:
         'isso', 'confirmo', 'confirma', 'registra', 'registre', 'salva',
         'pode fazer', 'pode ser', 'faz isso', 'vai', 's', 'yes', 'yep',
         'exato', 'correto', 'isso mesmo', 'manda ver', 'bora', 'pode mandar',
+        // Novas variações naturais
+        'tá', 'ta', 'tá bom', 'ta bom', 'fechado', 'boa', 'manda bala', 'vai em frente',
+        'pode ir', 'faz aí', 'faz aí', 'pode lançar', 'pode registrar', 'confirma ai',
+        'tamo junto', 'pode crer', 'perfeito', 'show', 'top', 'pode enviar', 'beleza',
+        'vai nisso', 'manda', 'já', 'faz mesmo', 'pode fazer isso', 'registra ai',
       ]
       const textoLower = userText?.trim().toLowerCase() || ''
       const eConfirmacao = PALAVRAS_CONFIRMACAO.some(p => textoLower === p || textoLower === p + '!' || textoLower === p + '.')
