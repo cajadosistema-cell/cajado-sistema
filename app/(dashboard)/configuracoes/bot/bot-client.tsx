@@ -795,7 +795,15 @@ function SecaoWhatsApp() {
         const token = await ensureToken()
         if (!token) return
         const lista = await apiGet('/canais') as any[]
-        const canalEvo = (lista || []).find((c: any) => c.tipo === 'evolution' && c.dados_conexao?.instance_name)
+        // Pega todos os canais do tipo evolution e ordena do mais novo pro mais antigo
+        const canaisEvo = (lista || []).filter((c: any) => c.tipo === 'evolution' && c.dados_conexao?.instance_name)
+        // Usa created_at ou id para ordenar (o maior ID geralmente é o mais novo no UUID/ulid, mas vamos tentar created_at se existir)
+        canaisEvo.sort((a: any, b: any) => {
+          if (a.created_at && b.created_at) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          return String(b.id).localeCompare(String(a.id))
+        })
+        
+        const canalEvo = canaisEvo[0]
         if (canalEvo) {
           const instanceName = canalEvo.dados_conexao.instance_name
           const isConnected  = canalEvo.status === 'conectado' || canalEvo.dados_conexao?.ativo === true
