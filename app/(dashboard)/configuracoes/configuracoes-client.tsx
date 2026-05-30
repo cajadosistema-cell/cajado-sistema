@@ -952,11 +952,307 @@ function TabMinhaConta() {
   )
 }
 
+// ── Tab WhatsApp Oficial (Meta Cloud API / Embedded Signup) ──────
+function TabWhatsAppMeta() {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [erroMsg, setErroMsg] = useState('')
+  const [resultado, setResultado] = useState<any>(null)
+  const [showManual, setShowManual] = useState(false)
+  const [manual, setManual] = useState({ wabaId: '', phoneId: '', token: '' })
+  const [sdkCarregado, setSdkCarregado] = useState(false)
+
+  // Carrega o Facebook SDK dinamicamente
+  useEffect(() => {
+    if ((window as any).FB) { setSdkCarregado(true); return }
+    const script = document.createElement('script')
+    script.src = 'https://connect.facebook.net/pt_BR/sdk.js'
+    script.async = true
+    script.defer = true
+    script.onload = () => setSdkCarregado(true)
+    document.head.appendChild(script)
+    ;(window as any).fbAsyncInit = () => {
+      (window as any).FB.init({
+        appId: '887363490968366', // App ID VisioPro (compartilhado)
+        cookie: true,
+        xfbml: true,
+        version: 'v21.0',
+      })
+    }
+  }, [])
+
+  const conectarComBackend = async (token: string | null, wabaId: string | null, phoneId: string | null) => {
+    setStatus('loading')
+    setErroMsg('')
+    try {
+      const inboxToken = localStorage.getItem('cajado_inbox_token')
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (inboxToken) headers['Authorization'] = `Bearer ${inboxToken}`
+
+      const isCode = token && token.length < 200 && !token.startsWith('EAA')
+      const body: any = isCode ? { code: token } : { access_token: token }
+      if (wabaId) body.waba_id = wabaId
+      if (phoneId) body.phone_number_id = phoneId
+
+      const BACKEND = process.env.NEXT_PUBLIC_INBOX_API_URL || 'https://scintillating-freedom-production.up.railway.app'
+      const res = await fetch(`${BACKEND}/api/waba/connect`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (data.ok || data.success) {
+        setStatus('success')
+        setResultado(data)
+      } else {
+        setStatus('error')
+        setErroMsg(data.erro || data.error || 'Erro ao conectar. Verifique as permissões na Meta.')
+      }
+    } catch (e: any) {
+      setStatus('error')
+      setErroMsg('Erro de rede: ' + e.message)
+    }
+  }
+
+  const launchEmbeddedSignup = () => {
+    if (!(window as any).FB) { setErroMsg('SDK do Facebook ainda carregando. Aguarde e tente novamente.'); return }
+    setStatus('loading')
+    setErroMsg('')
+
+    let signupCode: string | null = null
+    let signupWabaId: string | null = null
+    let signupPhoneId: string | null = null
+
+    const msgHandler = (event: MessageEvent) => {
+      const originOk = event.origin?.includes('facebook.com') || event.origin?.includes('meta.com')
+      if (!originOk) return
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          const evt = data.event || ''
+          if (evt.includes('FINISH')) {
+            signupWabaId = data.data?.waba_id || data.data?.business_id || null
+            signupPhoneId = data.data?.phone_number_id || null
+            if (signupCode && signupWabaId && signupPhoneId) {
+              window.removeEventListener('message', msgHandler)
+              conectarComBackend(signupCode, signupWabaId, signupPhoneId)
+              signupCode = null
+            }
+          }
+        }
+      } catch {}
+    }
+    window.addEventListener('message', msgHandler)
+
+    ;(window as any).FB.login((response: any) => {
+      if (response.authResponse) {
+        signupCode = response.authResponse.code || response.authResponse.accessToken || null
+        if (signupCode && signupWabaId && signupPhoneId) {
+          window.removeEventListener('message', msgHandler)
+          conectarComBackend(signupCode, signupWabaId, signupPhoneId)
+          signupCode = null
+        }
+        // Fallback: se postMessage não chegou em 5s, tenta só com o code
+        setTimeout(() => {
+          if (signupCode) {
+            window.removeEventListener('message', msgHandler)
+            conectarComBackend(signupCode, null, null)
+            signupCode = null
+          }
+        }, 5000)
+      } else {
+        window.removeEventListener('message', msgHandler)
+        setStatus('idle')
+        setErroMsg('Login cancelado ou janela fechada antes de concluir.')
+      }
+    }, {
+      config_id: '1288306029938207',
+      extras: {
+        setup: {},
+        featureType: 'whatsapp_business_app_onboarding',
+        sessionInfoVersion: '3',
+      },
+      scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
+    })
+  }
+
+  const conectarManual = () => {
+    if (!manual.wabaId || !manual.phoneId || !manual.token) {
+      setErroMsg('Preencha todos os campos manuais.')
+      return
+    }
+    conectarComBackend(manual.token, manual.wabaId, manual.phoneId)
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="card">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-2xl shrink-0">📘</div>
+          <div>
+            <h2 className="section-title">WhatsApp Oficial (Meta Cloud API)</h2>
+            <p className="text-xs text-fg-tertiary mt-1 leading-relaxed">
+              Conecte seu número de WhatsApp Business à API Oficial da Meta via <strong className="text-fg-secondary">Embedded Signup</strong>.
+              Diferente do QR Code (Evolution), a API Oficial é aprovada pela Meta, tem maior estabilidade e não corre risco de ban.
+            </p>
+          </div>
+        </div>
+
+        {/* Comparativo */}
+        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/15">
+            <p className="text-xs font-bold text-blue-400 mb-2">✅ API Oficial (Meta) — O que você terá:</p>
+            <ul className="space-y-1">
+              {['Mensagens ilimitadas sem risco de ban', 'Aprovada e suportada pela Meta', 'Botões, listas e templates oficiais', 'Webhook direto da Meta (sem intermediário)'].map(i => (
+                <li key={i} className="text-[11px] text-fg-secondary flex items-start gap-1.5"><span className="text-blue-400 shrink-0">•</span>{i}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/15">
+            <p className="text-xs font-bold text-amber-400 mb-2">⚠️ Pré-requisitos:</p>
+            <ul className="space-y-1">
+              {['Conta no Meta Business Manager', 'Número de telefone verificado', 'App aprovado na Meta (já configurado)', 'Login com o Facebook da conta do negócio'].map(i => (
+                <li key={i} className="text-[11px] text-fg-secondary flex items-start gap-1.5"><span className="text-amber-400 shrink-0">•</span>{i}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Botão Embedded Signup */}
+      <div className="card">
+        <h3 className="text-sm font-bold text-fg mb-1">🔐 Conexão via Embedded Signup (Recomendado)</h3>
+        <p className="text-xs text-fg-tertiary mb-5">Clique no botão abaixo e faça login com o Facebook da conta que administra o WhatsApp Business.</p>
+
+        {status === 'success' && resultado ? (
+          <div className="p-5 rounded-xl bg-emerald-500/8 border border-emerald-500/25 text-center">
+            <div className="text-3xl mb-3">✅</div>
+            <p className="text-sm font-bold text-emerald-400 mb-1">WhatsApp conectado com sucesso!</p>
+            <p className="text-xs text-fg-tertiary mb-3">Seu canal está ativo e pronto para receber mensagens.</p>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {resultado.phone_number && (
+                <div className="bg-black/20 rounded-lg p-2">
+                  <p className="text-[10px] text-fg-tertiary">Número</p>
+                  <p className="text-xs font-mono font-bold text-emerald-300">{resultado.phone_number}</p>
+                </div>
+              )}
+              {resultado.verified_name && (
+                <div className="bg-black/20 rounded-lg p-2">
+                  <p className="text-[10px] text-fg-tertiary">Nome verificado</p>
+                  <p className="text-xs font-bold text-emerald-300">{resultado.verified_name}</p>
+                </div>
+              )}
+            </div>
+            <button onClick={() => { setStatus('idle'); setResultado(null) }} className="mt-4 btn-secondary text-xs">
+              Conectar outro número
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={launchEmbeddedSignup}
+              disabled={status === 'loading'}
+              className="flex items-center justify-center gap-3 w-full max-w-sm mx-auto py-4 px-6 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-60"
+              style={{ background: '#1877F2' }}
+            >
+              {status === 'loading' ? (
+                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>Conectando com a Meta...</>
+              ) : (
+                <><svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>Continuar com o Facebook</>
+              )}
+            </button>
+
+            {erroMsg && (
+              <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-xs text-red-400">
+                ⚠️ {erroMsg}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 my-5">
+              <div className="flex-1 h-px bg-white/5" />
+              <span className="text-[10px] text-fg-disabled uppercase tracking-widest">OU</span>
+              <div className="flex-1 h-px bg-white/5" />
+            </div>
+
+            <button
+              onClick={() => setShowManual(!showManual)}
+              className="text-xs text-amber-400 underline underline-offset-2"
+            >
+              Conectar manualmente (dados do painel Meta) {showManual ? '▲' : '▼'}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Formulário Manual */}
+      {showManual && status !== 'success' && (
+        <div className="card space-y-4">
+          <h3 className="text-sm font-bold text-fg">⚙️ Conexão Manual (Avançado)</h3>
+          <p className="text-xs text-fg-tertiary">Preencha os dados do seu WABA diretamente do <a href="https://business.facebook.com/wa/manage" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">painel da Meta</a>.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="label">WABA ID</label>
+              <input className="input mt-1" placeholder="Ex: 123456789012345"
+                value={manual.wabaId} onChange={e => setManual(m => ({ ...m, wabaId: e.target.value }))} />
+            </div>
+            <div>
+              <label className="label">Phone Number ID</label>
+              <input className="input mt-1" placeholder="Ex: 987654321098765"
+                value={manual.phoneId} onChange={e => setManual(m => ({ ...m, phoneId: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Access Token Permanente (System User)</label>
+            <textarea className="input mt-1 resize-none" rows={3} placeholder="EAA..."
+              value={manual.token} onChange={e => setManual(m => ({ ...m, token: e.target.value }))} />
+          </div>
+          <button
+            onClick={conectarManual}
+            disabled={status === 'loading'}
+            className="btn-primary w-full disabled:opacity-50"
+          >
+            {status === 'loading' ? '⏳ Conectando...' : '🔗 Conectar com esses dados'}
+          </button>
+          {erroMsg && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-xs text-red-400">⚠️ {erroMsg}</div>
+          )}
+        </div>
+      )}
+
+      {/* Webhook Info */}
+      <div className="card">
+        <h3 className="text-sm font-bold text-fg mb-3">🔗 Configuração do Webhook na Meta</h3>
+        <p className="text-xs text-fg-tertiary mb-4">Após conectar, configure no <a href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">Meta for Developers</a>:</p>
+        <div className="space-y-3">
+          <div className="bg-page/60 border border-white/5 rounded-xl p-4">
+            <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">URL do Webhook</p>
+            <code className="text-xs font-mono text-emerald-400 break-all select-all">
+              https://scintillating-freedom-production.up.railway.app/webhook/oficial
+            </code>
+          </div>
+          <div className="bg-page/60 border border-white/5 rounded-xl p-4">
+            <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Verify Token</p>
+            <code className="text-xs font-mono text-amber-400 select-all">visiopro2025</code>
+          </div>
+          <div className="bg-page/60 border border-white/5 rounded-xl p-4">
+            <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-2">Campos para assinar</p>
+            <div className="flex flex-wrap gap-2">
+              {['messages', 'message_status', 'messaging_postbacks'].map(f => (
+                <span key={f} className="px-2 py-1 bg-white/5 rounded-md text-[10px] font-mono text-fg-secondary">{f}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Client Component ────────────────────────────────────────────
 export default function ConfiguracoesClient() {
   const supabase = createClient()
   const { success, error: toastError, confirm: toastConfirm } = useToast()
-  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta' | 'limpeza' | 'backup' | 'notificacoes'>('empresa')
+  const [activeTab, setActiveTab] = useState<'empresa' | 'funcionarios' | 'permissoes' | 'minha-conta' | 'limpeza' | 'backup' | 'notificacoes' | 'whatsapp'>('empresa')
   const [modalOpen, setModalOpen] = useState(false)
   const [editarLimitesFunc, setEditarLimitesFunc] = useState<{ id: string, nome: string, permissoes: string[] } | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
@@ -1162,6 +1458,16 @@ export default function ConfiguracoesClient() {
               )}
             >
               🔔 Notificações Push
+            </button>
+            <div className="my-1 border-t border-white/5" />
+            <button
+              onClick={() => setActiveTab('whatsapp')}
+              className={cn(
+                "px-4 py-3 rounded-lg text-sm font-medium text-left transition-all",
+                activeTab === 'whatsapp' ? "bg-surface text-white" : "text-fg-secondary hover:bg-white/5 hover:text-fg"
+              )}
+            >
+              📱 WhatsApp Oficial (Meta)
             </button>
             <div className="my-1 border-t border-white/5" />
             <button 
@@ -1423,6 +1729,8 @@ export default function ConfiguracoesClient() {
           {activeTab === 'backup' && <TabBackup />}
 
           {activeTab === 'limpeza' && <TabLimpeza />}
+
+          {activeTab === 'whatsapp' && <TabWhatsAppMeta />}
         </div>
       </div>
 
