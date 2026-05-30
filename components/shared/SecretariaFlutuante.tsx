@@ -11,7 +11,7 @@ import { getPendentes, marcarProcessado, limparProcessados, registrarBackgroundS
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
 interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato' | 'projecao_mes' | 'registro_livre'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato' | 'projecao_mes' | 'registro_livre' | 'buscar_lancamento' | 'editar_lancamento'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -388,6 +388,23 @@ Quando o Sr. Max colar um bloco de texto com transações bancárias (data + des
   • Vencimentos agendados para o próximo mês
 - Mostra: receita projetada, gastos projetados, saldo estimado, alertas de risco e recomendações
 
+🔎 BUSCA FINANCEIRA DETALHADA — Quando o chefe fizer perguntas específicas sobre gastos passados:
+\`\`\`json
+{"acao":"buscar_lancamento","periodo":"mes_atual","categoria":"alimentacao","tipo":"pf"}
+\`\`\`
+- Use quando ouvir: "qual foi o maior gasto", "quanto gastei de uber", "me mostre as despesas de marketing", "lista os lançamentos da empresa", "o que paguei de aluguel"
+- Períodos válidos: mes_atual, mes_passado, ultimos_7_dias, ultimos_30_dias, ano_atual
+- Tipo: "pf" (pessoal), "pj" (empresa), "todos"
+- Categoria é OPCIONAL. Use apenas se o chefe pedir uma categoria específica.
+- O sistema buscará os lançamentos reais e mostrará no chat.
+
+✏️ EDIÇÃO DE LANÇAMENTO — Quando o chefe quiser corrigir o lançamento que acabou de fazer:
+\`\`\`json
+{"acao":"editar_lancamento","novo_valor":150.00,"nova_descricao":"Almoço com cliente"}
+\`\`\`
+- Use quando ouvir: "errei o valor, era X", "muda a descrição para Y", "corrige o valor para Z"
+- Pode alterar apenas o valor, apenas a descrição, ou ambos.
+
 🧠 MEMÓRIA UNIVERSAL — REGISTRO LIVRE (use quando não souber onde salvar algo):
 \`\`\`json
 {"acao":"registro_livre","tipo":"preferencia","chave":"banco_preferido","titulo":"Banco preferido do Sr. Max","conteudo":"Nubank","importante":true}
@@ -465,6 +482,11 @@ function extrairAcoes(texto: string): AcaoIA[] {
       } else if (d.acao === 'registro_livre') {
         const icon = d.tipo === 'preferencia' ? '⭐' : d.tipo === 'regra_negocio' ? '📋' : d.tipo === 'contato' ? '📞' : d.tipo === 'acordo' ? '🤝' : d.tipo === 'dado_pessoal' ? '👤' : '🧠'
         acoes.push({ tipo: 'registro_livre', dados: d, label: `${icon} Lembrar: ${d.titulo || d.conteudo?.substring(0, 50) || d.chave || 'nova informação'}`, status: 'pending' })
+      } else if (d.acao === 'buscar_lancamento') {
+        const filtro = [d.categoria, d.periodo, d.tipo].filter(Boolean).join(' / ') || 'geral'
+        acoes.push({ tipo: 'buscar_lancamento', dados: d, label: `🔎 Buscar lançamentos: ${filtro}`, status: 'pending' })
+      } else if (d.acao === 'editar_lancamento') {
+        acoes.push({ tipo: 'editar_lancamento', dados: d, label: `✏️ Editar: ${d.descricao || 'lançamento recente'} → R$ ${Number(d.novo_valor || d.valor || 0).toFixed(2)}`, status: 'pending' })
       } else if (d.acao) {
         // Fallback: qualquer acao desconhecida vira um registro generico
         acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `🗂️ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
@@ -1566,6 +1588,170 @@ export function SecretariaFlutuante() {
             : `${icon} **Anotado localmente:** _${titulo || conteudo?.substring(0, 60)}_\n_(Houve um problema ao salvar no banco — tentarei novamente mais tarde)_`,
         }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'buscar_lancamento') {
+        // ── Busca financeira detalhada em tempo real ─────────────────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const agora = new Date()
+        const anoAtual = agora.getFullYear()
+        const mesAtual = agora.getMonth()
+
+        // Resolve período
+        const periodo = (acao.dados.periodo || 'mes_atual').toLowerCase()
+        let dataInicio: string, dataFim: string, labelPeriodo: string
+        if (periodo === 'mes_atual' || periodo === 'mes') {
+          dataInicio = `${anoAtual}-${String(mesAtual + 1).padStart(2,'0')}-01`
+          dataFim = new Date(anoAtual, mesAtual + 1, 0).toISOString().split('T')[0]
+          labelPeriodo = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        } else if (periodo === 'mes_passado' || periodo === 'mes_anterior') {
+          const d = new Date(anoAtual, mesAtual - 1, 1)
+          dataInicio = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-01`
+          dataFim = new Date(anoAtual, mesAtual, 0).toISOString().split('T')[0]
+          labelPeriodo = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        } else if (periodo === 'ultimos_7_dias' || periodo === '7_dias') {
+          const d = new Date(); d.setDate(d.getDate() - 7)
+          dataInicio = d.toISOString().split('T')[0]
+          dataFim = agora.toISOString().split('T')[0]
+          labelPeriodo = 'últimos 7 dias'
+        } else if (periodo === 'ultimos_30_dias' || periodo === '30_dias') {
+          const d = new Date(); d.setDate(d.getDate() - 30)
+          dataInicio = d.toISOString().split('T')[0]
+          dataFim = agora.toISOString().split('T')[0]
+          labelPeriodo = 'últimos 30 dias'
+        } else if (periodo === 'ano_atual' || periodo === 'ano') {
+          dataInicio = `${anoAtual}-01-01`
+          dataFim = `${anoAtual}-12-31`
+          labelPeriodo = `ano ${anoAtual}`
+        } else {
+          dataInicio = `${anoAtual}-${String(mesAtual + 1).padStart(2,'0')}-01`
+          dataFim = new Date(anoAtual, mesAtual + 1, 0).toISOString().split('T')[0]
+          labelPeriodo = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        }
+
+        const categoria = acao.dados.categoria?.toLowerCase() || null
+        const tipo = (acao.dados.tipo || 'pf').toLowerCase() // 'pf' | 'pj' | 'todos'
+
+        const resultados: string[] = []
+        let totalBuscado = 0
+
+        // Busca PF
+        if (tipo === 'pf' || tipo === 'todos') {
+          let qGastos = (supabase.from('gastos_pessoais') as any)
+            .select('descricao, valor, categoria, data, forma_pagamento')
+            .eq('user_id', uid).gte('data', dataInicio).lte('data', dataFim)
+            .order('data', { ascending: false }).limit(20)
+          if (categoria) qGastos = qGastos.eq('categoria', categoria)
+          const { data: gsPF } = await qGastos
+
+          let qReceitas = (supabase.from('receitas_pessoais') as any)
+            .select('descricao, valor, categoria, data')
+            .eq('user_id', uid).gte('data', dataInicio).lte('data', dataFim)
+            .order('data', { ascending: false }).limit(20)
+          if (categoria) qReceitas = qReceitas.eq('categoria', categoria)
+          const { data: rsPF } = await qReceitas
+
+          const totalGastosPF = (gsPF || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+          const totalReceitasPF = (rsPF || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+          totalBuscado += (gsPF || []).length + (rsPF || []).length
+
+          if ((gsPF || []).length > 0) {
+            resultados.push(`\n💸 **Gastos PF${categoria ? ` (${categoria})` : ''} — ${labelPeriodo}** (${(gsPF || []).length} lançamentos — Total: R$ ${totalGastosPF.toFixed(2)})`)
+            ;(gsPF || []).slice(0, 10).forEach((g: any) => {
+              const dt = g.data ? new Date(g.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'
+              resultados.push(`  • ${dt} · **${g.descricao}** · R$ ${Number(g.valor).toFixed(2)} (${g.categoria})`)
+            })
+            if ((gsPF || []).length > 10) resultados.push(`  _...e mais ${(gsPF || []).length - 10} lançamentos_`)
+          }
+          if ((rsPF || []).length > 0) {
+            resultados.push(`\n📈 **Receitas PF${categoria ? ` (${categoria})` : ''} — ${labelPeriodo}** (${(rsPF || []).length} — Total: R$ ${totalReceitasPF.toFixed(2)})`)
+            ;(rsPF || []).slice(0, 10).forEach((r: any) => {
+              const dt = r.data ? new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'
+              resultados.push(`  • ${dt} · **${r.descricao}** · R$ ${Number(r.valor).toFixed(2)}`)
+            })
+          }
+        }
+
+        // Busca PJ
+        if (tipo === 'pj' || tipo === 'todos') {
+          let qPJ = (supabase.from('lancamentos') as any)
+            .select('descricao, valor, tipo, categoria, data_competencia')
+            .eq('user_id', uid).gte('data_competencia', dataInicio).lte('data_competencia', dataFim)
+            .order('data_competencia', { ascending: false }).limit(20)
+          if (categoria) qPJ = qPJ.eq('categoria', categoria)
+          const { data: lsPJ } = await qPJ
+
+          const despesasPJ = (lsPJ || []).filter((l: any) => l.tipo === 'despesa' || l.tipo === 'saida')
+          const receitasPJ = (lsPJ || []).filter((l: any) => l.tipo === 'receita' || l.tipo === 'entrada')
+          totalBuscado += (lsPJ || []).length
+
+          if (despesasPJ.length > 0) {
+            const totalDespPJ = despesasPJ.reduce((s: number, l: any) => s + Number(l.valor), 0)
+            resultados.push(`\n🏢💸 **Despesas Empresa — ${labelPeriodo}** (${despesasPJ.length} — Total: R$ ${totalDespPJ.toFixed(2)})`)
+            despesasPJ.slice(0, 10).forEach((l: any) => {
+              const dt = l.data_competencia ? new Date(l.data_competencia + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'
+              resultados.push(`  • ${dt} · **${l.descricao}** · R$ ${Number(l.valor).toFixed(2)}`)
+            })
+          }
+          if (receitasPJ.length > 0) {
+            const totalRecPJ = receitasPJ.reduce((s: number, l: any) => s + Number(l.valor), 0)
+            resultados.push(`\n🏢📈 **Receitas Empresa — ${labelPeriodo}** (${receitasPJ.length} — Total: R$ ${totalRecPJ.toFixed(2)})`)
+            receitasPJ.slice(0, 10).forEach((l: any) => {
+              const dt = l.data_competencia ? new Date(l.data_competencia + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'
+              resultados.push(`  • ${dt} · **${l.descricao}** · R$ ${Number(l.valor).toFixed(2)}`)
+            })
+          }
+        }
+
+        const textoResposta = totalBuscado === 0
+          ? `🔎 Nenhum lançamento encontrado${categoria ? ` em **${categoria}**` : ''} em **${labelPeriodo}**, Sr. Max.`
+          : resultados.join('\n')
+
+        setMensagens(prev => [...prev, {
+          id: `busca-${Date.now()}`,
+          role: 'ai' as const,
+          texto: textoResposta,
+        }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'editar_lancamento') {
+        // ── Edita valor/descrição de um lançamento recente ───────────────────────
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const { tabela, id: lancId, novo_valor, nova_descricao } = acao.dados
+
+        // Usa o último lançamento registrado se não especificado
+        const tabelaAlvo = tabela || ultimoRegistroRef.current?.tabela
+        const idAlvo = lancId || ultimoRegistroRef.current?.id
+
+        if (!tabelaAlvo || !idAlvo) {
+          setAcaoStatus(msgId, acaoIdx, 'error', 'Não foi possível identificar o lançamento a editar. Informe qual lançamento deseja corrigir.')
+          return
+        }
+
+        const update: Record<string, any> = {}
+        if (novo_valor !== undefined && novo_valor !== null) update.valor = Number(novo_valor)
+        if (nova_descricao) update.descricao = nova_descricao
+
+        if (Object.keys(update).length === 0) {
+          setAcaoStatus(msgId, acaoIdx, 'error', 'Informe o novo valor ou nova descrição para editar.')
+          return
+        }
+
+        const { error } = await (supabase.from(tabelaAlvo) as any)
+          .update(update).eq('id', idAlvo)
+
+        if (error) throw new Error(error.message)
+
+        const partes = []
+        if (update.valor) partes.push(`valor para R$ ${update.valor.toFixed(2)}`)
+        if (update.descricao) partes.push(`descrição para "${update.descricao}"`)
+
+        setMensagens(prev => [...prev, {
+          id: `edit-${Date.now()}`,
+          role: 'ai' as const,
+          texto: `✏️ **Lançamento atualizado!** Alterei o ${partes.join(' e o ')}. ✅`,
+        }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
       }
 
     } catch (err: any) {
