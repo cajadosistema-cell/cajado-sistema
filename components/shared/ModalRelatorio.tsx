@@ -14,6 +14,8 @@ interface RelatorioData {
     saldo: number
     gastos: { descricao: string; valor: number; categoria: string; data: string; forma: string }[]
     receitas: { descricao: string; valor: number; categoria: string; data: string }[]
+    gastosEmpresa: { descricao: string; valor: number; categoria: string; data: string }[]
+    receitasEmpresa: { descricao: string; valor: number; categoria: string; data: string }[]
   }
   agenda: { titulo: string; data_inicio: string; tipo: string }[]
   registros: { titulo: string; tipo: string; valor: number | null; data: string; descricao: string | null }[]
@@ -59,7 +61,8 @@ export function ModalRelatorio({ dados, onClose }: Props) {
   }, {})
   const maxGasto = Math.max(...Object.values(gastosPorCat), 1)
 
-  const totalItens = dados.financeiro.gastos.length + dados.financeiro.receitas.length
+  const totalItens = dados.financeiro.gastos.length + dados.financeiro.receitas.length +
+    (dados.financeiro.gastosEmpresa?.length || 0) + (dados.financeiro.receitasEmpresa?.length || 0)
   const saldoColor = dados.financeiro.saldo >= 0 ? '#10b981' : '#ef4444'
 
   return (
@@ -197,7 +200,42 @@ export function ModalRelatorio({ dados, onClose }: Props) {
                   </div>
                 )}
 
-                {dados.financeiro.gastos.length === 0 && dados.financeiro.receitas.length === 0 && (
+                {/* Lista de Gastos PJ (Empresa) */}
+                {(dados.financeiro.gastosEmpresa?.length || 0) > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-fg-secondary mb-2">🏢 Gastos Empresa ({dados.financeiro.gastosEmpresa.length})</p>
+                    <div className="space-y-1">
+                      {dados.financeiro.gastosEmpresa.map((g, i) => (
+                        <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/2 border border-blue-500/10 hover:bg-white/4 transition-all">
+                          <span className="text-[10px] text-fg-disabled w-12 shrink-0">{fmtDate(g.data)}</span>
+                          <span className="text-xs text-fg flex-1 truncate">{g.descricao}</span>
+                          <span className="text-[10px] text-fg-tertiary w-20 shrink-0 text-right capitalize">{g.categoria}</span>
+                          <span className="text-xs font-bold text-orange-400 w-20 shrink-0 text-right">{fmt(g.valor)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista de Receitas PJ (Empresa) */}
+                {(dados.financeiro.receitasEmpresa?.length || 0) > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-fg-secondary mb-2">🏢 Receitas Empresa ({dados.financeiro.receitasEmpresa.length})</p>
+                    <div className="space-y-1">
+                      {dados.financeiro.receitasEmpresa.map((r, i) => (
+                        <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/2 border border-blue-500/10 hover:bg-white/4 transition-all">
+                          <span className="text-[10px] text-fg-disabled w-12 shrink-0">{fmtDate(r.data)}</span>
+                          <span className="text-xs text-fg flex-1 truncate">{r.descricao}</span>
+                          <span className="text-[10px] text-fg-tertiary w-20 shrink-0 text-right capitalize">{r.categoria}</span>
+                          <span className="text-xs font-bold text-blue-400 w-20 shrink-0 text-right">{fmt(r.valor)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {dados.financeiro.gastos.length === 0 && dados.financeiro.receitas.length === 0 &&
+                 (dados.financeiro.gastosEmpresa?.length || 0) === 0 && (dados.financeiro.receitasEmpresa?.length || 0) === 0 && (
                   <p className="text-center text-fg-disabled text-sm py-8">Nenhum lançamento no período.</p>
                 )}
               </div>
@@ -319,7 +357,7 @@ export async function buscarDadosRelatorio(
   }
 
   // Busca paralela em todas as tabelas
-  const [gastosRes, receitasRes, agendaRes, registrosRes, ideiasRes] = await Promise.all([
+  const [gastosRes, receitasRes, agendaRes, registrosRes, ideiasRes, lancamentosRes] = await Promise.all([
     (supabase.from('gastos_pessoais') as any)
       .select('descricao,valor,categoria,data,forma_pagamento')
       .eq('user_id', userId)
@@ -341,18 +379,27 @@ export async function buscarDadosRelatorio(
       .lte('data_inicio', dataFim + 'T23:59:59')
       .order('data_inicio'),
 
-    (supabase.from('elena_registros') as any)
-      .select('titulo,tipo,valor,data,descricao')
+    // ✅ CORRIGIDO: nome correto da tabela (sem 's')
+    (supabase.from('elena_registro') as any)
+      .select('titulo,tipo,conteudo,importante,atualizado_em')
       .eq('user_id', userId)
-      .gte('data', dataInicio)
-      .lte('data', dataFim)
-      .order('data', { ascending: false }),
+      .order('atualizado_em', { ascending: false })
+      .limit(30),
 
     (supabase.from('elena_ideias') as any)
       .select('titulo,categoria,status')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(10),
+
+    // ✅ NOVO: busca lançamentos PJ da empresa no período
+    (supabase.from('lancamentos') as any)
+      .select('descricao,valor,tipo,categoria,data')
+      .eq('user_id', userId)
+      .gte('data', dataInicio)
+      .lte('data', dataFim)
+      .order('data', { ascending: false })
+      .limit(100),
   ])
 
   const gastos = (gastosRes.data || []).map((g: any) => ({
@@ -370,11 +417,32 @@ export async function buscarDadosRelatorio(
     data: r.data,
   }))
 
-  const totalReceitas = receitas.reduce((a: number, r: any) => a + r.valor, 0)
-  const totalGastos = gastos.reduce((a: number, g: any) => a + g.valor, 0)
+  // Separa lançamentos PJ por tipo
+  const lancamentosPJ = lancamentosRes.data || []
+  const gastosEmpresa = lancamentosPJ
+    .filter((l: any) => l.tipo === 'saida' || l.tipo === 'despesa')
+    .map((l: any) => ({
+      descricao: l.descricao || 'Lançamento empresa',
+      valor: Number(l.valor),
+      categoria: l.categoria || 'operacional',
+      data: l.data || new Date().toISOString().split('T')[0],
+    }))
+  const receitasEmpresa = lancamentosPJ
+    .filter((l: any) => l.tipo === 'entrada' || l.tipo === 'receita')
+    .map((l: any) => ({
+      descricao: l.descricao || 'Receita empresa',
+      valor: Number(l.valor),
+      categoria: l.categoria || 'vendas',
+      data: l.data || new Date().toISOString().split('T')[0],
+    }))
+
+  const totalReceitas = receitas.reduce((a: number, r: any) => a + r.valor, 0) +
+    receitasEmpresa.reduce((a: number, r: any) => a + r.valor, 0)
+  const totalGastos = gastos.reduce((a: number, g: any) => a + g.valor, 0) +
+    gastosEmpresa.reduce((a: number, g: any) => a + g.valor, 0)
 
   return {
-    titulo: 'Relatório Financeiro Pessoal',
+    titulo: 'Relatório Financeiro Completo (PF + PJ)',
     periodo: tituloPeriodo,
     geradoEm: agora.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
     financeiro: {
@@ -383,9 +451,11 @@ export async function buscarDadosRelatorio(
       saldo: totalReceitas - totalGastos,
       gastos,
       receitas,
+      gastosEmpresa,
+      receitasEmpresa,
     },
     agenda: (agendaRes.data || []).map((e: any) => ({ titulo: e.titulo, data_inicio: e.data_inicio, tipo: e.tipo })),
-    registros: (registrosRes.data || []).map((r: any) => ({ titulo: r.titulo, tipo: r.tipo, valor: r.valor ? Number(r.valor) : null, data: r.data, descricao: r.descricao })),
+    registros: (registrosRes.data || []).map((r: any) => ({ titulo: r.titulo, tipo: r.tipo, valor: r.valor ? Number(r.valor) : null, data: r.atualizado_em || r.criado_em, descricao: r.conteudo })),
     ideias: (ideiasRes.data || []).map((i: any) => ({ titulo: i.titulo, categoria: i.categoria, status: i.status })),
   }
 }

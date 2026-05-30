@@ -43,30 +43,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
-    // Busca por similaridade usando ilike (case-insensitive)
-    // Divide o termo em palavras e busca mensagens que contenham qualquer palavra relevante
+    // Palavras para busca — filtra stopwords e usa todas relevantes
     const palavras = termo
       .toLowerCase()
       .split(/\s+/)
       .filter((p: string) => p.length > 3)  // Ignora palavras curtas (artigos, preposições)
-      .slice(0, 5)  // No máximo 5 palavras para a query
+      .slice(0, 6)  // No máximo 6 palavras para a query
 
     if (palavras.length === 0) {
       return NextResponse.json({ mensagens: [] })
     }
 
-    // Usa a primeira palavra mais relevante para a busca principal
-    // e filtra as demais no código
-    const termoPrincipal = palavras[0]
+    // Monta filtro OR com todas as palavras relevantes (não só a primeira)
+    const orFiltros = palavras.map((p: string) => `texto.ilike.%${p}%`).join(',')
+    const orFiltrosRegistro = palavras.map((p: string) =>
+      `titulo.ilike.%${p}%,conteudo.ilike.%${p}%,chave.ilike.%${p}%`
+    ).join(',')
+
+    // Detecta se é pedido de relatório financeiro (busca mais ampla)
+    const RELATORIO_KEYWORDS = ['relatorio', 'relatório', 'balanço', 'balanco', 'resumo financeiro',
+      'quanto gastei', 'quanto recebi', 'gastos do mes', 'receitas do mes', 'analise do mes']
+    const isFinanceiro = RELATORIO_KEYWORDS.some(kw => termo.toLowerCase().includes(kw))
 
     // Busca em paralelo: conversas históricas + memória universal
     const [{ data: msgs, error }, { data: registros }] = await Promise.all([
-      // 1. Conversas históricas (elena_conversas)
+      // 1. Conversas históricas (elena_conversas) — busca por múltiplas palavras
       supabase
         .from('elena_conversas')
         .select('id, role, texto, sessao_id, created_at')
         .eq('user_id', user.id)
-        .ilike('texto', `%${termoPrincipal}%`)
+        .or(orFiltros)
         .order('created_at', { ascending: false })
         .limit(limite * 3),
 
@@ -74,7 +80,7 @@ export async function POST(req: NextRequest) {
       (supabase.from('elena_registro') as any)
         .select('id, tipo, chave, titulo, conteudo, importante, criado_em')
         .eq('user_id', user.id)
-        .or(`titulo.ilike.%${termoPrincipal}%,conteudo.ilike.%${termoPrincipal}%,chave.ilike.%${termoPrincipal}%`)
+        .or(orFiltrosRegistro)
         .order('importante', { ascending: false })
         .limit(10),
     ])

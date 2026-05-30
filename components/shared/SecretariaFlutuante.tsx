@@ -2343,6 +2343,36 @@ Retorne exatamente este JSON:
         })
         .join('\n')
 
+      // ── Busca em conversas históricas ──────────────────────────────────────────────
+      // Detecta perguntas sobre conversas passadas e injeta resultados do banco
+      const KEYWORDS_HISTORICO = [
+        'conversamos', 'falamos', 'disse', 'comentei', 'registrei', 'anotei',
+        'que você disse', 'que eu disse', 'lembra quando', 'semana passada',
+        'mês passado', 'conversa anterior', 'histórico', 'sessão anterior',
+        'o que conversamos', 'já falei', 'você lembra', 'busca nas conversas',
+        'relatório', 'relatorio', 'resumo das conversas', 'últimas conversas',
+        'o que fizemos', 'o que tratamos', 'recap', 'resumo do dia',
+        'conversas de hoje', 'conversas de ontem', 'resuma nossas conversas',
+        // Financeiro
+        'balanço', 'balanço do mês', 'resumo financeiro', 'extrato', 'análise do mês',
+        'como fui esse mês', 'como foi esse mês', 'quanto gastei', 'quanto recebi',
+        'gastos do mês', 'receitas do mês', 'gráfico', 'fluxo do mês',
+        'relatorio financeiro', 'relatório financeiro', 'relatorio completo', 'relatório completo',
+      ]
+      const isRelatorio = (t: string) => {
+        const tl = t.toLowerCase()
+        return ['relatório', 'relatorio', 'resumo das conversas', 'últimas conversas',
+          'o que conversamos', 'o que fizemos', 'o que tratamos', 'recap', 'resumo do dia',
+          'balanço', 'balanço do mês', 'resumo financeiro', 'análise do mês',
+          'como fui esse mês', 'como foi esse mês', 'relatorio financeiro', 'relatório financeiro',
+          'relatorio completo', 'relatório completo'
+        ].some(kw => tl.includes(kw))
+      }
+      const precisaBuscarHistorico = (t: string) => {
+        const tl = t.toLowerCase()
+        return KEYWORDS_HISTORICO.some(kw => tl.includes(kw))
+      }
+      
       // Monta o prompt incluindo texto do PDF se for arquivo de texto
       let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
@@ -2372,26 +2402,6 @@ Retorne exatamente este JSON:
       // ── Incrementa contador de msgs da sessão (para backup automático) ──
       sessionMsgCountRef.current += 1
 
-      // ── Busca em conversas históricas ──────────────────────────────────
-      // Detecta perguntas sobre conversas passadas e injeta resultados do banco
-      const KEYWORDS_HISTORICO = [
-        'conversamos', 'falamos', 'disse', 'comentei', 'registrei', 'anotei',
-        'que você disse', 'que eu disse', 'lembra quando', 'semana passada',
-        'mês passado', 'conversa anterior', 'histórico', 'sessão anterior',
-        'o que conversamos', 'já falei', 'você lembra', 'busca nas conversas',
-        'relatório', 'relatorio', 'resumo das conversas', 'últimas conversas',
-        'o que fizemos', 'o que tratamos', 'recap', 'resumo do dia',
-        'conversas de hoje', 'conversas de ontem', 'resuma nossas conversas',
-      ]
-      const isRelatorio = (t: string) => {
-        const tl = t.toLowerCase()
-        return ['relatório', 'relatorio', 'resumo das conversas', 'últimas conversas',
-          'o que conversamos', 'o que fizemos', 'o que tratamos', 'recap', 'resumo do dia'].some(kw => tl.includes(kw))
-      }
-      const precisaBuscarHistorico = (t: string) => {
-        const tl = t.toLowerCase()
-        return KEYWORDS_HISTORICO.some(kw => tl.includes(kw))
-      }
       if (userText && precisaBuscarHistorico(userText) && !fileSnap) {
         try {
           setMensagens(prev => prev.map(m =>
