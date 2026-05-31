@@ -76,7 +76,8 @@ router.post("/oficial", async (req, res) => {
             }
             const history = conversationHistory.get(number);
             
-            const empresaId = canaisMemoria.get(phoneNumberId) || ADMIN_DEFAULT.empresa_id;
+            const canalInfo = canaisMemoria.get(phoneNumberId);
+            const empresaId = (canalInfo && typeof canalInfo === "object" ? canalInfo.empresa_id : canalInfo) || ADMIN_DEFAULT.empresa_id;
             console.log(`[WABA Oficial][${empresaId}][${number}]: ${messageText}`);
             
             // 1. Registra a mensagem recebida

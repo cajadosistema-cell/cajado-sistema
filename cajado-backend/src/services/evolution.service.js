@@ -268,7 +268,7 @@ async function enviarMetaCloudAPI(number, text, phoneNumberId) {
   if (!token && supabase) {
     try {
       const { data } = await supabase.from("canais")
-        .select("dados_conexao")
+        .select("empresa_id, dados_conexao")
         .eq("tipo", "cloud_api")
         .contains("dados_conexao", { phone_number_id: phoneNumberId })
         .single();
@@ -278,6 +278,7 @@ async function enviarMetaCloudAPI(number, text, phoneNumberId) {
           tipo: "cloud_api",
           access_token: token,
           phone_number_id: phoneNumberId,
+          empresa_id: data.empresa_id,
         });
       }
     } catch (e) {
