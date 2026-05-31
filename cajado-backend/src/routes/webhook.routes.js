@@ -151,18 +151,30 @@ router.post("/oficial", async (req, res) => {
   }
 });
 
+const webhookHistory = [];
+
+router.get("/debug/webhook-history", (req, res) => {
+  res.json(webhookHistory);
+});
+
 // ─── CANAL 2: EVOLUTION API (QR CODE PADRÃO) ──────────────────────────────
 router.post(["/evolution", "/"], async (req, res) => {
   res.status(200).send("ok");
 
   const data = req.body;
   if (data?.event?.toLowerCase() !== "messages.upsert") return;
+
+  // Guarda o log na memória
+  webhookHistory.unshift({ timestamp: new Date().toISOString(), payload: data });
+  if (webhookHistory.length > 5) webhookHistory.pop();
+
   console.log("================ WEBHOOK PAYLOAD ================");
   console.log(JSON.stringify(data, null, 2));
   console.log("=================================================");
   const messageData = Array.isArray(data?.data) ? data.data[0] : data?.data;
   if (!messageData?.key) {
     console.log("[Webhook] ERRO: messageData.key is undefined!", JSON.stringify(messageData));
+    webhookHistory[0].error = "messageData.key is undefined";
     return;
   }
 
