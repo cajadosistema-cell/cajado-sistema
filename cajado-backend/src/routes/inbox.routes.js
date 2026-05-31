@@ -148,12 +148,13 @@ router.get("/debug/evolution", (req, res) => {
 router.get("/debug/register-cajado-channel", async (req, res) => {
   if (!supabase) return res.json({ error: "no supabase" });
   try {
-    const empresaId = '658ed627-c84e-46c0-a9d2-83c4a1b66bca';
+    const empresaIdMax = '658ed627-c84e-46c0-a9d2-83c4a1b66bca'; // max@cajado
+    const empresaIdAdmin = '9cb2f597-367d-4475-b307-43345b09dee8'; // admin@visiopro
     
-    // Register maiara
+    // Register maiara (belongs to admin@visiopro)
     await supabase.from('canais').delete().eq('dados_conexao->>instance_name', 'maiara');
     await supabase.from('canais').insert({
-      empresa_id: empresaId,
+      empresa_id: empresaIdAdmin,
       nome: 'WhatsApp Principal (maiara)',
       tipo: 'evolution',
       status: 'conectado',
@@ -165,10 +166,10 @@ router.get("/debug/register-cajado-channel", async (req, res) => {
       }
     });
 
-    // Register vp_cajado_01
+    // Register vp_cajado_01 (belongs to max@cajado)
     await supabase.from('canais').delete().eq('dados_conexao->>instance_name', 'vp_cajado_01');
     await supabase.from('canais').insert({
-      empresa_id: empresaId,
+      empresa_id: empresaIdMax,
       nome: 'Cajado Evolution (vp_cajado_01)',
       tipo: 'evolution',
       status: 'conectado',
