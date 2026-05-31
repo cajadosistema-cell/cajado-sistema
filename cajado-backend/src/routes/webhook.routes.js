@@ -157,7 +157,7 @@ router.post(["/evolution", "/"], async (req, res) => {
 
   const data = req.body;
   if (data?.event?.toLowerCase() !== "messages.upsert") return;
-  const messageData = data?.data;
+  const messageData = Array.isArray(data?.data) ? data.data[0] : data?.data;
   if (!messageData?.key) return;
 
   const messageId = messageData.key.id;
