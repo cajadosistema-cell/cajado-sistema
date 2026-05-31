@@ -148,8 +148,27 @@ router.get("/debug/evolution", (req, res) => {
 router.get("/debug/register-cajado-channel", async (req, res) => {
   if (!supabase) return res.json({ error: "no supabase" });
   try {
-    const { data, error } = await supabase.from('canais').upsert({
-      empresa_id: '658ed627-c84e-46c0-a9d2-83c4a1b66bca',
+    const empresaId = '658ed627-c84e-46c0-a9d2-83c4a1b66bca';
+    
+    // Register maiara
+    await supabase.from('canais').delete().eq('dados_conexao->>instance_name', 'maiara');
+    await supabase.from('canais').insert({
+      empresa_id: empresaId,
+      nome: 'WhatsApp Principal (maiara)',
+      tipo: 'evolution',
+      status: 'conectado',
+      dados_conexao: {
+        instance_name: 'maiara',
+        webhook_url: 'https://scintillating-freedom-production.up.railway.app/webhook/evolution',
+        webhook_ok: true,
+        ativo: true,
+      }
+    });
+
+    // Register vp_cajado_01
+    await supabase.from('canais').delete().eq('dados_conexao->>instance_name', 'vp_cajado_01');
+    await supabase.from('canais').insert({
+      empresa_id: empresaId,
       nome: 'Cajado Evolution (vp_cajado_01)',
       tipo: 'evolution',
       status: 'conectado',
@@ -159,8 +178,9 @@ router.get("/debug/register-cajado-channel", async (req, res) => {
         webhook_ok: true,
         ativo: true,
       }
-    }, { onConflict: 'nome' }).select();
-    res.json({ success: true, data, error });
+    });
+
+    res.json({ success: true });
   } catch (e) {
     res.json({ error: e.message });
   }
