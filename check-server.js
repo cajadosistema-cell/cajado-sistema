@@ -2,9 +2,9 @@
 const crypto = require('crypto');
 
 const EMPRESA_VISIOPRO = '9cb2f597-367d-4475-b307-43345b09dee8';
-const INBOX_URL = 'https://visiopro-unified01-production.up.railway.app';
+const INBOX_URL = 'https://scintillating-freedom-production.up.railway.app';
 
-function gerarToken(empresaId, email, secret = 'visiopro-jwt-secret-2024-troque-em-producao') {
+function gerarToken(empresaId, email, secret = 'cajado-jwt-secret-2025-troque-em-producao') {
   const encodeBase64Url = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
   const header = encodeBase64Url({ alg: 'HS256', typ: 'JWT' });
   const payload = encodeBase64Url({
@@ -48,6 +48,11 @@ async function run() {
     console.log('Admin empresa_id:', d.adminDefault);
     console.log('Super admin?', d.isSuperAdmin);
     console.log('Conversas em memória:', d.conversasMemoria?.length);
+    console.log('\n--- CANAIS (Evolution/WABA) ---');
+    for (const c of (d.canaisMemoria || [])) {
+      console.log(`  - Canal: ${c.instance_name || 'Desconhecido'} | Empresa: ${c.empresa_id}`);
+    }
+    console.log('\n--- FIM CANAIS ---');
     for (const c of (d.conversasMemoria || [])) {
       console.log(`  - ${c.nome} (${c.numero}) | empresa: ${c.empresa_id} | msgs: ${c.msgs}`);
     }
