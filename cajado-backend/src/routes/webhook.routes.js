@@ -157,8 +157,14 @@ router.post(["/evolution", "/"], async (req, res) => {
 
   const data = req.body;
   if (data?.event?.toLowerCase() !== "messages.upsert") return;
+  console.log("================ WEBHOOK PAYLOAD ================");
+  console.log(JSON.stringify(data, null, 2));
+  console.log("=================================================");
   const messageData = Array.isArray(data?.data) ? data.data[0] : data?.data;
-  if (!messageData?.key) return;
+  if (!messageData?.key) {
+    console.log("[Webhook] ERRO: messageData.key is undefined!", JSON.stringify(messageData));
+    return;
+  }
 
   const messageId = messageData.key.id;
   if (processedMessages.has(messageId)) return;
