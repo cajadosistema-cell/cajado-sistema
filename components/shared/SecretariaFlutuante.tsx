@@ -3126,16 +3126,36 @@ Retorne exatamente este JSON:
         onPointerDown={handlePointerDown}
       >
         <div className="relative">
-          <div className="absolute inset-0 bg-amber-500 rounded-full animate-ping opacity-20" />
-          <div className="w-14 h-14 rounded-full border-[2.5px] border-amber-400 p-0.5 shadow-[0_8px_20px_rgba(251,191,36,0.4)] bg-page transition-transform active:scale-95">
+          {/* Pulso só quando há itens offline pendentes */}
+          {offlineQueue.length > 0 && (
+            <div className="absolute inset-0 bg-amber-500 rounded-full animate-ping opacity-25" />
+          )}
+          <div className={cn(
+            'w-14 h-14 rounded-full p-0.5 transition-all shadow-[0_8px_20px_rgba(251,191,36,0.4)] bg-page active:scale-95',
+            isOnline
+              ? 'border-[2.5px] border-amber-400'
+              : 'border-[2.5px] border-red-500 shadow-[0_8px_20px_rgba(239,68,68,0.4)]'
+          )}>
             <img
               src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=200&auto=format&fit=crop"
               alt="Elena" className="w-full h-full rounded-full object-cover pointer-events-none"
             />
           </div>
-          <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#080b14] rounded-full" />
+          {/* Badge de itens offline pendentes */}
+          {offlineQueue.length > 0 ? (
+            <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-amber-500 border-2 border-[#080b14] rounded-full flex items-center justify-center">
+              <span className="text-[9px] font-black text-black leading-none px-0.5">{offlineQueue.length}</span>
+            </div>
+          ) : (
+            /* Indicador online/offline */
+            <div className={cn(
+              'absolute bottom-0 right-0 w-3.5 h-3.5 border-2 border-[#080b14] rounded-full transition-colors',
+              isOnline ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'
+            )} />
+          )}
         </div>
       </div>
+
 
       {/* Janela de Chat */}
       {isOpen && (
@@ -3201,13 +3221,29 @@ Aqui está tudo o que você pode me pedir para fazer:
               </div>
             </div>
 
-            {/* Banner Offline */}
-            {!isOnline && (
-              <div className="px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2 shrink-0">
-                <span className="text-amber-400 text-xs">⚡</span>
-                <p className="text-[10px] text-amber-400 font-semibold">Sem internet — registros serão salvos ao reconectar</p>
+            {/* Banner Offline / Sync pendente */}
+            {!isOnline ? (
+              <div className="px-3 py-1.5 bg-red-500/15 border-b border-red-500/20 flex items-center gap-2 shrink-0">
+                <span className="text-red-400 text-xs animate-pulse">📵</span>
+                <p className="text-[10px] text-red-400 font-semibold flex-1">
+                  Sem internet {offlineQueue.length > 0 ? `— ${offlineQueue.length} item(s) na fila` : '— registros serão salvos ao reconectar'}
+                </p>
               </div>
-            )}
+            ) : offlineQueue.length > 0 ? (
+              <div className="px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2 shrink-0">
+                <span className="text-amber-400 text-xs">📶</span>
+                <p className="text-[10px] text-amber-400 font-semibold flex-1">
+                  {offlineQueue.length} item(s) aguardando sync...
+                </p>
+                <button
+                  onClick={processarFilaOffline}
+                  className="text-[9px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full hover:bg-amber-500/30 transition-colors"
+                >
+                  Sync agora
+                </button>
+              </div>
+            ) : null}
+
 
             {/* View do Histórico de Conversas */}
             {showHistory ? (
