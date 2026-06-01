@@ -580,10 +580,18 @@ export function SecretariaFlutuante() {
   // Controle de microfone já autorizado
   const micPermitidoRef = useRef(false)
 
+  // Fix #1: Salva autorização de mic no banco (não só localStorage)
+  const salvarMicAutorizado = async (uid: string) => {
+    try {
+      localStorage.setItem('elena_mic_ok', '1')
+      await (supabase.from('perfis') as any).update({ mic_autorizado: true }).eq('id', uid)
+    } catch { /* silencioso */ }
+  }
+
   useEffect(() => {
     setPos({ x: window.innerWidth - 80, y: window.innerHeight - 150 })
     setIsClient(true)
-    // Verifica permissão de microfone salva
+    // Verifica permissão de microfone salva (localStorage primeiro, banco depois)
     if (typeof window !== 'undefined') {
       micPermitidoRef.current = localStorage.getItem('elena_mic_ok') === '1'
     }
@@ -591,6 +599,18 @@ export function SecretariaFlutuante() {
       if (!data.user) return
       const uid = data.user.id
       setUserId(uid)
+
+      // Fix #1: verifica mic no banco se localStorage perdeu
+      if (!micPermitidoRef.current) {
+        try {
+          const { data: perfilMic } = await (supabase.from('perfis') as any)
+            .select('mic_autorizado').eq('id', uid).maybeSingle()
+          if (perfilMic?.mic_autorizado) {
+            micPermitidoRef.current = true
+            localStorage.setItem('elena_mic_ok', '1')
+          }
+        } catch { /* silencioso */ }
+      }
 
       // Carrega o histórico da ÚLTIMA sessão ou inicia uma nova
       if (!historyLoadedRef.current) {
@@ -601,16 +621,16 @@ export function SecretariaFlutuante() {
         const currentSessaoId = lastMsg && lastMsg.length > 0 ? lastMsg[0].sessao_id : Date.now().toString()
         setSessaoId(currentSessaoId)
         
+        // Fix #2: carrega as últimas msgs de QUALQUER sessão (não só a atual)
+        // Isso garante que após backup/nova sessão o histórico recente ainda aparece
         const { data: hist } = await (supabase
           .from('elena_conversas') as any)
-          .select('id, role, texto, acoes, created_at')
+          .select('id, role, texto, acoes, created_at, sessao_id')
           .eq('user_id', uid)
-          .eq('sessao_id', currentSessaoId)
-          .order('created_at', { ascending: false }) // Pega os mais recentes daquela sessão
-          .limit(40)
+          .order('created_at', { ascending: false })
+          .limit(60) // últimas 60 msgs de todas as sessões
         
         if (hist && hist.length > 0) {
-          // Reverte para a ordem cronológica correta de exibição
           const historico: Msg[] = (hist as any[]).reverse().map((r: any) => ({
             id: r.id,
             role: r.role as 'ai' | 'user',
@@ -619,12 +639,12 @@ export function SecretariaFlutuante() {
             created_at: r.created_at,
           }))
           setMensagens([
-            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Carreguei nossa última conversa. O que faremos agora?' },
+            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Carreguei o histórico recente. O que faremos agora?' },
             ...historico,
           ])
         }
 
-        // ── Carrega perfil de aprendizado ────────────────────────
+        // ── Carrega perfil de aprendizado ──────────────────────
         const { data: perfil } = await (supabase.from('elena_perfil') as any)
           .select('*').eq('user_id', uid).maybeSingle()
         if (perfil) {
@@ -843,6 +863,34 @@ export function SecretariaFlutuante() {
     return match ? { id: match.id, nome: match.nome, categoria: match.categoria } : { id: '', nome: '', categoria: '' }
   }, [supabase])
 
+  // ── Localizador: exibe onde o dado foi salvo ──────────────────
+  const exibirLocalizador = useCallback((tipo: string, dados: Record<string, any>) => {
+    const LOCAIS: Record<string, string> = {
+      gasto:            'Gastos Pessoais',
+      receita:          'Receitas Pessoais',
+      gasto_empresa:    'Despesas da Empresa',
+      receita_empresa:  'Receitas da Empresa',
+      agenda:           'Agenda',
+      ocorrencia:       'Ocorrencias',
+      ideia:            'Ideias',
+      transferencia:    'Transferencias',
+      definir_meta:     'Metas Financeiras',
+      registro_livre:   'Memoria da Elena',
+    }
+    const local = LOCAIS[tipo] || tipo
+    const cat   = dados.categoria ? ` > ${dados.categoria}` : ''
+    const conta = dados.conta_nome ? ` [${dados.conta_nome}]` : ''
+    const titulo = dados.titulo ? ` "${String(dados.titulo).substring(0, 28)}"` : ''
+    const dataFmt = dados.data
+      ? new Date(dados.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      : dados.data_inicio
+        ? new Date(dados.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    const valor = dados.valor ? ` — R$ ${Number(dados.valor).toFixed(2)}` : ''
+    const msg = `📍 Salvo em: **${local}${cat}${conta}${titulo}** (${dataFmt})${valor}`
+    setMensagens(prev => [...prev, { id: Date.now().toString() + '_loc', role: 'ai', texto: msg }])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA, uid: string) => {
     try {
       if (acao.tipo === 'gasto') {
@@ -899,6 +947,7 @@ export function SecretariaFlutuante() {
         if (error) throw new Error(error.message)
         if (novoGasto?.id) ultimoRegistroRef.current = { tabela: 'gastos_pessoais', id: novoGasto.id }
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('gasto', acao.dados)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'receita') {
@@ -942,6 +991,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('receita', acao.dados)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
       } else if (acao.tipo === 'gasto_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
@@ -973,6 +1023,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('gasto_empresa', acao.dados)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'receita_empresa') {
@@ -1002,6 +1053,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('receita_empresa', acao.dados)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'agenda') {
@@ -1050,6 +1102,7 @@ export function SecretariaFlutuante() {
           throw new Error(error.message)
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('agenda', acao.dados)
         // Notifica a TabAgenda para recarregar
         window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
 
@@ -1072,6 +1125,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('ocorrencia', acao.dados)
 
       } else if (acao.tipo === 'ideia') {
         // Ideia — tabela elena_ideias
@@ -1088,6 +1142,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('ideia', acao.dados)
         // Notifica TabIdeias para recarregar
         window.dispatchEvent(new CustomEvent('elena:ideia-salva'))
 
@@ -2862,13 +2917,21 @@ Retorne exatamente este JSON:
         if (e.error === 'not-allowed') {
           isListeningRef.current = false
           setIsListening(false)
-          alert('Microfone não acessível. Clique no 🔒 na barra de endereços e permita o microfone.')
+          alert('Microfone não acessível. Toque no cadeado 🔒 (ou ícone de câmera) na barra de endereços e permita o microfone.')
         } else if (e.error === 'audio-capture') {
           isListeningRef.current = false
           setIsListening(false)
           alert('Nenhum microfone encontrado. Conecte um e tente novamente.')
         }
         // 'no-speech' e 'aborted' → silenciosos (pausa normal ou stop manual)
+      }
+
+      // Fix #1: quando o mic inicia com sucesso → salvar autorização no banco
+      r.onspeechstart = () => {
+        if (!micPermitidoRef.current && userId) {
+          micPermitidoRef.current = true
+          salvarMicAutorizado(userId)
+        }
       }
 
       r.onend = () => {
