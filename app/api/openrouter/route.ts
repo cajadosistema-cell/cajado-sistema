@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     // Escolhe modelo: se tiver imagem usa GPT-4o (vision), senão usa Gemini 2.0 Flash
     const model = imageBase64
       ? 'openai/gpt-4o'
-      : (reqModel || 'google/gemini-2.0-flash-001')
+      : (reqModel || 'google/gemini-2.0-flash')
 
     let messages: { role: string; content: any }[]
 
