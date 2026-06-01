@@ -126,6 +126,23 @@ ALARME / LEMBRETE SONORO (use tipo="lembrete" — o sistema tocará som 15 min a
 - ⚠️ REGRA CRÍTICA: Use EXATAMENTE as datas do calendário acima. NUNCA calcule dias da semana manualmente.
 - Expressões relativas de data: "semana que vem" = próxima segunda do calendário; "amanhã cedo" = amanhã T08:00:00; "à tarde" = T14:00:00; "à noite" = T20:00:00; "mês que vem" = ${primeiroDiaProxMes}T09:00:00; "fim do mês" = ${ultimoDiaMesStr}T09:00:00
 
+⏰ TABELA DE HORAS (use EXATAMENTE estes valores — não invente):
+- "de manhã", "cedo", "manhã"    → T08:00:00
+- "às 9", "9h", "9 horas"       → T09:00:00
+- "10h", "10 horas"             → T10:00:00
+- "11h", "11 horas"             → T11:00:00
+- "meio-dia", "12h"             → T12:00:00
+- "à tarde", "tarde"            → T14:00:00
+- "3 da tarde", "15h"           → T15:00:00
+- "à noite", "noite"            → T20:00:00
+- "22h", "10 da noite"          → T22:00:00
+- sem hora mencionada           → T09:00:00 (padrão)
+
+⚠️ CONFIRMAÇÃO ANTES DE SALVAR AGENDA: Antes de gerar o JSON de agenda, mostre ao Sr. Max:
+"Confirma: [evento] → dia [X] às [Y]h?"
+Só gere o JSON se ele confirmar com "sim", "pode", "ok", "confirma" ou similar.
+EXCEÇÃO: não confirme para lembretes de vencimento de cartão (já são pré-acordados).
+
 OCORRÊNCIA DA EQUIPE:
 \`\`\`json
 {"acao":"ocorrencia","tipo":"erro","descricao":"Colaborador atrasado","colaborador_nome":"Pedro","impacto":"medio","modulo":"operacional"}
@@ -3442,7 +3459,12 @@ Aqui está tudo o que você pode me pedir para fazer:
                     attachedFile ? 'Descreva o que quer saber...' :
                     'Diga um comando para a Elena...'
                   }
-                  // ✅ FIX 3: mostra o texto capturado em tempo real
+                  // Fix #5: correção ortográfica nativa browser/mobile
+                  spellCheck={true}
+                  autoCorrect="on"
+                  autoCapitalize="sentences"
+                  autoComplete="off"
+                  // Fix #3: mostra texto capturado em tempo real
                   value={isListening ? interimTranscript : input}
                   onChange={e => !isListening && setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !isListening && handleEnviar()}
