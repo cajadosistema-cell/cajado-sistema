@@ -110,6 +110,20 @@ RECEITA DA EMPRESA:
 {"acao":"receita_empresa","valor":5000.00,"descricao":"Serviço prestado","categoria":"servicos","conta_nome":""}
 \`\`\`
 
+
+FATURA DE CARTÃO (salva no módulo Cartões PF — NÃO na agenda):
+\`\`\`json
+{"acao":"fatura_cartao","conta_nome":"Nubank","valor":850.00,"mes_referencia":"${anoAtual}-${mesAtual}","notas":"Fatura de junho"}
+\`\`\`
+- Use acao=fatura_cartao SEMPRE que o Sr. Max disser: "lança a fatura do [cartão]", "fatura do [banco] de [mês]", "gasto no [cartão] esse mês", "valor da fatura"
+- mes_referencia DEVE ser no formato YYYY-MM (ex: "2026-06" para junho de 2026)
+- conta_nome = nome exato do cartão (ex: "Nubank", "XP", "Bradesco")
+- ATENÇÃO: fatura_cartao vai para o MODULO CARTÕES — um lembrete de vencimento na agenda AINDA deve ser criado separadamente com acao=agenda.
+  Exemplo: Sr. Max diz "fatura do Nubank de junho é R$850, vence dia 15"
+  → JSON 1: {"acao":"fatura_cartao","conta_nome":"Nubank","valor":850,"mes_referencia":"2026-06"}
+  → JSON 2: {"acao":"agenda","titulo":"💳 Pagar Nubank — R$ 850","data_inicio":"2026-06-15T09:00:00","tipo":"vencimento"}
+  → JSON 3: {"acao":"agenda","titulo":"✅ Confirmação: Pagou o Nubank? R$ 850","data_inicio":"2026-06-15T20:00:00","tipo":"lembrete"}
+
 AGENDA / EVENTO:
 \`\`\`json
 {"acao":"agenda","titulo":"Reunião com cliente","data_inicio":"${amanhaStr}T14:00:00","tipo":"reuniao"}
@@ -1207,6 +1221,28 @@ export function SecretariaFlutuante() {
         URL.revokeObjectURL(url)
         
         setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      } else if (acao.tipo === 'fatura_cartao') {
+        // Fatura de cartão → tabela faturas_cartoes (módulo Cartões PF)
+        const valor = Number(acao.dados.valor) || 0
+        const mesRef = String(acao.dados.mes_referencia || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`)
+        // Resolve conta
+        const contaResolvida = await resolverContaPf(acao.dados.conta_nome)
+        if (!contaResolvida.id) {
+          throw new Error(`Cartão "${acao.dados.conta_nome || 'não informado'}" não encontrado. Cadastre o cartão primeiro em Cartões PF.`)
+        }
+        // Upsert: atualiza se já existe fatura deste cartao neste mes
+        const { error } = await (supabase.from('faturas_cartoes') as any).upsert({
+          conta_id: contaResolvida.id,
+          mes_referencia: mesRef,
+          valor_fechado: valor,
+          user_id: uid,
+          notas: acao.dados.notas || `Lançada pela Elena`,
+        }, { onConflict: 'conta_id,mes_referencia' })
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirLocalizador('fatura_cartao', { ...acao.dados, categoria: contaResolvida.nome })
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'transferencia') {
         // ── Transferência entre contas (PF ou PJ) ───────────────────
