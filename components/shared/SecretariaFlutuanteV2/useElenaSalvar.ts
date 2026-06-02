@@ -180,6 +180,28 @@ export function useElenaSalvar({
     return { id: '', nome: '' }
   }, [supabase])
 
+  // ── resolverCartaoPf ────────────────────────────────────────
+  const resolverCartaoPf = useCallback(async (contaNome: string): Promise<{ id: string; nome: string }> => {
+    if (!contaNome?.trim()) return { id: '', nome: '' }
+    const { data: contas } = await (supabase.from('contas') as any)
+      .select('id, nome, bandeira, tipo')
+      .eq('categoria', 'pf').eq('ativo', true)
+      .in('tipo', ['cartao_credito', 'cartao_debito'])
+      .order('created_at', { ascending: true })
+
+    const busca = contaNome.toLowerCase().trim()
+    if (contas?.length) {
+      const porBandeira = contas.find((c: any) => c.bandeira?.toLowerCase().includes(busca))
+      if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
+      const porNome = contas.find((c: any) => {
+        const nome = (c.nome || '').toLowerCase()
+        return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
+      })
+      if (porNome) return { id: porNome.id, nome: porNome.nome }
+    }
+    return { id: '', nome: '' }
+  }, [supabase])
+
   // ── resolverContaQualquer ─────────────────────────────────────
   const resolverContaQualquer = useCallback(async (contaNome: string): Promise<{ id: string; nome: string; categoria: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '', categoria: '' }
@@ -425,19 +447,19 @@ export function useElenaSalvar({
       } else if (acao.tipo === 'fatura_cartao') {
         const valor = Number(acao.dados.valor) || 0
         const mesRef = acao.dados.mes_referencia || new Date().toISOString().substring(0, 7)
-        const contaPf = await resolverContaPf(acao.dados.conta_nome)
-        if (!contaPf.id) throw new Error('Cartão não encontrado.')
+        const cartaoPf = await resolverCartaoPf(acao.dados.conta_nome)
+        if (!cartaoPf.id) throw new Error('Cartão não encontrado. Certifique-se de que o cartão existe na aba Cartões.')
         
         const { error } = await (supabase.from('faturas_cartoes') as any).upsert({
           user_id: uid,
-          conta_id: contaPf.id,
+          conta_id: cartaoPf.id,
           valor_fechado: valor,
           mes_referencia: mesRef,
           notas: acao.dados.notas || 'Registrado pela Elena',
         }, { onConflict: 'conta_id,mes_referencia' })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirConfirmacaoSalvamento('fatura_cartao', acao.dados, contaPf.nome)
+        exibirConfirmacaoSalvamento('fatura_cartao', acao.dados, cartaoPf.nome)
 
       // ── TRANSFERÊNCIA ────────────────────────────────────────
       } else if (acao.tipo === 'transferencia') {
