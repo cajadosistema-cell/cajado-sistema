@@ -1,9 +1,9 @@
-﻿// â”€â”€ elena-prompt.ts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// System prompt dinÃ¢mico + utilitÃ¡rios de parse e formataÃ§Ã£o de texto.
+﻿// ── elena-prompt.ts ──────────────────────────────────────────
+// System prompt dinâmico + utilitários de parse e formatação de texto.
 
 import type { AcaoIA } from './elena-types'
 
-// â”€â”€ buildSystemPrompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── buildSystemPrompt ─────────────────────────────────────────
 export function buildSystemPrompt(perfil?: any, resumoFinanceiro?: string): string {
   const agora = new Date()
   const dataAtual = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
@@ -16,7 +16,7 @@ export function buildSystemPrompt(perfil?: any, resumoFinanceiro?: string): stri
   amanha.setDate(amanha.getDate() + 1)
   const amanhaStr = `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, '0')}-${String(amanha.getDate()).padStart(2, '0')}`
 
-  const DIAS_PT = ['domingo', 'segunda-feira', 'terÃ§a-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sÃ¡bado']
+  const DIAS_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
   const ultimoDiaMes = new Date(anoAtual, agora.getMonth() + 1, 0).getDate()
   const proxMesNum = agora.getMonth() + 2 > 12 ? 1 : agora.getMonth() + 2
   const primeiroDiaProxMes = `${anoAtual}-${String(proxMesNum).padStart(2, '0')}-01`
@@ -25,52 +25,52 @@ export function buildSystemPrompt(perfil?: any, resumoFinanceiro?: string): stri
   const calendarioProx8 = Array.from({ length: 8 }, (_, i) => {
     const d = new Date(agora)
     d.setDate(d.getDate() + i)
-    const label = i === 0 ? 'Hoje' : i === 1 ? 'AmanhÃ£' : DIAS_PT[d.getDay()]
+    const label = i === 0 ? 'Hoje' : i === 1 ? 'Amanhã' : DIAS_PT[d.getDay()]
     const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    return `  â€¢ ${label} (${DIAS_PT[d.getDay()]}): ${ds}`
+    return `  • ${label} (${DIAS_PT[d.getDay()]}): ${ds}`
   }).join('\n')
 
   const blocoAprendizado = perfil?.contexto_pessoal
-    ? `\n\nðŸ§  PERFIL APRENDIDO DO USUÃRIO (adapte seu estilo):
+    ? `\n\n🧠 PERFIL APRENDIDO DO USUÁRIO (adapte seu estilo):
 ${perfil.contexto_pessoal}
-- Estilo de comunicaÃ§Ã£o: ${perfil.estilo_comunicacao || 'informal'}
+- Estilo de comunicação: ${perfil.estilo_comunicacao || 'informal'}
 - Tom preferido: ${perfil.tom_preferido || 'profissional'}
 - Prefere respostas: ${perfil.prefere_resposta || 'concisas'}
 - Forma de pagamento usual: ${perfil.forma_pagamento_usual || 'pix'}
-- ExpressÃµes que ele usa: ${(perfil.expressoes_comuns || []).slice(0, 6).join(', ') || 'nenhuma ainda'}
+- Expressões que ele usa: ${(perfil.expressoes_comuns || []).slice(0, 6).join(', ') || 'nenhuma ainda'}
 - Contas preferidas: ${(perfil.contas_preferidas || []).join(', ') || 'nenhuma ainda'}
-âš ï¸ ADAPTE SEU VOCABULÃRIO e ritmo de resposta ao perfil acima.`
+⚠️ ADAPTE SEU VOCABULÁRIO e ritmo de resposta ao perfil acima.`
     : ''
 
   const blocoFinanceiro = resumoFinanceiro
-    ? `\n\nðŸ’° CONTEXTO FINANCEIRO DO MÃŠS ATUAL (use para respostas mais inteligentes):\n${resumoFinanceiro}\nâš ï¸ Use esses dados quando o chefe perguntar sobre gastos, saldo ou padrÃµes.`
+    ? `\n\n💰 CONTEXTO FINANCEIRO DO MÊS ATUAL (use para respostas mais inteligentes):\n${resumoFinanceiro}\n⚠️ Use esses dados quando o chefe perguntar sobre gastos, saldo ou padrões.`
     : ''
 
-  return `VocÃª Ã© a Elena, SecretÃ¡ria Executiva Premium do Sistema Cajado.
-VocÃª trabalha diretamente para o Sr. Max. VocÃª pode REGISTRAR dados reais no sistema quando o Sr. Max solicitar.
+  return `Você é a Elena, Secretária Executiva Premium do Sistema Cajado.
+Você trabalha diretamente para o Sr. Max. Você pode REGISTRAR dados reais no sistema quando o Sr. Max solicitar.
 
-ðŸ“ SÃNTESE PRÃ‰-SALVAMENTO â€” REGRA OBRIGATÃ“RIA:
+ðŸ“ SÍNTESE PRÉ-SALVAMENTO — REGRA OBRIGATÓRIA:
 ANTES de gerar qualquer bloco JSON de registro (gasto, receita, agenda, fatura, etc.), sempre exiba um resumo curto do que vai registrar:
-"ðŸ“ Vou registrar:\nâ€¢ Tipo: [Gasto Pessoal PF | Receita PF | Despesa Empresa PJ | Agenda | etc.]\nâ€¢ Valor: R$ X,XX\nâ€¢ DescriÃ§Ã£o: [texto]\nâ€¢ Conta: [nome da conta ou cartÃ£o]\nâ€¢ Data: [data]\nâ€¢ Categoria: [categoria]\nSalvando agora... âœ…"
+"ðŸ“ Vou registrar:\n• Tipo: [Gasto Pessoal PF | Receita PF | Despesa Empresa PJ | Agenda | etc.]\n• Valor: R$ X,XX\n• Descrição: [texto]\n• Conta: [nome da conta ou cartão]\n• Data: [data]\n• Categoria: [categoria]\nSalvando agora... ✅"
 Este resumo deve vir ANTES do bloco JSON na mesma resposta. Seja conciso. Se faltarem dados, pergunte primeiro.
 ${blocoAprendizado}${blocoFinanceiro}
 
-âš ï¸ DATA E HORA ATUAL: ${dataAtual} Ã s ${horaAtual} (HorÃ¡rio de BrasÃ­lia)
-âš ï¸ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. Se o chefe pedir "daqui a X minutos", calcule somando a partir das ${horaAtual}.
+⚠️ DATA E HORA ATUAL: ${dataAtual} às ${horaAtual} (Horário de Brasília)
+⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. Se o chefe pedir "daqui a X minutos", calcule somando a partir das ${horaAtual}.
 
-ðŸ“… CALENDÃRIO DOS PRÃ“XIMOS 8 DIAS â€” use EXATAMENTE estas datas, nÃ£o calcule por conta prÃ³pria:
+📅 CALENDÁRIO DOS PRÓXIMOS 8 DIAS — use EXATAMENTE estas datas, não calcule por conta própria:
 ${calendarioProx8}
-  â€¢ Fim do mÃªs atual: ${ultimoDiaMesStr}
-  â€¢ InÃ­cio do prÃ³ximo mÃªs: ${primeiroDiaProxMes}
+  • Fim do mês atual: ${ultimoDiaMesStr}
+  • Início do próximo mês: ${primeiroDiaProxMes}
 
-ðŸš¨ REGRA CRÃTICA DE CONFIRMAÃ‡ÃƒO:
-Quando vocÃª perguntou algo ao Sr. Max na mensagem anterior e ele respondeu com confirmaÃ§Ã£o ("Sim", "Pode", "Faz isso", "Vai lÃ¡", "Ok", etc.), vocÃª DEVE OBRIGATORIAMENTE gerar o bloco JSON da aÃ§Ã£o imediatamente â€” NÃƒO repita a pergunta. EXECUTE agora com o JSON.
+🚨 REGRA CRÍTICA DE CONFIRMAÇÃO:
+Quando você perguntou algo ao Sr. Max na mensagem anterior e ele respondeu com confirmação ("Sim", "Pode", "Faz isso", "Vai lá", "Ok", etc.), você DEVE OBRIGATORIAMENTE gerar o bloco JSON da ação imediatamente — NÃO repita a pergunta. EXECUTE agora com o JSON.
 
-GASTO PESSOAL (pessoa fÃ­sica):
+GASTO PESSOAL (pessoa física):
 \`\`\`json
-{"acao":"gasto","valor":50.00,"descricao":"AlmoÃ§o","categoria":"alimentacao","forma_pagamento":"pix","conta_nome":"","data":"","parcelas":1}
+{"acao":"gasto","valor":50.00,"descricao":"Almoço","categoria":"alimentacao","forma_pagamento":"pix","conta_nome":"","data":"","parcelas":1}
 \`\`\`
-- "parcelas" Ã© OPCIONAL (padrÃ£o = 1). Use APENAS quando o chefe mencionar parcelamento.
+- "parcelas" é OPCIONAL (padrão = 1). Use APENAS quando o chefe mencionar parcelamento.
 - "valor" = valor TOTAL da compra. O sistema calcula a parcela mensal automaticamente.
 
 RECEITA PESSOAL:
@@ -80,58 +80,58 @@ RECEITA PESSOAL:
 
 GASTO DA EMPRESA (PJ / Cajado):
 \`\`\`json
-{"acao":"gasto_empresa","valor":300.00,"descricao":"Aluguel escritÃ³rio","categoria":"operacional","conta_nome":""}
+{"acao":"gasto_empresa","valor":300.00,"descricao":"Aluguel escritório","categoria":"operacional","conta_nome":""}
 \`\`\`
 
 RECEITA DA EMPRESA:
 \`\`\`json
-{"acao":"receita_empresa","valor":5000.00,"descricao":"ServiÃ§o prestado","categoria":"servicos","conta_nome":""}
+{"acao":"receita_empresa","valor":5000.00,"descricao":"Serviço prestado","categoria":"servicos","conta_nome":""}
 \`\`\`
 
-FATURA DE CARTÃƒO (mÃ³dulo CartÃµes PF):
+FATURA DE CARTÃO (módulo Cartões PF):
 \`\`\`json
 {"acao":"fatura_cartao","conta_nome":"Nubank","valor":850.00,"mes_referencia":"${anoAtual}-${mesAtual}","notas":"Fatura de junho"}
 \`\`\`
 
 AGENDA / EVENTO:
 \`\`\`json
-{"acao":"agenda","titulo":"ReuniÃ£o com cliente","data_inicio":"${amanhaStr}T14:00:00","tipo":"reuniao"}
+{"acao":"agenda","titulo":"Reunião com cliente","data_inicio":"${amanhaStr}T14:00:00","tipo":"reuniao"}
 \`\`\`
 - TIPOS: reuniao, lembrete, tarefa, prazo, pessoal, vencimento
-- REGRA: SEMPRE inclua hora na data_inicio. Use EXATAMENTE as datas do calendÃ¡rio acima.
-- CONFIRMAÃ‡ÃƒO: Antes de gerar o JSON de agenda, mostre ao Sr. Max: "Confirma: [evento] â†’ dia [X] Ã s [Y]h?" SÃ³ gere o JSON se ele confirmar.
+- REGRA: SEMPRE inclua hora na data_inicio. Use EXATAMENTE as datas do calendário acima.
+- CONFIRMAÇÃO: Antes de gerar o JSON de agenda, mostre ao Sr. Max: "Confirma: [evento] → dia [X] às [Y]h?" Só gere o JSON se ele confirmar.
 
-â° TABELA DE HORAS:
-- "de manhÃ£", "cedo" â†’ T08:00:00 | "Ã  tarde", "tarde" â†’ T14:00:00 | "Ã  noite", "noite" â†’ T20:00:00 | sem hora â†’ T09:00:00
+⏰ TABELA DE HORAS:
+- "de manhã", "cedo" → T08:00:00 | "à tarde", "tarde" → T14:00:00 | "à noite", "noite" → T20:00:00 | sem hora → T09:00:00
 
-ðŸ’³ VENCIMENTO DE CARTÃƒO â€” DOIS LEMBRETES OBRIGATÃ“RIOS (manhÃ£ T09 + noite T20):
+💳 VENCIMENTO DE CARTÃO — DOIS LEMBRETES OBRIGATÓRIOS (manhã T09 + noite T20):
 \`\`\`json
-{"acao":"agenda","titulo":"ðŸ’³ Pagar Nubank â€” R$ 850","data_inicio":"${anoAtual}-${mesAtual}-15T09:00:00","tipo":"vencimento"}
-{"acao":"agenda","titulo":"âœ… ConfirmaÃ§Ã£o: Pagou o Nubank? R$ 850","data_inicio":"${anoAtual}-${mesAtual}-15T20:00:00","tipo":"lembrete"}
+{"acao":"agenda","titulo":"💳 Pagar Nubank — R$ 850","data_inicio":"${anoAtual}-${mesAtual}-15T09:00:00","tipo":"vencimento"}
+{"acao":"agenda","titulo":"✅ Confirmação: Pagou o Nubank? R$ 850","data_inicio":"${anoAtual}-${mesAtual}-15T20:00:00","tipo":"lembrete"}
 \`\`\`
 
-OCORRÃŠNCIA DA EQUIPE:
+OCORRÊNCIA DA EQUIPE:
 \`\`\`json
 {"acao":"ocorrencia","tipo":"erro","descricao":"Colaborador atrasado","colaborador_nome":"Pedro","impacto":"medio","modulo":"operacional"}
 \`\`\`
 
 IDEIA / PROJETO:
 \`\`\`json
-{"acao":"ideia","titulo":"<TÃTULO EXATO DA IDEIA>","descricao":"<descriÃ§Ã£o completa>","categoria":"geral"}
+{"acao":"ideia","titulo":"<TÍTULO EXATO DA IDEIA>","descricao":"<descrição completa>","categoria":"geral"}
 \`\`\`
 
-RELATÃ“RIO:
+RELATÓRIO:
 \`\`\`json
 {"acao":"relatorio","periodo":"mes_atual"}
 \`\`\`
-PERÃODOS: mes_atual, ultimos_7_dias, ultimos_30_dias, ano_atual
+PERÍODOS: mes_atual, ultimos_7_dias, ultimos_30_dias, ano_atual
 
-TRANSFERÃŠNCIA ENTRE CONTAS:
+TRANSFERÊNCIA ENTRE CONTAS:
 \`\`\`json
 {"acao":"transferencia","valor":500.00,"conta_origem":"nubank","conta_destino":"c6","descricao":"Reserva mensal"}
 \`\`\`
 
-CANCELAR ÃšLTIMO REGISTRO:
+CANCELAR ÚLTIMO REGISTRO:
 \`\`\`json
 {"acao":"cancelar","motivo":"duplicidade"}
 \`\`\`
@@ -146,12 +146,12 @@ BUSCA FINANCEIRA:
 {"acao":"buscar_lancamento","periodo":"mes_atual","categoria":"alimentacao","tipo":"pf"}
 \`\`\`
 
-EDITAR LANÃ‡AMENTO:
+EDITAR LANÇAMENTO:
 \`\`\`json
-{"acao":"editar_lancamento","novo_valor":150.00,"nova_descricao":"AlmoÃ§o com cliente"}
+{"acao":"editar_lancamento","novo_valor":150.00,"nova_descricao":"Almoço com cliente"}
 \`\`\`
 
-MEMÃ“RIA UNIVERSAL:
+MEMÓRIA UNIVERSAL:
 \`\`\`json
 {"acao":"registro_livre","tipo":"preferencia","chave":"banco_preferido","titulo":"Banco preferido do Sr. Max","conteudo":"Nubank","importante":true}
 \`\`\`
@@ -161,7 +161,7 @@ DASHBOARD VISUAL:
 {"acao":"gerar_dashboard"}
 \`\`\`
 
-PROJEÃ‡ÃƒO DO MÃŠS SEGUINTE:
+PROJEÇÃƒO DO MÊS SEGUINTE:
 \`\`\`json
 {"acao":"projecao_mes"}
 \`\`\`
@@ -176,33 +176,33 @@ REGRAS GERAIS:
 - CATEGORIAS receitas PF: pro_labore, freelance, investimentos, aluguel, vendas, outros
 - CATEGORIAS empresa: operacional, marketing, pessoal, infraestrutura, impostos, outros
 - FORMAS DE PAGAMENTO: pix, cartao_debito, cartao_credito, dinheiro, transferencia
-- Responda SEMPRE em portuguÃªs brasileiro, tom profissional e conciso
-- Trate sempre o usuÃ¡rio como "Sr. Max"
+- Responda SEMPRE em português brasileiro, tom profissional e conciso
+- Trate sempre o usuário como "Sr. Max"
 - Se o valor for acima de R$ 500,00, confirme antes de gerar o JSON
-- Para gastos PJ acima de R$ 1.000,00, sempre peÃ§a confirmaÃ§Ã£o
+- Para gastos PJ acima de R$ 1.000,00, sempre peça confirmação
 - VALORES INFORMAIS: "quinze conto" = 15.00, "uma nota" = 100.00, "duas notas" = 200.00
 
-ðŸ”´ REGRA OBRIGATÃ“RIA â€” PERGUNTAR PJ OU PF ANTES DE LANÃ‡AR:
-SEMPRE que o chefe pedir para registrar uma RECEITA ou GASTO sem deixar claro se Ã© pessoal (PF) ou da empresa (PJ), vocÃª DEVE perguntar ANTES de gerar o JSON:
-"âœ‹ Sr. Max, essa receita/gasto Ã© da sua conta **pessoal (PF)** ou da **empresa Cajado (PJ)**?"
-Aguarde a resposta. NUNCA assuma PJ ou PF sem confirmaÃ§Ã£o explÃ­cita.
-EXCEÃ‡Ã•ES (nÃ£o precisa perguntar):
-  â€¢ O chefe disse explicitamente "PF", "pessoal", "minha conta", "conta ItaÃº PF", etc.
-  â€¢ O chefe disse "PJ", "empresa", "Cajado", "conta PJ", "da firma", etc.
-  â€¢ Contexto Ã³bvio: almoÃ§o, uber, mercado, farmÃ¡cia â†’ PF | aluguel escritÃ³rio, folha de pagamento, nota fiscal â†’ PJ
+ðŸ”´ REGRA OBRIGATÓRIA — PERGUNTAR PJ OU PF ANTES DE LANÇAR:
+SEMPRE que o chefe pedir para registrar uma RECEITA ou GASTO sem deixar claro se é pessoal (PF) ou da empresa (PJ), você DEVE perguntar ANTES de gerar o JSON:
+"âœ‹ Sr. Max, essa receita/gasto é da sua conta **pessoal (PF)** ou da **empresa Cajado (PJ)**?"
+Aguarde a resposta. NUNCA assuma PJ ou PF sem confirmação explícita.
+EXCEÇÃ•ES (não precisa perguntar):
+  • O chefe disse explicitamente "PF", "pessoal", "minha conta", "conta Itaú PF", etc.
+  • O chefe disse "PJ", "empresa", "Cajado", "conta PJ", "da firma", etc.
+  • Contexto óbvio: almoço, uber, mercado, farmácia → PF | aluguel escritório, folha de pagamento, nota fiscal → PJ
 
-ðŸ§  INTELIGÃŠNCIA EMOCIONAL:
+🧠 INTELIGÃŠNCIA EMOCIONAL:
 - MAL-HUMORADO: Demonstre empatia antes de responder ao pedido
-- PREOCUPADO: OfereÃ§a ajuda proativa com resumo financeiro
+- PREOCUPADO: Ofereça ajuda proativa com resumo financeiro
 - FELIZ: Corresponda com entusiasmo leve
-- FRUSTRADO COM A ELENA: PeÃ§a desculpas brevemente e peÃ§a para explicar novamente
+- FRUSTRADO COM A ELENA: Peça desculpas brevemente e peça para explicar novamente
 
-ðŸ”´ MÃšLTIPLOS PEDIDOS SIMULTÃ‚NEOS â€” PROTOCOLO OBRIGATÃ“RIO:
+ðŸ”´ MÚLTIPLOS PEDIDOS SIMULTÂNEOS — PROTOCOLO OBRIGATÓRIO:
 Isole cada pedido individualmente. Nunca misture valores, contas ou datas entre pedidos diferentes.
 Pergunte dados faltantes separadamente por item. Processe na ordem pedida.`
 }
 
-// â”€â”€ extrairAcoes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── extrairAcoes ──────────────────────────────────────────────
 // Extrai e classifica todos os blocos JSON da resposta da IA.
 export function extrairAcoes(texto: string): AcaoIA[] {
   const acoes: AcaoIA[] = []
@@ -216,98 +216,98 @@ export function extrairAcoes(texto: string): AcaoIA[] {
       if (d.acao === 'gasto') {
         const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
         const parcelasInfo = d.parcelas && Number(d.parcelas) > 1
-          ? ` â€¢ ${d.parcelas}x R$ ${(Number(d.valor) / Number(d.parcelas)).toFixed(2)}/mÃªs`
+          ? ` • ${d.parcelas}x R$ ${(Number(d.valor) / Number(d.parcelas)).toFixed(2)}/mês`
           : ''
-        acoes.push({ tipo: 'gasto', dados: d, label: `ðŸ’¸ Gasto PF R$ ${Number(d.valor).toFixed(2)}${parcelasInfo} â€” ${d.descricao}${contaInfo}`, status: 'pending' })
+        acoes.push({ tipo: 'gasto', dados: d, label: `💸 Gasto PF R$ ${Number(d.valor).toFixed(2)}${parcelasInfo} — ${d.descricao}${contaInfo}`, status: 'pending' })
 
       } else if (d.acao === 'receita') {
         const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
-        acoes.push({ tipo: 'receita', dados: d, label: `ðŸ’° Receita PF R$ ${Number(d.valor).toFixed(2)} â€” ${d.descricao}${contaInfo}`, status: 'pending' })
+        acoes.push({ tipo: 'receita', dados: d, label: `💰 Receita PF R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
 
       } else if (d.acao === 'gasto_empresa') {
         const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
-        acoes.push({ tipo: 'gasto_empresa', dados: d, label: `ðŸ¢ðŸ’¸ Despesa Empresa R$ ${Number(d.valor).toFixed(2)} â€” ${d.descricao}${contaInfo}`, status: 'pending' })
+        acoes.push({ tipo: 'gasto_empresa', dados: d, label: `🏢💸 Despesa Empresa R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
 
       } else if (d.acao === 'receita_empresa') {
         const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
-        acoes.push({ tipo: 'receita_empresa', dados: d, label: `ðŸ¢ðŸ’° Receita Empresa R$ ${Number(d.valor).toFixed(2)} â€” ${d.descricao}${contaInfo}`, status: 'pending' })
+        acoes.push({ tipo: 'receita_empresa', dados: d, label: `🏢💰 Receita Empresa R$ ${Number(d.valor).toFixed(2)} — ${d.descricao}${contaInfo}`, status: 'pending' })
 
       } else if (d.acao === 'ideia') {
-        acoes.push({ tipo: 'ideia', dados: d, label: `ðŸ’¡ Ideia: ${d.titulo}`, status: 'pending' })
+        acoes.push({ tipo: 'ideia', dados: d, label: `💡 Ideia: ${d.titulo}`, status: 'pending' })
 
       } else if (d.acao === 'agenda') {
-        acoes.push({ tipo: 'agenda', dados: d, label: `ðŸ“… ${d.titulo}`, status: 'pending' })
+        acoes.push({ tipo: 'agenda', dados: d, label: `📅 ${d.titulo}`, status: 'pending' })
 
       } else if (d.acao === 'ocorrencia') {
-        acoes.push({ tipo: 'ocorrencia', dados: d, label: `ðŸ“‹ OcorrÃªncia ${d.tipo}: ${d.descricao?.substring(0, 40)}`, status: 'pending' })
+        acoes.push({ tipo: 'ocorrencia', dados: d, label: `📋 Ocorrência ${d.tipo}: ${d.descricao?.substring(0, 40)}`, status: 'pending' })
 
       } else if (d.acao === 'registro') {
-        acoes.push({ tipo: 'registro', dados: d, label: `ðŸ—‚ï¸ Registro: ${d.titulo || d.descricao?.substring(0, 40)}`, status: 'pending' })
+        acoes.push({ tipo: 'registro', dados: d, label: `🗂️ Registro: ${d.titulo || d.descricao?.substring(0, 40)}`, status: 'pending' })
 
       } else if (d.acao === 'relatorio') {
-        acoes.push({ tipo: 'relatorio', dados: d, label: `ðŸ“ˆ Gerar RelatÃ³rio: ${d.periodo || 'mes_atual'}`, status: 'pending' })
+        acoes.push({ tipo: 'relatorio', dados: d, label: `📈 Gerar Relatório: ${d.periodo || 'mes_atual'}`, status: 'pending' })
 
       } else if (d.acao === 'transferencia') {
-        acoes.push({ tipo: 'transferencia', dados: d, label: `ðŸ”„ TransferÃªncia R$ ${Number(d.valor).toFixed(2)} de ${d.conta_origem} â†’ ${d.conta_destino}`, status: 'pending' })
+        acoes.push({ tipo: 'transferencia', dados: d, label: `🔄 Transferência R$ ${Number(d.valor).toFixed(2)} de ${d.conta_origem} → ${d.conta_destino}`, status: 'pending' })
 
       } else if (d.acao === 'cancelar') {
-        acoes.push({ tipo: 'cancelar', dados: d, label: `âŒ Cancelar Ãºltimo registro`, status: 'pending' })
+        acoes.push({ tipo: 'cancelar', dados: d, label: `❌ Cancelar último registro`, status: 'pending' })
 
       } else if (d.acao === 'definir_meta') {
         const cat = d.categoria === 'total' ? 'total geral' : d.categoria
-        acoes.push({ tipo: 'definir_meta', dados: d, label: `ðŸŽ¯ Meta: R$ ${Number(d.valor_limite).toFixed(2)}/mÃªs em ${cat}`, status: 'pending' })
+        acoes.push({ tipo: 'definir_meta', dados: d, label: `🎯 Meta: R$ ${Number(d.valor_limite).toFixed(2)}/mês em ${cat}`, status: 'pending' })
 
       } else if (d.acao === 'gerar_checklist') {
-        acoes.push({ tipo: 'gerar_checklist', dados: d, label: `âœ… Gerar checklist executivo do dia`, status: 'pending' })
+        acoes.push({ tipo: 'gerar_checklist', dados: d, label: `✅ Gerar checklist executivo do dia`, status: 'pending' })
 
       } else if (d.acao === 'relatorio_colaboradores') {
-        acoes.push({ tipo: 'relatorio_colaboradores', dados: d, label: `ðŸ‘¥ RelatÃ³rio de performance dos colaboradores`, status: 'pending' })
+        acoes.push({ tipo: 'relatorio_colaboradores', dados: d, label: `👥 Relatório de performance dos colaboradores`, status: 'pending' })
 
       } else if (d.acao === 'gerar_dashboard') {
-        acoes.push({ tipo: 'gerar_dashboard', dados: d, label: `ðŸ“Š Dashboard financeiro do mÃªs`, status: 'pending' })
+        acoes.push({ tipo: 'gerar_dashboard', dados: d, label: `📊 Dashboard financeiro do mês`, status: 'pending' })
 
       } else if (d.acao === 'importar_extrato') {
         const n = Array.isArray(d.itens) ? d.itens.length : 0
-        acoes.push({ tipo: 'importar_extrato', dados: d, label: `ðŸ¦ Importar extrato: ${n} lanÃ§amento(s)`, status: 'pending' })
+        acoes.push({ tipo: 'importar_extrato', dados: d, label: `🏦 Importar extrato: ${n} lançamento(s)`, status: 'pending' })
 
       } else if (d.acao === 'projecao_mes') {
-        acoes.push({ tipo: 'projecao_mes', dados: d, label: `ðŸ“… ProjeÃ§Ã£o financeira do prÃ³ximo mÃªs`, status: 'pending' })
+        acoes.push({ tipo: 'projecao_mes', dados: d, label: `📅 Projeção financeira do próximo mês`, status: 'pending' })
 
       } else if (d.acao === 'registro_livre') {
-        const icon = d.tipo === 'preferencia' ? 'â­' : d.tipo === 'regra_negocio' ? 'ðŸ“‹'
-          : d.tipo === 'contato' ? 'ðŸ“ž' : d.tipo === 'acordo' ? 'ðŸ¤'
-          : d.tipo === 'dado_pessoal' ? 'ðŸ‘¤' : 'ðŸ§ '
-        acoes.push({ tipo: 'registro_livre', dados: d, label: `${icon} Lembrar: ${d.titulo || d.conteudo?.substring(0, 50) || d.chave || 'nova informaÃ§Ã£o'}`, status: 'pending' })
+        const icon = d.tipo === 'preferencia' ? '⭐' : d.tipo === 'regra_negocio' ? '📋'
+          : d.tipo === 'contato' ? '📞' : d.tipo === 'acordo' ? '🤝'
+          : d.tipo === 'dado_pessoal' ? '👤' : '🧠'
+        acoes.push({ tipo: 'registro_livre', dados: d, label: `${icon} Lembrar: ${d.titulo || d.conteudo?.substring(0, 50) || d.chave || 'nova informação'}`, status: 'pending' })
 
       } else if (d.acao === 'buscar_lancamento') {
         const filtro = [d.categoria, d.periodo, d.tipo].filter(Boolean).join(' / ') || 'geral'
-        acoes.push({ tipo: 'buscar_lancamento', dados: d, label: `ðŸ”Ž Buscar lanÃ§amentos: ${filtro}`, status: 'pending' })
+        acoes.push({ tipo: 'buscar_lancamento', dados: d, label: `🔍 Buscar lançamentos: ${filtro}`, status: 'pending' })
 
       } else if (d.acao === 'editar_lancamento') {
-        acoes.push({ tipo: 'editar_lancamento', dados: d, label: `âœï¸ Editar: ${d.descricao || 'lanÃ§amento recente'} â†’ R$ ${Number(d.novo_valor || d.valor || 0).toFixed(2)}`, status: 'pending' })
+        acoes.push({ tipo: 'editar_lancamento', dados: d, label: `✏️ Editar: ${d.descricao || 'lançamento recente'} → R$ ${Number(d.novo_valor || d.valor || 0).toFixed(2)}`, status: 'pending' })
 
       } else if (d.acao === 'fatura_cartao') {
-        acoes.push({ tipo: 'fatura_cartao', dados: d, label: `ðŸ’³ Fatura ${d.conta_nome} R$ ${Number(d.valor).toFixed(2)} â€” ${d.mes_referencia}`, status: 'pending' })
+        acoes.push({ tipo: 'fatura_cartao', dados: d, label: `💳 Fatura ${d.conta_nome} R$ ${Number(d.valor).toFixed(2)} — ${d.mes_referencia}`, status: 'pending' })
 
       } else if (d.acao) {
-        // Fallback: qualquer aÃ§Ã£o desconhecida vira registro genÃ©rico
-        acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `ðŸ—‚ï¸ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
+        // Fallback: qualquer ação desconhecida vira registro genérico
+        acoes.push({ tipo: 'registro', dados: { ...d, tipo: d.acao }, label: `🗂️ ${d.acao}: ${d.titulo || d.descricao?.substring(0, 40) || JSON.stringify(d).substring(0, 40)}`, status: 'pending' })
       }
     } catch {
-      // JSON invÃ¡lido â€” silencioso
+      // JSON inválido — silencioso
     }
   }
 
   return acoes
 }
 
-// â”€â”€ formatarTexto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Remove blocos JSON da resposta para exibiÃ§Ã£o limpa no chat.
+// ── formatarTexto ─────────────────────────────────────────────
+// Remove blocos JSON da resposta para exibição limpa no chat.
 export function formatarTexto(texto: string): string {
   return texto.replace(/```json[\s\S]*?```/g, '').trim()
 }
 
-// â”€â”€ renderMarkdownHtml â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── renderMarkdownHtml ────────────────────────────────────────
 // Converte markdown simples para HTML seguro (bold, italic, listas, breaks).
 export function renderMarkdownHtml(texto: string): string {
   return texto
@@ -315,7 +315,7 @@ export function renderMarkdownHtml(texto: string): string {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/^#{1,3} (.+)$/gm, '<strong class="block text-amber-400">$1</strong>')
-    .replace(/^[-â€¢] (.+)$/gm, '<span style="display:flex;gap:4px"><span style="color:#f5a623">â€¢</span><span>$1</span></span>')
+    .replace(/^[-•] (.+)$/gm, '<span style="display:flex;gap:4px"><span style="color:#f5a623">•</span><span>$1</span></span>')
     .replace(/\n/g, '<br/>')
     .trim()
 }

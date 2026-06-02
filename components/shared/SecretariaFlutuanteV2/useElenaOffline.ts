@@ -1,8 +1,8 @@
 ﻿'use client'
-// Ã¢â€â‚¬Ã¢â€â‚¬ useElenaOffline.ts Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ââ€â‚¬ââ€â‚¬ useElenaOffline.ts ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
 // ResponsÃƒÂ¡vel por: detecÃƒÂ§ÃƒÂ£o online/offline, fila IndexedDB, sync ao reconectar,
 // formulÃƒÂ¡rio de emergÃƒÂªncia offline.
-// Completamente isolado Ã¢â‚¬â€ nÃƒÂ£o sabe nada de IA ou voz.
+// Completamente isolado ââ‚¬â€ nÃƒÂ£o sabe nada de IA ou voz.
 
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -57,7 +57,7 @@ export function useElenaOffline({
     hora: '12:00',
   })
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ DetecÃƒÂ§ÃƒÂ£o online/offline Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  // ââ€â‚¬ââ€â‚¬ DetecÃƒÂ§ÃƒÂ£o online/offline ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
   useEffect(() => {
     const goOnline  = () => setIsOnline(true)
     const goOffline = () => setIsOnline(false)
@@ -78,12 +78,12 @@ export function useElenaOffline({
     }
   }, [])
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Carrega fila offline ao montar e ao reconectar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  // ââ€â‚¬ââ€â‚¬ Carrega fila offline ao montar e ao reconectar ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
   useEffect(() => {
     if (userId) getPendentes(userId).then(setOfflineQueue)
   }, [userId, isOnline])
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Processa fila ao reconectar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  // ââ€â‚¬ââ€â‚¬ Processa fila ao reconectar ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
   const processarFilaOffline = useCallback(async () => {
     if (!userId || !navigator.onLine) return
     const pendentes = await getPendentes(userId)
@@ -103,7 +103,7 @@ export function useElenaOffline({
         await marcarProcessado(reg.id!)
         sucesso++
       } catch {
-        // MantÃƒÂ©m na fila Ã¢â‚¬â€ tentarÃƒÂ¡ novamente na prÃƒÂ³xima conexÃƒÂ£o
+        // MantÃƒÂ©m na fila ââ‚¬â€ tentarÃƒÂ¡ novamente na prÃƒÂ³xima conexÃƒÂ£o
       }
     }
 
@@ -112,7 +112,7 @@ export function useElenaOffline({
       adicionarMensagem({
         id: 'sync-ok-' + Date.now(),
         role: 'ai' as const,
-        texto: `Ã¢Å“â€¦ ${sucesso} registro(s) sincronizado(s) com sucesso!`,
+        texto: `âÅ“â€¦ ${sucesso} registro(s) sincronizado(s) com sucesso!`,
       })
     }
   }, [userId, executarAcoesAuto, adicionarMensagem])
@@ -124,7 +124,7 @@ export function useElenaOffline({
     }
   }, [isOnline, userId, processarFilaOffline])
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Salvar registro no formulÃƒÂ¡rio offline Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  // ââ€â‚¬ââ€â‚¬ Salvar registro no formulÃƒÂ¡rio offline ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
   const salvarOffline = useCallback(async () => {
     if (!userId) return
     const { tipo, valor, descricao, categoria, data, hora } = offlineForm

@@ -1,7 +1,7 @@
 ﻿'use client'
-// â”€â”€ SecretariaFlutuante.tsx â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SecretariaFlutuante.tsx ───────────────────────────────────
 // Orquestrador principal. Conecta todos os hooks e renderiza o widget.
-// NUNCA contÃ©m lÃ³gica de negÃ³cio â€” tudo fica nos hooks.
+// NUNCA contém lógica de negócio — tudo fica nos hooks.
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
@@ -20,7 +20,7 @@ import { buildSystemPrompt, extrairAcoes, formatarTexto, renderMarkdownHtml } fr
 import { PALAVRAS_CONFIRMACAO, KEYWORDS_WEB, KEYWORDS_HISTORICO } from './elena-constants'
 import type { AcaoIA, AttachedFile, Msg } from './elena-types'
 
-// â”€â”€ processarArquivo: processa imagens e PDFs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── processarArquivo: processa imagens e PDFs ──────────────────────
 async function processarArquivo(
   file: File,
   setAttachedFile: (f: AttachedFile | null) => void,
@@ -67,7 +67,7 @@ async function processarArquivo(
         if (texto) {
           setAttachedFile({ base64: texto, mime: 'text/plain', name: file.name, isImage: false })
         } else {
-          alert('PDF sem texto legÃ­vel. Tente converter para imagem.')
+          alert('PDF sem texto legível. Tente converter para imagem.')
         }
       } catch {
         alert('Erro ao processar o PDF. Tente novamente.')
@@ -79,11 +79,11 @@ async function processarArquivo(
   }
 }
 
-// â”€â”€ Componente principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Componente principal ──────────────────────────────────────
 export function SecretariaFlutuante() {
   const supabase = createClient()
 
-  // â”€â”€ Estado local simples (apenas UI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Estado local simples (apenas UI) ─────────────────────────
   const [isOpen, setIsOpen]       = useState(false)
   const [isClient, setIsClient]   = useState(false)
   const [pos, setPos]             = useState({ x: 0, y: 0 })
@@ -115,7 +115,7 @@ export function SecretariaFlutuante() {
     setAttachedFileState(f)
   }
 
-  // â”€â”€ Hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Hooks ─────────────────────────────────────────────────────
   const session = useElenaSession(supabase)
 
   // Ref de mensagens para evitar stale closure no backup_chat
@@ -148,7 +148,7 @@ export function SecretariaFlutuante() {
 
   const alertas = useElenaAlertas(supabase, session.userId, session.setMensagens)
 
-  // â”€â”€ InicializaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Inicialização ─────────────────────────────────────────────
   useEffect(() => {
     setPos({ x: window.innerWidth - 80, y: window.innerHeight - 150 })
     setIsClient(true)
@@ -158,7 +158,7 @@ export function SecretariaFlutuante() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [session.mensagens, isOpen])
 
-  // â”€â”€ Drag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Drag ──────────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
     setIsDragging(true)
     dragRef.current = { startX: e.clientX, startY: e.clientY, initialX: pos.x, initialY: pos.y, distance: 0 }
@@ -190,7 +190,7 @@ export function SecretariaFlutuante() {
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
   }, [isDragging, alertas])
 
-  // â”€â”€ Carregar resumo financeiro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Carregar resumo financeiro ────────────────────────────────
   const carregarResumoFinanceiro = useCallback(async (uid: string) => {
     // mantido simplificado
   }, [supabase]) // eslint-disable-line
@@ -202,7 +202,7 @@ export function SecretariaFlutuante() {
     return () => clearInterval(t)
   }, [session.userId, carregarResumoFinanceiro])
 
-  // â”€â”€ Busca web â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Busca web ─────────────────────────────────────────────────
   const precisaBuscarWeb = (texto: string) =>
     KEYWORDS_WEB.some(kw => texto.toLowerCase().includes(kw))
 
@@ -222,7 +222,7 @@ export function SecretariaFlutuante() {
     finally { setBuscandoWeb(false) }
   }
 
-  // â”€â”€ handleEnviar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── handleEnviar ──────────────────────────────────────────────
   const handleEnviar = useCallback(async (textToSubmit?: string) => {
     if (isSendingRef.current) return
     const userText = (textToSubmit ?? input).trim()
@@ -255,7 +255,7 @@ export function SecretariaFlutuante() {
       const colaboradoresCtx = session.colaboradores.length > 0
         ? `\n[COLABORADORES ATIVOS: ${session.colaboradores.map(c => c.nome).join(', ')}]`
         : ''
-      const SAUDACAO = 'OlÃ¡, Sr. Max! ðŸ‘‹ Sou a **Elena**'
+      const SAUDACAO = 'Olá, Sr. Max! ðŸ‘‹ Sou a **Elena**'
       const contexto = session.mensagens
         .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith(SAUDACAO))
         .slice(-30)
@@ -267,7 +267,7 @@ export function SecretariaFlutuante() {
         })
         .join('\n') + colaboradoresCtx
 
-      let promptFinal = userText || 'Analise este arquivo e extraia as informaÃ§Ãµes financeiras relevantes.'
+      let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
         promptFinal = `${promptFinal}\n\n[CONTEÃšDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
       }
@@ -277,14 +277,14 @@ export function SecretariaFlutuante() {
       if (eConfirmacao && session.mensagens.length >= 2) {
         const ultimaElena = [...session.mensagens].reverse().find(m => m.role === 'ai' && m.texto && m.texto !== '...')
         if (ultimaElena) {
-          promptFinal = `[INSTRUÃ‡ÃƒO PRIORITÃRIA DO SISTEMA]: O usuÃ¡rio estÃ¡ CONFIRMANDO a aÃ§Ã£o que vocÃª sugeriu na mensagem anterior. VocÃª DEVE gerar o bloco JSON da aÃ§Ã£o agora â€” EXECUTE imediatamente.\n\nMensagem anterior da Elena: "${ultimaElena.texto.substring(0, 300)}"\n\nResposta do usuÃ¡rio: "${userText}"\n\nEXECUTE a aÃ§Ã£o agora.`
+          promptFinal = `[INSTRUÇÃƒO PRIORITÁRIA DO SISTEMA]: O usuário está CONFIRMANDO a ação que você sugeriu na mensagem anterior. Você DEVE gerar o bloco JSON da ação agora — EXECUTE imediatamente.\n\nMensagem anterior da Elena: "${ultimaElena.texto.substring(0, 300)}"\n\nResposta do usuário: "${userText}"\n\nEXECUTE a ação agora.`
         }
       }
 
       if (userText && precisaBuscarHistorico(userText) && !fileSnap) {
         try {
           session.setMensagens(prev => prev.map(m => m.id === aiMsgId ? { ...m, texto: 'ðŸ” Buscando nas conversas anteriores...' } : m))
-          const isRelatorio = ['relatÃ³rio','relatorio','resumo','balanÃ§o'].some(kw => userText.toLowerCase().includes(kw))
+          const isRelatorio = ['relatório','relatorio','resumo','balanço'].some(kw => userText.toLowerCase().includes(kw))
           const res = await fetch('/api/elena-busca', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ termo: userText, limite: isRelatorio ? 30 : 8 }),
@@ -296,7 +296,7 @@ export function SecretariaFlutuante() {
                 const dt = m.created_at ? new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
                 return `[${dt}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto}`
               }).join('\n---\n')
-              promptFinal = `${promptFinal}\n\n[CONVERSAS HISTÃ“RICAS RELEVANTES]\n${blocoHistorico}`
+              promptFinal = `${promptFinal}\n\n[CONVERSAS HISTÓRICAS RELEVANTES]\n${blocoHistorico}`
             }
           }
           session.setMensagens(prev => prev.map(m => m.id === aiMsgId ? { ...m, texto: '...' } : m))
@@ -356,7 +356,7 @@ export function SecretariaFlutuante() {
     } catch (err: any) {
       const errMsg = err?.message || 'Erro desconhecido'
       session.setMensagens(prev => prev.map(m =>
-        m.id === aiMsgId ? { ...m, texto: `PerdÃ£o, chefe. Tive um problema: ${errMsg.substring(0, 120)}` } : m
+        m.id === aiMsgId ? { ...m, texto: `Perdão, chefe. Tive um problema: ${errMsg.substring(0, 120)}` } : m
       ))
     } finally {
       setLoading(false)
@@ -369,10 +369,10 @@ export function SecretariaFlutuante() {
 
   if (!isClient) return null
 
-  // â”€â”€ JSX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── JSX ───────────────────────────────────────────────────────
   // (mantenha o JSX exatamente igual ao original a partir da linha 3182)
-  // O JSX nÃ£o foi incluÃ­do aqui pois nÃ£o tem lÃ³gica â€” Ã© pura renderizaÃ§Ã£o.
-  // Substitua apenas os imports e as chamadas de funÃ§Ã£o/state pelos nomes do hook:
+  // O JSX não foi incluído aqui pois não tem lógica — é pura renderização.
+  // Substitua apenas os imports e as chamadas de função/state pelos nomes do hook:
 
   
 
