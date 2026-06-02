@@ -9,9 +9,22 @@ import { getPendentes, marcarProcessado, limparProcessados, registrarBackgroundS
 
 // ── Types ────────────────────────────────────────────────────
 interface AttachedFile { base64: string; mime: string; name: string; isImage: boolean; preview?: string }
-interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string }
+interface ConfirmacaoSalvamento {
+  tipo: string
+  descricao: string
+  valor?: number
+  contaNome?: string
+  data?: string
+  categoria?: string
+  modulo: string
+  rota?: string
+  icone: string
+  ultimoId?: string
+  ultimaTabela?: string
+}
+interface Msg { id: string; role: 'ai' | 'user'; texto: string; acoes?: AcaoIA[]; anexo?: string; created_at?: string; confirmacao?: ConfirmacaoSalvamento }
 interface AcaoIA {
-  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato' | 'projecao_mes' | 'registro_livre' | 'buscar_lancamento' | 'editar_lancamento'
+  tipo: 'gasto' | 'receita' | 'agenda' | 'ocorrencia' | 'gasto_empresa' | 'receita_empresa' | 'ideia' | 'registro' | 'relatorio' | 'backup_chat' | 'transferencia' | 'cancelar' | 'definir_meta' | 'gerar_checklist' | 'relatorio_colaboradores' | 'gerar_dashboard' | 'importar_extrato' | 'projecao_mes' | 'registro_livre' | 'buscar_lancamento' | 'editar_lancamento' | 'fatura_cartao'
   dados: Record<string, any>
   label: string
   status?: 'pending' | 'saving' | 'saved' | 'error'
@@ -63,6 +76,11 @@ ${perfil.contexto_pessoal}
 
   return `Você é a Elena, Secretária Executiva Premium do Sistema Cajado.
 Você trabalha diretamente para o Sr. Max. Você pode REGISTRAR dados reais no sistema quando o Sr. Max solicitar.
+
+📝 SÍNTESE PRÉ-SALVAMENTO — REGRA OBRIGATÓRIA:
+ANTES de gerar qualquer bloco JSON de registro (gasto, receita, agenda, fatura, etc.), sempre exiba um resumo curto do que vai registrar:
+"📝 Vou registrar:\n• Tipo: [Gasto Pessoal PF | Receita PF | Despesa Empresa PJ | Agenda | etc.]\n• Valor: R$ X,XX\n• Descrição: [texto]\n• Conta: [nome da conta ou cartão]\n• Data: [data]\n• Categoria: [categoria]\nSalvando agora... ✅"
+Este resumo deve vir ANTES do bloco JSON na mesma resposta. Seja conciso. Se faltarem dados, pergunte primeiro.
 ${blocoAprendizado}${blocoFinanceiro}
 
 ⚠️ DATA E HORA ATUAL: ${dataAtual} às ${horaAtual} (Horário de Brasília)
@@ -601,6 +619,53 @@ export function SecretariaFlutuante() {
   // Conta apenas mensagens ENVIADAS nesta sessão (não as carregadas do histórico)
   // Usado para disparar backup automático apenas por msgs novas, não pelo histórico
   const sessionMsgCountRef = useRef(0)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+
+  const unlockAudioAndNotifications = () => {
+    // 1. Destrava AudioContext
+    if (!audioCtxRef.current) {
+      try {
+        const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+        audioCtxRef.current = new AudioCtor()
+      } catch (e) {}
+    }
+    if (audioCtxRef.current?.state === 'suspended') {
+      audioCtxRef.current.resume()
+    }
+    // 2. Destrava Push Notifications no primeiro clique do usuário
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }
+
+  const tocarAlertaSonoro = useCallback((urgencia: 'alta' | 'media' | 'baixa') => {
+    try {
+      let ctx = audioCtxRef.current
+      if (!ctx) {
+        const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+        ctx = new AudioCtor()
+        audioCtxRef.current = ctx
+      }
+      if (ctx.state === 'suspended') ctx.resume()
+      
+      const osc = ctx.createOscillator(); const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      
+      if (urgencia === 'alta') {
+        osc.frequency.setValueAtTime(1050, ctx.currentTime)
+        osc.frequency.setValueAtTime(800, ctx.currentTime + 0.2)
+        osc.frequency.setValueAtTime(1050, ctx.currentTime + 0.4)
+      } else {
+        osc.frequency.setValueAtTime(880, ctx.currentTime)
+        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.2)
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.4)
+      }
+      
+      gain.gain.setValueAtTime(0.3, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6)
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6)
+    } catch {}
+  }, [])
 
   // Helper: mantém ref e state sincronizados
   const setAttachedFile = (f: AttachedFile | null) => {
@@ -725,6 +790,7 @@ export function SecretariaFlutuante() {
   // ── Drag ─────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
     setIsDragging(true)
+    unlockAudioAndNotifications()
     dragRef.current = { startX: e.clientX, startY: e.clientY, initialX: pos.x, initialY: pos.y, distance: 0 }
   }
 
@@ -894,32 +960,59 @@ export function SecretariaFlutuante() {
     return match ? { id: match.id, nome: match.nome, categoria: match.categoria } : { id: '', nome: '', categoria: '' }
   }, [supabase])
 
-  // ── Localizador: exibe onde o dado foi salvo ──────────────────
-  const exibirLocalizador = useCallback((tipo: string, dados: Record<string, any>) => {
-    const LOCAIS: Record<string, string> = {
-      gasto:            'Gastos Pessoais',
-      receita:          'Receitas Pessoais',
-      gasto_empresa:    'Despesas da Empresa',
-      receita_empresa:  'Receitas da Empresa',
-      agenda:           'Agenda',
-      ocorrencia:       'Ocorrencias',
-      ideia:            'Ideias',
-      transferencia:    'Transferencias',
-      definir_meta:     'Metas Financeiras',
-      registro_livre:   'Memoria da Elena',
+  // ── Confirmação Rica: exibe card detalhado de onde o dado foi salvo ──
+  const exibirConfirmacaoSalvamento = useCallback((
+    tipo: string,
+    dados: Record<string, any>,
+    contaNomeResolvido?: string,
+    ultimoId?: string,
+    ultimaTabela?: string
+  ) => {
+    const MAPA: Record<string, { modulo: string; rota: string; icone: string }> = {
+      gasto:           { modulo: 'Gastos PF',         rota: '/financeiro',  icone: '💸' },
+      receita:         { modulo: 'Receitas PF',        rota: '/financeiro',  icone: '💰' },
+      gasto_empresa:   { modulo: 'Despesas Empresa',   rota: '/financeiro',  icone: '🏢💸' },
+      receita_empresa: { modulo: 'Receitas Empresa',   rota: '/financeiro',  icone: '🏢💰' },
+      agenda:          { modulo: 'Agenda',             rota: '/agenda',      icone: '📅' },
+      fatura_cartao:   { modulo: 'Cartões PF',         rota: '/financeiro',  icone: '💳' },
+      ocorrencia:      { modulo: 'Cajado Empresa',     rota: '/cajado',      icone: '📋' },
+      ideia:           { modulo: 'Ideias',             rota: '/ideias',      icone: '💡' },
+      transferencia:   { modulo: 'Financeiro',         rota: '/financeiro',  icone: '🔄' },
+      definir_meta:    { modulo: 'Metas da Elena',     rota: '/financeiro',  icone: '🎯' },
+      registro_livre:  { modulo: 'Memória da Elena',   rota: undefined as any, icone: '🧠' },
     }
-    const local = LOCAIS[tipo] || tipo
-    const cat   = dados.categoria ? ` > ${dados.categoria}` : ''
-    const conta = dados.conta_nome ? ` [${dados.conta_nome}]` : ''
-    const titulo = dados.titulo ? ` "${String(dados.titulo).substring(0, 28)}"` : ''
+    const info = MAPA[tipo] || { modulo: tipo, rota: undefined as any, icone: '✅' }
+
+    // Monta dados do card
+    const descricao = dados.descricao || dados.titulo || dados.chave || ''
+    const valor = dados.valor ? Number(dados.valor) : undefined
+    const categoria = dados.categoria || dados.mes_referencia || undefined
     const dataFmt = dados.data
-      ? new Date(dados.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      ? new Date(dados.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
       : dados.data_inicio
-        ? new Date(dados.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-    const valor = dados.valor ? ` — R$ ${Number(dados.valor).toFixed(2)}` : ''
-    const msg = `📍 Salvo em: **${local}${cat}${conta}${titulo}** (${dataFmt})${valor}`
-    setMensagens(prev => [...prev, { id: Date.now().toString() + '_loc', role: 'ai', texto: msg }])
+        ? new Date(dados.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+
+    const confirmacao: ConfirmacaoSalvamento = {
+      tipo,
+      descricao,
+      valor,
+      contaNome: contaNomeResolvido || dados.conta_nome || undefined,
+      data: dataFmt,
+      categoria,
+      modulo: info.modulo,
+      rota: info.rota,
+      icone: info.icone,
+      ultimoId,
+      ultimaTabela,
+    }
+
+    setMensagens(prev => [...prev, {
+      id: Date.now().toString() + '_conf',
+      role: 'ai',
+      texto: '',
+      confirmacao,
+    }])
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA, uid: string) => {
@@ -978,7 +1071,7 @@ export function SecretariaFlutuante() {
         if (error) throw new Error(error.message)
         if (novoGasto?.id) ultimoRegistroRef.current = { tabela: 'gastos_pessoais', id: novoGasto.id }
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('gasto', acao.dados)
+        exibirConfirmacaoSalvamento('gasto', acao.dados, contaPfResolvida.nome || acao.dados.conta_nome, novoGasto?.id, 'gastos_pessoais')
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'receita') {
@@ -1022,7 +1115,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('receita', acao.dados)
+        exibirConfirmacaoSalvamento('receita', acao.dados, contaPfReceitaResolvida.nome || acao.dados.conta_nome)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
       } else if (acao.tipo === 'gasto_empresa') {
         const hoje = new Date().toISOString().split('T')[0]
@@ -1054,7 +1147,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('gasto_empresa', acao.dados)
+        exibirConfirmacaoSalvamento('gasto_empresa', acao.dados, contaNomeResolvido)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'receita_empresa') {
@@ -1084,7 +1177,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('receita_empresa', acao.dados)
+        exibirConfirmacaoSalvamento('receita_empresa', acao.dados, contaNomeResolvido)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'agenda') {
@@ -1133,7 +1226,7 @@ export function SecretariaFlutuante() {
           throw new Error(error.message)
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('agenda', acao.dados)
+        exibirConfirmacaoSalvamento('agenda', acao.dados)
         // Notifica a TabAgenda para recarregar
         window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
 
@@ -1156,7 +1249,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('ocorrencia', acao.dados)
+        exibirConfirmacaoSalvamento('ocorrencia', acao.dados)
 
       } else if (acao.tipo === 'ideia') {
         // Ideia — tabela elena_ideias
@@ -1173,7 +1266,7 @@ export function SecretariaFlutuante() {
         })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('ideia', acao.dados)
+        exibirConfirmacaoSalvamento('ideia', acao.dados)
         // Notifica TabIdeias para recarregar
         window.dispatchEvent(new CustomEvent('elena:ideia-salva'))
 
@@ -1241,7 +1334,7 @@ export function SecretariaFlutuante() {
         }, { onConflict: 'conta_id,mes_referencia' })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirLocalizador('fatura_cartao', { ...acao.dados, categoria: contaResolvida.nome })
+        exibirConfirmacaoSalvamento('fatura_cartao', { ...acao.dados, categoria: contaResolvida.nome }, contaResolvida.nome)
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       } else if (acao.tipo === 'transferencia') {
@@ -1849,7 +1942,7 @@ export function SecretariaFlutuante() {
 
         if (error) throw new Error(error.message)
 
-        const partes = []
+        const partes: string[] = []
         if (update.valor) partes.push(`valor para R$ ${update.valor.toFixed(2)}`)
         if (update.descricao) partes.push(`descrição para "${update.descricao}"`)
 
@@ -1876,6 +1969,20 @@ export function SecretariaFlutuante() {
   }, [supabase, colaboradores, resolverContaPj, resolverContaPf, resolverContaQualquer, getContaPjId])
 
   const executarAcoesAuto = useCallback((msgId: string, acoes: AcaoIA[], uid: string) => {
+    // Mostra status "Salvando..." inline antes de executar
+    const tiposComValor = acoes.filter(a => ['gasto','receita','gasto_empresa','receita_empresa','fatura_cartao','transferencia'].includes(a.tipo))
+    if (tiposComValor.length > 0) {
+      const resumo = tiposComValor.map(a => {
+        const val = a.dados.valor ? ` R$ ${Number(a.dados.valor).toFixed(2)}` : ''
+        const desc = a.dados.descricao || a.dados.titulo || ''
+        return `${a.tipo === 'gasto' || a.tipo === 'gasto_empresa' ? '💸' : a.tipo === 'receita' || a.tipo === 'receita_empresa' ? '💰' : a.tipo === 'fatura_cartao' ? '💳' : '🔄'}${val}${desc ? ` · ${desc.substring(0,30)}` : ''}`
+      }).join(' + ')
+      setMensagens(prev => [...prev, {
+        id: msgId + '_saving',
+        role: 'ai' as const,
+        texto: `⏳ Salvando: ${resumo}...`,
+      }])
+    }
     acoes.forEach((acao, idx) => {
       setMensagens(prev => prev.map(m =>
         m.id === msgId
@@ -1883,7 +1990,10 @@ export function SecretariaFlutuante() {
           : m
       ))
       // Não engole erros — o salvarAcao já mostra no chat
-      salvarAcao(msgId, idx, acao, uid)
+      salvarAcao(msgId, idx, acao, uid).then(() => {
+        // Remove a mensagem "Salvando..." quando a primeira ação terminar
+        setMensagens(prev => prev.filter(m => m.id !== msgId + '_saving'))
+      })
     })
   }, [salvarAcao])
 
@@ -2090,12 +2200,14 @@ Retorne exatamente este JSON:
       const [{ data: gastos }, { data: receitas }, { data: vencFuturos }, { data: gastosMesAnterior }] = await Promise.all([
         (supabase.from('gastos_pessoais') as any).select('valor, categoria, data').eq('user_id', uid).gte('data', inicioMesStr),
         (supabase.from('receitas_pessoais') as any).select('valor, categoria').eq('user_id', uid).gte('data', inicioMesStr),
-        // Vencimentos agendados no restante do mês
+        // Vencimentos e eventos agendados no restante do mês
         (supabase.from('agenda_eventos') as any)
-          .select('titulo, data_inicio').eq('user_id', uid).eq('tipo', 'vencimento')
+          .select('titulo, data_inicio, tipo').eq('user_id', uid).in('tipo', ['vencimento', 'lembrete', 'compromisso', 'reuniao', 'tarefa', 'prazo'])
           .gte('data_inicio', new Date().toISOString())
-          .lte('data_inicio', new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString())
-          .neq('status', 'cancelado'),
+          .lte('data_inicio', new Date(new Date().getFullYear(), new Date().getMonth() + 1, 15, 23, 59, 59).toISOString())
+          .neq('status', 'cancelado')
+          .order('data_inicio', { ascending: true })
+          .limit(15),
         // Mês anterior para comparação de tendências
         (supabase.from('gastos_pessoais') as any).select('valor, categoria')
           .eq('user_id', uid)
@@ -2142,10 +2254,23 @@ Retorne exatamente este JSON:
       const diasRestantes = diasNoMes - diaAtual
       const ritmodiario = diaAtual > 0 ? totalG / diaAtual : 0
       const projecaoGastos = totalG + (ritmodiario * diasRestantes)
-      const numVenc = (vencFuturos || []).length
+      const numVenc = (vencFuturos || []).filter((v: any) => v.tipo === 'vencimento').length
       const previsao = `- Ritmo de gasto: R$ ${ritmodiario.toFixed(2)}/dia\n` +
         `- Projeção de gastos ao fim do mês: R$ ${projecaoGastos.toFixed(2)}\n` +
-        (numVenc > 0 ? `- Vencimentos restantes no mês: ${numVenc} (verifique agenda)\n` : '')
+        (numVenc > 0 ? `- Vencimentos restantes no mês: ${numVenc} (verifique a agenda abaixo)\n` : '')
+
+      let blocoAgenda = ''
+      if (vencFuturos && vencFuturos.length > 0) {
+        blocoAgenda = '\n📅 PRÓXIMOS EVENTOS E VENCIMENTOS (Responda se perguntarem):\n' +
+          vencFuturos.map((v: any) => {
+            const dataObj = new Date(v.data_inicio)
+            const dia = String(dataObj.getDate()).padStart(2, '0')
+            const mes = String(dataObj.getMonth() + 1).padStart(2, '0')
+            const hora = String(dataObj.getHours()).padStart(2, '0')
+            const min = String(dataObj.getMinutes()).padStart(2, '0')
+            return `- ${dia}/${mes} ${hora}:${min} -> [${v.tipo.toUpperCase()}] ${v.titulo}`
+          }).join('\n') + '\n'
+      }
 
       // ── Análise de Risco de Concentração de Receitas ────────────
       const catReceitas: Record<string, number> = {}
@@ -2235,6 +2360,7 @@ Retorne exatamente este JSON:
         (riscoConcentracao ? `ALERTAS DE RISCO:\n${riscoConcentracao}` : '') +
         `PREVISÃO DO MÊS:\n${previsao}` +
         blocoContas +
+        blocoAgenda +
         blocoMemoria
       )
     } catch { /* silencioso */ }
@@ -2263,18 +2389,8 @@ Retorne exatamente este JSON:
         const diffMin = Math.round((new Date(ev.data_inicio).getTime() - agora.getTime()) / 60000)
         const corpo = diffMin <= 1 ? 'Agora!' : `Em ${diffMin} minuto(s)`
 
-        // Som de alerta via AudioContext (beep triplo)
-        try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-          const osc = ctx.createOscillator(); const gain = ctx.createGain()
-          osc.connect(gain); gain.connect(ctx.destination)
-          osc.frequency.setValueAtTime(880, ctx.currentTime)
-          osc.frequency.setValueAtTime(660, ctx.currentTime + 0.2)
-          osc.frequency.setValueAtTime(880, ctx.currentTime + 0.4)
-          gain.gain.setValueAtTime(0.3, ctx.currentTime)
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6)
-          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6)
-        } catch {}
+        // Som de alerta garantido via AudioContext unificado
+        tocarAlertaSonoro('alta')
 
         // Push Notification se permitida
         if (typeof Notification !== 'undefined') {
@@ -2334,19 +2450,8 @@ Retorne exatamente este JSON:
         localStorage.setItem(chaveV, '1')
         const emoji = diffDias === 0 ? '🔴' : diffDias === 1 ? '🟠' : '🟡'
         const urgencia = diffDias === 0 ? '**HOJE!**' : diffDias === 1 ? '**amanhã**' : `em **${diffDias} dias**`
-        // Som escalonado por urgência
-        try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-          const osc = ctx.createOscillator(); const gain = ctx.createGain()
-          osc.connect(gain); gain.connect(ctx.destination)
-          const freq = diffDias === 0 ? 1050 : diffDias === 1 ? 880 : 660
-          osc.frequency.setValueAtTime(freq, ctx.currentTime)
-          osc.frequency.setValueAtTime(freq * 0.8, ctx.currentTime + 0.15)
-          osc.frequency.setValueAtTime(freq, ctx.currentTime + 0.3)
-          gain.gain.setValueAtTime(0.25, ctx.currentTime)
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
-          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5)
-        } catch {}
+        // Som escalonado por urgência garantido
+        tocarAlertaSonoro(diffDias === 0 ? 'alta' : diffDias === 1 ? 'media' : 'baixa')
         setMensagens(prev => [...prev, {
           id: `venc-${v.id}-${Date.now()}`,
           role: 'ai' as const,
@@ -3395,6 +3500,81 @@ Aqui está tudo o que você pode me pedir para fazer:
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 text-sm">
               {mensagens.map(msg => {
                 const isAi = msg.role === 'ai'
+
+                // ── Card de Confirmação de Salvamento ────────────────────
+                if (msg.confirmacao) {
+                  const c = msg.confirmacao
+                  const podeDesfazer = !!(c.ultimoId && c.ultimaTabela)
+                  return (
+                    <div key={msg.id} className="flex flex-col items-start">
+                      <div className="w-full max-w-[92%] rounded-2xl rounded-tl-sm overflow-hidden border border-emerald-500/25 bg-emerald-500/5">
+                        {/* Cabeçalho do card */}
+                        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border-b border-emerald-500/15">
+                          <span className="text-base leading-none">{c.icone}</span>
+                          <span className="text-[11px] font-bold text-emerald-400 flex-1">✅ Registrado com sucesso</span>
+                          <span className="text-[9px] text-emerald-400/60 font-semibold uppercase tracking-wider">{c.modulo}</span>
+                        </div>
+                        {/* Corpo do card */}
+                        <div className="px-3 py-2 space-y-1">
+                          {c.descricao && (
+                            <p className="text-xs text-fg font-medium truncate">📋 {c.descricao}</p>
+                          )}
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                            {c.valor !== undefined && (
+                              <span className="text-[11px] text-amber-400 font-bold">R$ {c.valor.toFixed(2)}</span>
+                            )}
+                            {c.contaNome && (
+                              <span className="text-[11px] text-fg-secondary">💳 {c.contaNome}</span>
+                            )}
+                            {c.data && (
+                              <span className="text-[11px] text-fg-tertiary">📅 {c.data}</span>
+                            )}
+                            {c.categoria && (
+                              <span className="text-[11px] text-fg-tertiary">#{c.categoria}</span>
+                            )}
+                          </div>
+                        </div>
+                        {/* Botões de ação */}
+                        <div className="px-3 py-2 border-t border-emerald-500/10 flex gap-2">
+                          {c.rota && (
+                            <button
+                              onClick={() => { window.location.href = c.rota! }}
+                              className="flex-1 text-[10px] font-semibold py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors flex items-center justify-center gap-1"
+                            >
+                              Ver em {c.modulo} →
+                            </button>
+                          )}
+                          {podeDesfazer && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await (supabase.from(c.ultimaTabela!) as any).delete().eq('id', c.ultimoId!)
+                                  setMensagens(prev => prev.filter(m => m.id !== msg.id))
+                                  setMensagens(prev => [...prev, {
+                                    id: 'undo-ok-' + Date.now(),
+                                    role: 'ai' as const,
+                                    texto: '↩️ **Registro desfeito com sucesso!** O lançamento foi removido.',
+                                  }])
+                                  window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+                                } catch {
+                                  setMensagens(prev => [...prev, {
+                                    id: 'undo-err-' + Date.now(),
+                                    role: 'ai' as const,
+                                    texto: '❌ Não foi possível desfazer. Remova manualmente no módulo correspondente.',
+                                  }])
+                                }
+                              }}
+                              className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1"
+                            >
+                              ↩ Desfazer
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+
                 return (
                   <div key={msg.id} className={cn('flex flex-col', isAi ? 'items-start' : 'items-end')}>
                     <div className={cn(
