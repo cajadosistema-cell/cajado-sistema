@@ -1,7 +1,7 @@
-'use client'
-// ── useElenaSession.ts ────────────────────────────────────────
-// Responsável por: autenticação, sessão, histórico de mensagens e perfil de aprendizado.
-// NUNCA contém lógica de salvamento, voz ou IA.
+﻿'use client'
+// â”€â”€ useElenaSession.ts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ResponsÃ¡vel por: autenticaÃ§Ã£o, sessÃ£o, histÃ³rico de mensagens e perfil de aprendizado.
+// NUNCA contÃ©m lÃ³gica de salvamento, voz ou IA.
 
 import { useState, useEffect, useRef } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -10,11 +10,11 @@ import type { Msg } from './elena-types'
 const SAUDACAO_INICIAL: Msg = {
   id: '1',
   role: 'ai',
-  texto: 'Olá, Sr. Max! 👋 Sou a **Elena**, sua Secretária Executiva.\n\nPosso **registrar gastos, receitas, agenda e ocorrências** direto no sistema.\n\nExemplos:\n• _"Gastei R$ 80 de gasolina no PIX"_\n• _"Agendar reunião amanhã às 14h"_\n• _"Abrir ocorrência de erro para o Pedro"_',
+  texto: 'OlÃ¡, Sr. Max! ðŸ‘‹ Sou a **Elena**, sua SecretÃ¡ria Executiva.\n\nPosso **registrar gastos, receitas, agenda e ocorrÃªncias** direto no sistema.\n\nExemplos:\nâ€¢ _"Gastei R$ 80 de gasolina no PIX"_\nâ€¢ _"Agendar reuniÃ£o amanhÃ£ Ã s 14h"_\nâ€¢ _"Abrir ocorrÃªncia de erro para o Pedro"_',
 }
 
 interface UseElenaSessionReturn {
-  // IDs (sempre via ref — nunca stale)
+  // IDs (sempre via ref â€” nunca stale)
   userIdRef: React.MutableRefObject<string>
   sessaoIdRef: React.MutableRefObject<string>
   // Reatividade para UI
@@ -29,7 +29,7 @@ interface UseElenaSessionReturn {
   perfilRef: React.MutableRefObject<any>
   // Colaboradores
   colaboradores: { id: string; nome: string }[]
-  // Histórico de sessões
+  // HistÃ³rico de sessÃµes
   sessoesAnteriores: { sid: string; data: string; resumo: string }[]
   showHistory: boolean
   setShowHistory: (v: boolean) => void
@@ -39,19 +39,19 @@ interface UseElenaSessionReturn {
   // Mic autorizado
   micPermitidoRef: React.MutableRefObject<boolean>
   salvarMicAutorizado: (uid: string) => Promise<void>
-  // Persistência de histórico
+  // PersistÃªncia de histÃ³rico
   salvarHistorico: (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sessaoId?: string) => Promise<void>
 }
 
 export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn {
-  // ── Refs (nunca ficam stale em callbacks) ────────────────────
+  // â”€â”€ Refs (nunca ficam stale em callbacks) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const userIdRef  = useRef('')
   const sessaoIdRef = useRef('')
   const perfilRef  = useRef<any>(null)
   const micPermitidoRef = useRef(false)
   const historyLoadedRef = useRef(false)
 
-  // ── State (apenas para reatividade de UI) ────────────────────
+  // â”€â”€ State (apenas para reatividade de UI) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [userId,  setUserIdState]  = useState('')
   const [sessaoId, setSessaoIdState] = useState('')
   const [mensagens, setMensagens]  = useState<Msg[]>([SAUDACAO_INICIAL])
@@ -59,13 +59,13 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
   const [sessoesAnteriores, setSessoesAnteriores] = useState<{ sid: string; data: string; resumo: string }[]>([])
   const [showHistory, setShowHistory] = useState(false)
 
-  // Wrappers que mantêm ref + state sincronizados
+  // Wrappers que mantÃªm ref + state sincronizados
   const setUserId = (v: string) => { userIdRef.current = v; setUserIdState(v) }
   const setSessaoId = (v: string) => { sessaoIdRef.current = v; setSessaoIdState(v) }
 
-  // ── Inicialização ─────────────────────────────────────────────
+  // â”€â”€ InicializaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
-    // Restaura permissão de mic do localStorage
+    // Restaura permissÃ£o de mic do localStorage
     if (typeof window !== 'undefined') {
       micPermitidoRef.current = localStorage.getItem('elena_mic_ok') === '1'
     }
@@ -87,7 +87,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
         } catch { /* silencioso */ }
       }
 
-      // Carrega histórico uma única vez
+      // Carrega histÃ³rico uma Ãºnica vez
       if (!historyLoadedRef.current) {
         historyLoadedRef.current = true
 
@@ -111,7 +111,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
             created_at: r.created_at,
           }))
           setMensagens([
-            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Carreguei o histórico recente. O que faremos agora?' },
+            { id: '1', role: 'ai', texto: 'OlÃ¡, Sr. Max! ðŸ‘‹ Carreguei o histÃ³rico recente. O que faremos agora?' },
             ...historico,
           ])
         }
@@ -129,7 +129,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Salvar histórico no banco ─────────────────────────────────
+  // â”€â”€ Salvar histÃ³rico no banco â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const salvarHistorico = async (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sid?: string) => {
     if (!uid || !texto || texto === '...') return
     try {
@@ -143,7 +143,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
     } catch { /* silencioso */ }
   }
 
-  // ── Mic autorizado ────────────────────────────────────────────
+  // â”€â”€ Mic autorizado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const salvarMicAutorizado = async (uid: string) => {
     try {
       localStorage.setItem('elena_mic_ok', '1')
@@ -151,7 +151,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
     } catch { /* silencioso */ }
   }
 
-  // ── Histórico de sessões ──────────────────────────────────────
+  // â”€â”€ HistÃ³rico de sessÃµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const loadSessoes = async () => {
     const uid = userIdRef.current
     if (!uid) return
@@ -168,7 +168,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
       dataReversa.forEach((m: any) => {
         if (!agrupado.has(m.sessao_id)) {
           agrupado.set(m.sessao_id, { data: m.created_at, resumo: m.texto })
-        } else if (m.role === 'user' && (!agrupado.get(m.sessao_id)?.resumo || agrupado.get(m.sessao_id)!.resumo.includes('Olá, Sr. Max'))) {
+        } else if (m.role === 'user' && (!agrupado.get(m.sessao_id)?.resumo || agrupado.get(m.sessao_id)!.resumo.includes('OlÃ¡, Sr. Max'))) {
           agrupado.set(m.sessao_id, { data: m.created_at, resumo: m.texto })
         }
       })
@@ -199,14 +199,14 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
         acoes: r.acoes ?? undefined,
         created_at: r.created_at,
       }))
-      setMensagens([{ id: '1', role: 'ai', texto: 'Histórico carregado! O que faremos com ele?' }, ...historico])
+      setMensagens([{ id: '1', role: 'ai', texto: 'HistÃ³rico carregado! O que faremos com ele?' }, ...historico])
       setSessaoId(sid)
       setShowHistory(false)
     }
   }
 
   const handleClearChat = () => {
-    if (!confirm('Deseja iniciar um NOVO assunto? O assunto atual ficará salvo no banco para consultas futuras.')) return
+    if (!confirm('Deseja iniciar um NOVO assunto? O assunto atual ficarÃ¡ salvo no banco para consultas futuras.')) return
     setMensagens([SAUDACAO_INICIAL])
     setSessaoId(Date.now().toString())
   }
@@ -223,3 +223,4 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
     salvarHistorico,
   }
 }
+

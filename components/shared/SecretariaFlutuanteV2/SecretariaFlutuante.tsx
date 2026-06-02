@@ -375,16 +375,17 @@ export function SecretariaFlutuante() {
   // Substitua apenas os imports e as chamadas de funÃ§Ã£o/state pelos nomes do hook:
 
   
+
   return (
     <>
-      {/* BotÃ£o Flutuante */}
+      {/* Botão Flutuante */}
       <div
         className="fixed z-[100] cursor-grab active:cursor-grabbing"
         style={{ left: pos.x, top: pos.y, touchAction: 'none' }}
         onPointerDown={handlePointerDown}
       >
         <div className="relative">
-          {/* Pulso sÃ³ quando hÃ¡ itens offline pendentes */}
+          {/* Pulso só quando há itens offline pendentes */}
           {offline.offlineQueue.length > 0 && (
             <div className="absolute inset-0 bg-amber-500 rounded-full animate-ping opacity-25" />
           )}
@@ -432,64 +433,64 @@ export function SecretariaFlutuante() {
                 />
                 <div>
                   <p className="text-sm font-bold text-fg cursor-pointer" onClick={() => session.setShowHistory(false)}>Elena</p>
-                  <p className="text-[10px] text-amber-400">SecretÃ¡ria Executiva Â· Registros automÃ¡ticos</p>
+                  <p className="text-[10px] text-amber-400">Secretária Executiva · Registros automáticos</p>
                 </div>
               </div>
               <div className="flex gap-2 items-center">
                 <button onClick={() => {
-                  // Injeta uma mensagem de ajuda se o cliente clicar no botÃ£o de interrogaÃ§Ã£o ou abre o painel visual
+                  // Injeta uma mensagem de ajuda se o cliente clicar no botão de interrogação ou abre o painel visual
                   session.setMensagens(prev => [
                     ...prev,
                     {
                       id: String(Date.now()),
                       role: 'ai',
-                      texto: `ðŸ“– **Guia RÃ¡pido de Comandos da Elena Premium** ðŸš€
+                      texto: `📖 **Guia Rápido de Comandos da Elena Premium** 🚀
 
-Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
+Aqui está tudo o que você pode me pedir para fazer:
 
-ðŸ“… **Agenda & Lembretes**
-* *"Agendar reuniÃ£o amanhÃ£ Ã s 14h"*
-* *"Me lembra de ligar pro fornecedor dia 28 Ã s 10h"* (cria alarme)
+📅 **Agenda & Lembretes**
+* *"Agendar reunião amanhã às 14h"*
+* *"Me lembra de ligar pro fornecedor dia 28 às 10h"* (cria alarme)
 
-ðŸ’° **Controle Financeiro**
+💰 **Controle Financeiro**
 * *"Gastei R$ 150 no mercadinho no pix"*
 * *"Recebi R$ 5.000 de pro-labore"*
-* *"Transferir R$ 200 do ItaÃº para o Bradesco"*
-* *"Definir meta de gastos de R$ 2.000 em alimentaÃ§Ã£o"*
+* *"Transferir R$ 200 do Itaú para o Bradesco"*
+* *"Definir meta de gastos de R$ 2.000 em alimentação"*
 
-ðŸ¢ **GestÃ£o Empresarial (PJ)**
-* *"Gasto de 500 no escritÃ³rio"*
+🏢 **Gestão Empresarial (PJ)**
+* *"Gasto de 500 no escritório"*
 * *"Faturamento de 15.000 da consultoria"*
-* *Nota: Gastos PJ acima de R$ 1.000 exigem sua aprovaÃ§Ã£o verbal!*
+* *Nota: Gastos PJ acima de R$ 1.000 exigem sua aprovação verbal!*
 
-ðŸ“Š **VisÃ£o de NegÃ³cios & Equipe**
-* *"Gerar meu checklist executivo"* (cria tarefas prioritÃ¡rias)
-* *"Como estÃ¡ a performance da equipe?"* (busca ocorrÃªncias)
-* *"Mostrar meu dashboard financeiro"* (exibe grÃ¡ficos de barras)
-* *"Extrato bancÃ¡rio"* (pode colar o extrato direto no chat!)
+📊 **Visão de Negócios & Equipe**
+* *"Gerar meu checklist executivo"* (cria tarefas prioritárias)
+* *"Como está a performance da equipe?"* (busca ocorrências)
+* *"Mostrar meu dashboard financeiro"* (exibe gráficos de barras)
+* *"Extrato bancário"* (pode colar o extrato direto no chat!)
 
-ðŸŽ™ï¸ **Modo Hands-Free (Voz ContÃ­nua)**
-* Clique no Ã­cone **ðŸŽ™ï¸âˆž** para ativar o modo contÃ­nuo de voz (Ã³timo para usar no trÃ¢nsito!).`
+🎙️ **Modo Hands-Free (Voz Contínua)**
+* Clique no ícone **🎙️∞** para ativar o modo contínuo de voz (ótimo para usar no trânsito!).`
                     }
                   ])
-                }} title="Ver guia de recursos da Elena" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-amber-400 hover:bg-amber-400/10 transition-colors text-xs">â“</button>
-                <button onClick={session.loadSessoes} title="Ver conversas passadas" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-blue-400 hover:bg-blue-400/10 transition-colors text-xs">ðŸ—‚ï¸</button>
-                <button onClick={session.handleClearChat} title="Nova conversa (iniciar novo assunto)" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-emerald-400 hover:bg-emerald-400/10 transition-colors text-xs">âœ¨</button>
-                <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-red-400 hover:bg-red-400/10 text-sm">âœ•</button>
+                }} title="Ver guia de recursos da Elena" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-amber-400 hover:bg-amber-400/10 transition-colors text-xs">❓</button>
+                <button onClick={session.loadSessoes} title="Ver conversas passadas" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-blue-400 hover:bg-blue-400/10 transition-colors text-xs">🗂️</button>
+                <button onClick={session.handleClearChat} title="Nova conversa (iniciar novo assunto)" className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-emerald-400 hover:bg-emerald-400/10 transition-colors text-xs">✨</button>
+                <button onClick={() => setIsOpen(false)} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-fg-tertiary hover:text-red-400 hover:bg-red-400/10 text-sm">✕</button>
               </div>
             </div>
 
             {/* Banner Offline / Sync pendente */}
             {!offline.isOnline ? (
               <div className="px-3 py-1.5 bg-red-500/15 border-b border-red-500/20 flex items-center gap-2 shrink-0">
-                <span className="text-red-400 text-xs animate-pulse">ðŸ“µ</span>
+                <span className="text-red-400 text-xs animate-pulse">📵</span>
                 <p className="text-[10px] text-red-400 font-semibold flex-1">
-                  Sem internet {offline.offlineQueue.length > 0 ? `â€” ${offline.offlineQueue.length} item(s) na fila` : 'â€” registros serÃ£o salvos ao reconectar'}
+                  Sem internet {offline.offlineQueue.length > 0 ? `— ${offline.offlineQueue.length} item(s) na fila` : '— registros serão salvos ao reconectar'}
                 </p>
               </div>
             ) : offline.offlineQueue.length > 0 ? (
               <div className="px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/20 flex items-center gap-2 shrink-0">
-                <span className="text-amber-400 text-xs">ðŸ“¶</span>
+                <span className="text-amber-400 text-xs">📶</span>
                 <p className="text-[10px] text-amber-400 font-semibold flex-1">
                   {offline.offlineQueue.length} item(s) aguardando sync...
                 </p>
@@ -503,17 +504,17 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
             ) : null}
 
 
-            {/* View do HistÃ³rico de Conversas */}
+            {/* View do Histórico de Conversas */}
             {session.showHistory ? (
               <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#0a0d16]">
-                <p className="text-xs font-semibold text-fg-secondary px-2 mb-3 uppercase tracking-wider">HistÃ³rico de Chats</p>
+                <p className="text-xs font-semibold text-fg-secondary px-2 mb-3 uppercase tracking-wider">Histórico de Chats</p>
                 {session.sessoesAnteriores.map(s => (
                   <button
                     key={s.sid}
                     onClick={() => session.loadSpecificSession(s.sid)}
                     className={cn("w-full text-left p-3 rounded-xl border transition-all", s.sid === session.sessaoId ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-white/5 border-white/5 hover:border-white/10 hover:bg-white/10 text-fg")}
                   >
-                    <p className="text-xs font-semibold truncate mb-1">{s.resumo.replace(/```json[\s\S]*?```/g, '').substring(0, 60) || 'Conversa sem tÃ­tulo'}</p>
+                    <p className="text-xs font-semibold truncate mb-1">{s.resumo.replace(/```json[\s\S]*?```/g, '').substring(0, 60) || 'Conversa sem título'}</p>
                     <p className="text-[10px] text-fg-tertiary">{new Date(s.data).toLocaleString('pt-BR')}</p>
                   </button>
                 ))}
@@ -528,9 +529,9 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                   <div className="flex-1 overflow-y-auto p-4 bg-[#0a0d16] flex flex-col gap-3">
                     {/* Header offline */}
                     <div className="text-center pt-2 pb-1">
-                      <div className="w-11 h-11 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-2xl mx-auto mb-2">ðŸ“µ</div>
+                      <div className="w-11 h-11 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-2xl mx-auto mb-2">📵</div>
                       <p className="text-sm font-bold text-fg">Modo Offline</p>
-                      <p className="text-[11px] text-fg-tertiary mt-0.5">Registre aqui â€” sincroniza ao reconectar</p>
+                      <p className="text-[11px] text-fg-tertiary mt-0.5">Registre aqui — sincroniza ao reconectar</p>
                     </div>
 
                     {/* Tipo */}
@@ -548,7 +549,7 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                               : 'bg-white/5 text-fg-tertiary border border-white/5 hover:border-white/10'
                           )}
                         >
-                          {t === 'gasto' ? 'ðŸ’¸ Gasto' : t === 'receita' ? 'ðŸ’° Receita' : 'ðŸ“… Agenda'}
+                          {t === 'gasto' ? '💸 Gasto' : t === 'receita' ? '💰 Receita' : '📅 Agenda'}
                         </button>
                       ))}
                     </div>
@@ -564,10 +565,10 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                       />
                     )}
 
-                    {/* DescriÃ§Ã£o / TÃ­tulo */}
+                    {/* Descrição / Título */}
                     <input
                       type="text"
-                      placeholder={offline.offlineForm.tipo === 'agenda' ? 'TÃ­tulo do evento' : 'DescriÃ§Ã£o'}
+                      placeholder={offline.offlineForm.tipo === 'agenda' ? 'Título do evento' : 'Descrição'}
                       value={offline.offlineForm.descricao}
                       onChange={e => offline.setOfflineForm(prev => ({ ...prev, descricao: e.target.value }))}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-fg placeholder-zinc-600 focus:outline-none focus:border-amber-400/50 transition-colors"
@@ -591,25 +592,25 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-fg focus:outline-none focus:border-amber-400/50"
                       >
                         {offline.offlineForm.tipo === 'gasto' ? (<>
-                          <option value="alimentacao">ðŸ½ï¸ AlimentaÃ§Ã£o</option>
-                          <option value="transporte">ðŸš— Transporte</option>
-                          <option value="saude">â¤ï¸ SaÃºde</option>
-                          <option value="lazer">ðŸŽ® Lazer</option>
-                          <option value="moradia">ðŸ  Moradia</option>
-                          <option value="tecnologia">ðŸ’» Tecnologia</option>
-                          <option value="outros">ðŸ“¦ Outros</option>
+                          <option value="alimentacao">🍽️ Alimentação</option>
+                          <option value="transporte">🚗 Transporte</option>
+                          <option value="saude">❤️ Saúde</option>
+                          <option value="lazer">🎮 Lazer</option>
+                          <option value="moradia">🏠 Moradia</option>
+                          <option value="tecnologia">💻 Tecnologia</option>
+                          <option value="outros">📦 Outros</option>
                         </>) : (<>
-                          <option value="pro_labore">ðŸ’¼ PrÃ³-labore</option>
-                          <option value="freelance">ðŸ”§ Freelance</option>
-                          <option value="investimentos">ðŸ“ˆ Investimentos</option>
-                          <option value="aluguel">ðŸ  Aluguel</option>
-                          <option value="vendas">ðŸ›’ Vendas</option>
-                          <option value="outros">ðŸ“¦ Outros</option>
+                          <option value="pro_labore">💼 Pró-labore</option>
+                          <option value="freelance">🔧 Freelance</option>
+                          <option value="investimentos">📈 Investimentos</option>
+                          <option value="aluguel">🏠 Aluguel</option>
+                          <option value="vendas">🛒 Vendas</option>
+                          <option value="outros">📦 Outros</option>
                         </>)}
                       </select>
                     )}
 
-                    {/* BotÃ£o salvar */}
+                    {/* Botão salvar */}
                     <button
                       onClick={offline.salvarOffline}
                       disabled={!offline.offlineForm.descricao.trim() || (offline.offlineForm.tipo !== 'agenda' && !offline.offlineForm.valor)}
@@ -620,20 +621,20 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                           : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 disabled:opacity-30 disabled:cursor-not-allowed'
                       )}
                     >
-                      {offline.offlineSaved ? 'âœ… Salvo na fila!' : 'ðŸ“¥ Salvar na Fila Offline'}
+                      {offline.offlineSaved ? '✅ Salvo na fila!' : '📥 Salvar na Fila Offline'}
                     </button>
 
                     {/* Fila pendente */}
                     {offline.offlineQueue.length > 0 && (
                       <div className="bg-white/3 rounded-xl p-3 border border-white/5">
                         <p className="text-[10px] text-fg-tertiary uppercase tracking-wider font-semibold mb-2">
-                          â³ Aguardando sync ({offline.offlineQueue.length})
+                          ⏳ Aguardando sync ({offline.offlineQueue.length})
                         </p>
                         <div className="space-y-1.5">
                           {offline.offlineQueue.slice(0, 6).map((item: any, i: number) => (
                             <div key={i} className="flex items-center gap-2 text-[11px]">
                               <span className="shrink-0">
-                                {item.tipo === 'gasto' ? 'ðŸ’¸' : item.tipo === 'receita' ? 'ðŸ’°' : 'ðŸ“…'}
+                                {item.tipo === 'gasto' ? '💸' : item.tipo === 'receita' ? '💰' : '📅'}
                               </span>
                               <span className="flex-1 text-fg-secondary truncate">
                                 {String(item.acao.descricao || item.acao.titulo || item.tipo)}
@@ -654,47 +655,47 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
               {session.mensagens.map(msg => {
                 const isAi = msg.role === 'ai'
 
-                // â”€â”€ Card de ConfirmaÃ§Ã£o de Salvamento â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // ── Card de Confirmação de Salvamento ────────────────────
                 if (msg.confirmacao) {
                   const c = msg.confirmacao
                   const podeDesfazer = !!(c.ultimoId && c.ultimaTabela)
                   return (
                     <div key={msg.id} className="flex flex-col items-start">
                       <div className="w-full max-w-[92%] rounded-2xl rounded-tl-sm overflow-hidden border border-emerald-500/25 bg-emerald-500/5">
-                        {/* CabeÃ§alho do card */}
+                        {/* Cabeçalho do card */}
                         <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border-b border-emerald-500/15">
                           <span className="text-base leading-none">{c.icone}</span>
-                          <span className="text-[11px] font-bold text-emerald-400 flex-1">âœ… Registrado com sucesso</span>
+                          <span className="text-[11px] font-bold text-emerald-400 flex-1">✅ Registrado com sucesso</span>
                           <span className="text-[9px] text-emerald-400/60 font-semibold uppercase tracking-wider">{c.modulo}</span>
                         </div>
                         {/* Corpo do card */}
                         <div className="px-3 py-2 space-y-1">
                           {c.descricao && (
-                            <p className="text-xs text-fg font-medium truncate">ðŸ“‹ {c.descricao}</p>
+                            <p className="text-xs text-fg font-medium truncate">📋 {c.descricao}</p>
                           )}
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                             {c.valor !== undefined && (
                               <span className="text-[11px] text-amber-400 font-bold">R$ {c.valor.toFixed(2)}</span>
                             )}
                             {c.contaNome && (
-                              <span className="text-[11px] text-fg-secondary">ðŸ’³ {c.contaNome}</span>
+                              <span className="text-[11px] text-fg-secondary">💳 {c.contaNome}</span>
                             )}
                             {c.data && (
-                              <span className="text-[11px] text-fg-tertiary">ðŸ“… {c.data}</span>
+                              <span className="text-[11px] text-fg-tertiary">📅 {c.data}</span>
                             )}
                             {c.categoria && (
                               <span className="text-[11px] text-fg-tertiary">#{c.categoria}</span>
                             )}
                           </div>
                         </div>
-                        {/* BotÃµes de aÃ§Ã£o */}
+                        {/* Botões de ação */}
                         <div className="px-3 py-2 border-t border-emerald-500/10 flex gap-2">
                           {c.rota && (
                             <button
                               onClick={() => { window.location.href = c.rota! }}
                               className="flex-1 text-[10px] font-semibold py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 transition-colors flex items-center justify-center gap-1"
                             >
-                              Ver em {c.modulo} â†’
+                              Ver em {c.modulo} →
                             </button>
                           )}
                           {podeDesfazer && (
@@ -706,20 +707,20 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                                   session.setMensagens(prev => [...prev, {
                                     id: 'undo-ok-' + Date.now(),
                                     role: 'ai' as const,
-                                    texto: 'â†©ï¸ **Registro desfeito com sucesso!** O lanÃ§amento foi removido.',
+                                    texto: '↩️ **Registro desfeito com sucesso!** O lançamento foi removido.',
                                   }])
                                   window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
                                 } catch {
                                   session.setMensagens(prev => [...prev, {
                                     id: 'undo-err-' + Date.now(),
                                     role: 'ai' as const,
-                                    texto: 'âŒ NÃ£o foi possÃ­vel desfazer. Remova manualmente no mÃ³dulo correspondente.',
+                                    texto: '❌ Não foi possível desfazer. Remova manualmente no módulo correspondente.',
                                   }])
                                 }
                               }}
                               className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1"
                             >
-                              â†© Desfazer
+                              ↩ Desfazer
                             </button>
                           )}
                         </div>
@@ -735,7 +736,7 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                       isAi ? 'bg-muted text-fg rounded-tl-sm' : 'bg-amber-600 text-white rounded-tr-sm'
                     )}>
                       {msg.texto === '...' ? (
-                        <span className="flex gap-1"><span className="animate-bounce">â—</span><span className="animate-bounce" style={{animationDelay:'0.1s'}}>â—</span><span className="animate-bounce" style={{animationDelay:'0.2s'}}>â—</span></span>
+                        <span className="flex gap-1"><span className="animate-bounce">●</span><span className="animate-bounce" style={{animationDelay:'0.1s'}}>●</span><span className="animate-bounce" style={{animationDelay:'0.2s'}}>●</span></span>
                       ) : (
                         <>
                           {msg.anexo && <img src={msg.anexo} alt="anexo" className="max-w-full rounded-lg mb-1 max-h-32 object-contain" />}
@@ -759,9 +760,9 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                             'bg-blue-500/10 border-blue-500/20 text-blue-300 animate-pulse'
                           )}>
                             {acao.status === 'saving' && <svg className="w-3 h-3 animate-spin shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-                            {acao.status === 'saved'  && <span>âœ…</span>}
-                            {acao.status === 'error'  && <span>âŒ</span>}
-                            {(!acao.status || acao.status === 'pending') && <span>{acao.tipo === 'gasto' ? 'ðŸ’¸' : acao.tipo === 'receita' ? 'ðŸ’°' : acao.tipo === 'ocorrencia' ? 'ðŸ“‹' : 'ðŸ“…'}</span>}
+                            {acao.status === 'saved'  && <span>✅</span>}
+                            {acao.status === 'error'  && <span>❌</span>}
+                            {(!acao.status || acao.status === 'pending') && <span>{acao.tipo === 'gasto' ? '💸' : acao.tipo === 'receita' ? '💰' : acao.tipo === 'ocorrencia' ? '📋' : '📅'}</span>}
                             <span className="truncate">{acao.status === 'saved' ? 'Registrado automaticamente' : acao.status === 'saving' ? 'Salvando...' : acao.status === 'error' ? (acao.errorMsg || 'Erro') : acao.label}</span>
                           </div>
                         ))}
@@ -781,23 +782,23 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                   {attachedFile.isImage && attachedFile.preview ? (
                     <img src={attachedFile.preview} alt="preview" className="w-10 h-10 rounded object-cover shrink-0" />
                   ) : (
-                    <div className="w-10 h-10 rounded bg-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">ðŸ“„</div>
+                    <div className="w-10 h-10 rounded bg-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">📄</div>
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-semibold text-amber-400 truncate">{attachedFile.name}</p>
-                    <p className="text-[9px] text-fg-tertiary">{attachedFile.isImage ? 'Imagem pronta para anÃ¡lise' : 'PDF extraÃ­do â€” pronto para anÃ¡lise'}</p>
+                    <p className="text-[9px] text-fg-tertiary">{attachedFile.isImage ? 'Imagem pronta para análise' : 'PDF extraído — pronto para análise'}</p>
                   </div>
-                  <button onClick={() => setAttachedFile(null)} className="text-fg-tertiary hover:text-fg text-sm shrink-0">âœ•</button>
+                  <button onClick={() => setAttachedFile(null)} className="text-fg-tertiary hover:text-fg text-sm shrink-0">✕</button>
                 </div>
               </div>
             )}
 
-            {/* Input â€” desativado quando offline */}
+            {/* Input — desativado quando offline */}
             {!offline.isOnline ? (
               <div className="p-3 border-t border-border-subtle shrink-0">
                 <div className="flex items-center justify-center gap-2 bg-white/3 rounded-xl py-2.5 border border-white/5">
-                  <span className="text-xs">ðŸ“µ</span>
-                  <p className="text-[11px] text-fg-tertiary">Chat indisponÃ­vel offline â€” use o formulÃ¡rio acima</p>
+                  <span className="text-xs">📵</span>
+                  <p className="text-[11px] text-fg-tertiary">Chat indisponível offline — use o formulário acima</p>
                 </div>
               </div>
             ) : (
@@ -808,10 +809,10 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                 type="file"
                 accept="image/*,application/pdf"
                 className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) processarArquivo(f, setAttachedFile, setProcessingFile); e.target.value = '' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) processarArquivo(f, setAttachedFile, setProcessingFile)(f); e.target.value = '' }}
               />
               <div className="flex items-center gap-2 bg-page rounded-xl p-1 border border-border-subtle focus-within:border-amber-500/40 transition-colors">
-                {/* BotÃ£o microfone (Toggle) */}
+                {/* Botão microfone (Toggle) */}
                 <button
                   onClick={voz.toggleMic}
                   className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
@@ -820,12 +821,12 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
                 </button>
-                {/* BotÃ£o Modo Voz ContÃ­nua */}
+                {/* Botão Modo Voz Contínua */}
                 <button
                   onClick={() => {
                     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
                     if (isIOS) {
-                      alert('O Modo MÃ£os-Livres (Voz ContÃ­nua) nÃ£o Ã© suportado no iPhone devido a restriÃ§Ãµes de privacidade da Apple (o iOS exige um clique fÃ­sico para ativar o microfone a cada resposta). Por favor, use o botÃ£o do microfone comum para falar!')
+                      alert('O Modo Mãos-Livres (Voz Contínua) não é suportado no iPhone devido a restrições de privacidade da Apple (o iOS exige um clique físico para ativar o microfone a cada resposta). Por favor, use o botão do microfone comum para falar!')
                       return
                     }
                     const novo = !voz.modoVozContinuo
@@ -836,11 +837,11 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                   }}
                   className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all text-[10px] font-bold',
                     voz.modoVozContinuo ? 'bg-emerald-500 text-white animate-pulse' : 'text-fg-tertiary hover:text-emerald-400 opacity-60')}
-                  title={voz.modoVozContinuo ? 'Modo mÃ£os-livres ATIVO â€” clique para desativar' : 'Ativar modo mÃ£os-livres (Elena ouve automaticamente)'}
+                  title={voz.modoVozContinuo ? 'Modo mãos-livres ATIVO — clique para desativar' : 'Ativar modo mãos-livres (Elena ouve automaticamente)'}
                 >
-                  âˆž
+                  ∞
                 </button>
-                {/* BotÃ£o Anexar */}
+                {/* Botão Anexar */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={processingFile}
@@ -859,12 +860,12 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
                   type="text"
                   className="flex-1 bg-transparent border-0 focus:ring-0 text-xs text-fg placeholder-zinc-600 h-8"
                   placeholder={
-                    buscandoWeb ? 'ðŸŒ Buscando na internet...' :
-                    voz.isListening ? 'ðŸŽ™ï¸ Ouvindo... clique novamente no microfone para enviar' :
+                    buscandoWeb ? '🌐 Buscando na internet...' :
+                    voz.isListening ? '🎙️ Ouvindo... clique novamente no microfone para enviar' :
                     attachedFile ? 'Descreva o que quer saber...' :
                     'Diga um comando para a Elena...'
                   }
-                  // Fix #5: correÃ§Ã£o ortogrÃ¡fica nativa browser/mobile
+                  // Fix #5: correção ortográfica nativa browser/mobile
                   spellCheck={true}
                   autoCorrect="on"
                   autoCapitalize="sentences"
@@ -901,7 +902,7 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
         }
       `}</style>
 
-      {/* Modal de RelatÃ³rio â€” abre quando Elena gera um relatÃ³rio */}
+      {/* Modal de Relatório — abre quando Elena gera um relatório */}
       {relatorioData && (
         <ModalRelatorio
           dados={relatorioData}
@@ -911,7 +912,6 @@ Aqui estÃ¡ tudo o que vocÃª pode me pedir para fazer:
     </>
   )
 }
-
 
 
 
