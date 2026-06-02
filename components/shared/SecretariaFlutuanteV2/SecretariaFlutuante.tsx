@@ -809,7 +809,7 @@ Aqui está tudo o que você pode me pedir para fazer:
                 type="file"
                 accept="image/*,application/pdf"
                 className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) processarArquivo(f, setAttachedFile, setProcessingFile)(f); e.target.value = '' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) processarArquivo(f, setAttachedFile, setProcessingFile); e.target.value = '' }}
               />
               <div className="flex items-center gap-2 bg-page rounded-xl p-1 border border-border-subtle focus-within:border-amber-500/40 transition-colors">
                 {/* Botão microfone (Toggle) */}
@@ -912,6 +912,7 @@ Aqui está tudo o que você pode me pedir para fazer:
     </>
   )
 }
+
 
 
 
