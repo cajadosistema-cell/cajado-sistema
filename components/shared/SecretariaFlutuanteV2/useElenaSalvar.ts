@@ -426,14 +426,15 @@ export function useElenaSalvar({
         const valor = Number(acao.dados.valor) || 0
         const mesRef = acao.dados.mes_referencia || new Date().toISOString().substring(0, 7)
         const contaPf = await resolverContaPf(acao.dados.conta_nome)
-        const { error } = await (supabase.from('faturas_cartao') as any).insert({
+        if (!contaPf.id) throw new Error('Cartão não encontrado.')
+        
+        const { error } = await (supabase.from('faturas_cartoes') as any).upsert({
           user_id: uid,
-          conta_id: contaPf.id || null,
-          conta_nome: acao.dados.conta_nome || 'Cartão',
-          valor, mes_referencia: mesRef,
+          conta_id: contaPf.id,
+          valor_fechado: valor,
+          mes_referencia: mesRef,
           notas: acao.dados.notas || 'Registrado pela Elena',
-          status: 'pendente',
-        })
+        }, { onConflict: 'conta_id,mes_referencia' })
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
         exibirConfirmacaoSalvamento('fatura_cartao', acao.dados, contaPf.nome)
