@@ -57,6 +57,43 @@ function tocarChime(tipo: 'aviso' | 'urgente' = 'aviso') {
   }
 }
 
+// ── Voz sintetizada (TTS) ────────────────────────────────────────────
+function falarTexto(texto: string, urgente = false) {
+  try {
+    if (!('speechSynthesis' in window)) return
+    // Cancela qualquer fala em andamento
+    window.speechSynthesis.cancel()
+
+    const utterance = new SpeechSynthesisUtterance()
+    utterance.text = urgente
+      ? `Atenção! ${texto}`
+      : `Lembrete: ${texto}`
+    utterance.lang = 'pt-BR'
+    utterance.rate = 0.95
+    utterance.pitch = 1.05
+    utterance.volume = 1
+
+    // Tenta usar voz em português brasileiro
+    const vozes = window.speechSynthesis.getVoices()
+    const vozPtBR = vozes.find(v => v.lang === 'pt-BR')
+      || vozes.find(v => v.lang.startsWith('pt'))
+    if (vozPtBR) utterance.voice = vozPtBR
+
+    // Se vozes ainda não carregaram, espera e tenta de novo
+    if (vozes.length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const vs = window.speechSynthesis.getVoices()
+        const voz = vs.find(v => v.lang === 'pt-BR') || vs.find(v => v.lang.startsWith('pt'))
+        if (voz) utterance.voice = voz
+        window.speechSynthesis.speak(utterance)
+      }
+      return
+    }
+
+    window.speechSynthesis.speak(utterance)
+  } catch { /* SpeechSynthesis indisponível */ }
+}
+
 // ── Notificação do navegador ─────────────────────────────────────
 async function notificarNavegador(titulo: string, corpo: string) {
   if (!('Notification' in window)) return
@@ -201,6 +238,10 @@ export function AlarmManager({ userId }: { userId: string }) {
       // Tipo de som
       const urgente = jaPassou || diffMin <= 1
       tocarChime(urgente ? 'urgente' : 'aviso')
+
+      // Voz sintetizada (TTS) — fala o título do evento
+      // Pequeno delay para o chime terminar antes da voz
+      setTimeout(() => falarTexto(evento.titulo, urgente), 800)
 
       // Notificação do navegador
       await notificarNavegador(
