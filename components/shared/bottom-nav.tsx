@@ -9,6 +9,7 @@ import { PWAInstallButton } from '@/components/shared/PWAInstallBanner'
 
 const mainItems = [
   { href: '/inicio',      label: 'Início',    icon: '⬡',  activeColor: 'text-amber-400'  },
+  { href: '/agenda',      label: 'Agenda',    icon: '📅', activeColor: 'text-purple-400' },
   { href: '/financeiro',  label: 'Contas',    icon: '💰', activeColor: 'text-teal-400'   },
   { href: '/inbox',       label: 'Inbox',     icon: '💬', activeColor: 'text-green-400'  },
   { href: '/vendas',      label: 'Fechamento',icon: '📋', activeColor: 'text-emerald-400'},
@@ -77,7 +78,7 @@ export function BottomNav() {
     { href: '/configuracoes', label: 'Canais',   icon: '📞', activeColor: 'text-blue-400' },
     { href: '/inteligencia',  label: 'Vivi',     icon: '✨', activeColor: 'text-purple-400' },
     { href: '/cajado',        label: 'Leads',    icon: '👥', activeColor: 'text-rose-400' },
-    { href: '/organizacao',   label: 'Agenda',   icon: '📅', activeColor: 'text-amber-400' },
+    { href: '/agenda',        label: 'Agenda',   icon: '📅', activeColor: 'text-purple-400' },
     { href: '/vendas',        label: 'Clientes', icon: '💼', activeColor: 'text-teal-400' },
   ]
 

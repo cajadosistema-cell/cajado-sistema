@@ -61,7 +61,6 @@ export function useElenaAlertas(supabase: SupabaseClient, userId: string, setMen
       const { data: eventos } = await supabase.from('agenda_eventos')
         .select('id, titulo, data_inicio, tipo')
         .eq('user_id', uid)
-        .in('tipo', ['lembrete', 'vencimento', 'compromisso', 'reuniao'])
         .gte('data_inicio', agora.toISOString())
         .lte('data_inicio', em15.toISOString())
         .eq('status', 'pendente')
@@ -69,7 +68,9 @@ export function useElenaAlertas(supabase: SupabaseClient, userId: string, setMen
       if (!eventos || eventos.length === 0) return
 
       for (const ev of eventos) {
-        const chave = `${ev.id}-${new Date(ev.data_inicio).getMinutes()}`
+        // Chave com data ISO truncada (YYYY-MM-DDTHH:MM) — evita conflito entre
+        // eventos em horas diferentes com mesmo minuto
+        const chave = `${ev.id}-${new Date(ev.data_inicio).toISOString().substring(0, 16)}`
         if (alertasDisparadosRef.current.has(chave)) continue
         alertasDisparadosRef.current.add(chave)
 

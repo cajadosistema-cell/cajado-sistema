@@ -110,8 +110,10 @@ export function useElenaSalvar({
 
   // ── resolverContaPj ───────────────────────────────────────────
   const resolverContaPj = useCallback(async (contaNome?: string, autocriar = true): Promise<{ id: string; nome: string }> => {
+    const uid = userIdRef.current
     const { data: contas } = await (supabase.from('contas') as any)
       .select('id, nome, bandeira, tipo')
+      .eq('user_id', uid)
       .eq('categoria', 'pj').eq('ativo', true)
       .order('created_at', { ascending: true })
 
@@ -148,8 +150,10 @@ export function useElenaSalvar({
   // ── resolverContaPf ───────────────────────────────────────────
   const resolverContaPf = useCallback(async (contaNome?: string, autocriar = true): Promise<{ id: string; nome: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '' }
+    const uid = userIdRef.current
     const { data: contas } = await (supabase.from('contas') as any)
       .select('id, nome, bandeira, tipo')
+      .eq('user_id', uid)
       .eq('categoria', 'pf').eq('ativo', true)
       .order('created_at', { ascending: true })
 
@@ -183,8 +187,10 @@ export function useElenaSalvar({
   // ── resolverCartaoPf ────────────────────────────────────────
   const resolverCartaoPf = useCallback(async (contaNome: string): Promise<{ id: string; nome: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '' }
+    const uid = userIdRef.current
     const { data: contas } = await (supabase.from('contas') as any)
       .select('id, nome, bandeira, tipo')
+      .eq('user_id', uid)
       .eq('categoria', 'pf').eq('ativo', true)
       .in('tipo', ['cartao_credito', 'cartao_debito'])
       .order('created_at', { ascending: true })
@@ -205,8 +211,9 @@ export function useElenaSalvar({
   // ── resolverContaQualquer ─────────────────────────────────────
   const resolverContaQualquer = useCallback(async (contaNome: string): Promise<{ id: string; nome: string; categoria: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '', categoria: '' }
+    const uid = userIdRef.current
     const { data: contas } = await (supabase.from('contas') as any)
-      .select('id, nome, bandeira, categoria').eq('ativo', true)
+      .select('id, nome, bandeira, categoria').eq('user_id', uid).eq('ativo', true)
     if (!contas?.length) return { id: '', nome: '', categoria: '' }
     const busca = contaNome.toLowerCase().trim()
     const match = contas.find((c: any) => {
@@ -615,7 +622,8 @@ export function useElenaSalvar({
       } else if ((acao.tipo as string) === 'buscar_contas') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const cat = acao.dados.categoria || 'todos'
-        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo').eq('ativo', true).order('categoria').order('nome')
+        // IMPORTANTE: sempre filtra por user_id para evitar vazamento entre contas
+        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo').eq('user_id', uid).eq('ativo', true).order('categoria').order('nome')
         if (cat === 'pf') query = query.eq('categoria', 'pf')
         else if (cat === 'pj') query = query.eq('categoria', 'pj')
         const { data: contas, error } = await query

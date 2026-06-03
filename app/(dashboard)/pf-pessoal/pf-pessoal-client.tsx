@@ -17,7 +17,6 @@ import { TabPrevisao }    from './_components/tabs/TabPrevisao'
 import { TabRegistros }   from './_components/tabs/TabRegistros'
 import { TabCartoesPF }   from './_components/tabs/TabCartoesPF'
 import { SecretariaFlutuante }    from '@/components/shared/SecretariaFlutuante'
-import { AlarmManager }           from '@/components/shared/AlarmManager'
 import { ModalNovoGasto }         from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita }       from './_components/modals/ModalNovaReceita'
 import { PainelComparativoMes }   from '@/components/shared/PainelComparativoMes'
@@ -258,7 +257,7 @@ export default function PfPessoalClient() {
       )}
 
       <SecretariaFlutuante />
-      <AlarmManager userId={authUserId} />
+      {/* AlarmManager movido para DashboardLayoutClient (global em todas as páginas) */}
 
       {/* ── Modais ── */}
       <VencimentosMesPF
