@@ -611,6 +611,97 @@ export function useElenaSalvar({
         }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
+      // ── BUSCAR CONTAS E CARTÕES ───────────────────────────────
+      } else if ((acao.tipo as string) === 'buscar_contas') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const cat = acao.dados.categoria || 'todos'
+        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo').eq('ativo', true).order('categoria').order('nome')
+        if (cat === 'pf') query = query.eq('categoria', 'pf')
+        else if (cat === 'pj') query = query.eq('categoria', 'pj')
+        const { data: contas, error } = await query
+        if (error) throw new Error(error.message)
+        if (!contas || contas.length === 0) {
+          setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto: '🏦 Nenhuma conta cadastrada ainda, Sr. Max. Posso cadastrar uma para você agora!' }])
+        } else {
+          const contasPf = contas.filter((c: any) => c.categoria === 'pf')
+          const contasPj = contas.filter((c: any) => c.categoria === 'pj')
+          const tipoIcon = (tipo: string) => tipo === 'cartao_credito' ? '💳' : tipo === 'cartao_debito' ? '💳' : tipo === 'poupanca' ? '🏦' : tipo === 'investimento' ? '📈' : tipo === 'carteira' ? '👛' : '🏦'
+          let texto = '🏦 **Suas contas cadastradas:**\n\n'
+          if (contasPf.length > 0) {
+            texto += '**👤 Pessoal (PF):**\n'
+            contasPf.forEach((c: any) => {
+              const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+              const band = c.bandeira ? ` [${c.bandeira}]` : ''
+              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}\n`
+            })
+            texto += '\n'
+          }
+          if (contasPj.length > 0) {
+            texto += '**🏢 Empresa (PJ):**\n'
+            contasPj.forEach((c: any) => {
+              const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+              const band = c.bandeira ? ` [${c.bandeira}]` : ''
+              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}\n`
+            })
+          }
+          texto += `\n_Total: ${contas.length} conta(s) ativa(s)_`
+          setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // ── BUSCAR LANÇAMENTOS RECENTES ───────────────────────────
+      } else if ((acao.tipo as string) === 'buscar_lancamentos') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const tipo = acao.dados.tipo || 'todos'
+        const limite = Math.min(Number(acao.dados.limite) || 10, 20)
+        let texto = ''
+
+        if (tipo === 'pf' || tipo === 'todos') {
+          const [{ data: gastos }, { data: receitas }] = await Promise.all([
+            (supabase.from('gastos_pessoais') as any).select('descricao, valor, categoria, data, forma_pagamento').eq('user_id', uid).order('data', { ascending: false }).limit(limite),
+            (supabase.from('receitas_pessoais') as any).select('descricao, valor, categoria, data').eq('user_id', uid).order('data', { ascending: false }).limit(limite),
+          ])
+          const todosPf = [
+            ...(gastos || []).map((g: any) => ({ ...g, _tipo: 'gasto' })),
+            ...(receitas || []).map((r: any) => ({ ...r, _tipo: 'receita' })),
+          ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()).slice(0, limite)
+
+          if (todosPf.length > 0) {
+            texto += '**💰 Lançamentos Pessoais (PF):**\n'
+            todosPf.forEach((l: any) => {
+              const dt = l.data ? new Date(l.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'
+              const icon = l._tipo === 'gasto' ? '💸' : '💰'
+              const valor = `R$ ${Number(l.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+              texto += `• ${icon} [${dt}] ${l.descricao} — **${valor}** _(${l.categoria})_\n`
+            })
+            texto += '\n'
+          } else if (tipo === 'pf') {
+            texto += '💰 Nenhum lançamento PF encontrado.\n'
+          }
+        }
+
+        if (tipo === 'pj' || tipo === 'todos') {
+          const { data: lancPj } = await (supabase.from('lancamentos') as any)
+            .select('descricao, valor, tipo, data_competencia, categorias(nome)')
+            .order('data_competencia', { ascending: false })
+            .limit(limite)
+          if (lancPj && lancPj.length > 0) {
+            texto += '**🏢 Lançamentos Empresa (PJ):**\n'
+            lancPj.forEach((l: any) => {
+              const dt = l.data_competencia ? new Date(l.data_competencia + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'
+              const icon = l.tipo === 'despesa' ? '💸' : '💰'
+              const valor = `R$ ${Number(l.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+              texto += `• ${icon} [${dt}] ${l.descricao} — **${valor}**\n`
+            })
+          } else if (tipo === 'pj') {
+            texto += '🏢 Nenhum lançamento PJ encontrado.\n'
+          }
+        }
+
+        if (!texto.trim()) texto = '🔍 Nenhum lançamento encontrado para o filtro aplicado.'
+        setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto: texto.trim() }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
       // ── AÇÃO DESCONHECIDA → ignora silenciosamente ───────────
       } else {
         setAcaoStatus(msgId, acaoIdx, 'saved')

@@ -155,6 +155,21 @@ BUSCA FINANCEIRA:
 {"acao":"buscar_lancamento","periodo":"mes_atual","categoria":"alimentacao","tipo":"pf"}
 \`\`\`
 
+BUSCAR CONTAS E CARTÕES CADASTRADOS:
+\`\`\`json
+{"acao":"buscar_contas","categoria":"pf"}
+\`\`\`
+- "categoria": "pf", "pj" ou "todos" (padrão: "todos")
+- Use quando o Sr. Max perguntar: "quais contas tenho?", "quais cartões cadastrei?", "me mostra minhas contas"
+
+BUSCAR LANÇAMENTOS RECENTES:
+\`\`\`json
+{"acao":"buscar_lancamentos","tipo":"pf","limite":10}
+\`\`\`
+- "tipo": "pf" (gastos/receitas pessoais), "pj" (empresa), "todos"
+- "limite": quantidade de registros (padrão: 10, máximo: 20)
+- Use quando perguntar: "o que lancei hoje?", "meus últimos gastos", "me mostra os lançamentos da empresa"
+
 EDITAR LANÇAMENTO:
 \`\`\`json
 {"acao":"editar_lancamento","novo_valor":150.00,"nova_descricao":"Almoço com cliente"}
@@ -325,6 +340,14 @@ export function extrairAcoes(texto: string): AcaoIA[] {
         const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : 'Pessoal (PF)'
         const bandeira = d.bandeira ? ` (${d.bandeira})` : ''
         acoes.push({ tipo: 'cadastrar_cartao', dados: d, label: `💳 Cadastrar cartão: ${d.nome}${bandeira} — ${catLabel}`, status: 'pending' })
+
+      } else if (d.acao === 'buscar_contas') {
+        const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : d.categoria === 'pf' ? 'Pessoal (PF)' : 'Todas'
+        acoes.push({ tipo: 'buscar_contas' as any, dados: d, label: `🏦 Buscando contas — ${catLabel}`, status: 'pending' })
+
+      } else if (d.acao === 'buscar_lancamentos') {
+        const tipoLabel = d.tipo === 'pf' ? 'Pessoal (PF)' : d.tipo === 'pj' ? 'Empresa (PJ)' : 'Todos'
+        acoes.push({ tipo: 'buscar_lancamentos' as any, dados: d, label: `🔍 Buscando lançamentos — ${tipoLabel}`, status: 'pending' })
 
       } else if (d.acao) {
         // Fallback: qualquer ação desconhecida vira registro genérico
