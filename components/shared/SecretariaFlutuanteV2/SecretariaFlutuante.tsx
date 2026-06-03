@@ -281,9 +281,12 @@ export function SecretariaFlutuante() {
         const acoesPendentes = ultimaElena?.acoes?.filter(a => a.status === 'pending')
         if (acoesPendentes && acoesPendentes.length > 0 && ultimaElena && uid) {
           session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))
-          isSendingRef.current = false
           setLoading(false)
-          await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid)
+          try {
+            await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid)
+          } finally {
+            isSendingRef.current = false  // só libera após executar
+          }
           return
         }
 

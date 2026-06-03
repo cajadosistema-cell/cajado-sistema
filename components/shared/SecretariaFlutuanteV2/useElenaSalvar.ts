@@ -376,12 +376,43 @@ export function useElenaSalvar({
           : (TIPOS_BANCO_ANTIGO.includes(tipoRaw as any)
               ? tipoRaw
               : (TIPO_FALLBACK_PRE_MIGRATION[tipoRaw] || 'compromisso'))
+        // ── Guard anti-duplicação ────────────────────────────────────────
+        // Verifica se já existe evento idêntico criado nos últimos 30s
+        const ha30s = new Date(Date.now() - 30000).toISOString()
+        const tituloEvento = acao.dados.titulo || 'Evento via Elena'
+        const { data: jaExiste } = await (supabase.from('agenda_eventos') as any)
+          .select('id')
+          .eq('user_id', uid)
+          .eq('titulo', tituloEvento)
+          .gte('created_at', ha30s)
+          .limit(1)
+        if (jaExiste && jaExiste.length > 0) {
+          // Evento duplicado — ignora silenciosamente
+          setAcaoStatus(msgId, acaoIdx, 'saved')
+          return
+        }
+
+        // ── Preservar horário local (sem converter para UTC) ───────────────
+        // dataInicio.toISOString() converti para UTC causando +3h no banco
+        // Usamos a string original da IA (horario local) ou formatamos sem UTC offset
+        const strDataOriginal = String(acao.dados.data_inicio || '')
+        let dataInicioStr: string
+        if (strDataOriginal && strDataOriginal.includes('T')) {
+          // Garante que não tem Z (UTC marker) — mantém como horário local
+          dataInicioStr = strDataOriginal.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '')
+        } else {
+          // Fallback: formato local sem UTC
+          const pad = (n: number) => String(n).padStart(2, '0')
+          const d = dataInicio
+          dataInicioStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
+        }
+
         const { error } = await (supabase.from('agenda_eventos') as any).insert({
           user_id: uid,
-          titulo: acao.dados.titulo || 'Evento via Elena',
+          titulo: tituloEvento,
           descricao: acao.dados.descricao || null,
           tipo: tipoEvento,
-          data_inicio: dataInicio.toISOString(),
+          data_inicio: dataInicioStr,  // horário local sem conversão UTC
           data_fim: null, dia_inteiro: false,
           status: 'pendente', prioridade: 'normal',
           cor: COR_EVENTO[tipoEvento] || '#f59e0b',
