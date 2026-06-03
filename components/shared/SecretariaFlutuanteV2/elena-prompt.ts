@@ -363,15 +363,28 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
 // ── formatarTexto ─────────────────────────────────────────────
 // Remove blocos JSON da resposta para exibição limpa no chat.
+// Cobre tanto o formato ```json...``` quanto JSON cru em linha ({"acao":...})
 export function formatarTexto(texto: string): string {
-  return texto.replace(/```json[\s\S]*?```/g, '').trim()
+  return texto
+    // Remove blocos ```json ... ```
+    .replace(/```json[\s\S]*?```/g, '')
+    // Remove linhas que são JSON de ação cruo (sem wrapper): {"acao":"..."}
+    .replace(/^\s*\{"acao":[^}\n]*\}\s*$/gm, '')
+    // Remove linhas que começam com { e contém "acao" mesmo com mais campos
+    .replace(/^\s*\{[^\n]*"acao"[^\n]*\}\s*$/gm, '')
+    // Remove linhas vazias duplicadas que sobraram
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 // ── renderMarkdownHtml ────────────────────────────────────────
 // Converte markdown simples para HTML seguro (bold, italic, listas, breaks).
 export function renderMarkdownHtml(texto: string): string {
   return texto
+    // Remove blocos ```json ... ```
     .replace(/```json[\s\S]*?```/g, '')
+    // Remove JSON de ação cruo em linha
+    .replace(/^\s*\{[^\n]*"acao"[^\n]*\}\s*$/gm, '')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/^#{1,3} (.+)$/gm, '<strong class="block text-amber-400">$1</strong>')
