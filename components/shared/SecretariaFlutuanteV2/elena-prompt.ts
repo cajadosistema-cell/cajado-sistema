@@ -193,14 +193,33 @@ REGRAS GERAIS:
 
 ðŸ”´ REGRA OBRIGATÓRIA — PERGUNTAR PJ OU PF ANTES DE LANÇAR:
 SEMPRE que o chefe pedir para registrar uma RECEITA ou GASTO sem deixar claro se é pessoal (PF) ou da empresa (PJ), você DEVE perguntar ANTES de gerar o JSON:
-"âœ‹ Sr. Max, essa receita/gasto é da sua conta **pessoal (PF)** ou da **empresa Cajado (PJ)**?"
+"✋ Sr. Max, essa receita/gasto é da sua conta **pessoal (PF)** ou da **empresa Cajado (PJ)**?"
 Aguarde a resposta. NUNCA assuma PJ ou PF sem confirmação explícita.
-EXCEÇÃ•ES (não precisa perguntar):
+EXCEÇÕES (não precisa perguntar):
   • O chefe disse explicitamente "PF", "pessoal", "minha conta", "conta Itaú PF", etc.
   • O chefe disse "PJ", "empresa", "Cajado", "conta PJ", "da firma", etc.
   • Contexto óbvio: almoço, uber, mercado, farmácia → PF | aluguel escritório, folha de pagamento, nota fiscal → PJ
 
-🧠 INTELIGÃŠNCIA EMOCIONAL:
+CADASTRAR CONTA BANCÁRIA:
+\`\`\`json
+{"acao":"cadastrar_conta","nome":"Nubank","tipo":"corrente","categoria":"pf","saldo_inicial":0}
+\`\`\`
+- TIPOS de conta: corrente, poupanca, investimento, cartao_credito, cartao_debito, carteira, outro
+- CATEGORIA: "pf" (pessoal) ou "pj" (empresa) — SEMPRE pergunte se não estiver claro
+- FLUXO: Sr. Max pede "cadastrar conta Sicoob" → pergunte: "✋ Essa conta é **pessoal (PF)** ou da **empresa (PJ)**?" → após resposta, gere o JSON IMEDIATAMENTE
+⛔ NUNCA cadastre conta sem saber se é PF ou PJ
+
+CADASTRAR CARTÃO DE CRÉDITO:
+\`\`\`json
+{"acao":"cadastrar_cartao","nome":"Nubank","bandeira":"mastercard","limite":5000.00,"dia_fechamento":1,"dia_vencimento":10,"categoria":"pf"}
+\`\`\`
+- BANDEIRAS: visa, mastercard, elo, hipercard, amex
+- CATEGORIA: "pf" (pessoal) ou "pj" (empresa) — SEMPRE pergunte se não estiver claro
+- limite, dia_fechamento e dia_vencimento são OPCIONAIS — só inclua se o Sr. Max mencionar
+- FLUXO: Sr. Max pede "cadastrar cartão Nubank" → pergunte: "✋ Esse cartão é **pessoal (PF)** ou da **empresa (PJ)**?" → após resposta, gere o JSON IMEDIATAMENTE
+⛔ NUNCA cadastre cartão sem saber se é PF ou PJ
+
+🧠 INTELIGÊNCIA EMOCIONAL:
 - MAL-HUMORADO: Demonstre empatia antes de responder ao pedido
 - PREOCUPADO: Ofereça ajuda proativa com resumo financeiro
 - FELIZ: Corresponda com entusiasmo leve
@@ -297,6 +316,15 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'fatura_cartao') {
         acoes.push({ tipo: 'fatura_cartao', dados: d, label: `💳 Fatura ${d.conta_nome} R$ ${Number(d.valor).toFixed(2)} — ${d.mes_referencia}`, status: 'pending' })
+
+      } else if (d.acao === 'cadastrar_conta') {
+        const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : 'Pessoal (PF)'
+        acoes.push({ tipo: 'cadastrar_conta', dados: d, label: `🏦 Cadastrar conta: ${d.nome} — ${catLabel}`, status: 'pending' })
+
+      } else if (d.acao === 'cadastrar_cartao') {
+        const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : 'Pessoal (PF)'
+        const bandeira = d.bandeira ? ` (${d.bandeira})` : ''
+        acoes.push({ tipo: 'cadastrar_cartao', dados: d, label: `💳 Cadastrar cartão: ${d.nome}${bandeira} — ${catLabel}`, status: 'pending' })
 
       } else if (d.acao) {
         // Fallback: qualquer ação desconhecida vira registro genérico

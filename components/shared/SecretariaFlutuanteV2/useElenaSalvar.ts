@@ -476,7 +476,56 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
         exibirConfirmacaoSalvamento('fatura_cartao', acao.dados, cartaoPf.nome)
 
+      // ── CADASTRAR CONTA ──────────────────────────────────────
+      } else if (acao.tipo === 'cadastrar_conta') {
+        const categoria = acao.dados.categoria === 'pj' ? 'pj' : 'pf'
+        const tiposContaValidos = ['corrente','poupanca','investimento','cartao_credito','cartao_debito','carteira','outro']
+        const tipoConta = tiposContaValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'corrente'
+        const { data: novaConta, error } = await (supabase.from('contas') as any).insert({
+          nome: acao.dados.nome || 'Conta via Elena',
+          tipo: tipoConta,
+          categoria,
+          saldo_inicial: Number(acao.dados.saldo_inicial) || 0,
+          saldo_atual: Number(acao.dados.saldo_inicial) || 0,
+          ativo: true,
+          user_id: uid,
+        }).select('id, nome').single()
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirConfirmacaoSalvamento('cadastrar_conta', acao.dados, acao.dados.nome, novaConta?.id, 'contas')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      // ── CADASTRAR CARTÃO ─────────────────────────────────────
+      } else if (acao.tipo === 'cadastrar_cartao') {
+        const categoria = acao.dados.categoria === 'pj' ? 'pj' : 'pf'
+        const bandeirasValidas = ['visa','mastercard','elo','hipercard','amex']
+        // Detecta bandeira pelo nome se não informada explicitamente
+        const nomeLower = (acao.dados.nome || '').toLowerCase()
+        const bandeiraNome = acao.dados.bandeira?.toLowerCase()
+        const bandeira = bandeirasValidas.includes(bandeiraNome)
+          ? bandeiraNome
+          : (Object.entries(BANDEIRAS_MAP).find(([k]) => nomeLower.includes(k))?.[1] || null)
+        const payload: Record<string, any> = {
+          nome: acao.dados.nome || 'Cartão via Elena',
+          tipo: 'cartao_credito',
+          categoria,
+          bandeira: bandeira || null,
+          saldo_inicial: 0,
+          saldo_atual: 0,
+          ativo: true,
+          user_id: uid,
+        }
+        if (acao.dados.limite) payload.limite = Number(acao.dados.limite)
+        if (acao.dados.dia_fechamento) payload.dia_fechamento = Number(acao.dados.dia_fechamento)
+        if (acao.dados.dia_vencimento) payload.dia_vencimento = Number(acao.dados.dia_vencimento)
+        const { data: novoCartao, error } = await (supabase.from('contas') as any).insert(payload).select('id, nome').single()
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirConfirmacaoSalvamento('cadastrar_cartao', acao.dados, acao.dados.nome, novoCartao?.id, 'contas')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
       // ── TRANSFERÊNCIA ────────────────────────────────────────
+
       } else if (acao.tipo === 'transferencia') {
         const valor = Number(acao.dados.valor) || 0
         const { id: origemId } = await resolverContaQualquer(acao.dados.conta_origem)

@@ -65,6 +65,8 @@ export const MAPA_CONFIRMACAO: Record<string, { modulo: string; rota: string; ic
   transferencia:        { modulo: 'Financeiro',       rota: '/financeiro', icone: '🔄' },
   definir_meta:         { modulo: 'Metas da Elena',   rota: '/financeiro', icone: '🎯' },
   registro_livre:       { modulo: 'Memória da Elena', rota: '',            icone: '🧠' },
+  cadastrar_conta:      { modulo: 'Contas',           rota: '/financeiro', icone: '🏦' },
+  cadastrar_cartao:     { modulo: 'Cartões',          rota: '/financeiro', icone: '💳' },
 }
 
 // Detecção de bandeira pelo nome da conta

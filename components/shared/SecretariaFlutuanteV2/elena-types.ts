@@ -56,6 +56,8 @@ export type AcaoTipo =
   | 'buscar_lancamento'
   | 'editar_lancamento'
   | 'fatura_cartao'
+  | 'cadastrar_conta'
+  | 'cadastrar_cartao'
 
 export interface AcaoIA {
   tipo: AcaoTipo
