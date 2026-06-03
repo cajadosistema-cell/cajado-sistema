@@ -1,0 +1,21 @@
+fix: isolamento de contas/cartoes entre usuarios + melhorias agenda
+
+- fix(useElenaSalvar): adiciona .eq('user_id', uid) em todas as queries
+  da tabela contas (resolverContaPf, resolverContaPj, resolverCartaoPf,
+  resolverContaQualquer, buscar_contas) para evitar vazamento de cartoes
+  entre contas diferentes (bug: Elena mostrava cartoes de outros usuarios)
+
+- fix(rls): migration 050 - recria policies da tabela contas com isolamento
+  correto: contas PF isoladas por user_id, contas PJ por empresa_id
+
+- feat(bottom-nav): adiciona aba Agenda na navegacao mobile principal
+  e corrige link Agenda nos inboxItems que apontava para /organizacao
+
+- fix(AlarmManager): move para DashboardLayoutClient (global em todas as
+  paginas) eliminando cobertura parcial que era apenas em /pf-pessoal
+
+- fix(useElenaAlertas): corrige chave de deduplicacao de alertas usando
+  ISO datetime truncado (YYYY-MM-DDTHH:MM) em vez de somente getMinutes()
+
+- fix(useElenaAlertas): remove filtro de tipo nos alertas para cobrir
+  todos os tipos (tarefa, prazo, pessoal, nota, aniversario, etc.)

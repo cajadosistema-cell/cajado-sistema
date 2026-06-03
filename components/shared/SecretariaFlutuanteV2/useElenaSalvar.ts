@@ -135,6 +135,7 @@ export function useElenaSalvar({
           const bandeira = Object.entries(BANDEIRAS_MAP).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
           const tipo = bandeira ? 'cartao_credito' : 'corrente'
           const { data: nova, error } = await (supabase.from('contas') as any).insert({
+            user_id: uid, // ⚠️ obrigatório para isolação
             nome: nomeNovo, tipo, categoria: 'pj', bandeira,
             saldo_inicial: 0, saldo_atual: 0, ativo: true,
           }).select('id, nome').single()
@@ -145,7 +146,7 @@ export function useElenaSalvar({
 
     if (!contaPjIdRef.current) contaPjIdRef.current = contas[0].id
     return { id: contas[0].id, nome: contas[0].nome }
-  }, [supabase])
+  }, [supabase, userIdRef])
 
   // ── resolverContaPf ───────────────────────────────────────────
   const resolverContaPf = useCallback(async (contaNome?: string, autocriar = true): Promise<{ id: string; nome: string }> => {
@@ -174,6 +175,7 @@ export function useElenaSalvar({
         const bandeira = Object.entries(BANDEIRAS_MAP).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
         const tipo = bandeira ? 'cartao_credito' : 'corrente'
         const { data: nova, error } = await (supabase.from('contas') as any).insert({
+          user_id: uid, // ⚠️ obrigatório para isolação
           nome: nomeNovo, tipo, categoria: 'pf', bandeira,
           saldo_inicial: 0, saldo_atual: 0, ativo: true,
         }).select('id, nome').single()
@@ -182,7 +184,7 @@ export function useElenaSalvar({
     }
 
     return { id: '', nome: '' }
-  }, [supabase])
+  }, [supabase, userIdRef])
 
   // ── resolverCartaoPf ────────────────────────────────────────
   const resolverCartaoPf = useCallback(async (contaNome: string): Promise<{ id: string; nome: string }> => {
