@@ -433,6 +433,21 @@ export function TabAgenda({ userId }: { userId: string }) {
             <button onClick={() => setViewMode('semana')} className={cn('px-3 py-1 rounded-lg text-xs font-semibold transition-all', viewMode === 'semana' ? 'bg-amber-500/10 text-amber-400' : 'text-fg-tertiary hover:text-fg-secondary')}>📆 Semana</button>
             <button onClick={() => setViewMode('lista')} className={cn('px-3 py-1 rounded-lg text-xs font-semibold transition-all', viewMode === 'lista' ? 'bg-amber-500/10 text-amber-400' : 'text-fg-tertiary hover:text-fg-secondary')}>📋 Lista</button>
           </div>
+          {concluidos.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Excluir ${concluidos.length} evento(s) concluído(s)?`)) return
+                for (const ev of concluidos) {
+                  await (supabase.from('agenda_eventos') as any).delete().eq('id', ev.id)
+                }
+                carregar()
+                success(`${concluidos.length} evento(s) excluído(s)!`)
+              }}
+              className="text-xs px-3 h-8 rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10 transition-all"
+            >
+              🗑️ Limpar concluídos ({concluidos.length})
+            </button>
+          )}
           <button onClick={() => { setEventoEditar(null); setEventoPreview(null); setModalOpen(true) }} className="btn-primary text-xs h-8 px-4">
             + Novo
           </button>
@@ -539,20 +554,27 @@ export function TabAgenda({ userId }: { userId: string }) {
                             ? 'opacity-40 border-border-subtle bg-page'
                             : 'border-white/5 bg-black/20 hover:border-white/10'
                         )}
-                        onClick={() => { setEventoEditar(ev); setModalOpen(true) }}
                       >
                         <span className="text-sm shrink-0">{TIPO_CONFIG[ev.tipo]?.icon}</span>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1" onClick={() => { setEventoEditar(ev); setModalOpen(true) }}>
                           <p className={cn('text-xs font-semibold truncate', ev.status === 'concluido' ? 'line-through text-fg-disabled' : 'text-fg')}>
                             {ev.titulo}
                           </p>
                           <p className="text-[9px] text-fg-disabled">{formatHora(ev.data_inicio)}</p>
                         </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); handleStatus(ev.id, ev.status === 'concluido' ? 'pendente' : 'concluido') }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-emerald-500 hover:text-emerald-400 shrink-0"
-                          title="Concluir"
-                        >✓</button>
+                        {/* Ações rápidas — sempre visíveis */}
+                        <div className="flex gap-0.5 shrink-0">
+                          <button
+                            onClick={e => { e.stopPropagation(); setEventoEditar(ev); setModalOpen(true) }}
+                            className="w-5 h-5 rounded flex items-center justify-center text-[10px] text-fg-disabled hover:text-amber-400 hover:bg-amber-500/10 transition-all"
+                            title="Editar"
+                          >✎</button>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDelete(ev.id, ev.titulo) }}
+                            className="w-5 h-5 rounded flex items-center justify-center text-[10px] text-fg-disabled hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            title="Excluir"
+                          >✕</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -581,7 +603,7 @@ export function TabAgenda({ userId }: { userId: string }) {
               <div
                 key={ev.id}
                 className={cn(
-                  'flex items-start gap-3 p-3 rounded-xl border transition-all group',
+                  'flex items-start gap-3 p-3 rounded-xl border transition-all',
                   ev.status === 'concluido'
                     ? 'opacity-50 border-border-subtle bg-page'
                     : 'border-white/5 bg-surface hover:border-white/10'
@@ -616,8 +638,8 @@ export function TabAgenda({ userId }: { userId: string }) {
                   {ev.descricao && <p className="text-xs text-fg-disabled mt-1 line-clamp-1">{ev.descricao}</p>}
                 </div>
 
-                {/* Ações */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                {/* Ações — sempre visíveis */}
+                <div className="flex items-center gap-1 shrink-0">
                   {ev.status !== 'concluido' && (
                     <button
                       onClick={() => handleStatus(ev.id, 'concluido')}
