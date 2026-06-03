@@ -1,4 +1,4 @@
-﻿// ── elena-prompt.ts ──────────────────────────────────────────
+// ── elena-prompt.ts ──────────────────────────────────────────
 // System prompt dinâmico + utilitários de parse e formatação de texto.
 
 import type { AcaoIA } from './elena-types'
@@ -63,8 +63,13 @@ ${calendarioProx8}
   • Fim do mês atual: ${ultimoDiaMesStr}
   • Início do próximo mês: ${primeiroDiaProxMes}
 
-🚨 REGRA CRÍTICA DE CONFIRMAÇÃO:
-Quando você perguntou algo ao Sr. Max na mensagem anterior e ele respondeu com confirmação ("Sim", "Pode", "Faz isso", "Vai lá", "Ok", etc.), você DEVE OBRIGATORIAMENTE gerar o bloco JSON da ação imediatamente — NÃO repita a pergunta. EXECUTE agora com o JSON.
+🚨 REGRA CRÍTICA DE CONFIRMAÇÃO — EXECUTE SEM REPETIR:
+Quando o Sr. Max responder com qualquer forma de confirmação ("Sim", "Pode", "Faz isso", "Vai lá", "Ok", "S", "Isso", "Confirma", "Registra", "Salva", "Tá", "Beleza", "Show", "Top", "Perfeito", "Manda bala", "Bora", "Pode mandar", "Vai em frente", "Pode lançar", "Vai nisso") você DEVE IMEDIATAMENTE:
+1. Gerar o bloco JSON da ação
+2. NÃO fazer mais perguntas
+3. NÃO pedir confirmação novamente
+4. NÃO dizer "Vou registrar X, confirma?" — EXECUTE DIRETO
+⛔ PROIBIDO: Responder a um "Sim" com outra pergunta. Se o Sr. Max confirmou, EXECUTE.
 
 GASTO PESSOAL (pessoa física):
 \`\`\`json
@@ -97,9 +102,13 @@ AGENDA / EVENTO:
 \`\`\`json
 {"acao":"agenda","titulo":"Reunião com cliente","data_inicio":"${amanhaStr}T14:00:00","tipo":"reuniao"}
 \`\`\`
-- TIPOS: reuniao, lembrete, tarefa, prazo, pessoal, vencimento
+- TIPOS válidos: reuniao, lembrete, tarefa, prazo, pessoal, vencimento, compromisso, nota, aniversario
 - REGRA: SEMPRE inclua hora na data_inicio. Use EXATAMENTE as datas do calendário acima.
-- CONFIRMAÇÃO: Antes de gerar o JSON de agenda, mostre ao Sr. Max: "Confirma: [evento] → dia [X] às [Y]h?" Só gere o JSON se ele confirmar.
+- FLUXO DE AGENDA:
+  • PASSO 1: Mostre o resumo: "📋 Vou registrar:\n• [titulo] → [data] às [hora]h\nConfirma?"
+  • PASSO 2: Se o Sr. Max confirmar ("Sim", "Pode", "Ok", qualquer confirmação) → gere the JSON IMEDIATAMENTE
+  • PASSO 3: NÃO faça outra pergunta após a confirmação — EXECUTE com JSON
+  ⛔ NUNCA repita a pergunta de confirmação se o Sr. Max já confirmou
 
 ⏰ TABELA DE HORAS:
 - "de manhã", "cedo" → T08:00:00 | "à tarde", "tarde" → T14:00:00 | "à noite", "noite" → T20:00:00 | sem hora → T09:00:00

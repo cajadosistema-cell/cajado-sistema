@@ -351,7 +351,22 @@ export function useElenaSalvar({
         }
         const anoCorreto = new Date().getFullYear()
         if (dataInicio.getFullYear() < anoCorreto) dataInicio.setFullYear(anoCorreto)
-        const tipoEvento = TIPOS_EVENTO_VALIDOS.includes(acao.dados.tipo) ? acao.dados.tipo : 'compromisso'
+        // Mapeamento de tipos: garante compatibilidade mesmo sem a migration 049
+        // Após rodar migration 049 no Supabase, todos esses tipos passam a ser aceitos
+        // ANTES da migration: vencimento→lembrete, prazo→tarefa, pessoal→compromisso
+        // APÓS a migration 049: todos os tipos são aceitos diretamente pelo banco
+        const TIPOS_BANCO_ANTIGO = ['compromisso','lembrete','nota','tarefa','aniversario','reuniao'] as const
+        const TIPO_FALLBACK_PRE_MIGRATION: Record<string, string> = {
+          vencimento: 'lembrete',    // fallback até migration 049
+          prazo: 'tarefa',           // fallback até migration 049  
+          pessoal: 'compromisso',    // fallback até migration 049
+        }
+        const tipoRaw = String(acao.dados.tipo || 'compromisso')
+        const tipoEvento = (TIPOS_EVENTO_VALIDOS as readonly string[]).includes(tipoRaw)
+          ? tipoRaw
+          : (TIPOS_BANCO_ANTIGO.includes(tipoRaw as any)
+              ? tipoRaw
+              : (TIPO_FALLBACK_PRE_MIGRATION[tipoRaw] || 'compromisso'))
         const { error } = await (supabase.from('agenda_eventos') as any).insert({
           user_id: uid,
           titulo: acao.dados.titulo || 'Evento via Elena',
