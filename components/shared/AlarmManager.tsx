@@ -168,12 +168,15 @@ export function AlarmManager({ userId }: { userId: string }) {
     if (!userId) return
     const agora = new Date()
     const em16min = new Date(agora.getTime() + 16 * 60 * 1000)
+    // Inclui também eventos dos últimos 2 minutos (para não perder alarmes
+    // criados na brecha entre verificações de 30 segundos)
+    const ha2min = new Date(agora.getTime() - 2 * 60 * 1000)
 
-    // Busca eventos nos próximos 16 minutos (janela de 15 min + margem)
+    // Busca eventos dos últimos 2 min até os próximos 16 min
     const { data } = await (supabase.from('agenda_eventos') as any)
       .select('id,titulo,data_inicio,tipo,descricao')
       .eq('user_id', userId)
-      .gte('data_inicio', agora.toISOString())
+      .gte('data_inicio', ha2min.toISOString())
       .lte('data_inicio', em16min.toISOString())
       .order('data_inicio')
 
@@ -184,8 +187,11 @@ export function AlarmManager({ userId }: { userId: string }) {
       const diffMs = dataEvento.getTime() - agora.getTime()
       const diffMin = Math.round(diffMs / 60000)
 
-      // Chave única por evento + janela de tempo (15min ou 0min)
-      const janela = diffMin <= 1 ? '0min' : '15min'
+      // Para eventos no passado recente (até -2 min) → trata como "AGORA"
+      const jaPassou = diffMs < 0
+
+      // Chave única por evento + janela de tempo
+      const janela = (jaPassou || diffMin <= 1) ? '0min' : '15min'
       const chave = `${agora.toISOString().split('T')[0]}_${evento.id}_${janela}`
 
       if (firedRef.current.has(chave)) continue // já disparou esta janela
@@ -193,14 +199,16 @@ export function AlarmManager({ userId }: { userId: string }) {
       salvarFired(chave)
 
       // Tipo de som
-      const urgente = diffMin <= 1
+      const urgente = jaPassou || diffMin <= 1
       tocarChime(urgente ? 'urgente' : 'aviso')
 
       // Notificação do navegador
       await notificarNavegador(
         evento.titulo,
         urgente
-          ? 'O evento está começando AGORA!'
+          ? jaPassou
+            ? `Lembrete: esse evento já passou (${Math.abs(diffMin)} min atrás)`
+            : 'O evento está começando AGORA!'
           : `Começa em ${diffMin} minuto${diffMin !== 1 ? 's' : ''}`
       )
 
@@ -223,16 +231,16 @@ export function AlarmManager({ userId }: { userId: string }) {
     }
   }, [userId, supabase])
 
-  // Roda imediatamente e depois a cada 60 segundos
+  // Roda imediatamente e depois a cada 30 segundos
+  // (reduzido de 60s para minimizar janela de perda de alarmes)
   // IMPORTANTE: userId pode chegar vazio na primeira renderização (assíncrono).
-  // O effect re-executa quando userId muda, criando o intervalo apenas quando disponível.
   useEffect(() => {
     if (!userId) return
-    // Dispara imediatamente para não esperar 60s
+    // Dispara imediatamente para não esperar
     verificarAlarmes()
-    const interval = setInterval(verificarAlarmes, 60_000)
+    const interval = setInterval(verificarAlarmes, 30_000)  // 30s
     return () => clearInterval(interval)
-  }, [userId, verificarAlarmes]) // re-executa quando userId chega do auth
+  }, [userId, verificarAlarmes])
 
   // Solicita permissão de notificação se ainda não concedida
   const pedirPermissao = async () => {
