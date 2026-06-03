@@ -392,19 +392,29 @@ export function useElenaSalvar({
           return
         }
 
-        // ── Preservar horário local (sem converter para UTC) ───────────────
-        // dataInicio.toISOString() converti para UTC causando +3h no banco
-        // Usamos a string original da IA (horario local) ou formatamos sem UTC offset
+        // ── Timezone: adiciona offset local para salvar corretamente no Supabase ──────
+        // Problema: "2026-06-03T20:39:00" sem offset → Supabase (UTC) interpreta como UTC
+        //           → exibe 17:39 no Brasil (UTC-3) em vez de 20:39
+        // Solução: adicionar o offset local: "2026-06-03T20:39:00-03:00"
+        //          → Supabase armazena 23:39 UTC → display correto: 20:39 local
+        const tzOffset = (() => {
+          const off = new Date().getTimezoneOffset() // e.g. 180 para UTC-3
+          const sign = off <= 0 ? '+' : '-'
+          const h = String(Math.floor(Math.abs(off) / 60)).padStart(2, '0')
+          const m = String(Math.abs(off) % 60).padStart(2, '0')
+          return `${sign}${h}:${m}` // "-03:00"
+        })()
         const strDataOriginal = String(acao.dados.data_inicio || '')
         let dataInicioStr: string
         if (strDataOriginal && strDataOriginal.includes('T')) {
-          // Garante que não tem Z (UTC marker) — mantém como horário local
-          dataInicioStr = strDataOriginal.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '')
+          // Remove Z ou offset existente, adiciona offset local
+          const base = strDataOriginal.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '')
+          dataInicioStr = `${base}${tzOffset}`
         } else {
-          // Fallback: formato local sem UTC
+          // Fallback: constrói com data local + offset
           const pad = (n: number) => String(n).padStart(2, '0')
           const d = dataInicio
-          dataInicioStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
+          dataInicioStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${tzOffset}`
         }
 
         const { error } = await (supabase.from('agenda_eventos') as any).insert({

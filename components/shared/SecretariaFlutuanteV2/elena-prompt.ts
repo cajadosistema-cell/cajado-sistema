@@ -240,41 +240,48 @@ CADASTRAR CARTÃO DE CRÉDITO:
 - FELIZ: Corresponda com entusiasmo leve
 - FRUSTRADO COM A ELENA: Peça desculpas brevemente e peça para explicar novamente
 
-ðŸ”´ MÚLTIPLOS PEDIDOS SIMULTÂNEOS — PROTOCOLO OBRIGATÓRIO:
+🔴 MÚLTIPLOS PEDIDOS SIMULTÂNEOS — PROTOCOLO OBRIGATÓRIO:
 Isole cada pedido individualmente. Nunca misture valores, contas ou datas entre pedidos diferentes.
 Pergunte dados faltantes separadamente por item. Processe na ordem pedida.`
 }
 
-// ── extrairAcoes ──────────────────────────────────────────────
+// ── extrairAcoes ─────────────────────────────────────────────
 // Extrai e classifica todos os blocos JSON da resposta da IA.
 // Suporta dois formatos:
 //   1. ```json { ... } ``` — formato padrão com backticks
-//   2. {"acao": ...}       — JSON cru em linha (sem backticks)
+//   2. {"acao": ...}       — JSON cru em linha (sem backticks, apenas se não duplicado)
 export function extrairAcoes(texto: string): AcaoIA[] {
   const acoes: AcaoIA[] = []
-
-  // Coleta todos os trechos JSON candidatos de ambos os formatos
   const candidatos: string[] = []
 
-  // Formato 1: ```json ... ```
+  // Formato 1: ```json ... ``` (prioridade)
+  // Registra cada linha do bloco em linhasCapturadas para evitar re-captura no Formato 2
+  const linhasCapturadas = new Set<string>()
   const regexBloco = /```json\s*([\s\S]*?)```/g
   let m1
   while ((m1 = regexBloco.exec(texto)) !== null) {
-    candidatos.push(m1[1].trim())
+    const conteudo = m1[1].trim()
+    candidatos.push(conteudo)
+    conteudo.split('\n').forEach(l => linhasCapturadas.add(l.trim()))
   }
 
-  // Formato 2: JSON cru em linha — linhas que começam com { e contêm "acao"
-  const linhas = texto.split('\n')
-  for (const linha of linhas) {
+  // Formato 2: JSON cru em linha — APENAS linhas NÃO capturadas no Formato 1
+  texto.split('\n').forEach(linha => {
     const t = linha.trim()
-    if (t.startsWith('{') && t.includes('"acao"') && t.endsWith('}')) {
+    if (
+      t.startsWith('{') &&
+      t.includes('"acao"') &&
+      t.endsWith('}') &&
+      !linhasCapturadas.has(t)   // ⚠️ evita duplicar do bloco ```json```
+    ) {
       candidatos.push(t)
     }
-  }
+  })
 
   for (const candidato of candidatos) {
     try {
       const d = JSON.parse(candidato)
+
 
       if (d.acao === 'gasto') {
         const contaInfo = d.conta_nome ? ` [${d.conta_nome}]` : ''
