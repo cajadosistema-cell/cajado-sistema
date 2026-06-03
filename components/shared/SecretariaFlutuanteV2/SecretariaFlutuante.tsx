@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 // ── SecretariaFlutuante.tsx ───────────────────────────────────
 // Orquestrador principal. Conecta todos os hooks e renderiza o widget.
 // NUNCA contém lógica de negócio — tudo fica nos hooks.
@@ -255,9 +255,8 @@ export function SecretariaFlutuante() {
       const colaboradoresCtx = session.colaboradores.length > 0
         ? `\n[COLABORADORES ATIVOS: ${session.colaboradores.map(c => c.nome).join(', ')}]`
         : ''
-      const SAUDACAO = 'Olá, Sr. Max! ðŸ‘‹ Sou a **Elena**'
       const contexto = session.mensagens
-        .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith(SAUDACAO))
+        .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith('Olá, Sr. Max!'))
         .slice(-30)
         .map(m => {
           const dtStr = m.created_at
@@ -269,15 +268,28 @@ export function SecretariaFlutuante() {
 
       let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
-        promptFinal = `${promptFinal}\n\n[CONTEÃšDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
+        promptFinal = `${promptFinal}\n\n[CONTEÚDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
       }
 
       const textoLower = userText?.trim().toLowerCase() || ''
       const eConfirmacao = PALAVRAS_CONFIRMACAO.some(p => textoLower === p || textoLower === p + '!' || textoLower === p + '.')
-      if (eConfirmacao && session.mensagens.length >= 2) {
+      if (eConfirmacao && session.mensagens.length >= 2 && !fileSnap) {
         const ultimaElena = [...session.mensagens].reverse().find(m => m.role === 'ai' && m.texto && m.texto !== '...')
+
+        // ── ATALHO DIRETO: ações pendentes → executa sem re-consultar IA ──
+        // Evita recálculo de horário quando o usuário confirma minutos depois
+        const acoesPendentes = ultimaElena?.acoes?.filter(a => a.status === 'pending')
+        if (acoesPendentes && acoesPendentes.length > 0 && ultimaElena && uid) {
+          session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))
+          isSendingRef.current = false
+          setLoading(false)
+          await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid)
+          return
+        }
+
+        // Fallback: re-consulta IA se Elena só fez pergunta textual (sem JSON ainda)
         if (ultimaElena) {
-          promptFinal = `[INSTRUÇÃƒO PRIORITÁRIA DO SISTEMA]: O usuário está CONFIRMANDO a ação que você sugeriu na mensagem anterior. Você DEVE gerar o bloco JSON da ação agora — EXECUTE imediatamente.\n\nMensagem anterior da Elena: "${ultimaElena.texto.substring(0, 300)}"\n\nResposta do usuário: "${userText}"\n\nEXECUTE a ação agora.`
+          promptFinal = `[INSTRUÇÃO PRIORITÁRIA DO SISTEMA]: O usuário está CONFIRMANDO. Gere o bloco JSON IMEDIATAMENTE.\n\nMensagem anterior da Elena: "${ultimaElena.texto.substring(0, 500)}"\n\nEXECUTE usando EXATAMENTE os dados (data, hora, valor) já informados — NÃO recalcule.`
         }
       }
 
