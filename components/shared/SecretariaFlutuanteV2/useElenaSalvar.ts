@@ -697,7 +697,78 @@ export function useElenaSalvar({
         URL.revokeObjectURL(url)
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
+      // ── ALERTAR RECORRENTE (cadastra conta fixa mensal) ───────
+      } else if ((acao.tipo as string) === 'alertar_recorrente') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const tiposValidos = ['boleto','cartao','agua','energia','internet','telefone','aluguel','condominio','plano_saude','financiamento','outro']
+        const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'boleto'
+        const dia = Number(acao.dados.dia_vencimento)
+        if (!dia || dia < 1 || dia > 31) throw new Error('Dia de vencimento inválido (1–31).')
+        if (!acao.dados.descricao) throw new Error('Descrição da conta é obrigatória.')
+
+        const { data: novo, error } = await (supabase.from('alertas_recorrentes') as any).insert({
+          user_id:          uid,
+          descricao:        acao.dados.descricao,
+          valor:            acao.dados.valor ? Number(acao.dados.valor) : null,
+          dia_vencimento:   dia,
+          tipo,
+          categoria:        acao.dados.categoria || 'outros',
+          criado_pela_elena: true,
+        }).select('id').single()
+
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+        const emojiMap: Record<string, string> = {
+          agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
+          aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
+          financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
+        }
+        const emoji = emojiMap[tipo] || '📋'
+        const valorStr = acao.dados.valor ? ` — R$ ${Number(acao.dados.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+        setMensagens(prev => [...prev, {
+          id: `rec-${Date.now()}`, role: 'ai' as const,
+          texto: `${emoji} **${acao.dados.descricao}** cadastrada nas contas recorrentes!\n📅 Todo dia **${dia}** o sistema criará automaticamente o alerta de vencimento${valorStr}.\n\n_Não precisa mais lembrar manualmente, Sr. Max!_ ✅`,
+        }])
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      // ── LISTAR RECORRENTES (mostra contas fixas cadastradas) ──
+      } else if ((acao.tipo as string) === 'listar_recorrentes') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const { data: recs, error } = await (supabase.from('alertas_recorrentes') as any)
+          .select('descricao, valor, dia_vencimento, tipo, ativo')
+          .eq('user_id', uid)
+          .order('dia_vencimento', { ascending: true })
+
+        if (error) throw new Error(error.message)
+
+        if (!recs || recs.length === 0) {
+          setMensagens(prev => [...prev, {
+            id: `rec-${Date.now()}`, role: 'ai' as const,
+            texto: '📋 Nenhuma conta recorrente cadastrada ainda, Sr. Max.\n\nDiga-me, por exemplo: _"cadastrar internet Vivo R$ 120 todo dia 5"_ e eu cuido dos alertas automaticamente!',
+          }])
+        } else {
+          const ativas = recs.filter((r: any) => r.ativo)
+          const inativas = recs.filter((r: any) => !r.ativo)
+          const emojiMap: Record<string, string> = {
+            agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
+            aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
+            financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
+          }
+          let texto = `📋 **Suas contas recorrentes cadastradas:**\n\n`
+          ativas.forEach((r: any) => {
+            const emoji = emojiMap[r.tipo] || '📋'
+            const valor = r.valor ? ` — R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+            texto += `${emoji} **${r.descricao}**${valor} — todo dia ${r.dia_vencimento}\n`
+          })
+          if (inativas.length > 0) texto += `\n_${inativas.length} conta(s) inativa(s) não listada(s)._`
+          texto += `\n\n_Total: ${ativas.length} conta(s) ativa(s). O sistema gera alertas automaticamente todo mês!_ ✅`
+          setMensagens(prev => [...prev, { id: `rec-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
       // ── FATURA CARTÃO ────────────────────────────────────────
+
       } else if (acao.tipo === 'fatura_cartao') {
         const valor = Number(acao.dados.valor) || 0
         const mesRef = acao.dados.mes_referencia || new Date().toISOString().substring(0, 7)

@@ -201,6 +201,30 @@ CANCELAR ÚLTIMO REGISTRO:
 {"acao":"cancelar","motivo":"duplicidade"}
 \`\`\`
 
+🔁 CADASTRAR CONTA RECORRENTE MENSAL (alerta automático todo mês, sem precisar lembrar):
+\`\`\`json
+{"acao":"alertar_recorrente","descricao":"Internet Vivo","valor":120.00,"dia_vencimento":5,"tipo":"internet"}
+\`\`\`
+- TIPOS: boleto, cartao, agua, energia, internet, telefone, aluguel, condominio, plano_saude, financiamento, outro
+- O SISTEMA cria automaticamente o evento de vencimento TODO MÊS no dia informado
+- Use quando o chefe mencionar: "cadastrar alerta recorrente", "colocar no sistema pra avisar todo mês",
+  "todo mês vence o aluguel no dia X", "registrar conta fixa", "todo dia X pago a internet"
+- ⚠️ DIFERENÇA: Use `alertar_recorrente` para contas que repetem todo mês (sistema cria automaticamente).
+  Use `agenda` para eventos pontuais/únicos.
+- EXEMPLOS:
+  → "aluguel todo dia 10, R$ 1.500" → {"acao":"alertar_recorrente","descricao":"Aluguel","valor":1500,"dia_vencimento":10,"tipo":"aluguel"}
+  → "conta de luz todo dia 15" → {"acao":"alertar_recorrente","descricao":"Conta de Luz","dia_vencimento":15,"tipo":"energia"}
+  → "Unimed R$ 450 dia 8 todo mês" → {"acao":"alertar_recorrente","descricao":"Unimed","valor":450,"dia_vencimento":8,"tipo":"plano_saude"}
+  → "internet dia 5, R$ 120 mensal" → {"acao":"alertar_recorrente","descricao":"Internet Vivo","valor":120,"dia_vencimento":5,"tipo":"internet"}
+
+📋 LISTAR CONTAS RECORRENTES CADASTRADAS:
+\`\`\`json
+{"acao":"listar_recorrentes"}
+\`\`\`
+- Use quando o chefe perguntar: "quais contas fixas tenho?", "me mostra minhas contas recorrentes",
+  "o que o sistema monitora?", "quais alertas automáticos tenho?"
+
+
 DEFINIR META:
 \`\`\`json
 {"acao":"definir_meta","categoria":"alimentacao","valor_limite":2000,"periodo":"mes"}
@@ -467,6 +491,15 @@ export function extrairAcoes(texto: string): AcaoIA[] {
       } else if (d.acao === 'buscar_lancamentos') {
         const tipoLabel = d.tipo === 'pf' ? 'Pessoal (PF)' : d.tipo === 'pj' ? 'Empresa (PJ)' : 'Todos'
         acoes.push({ tipo: 'buscar_lancamentos' as any, dados: d, label: `🔍 Buscando lançamentos — ${tipoLabel}`, status: 'pending' })
+
+      } else if (d.acao === 'buscar_vencimentos') {
+        acoes.push({ tipo: 'buscar_vencimentos' as any, dados: d, label: `📋 Verificando vencimentos dos próximos ${d.dias || 30} dias`, status: 'pending' })
+
+      } else if (d.acao === 'alertar_recorrente') {
+        acoes.push({ tipo: 'alertar_recorrente' as any, dados: d, label: `📌 Cadastrar alerta recorrente: ${d.descricao} — dia ${d.dia_vencimento}`, status: 'pending' })
+
+      } else if (d.acao === 'listar_recorrentes') {
+        acoes.push({ tipo: 'listar_recorrentes' as any, dados: d, label: `📋 Listando contas recorrentes cadastradas`, status: 'pending' })
 
       } else if (d.acao) {
         // Fallback: qualquer ação desconhecida vira registro genérico
