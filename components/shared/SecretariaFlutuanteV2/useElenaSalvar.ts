@@ -848,8 +848,13 @@ export function useElenaSalvar({
       // ── CADASTRAR CONTA ──────────────────────────────────────
       } else if (acao.tipo === 'cadastrar_conta') {
         const categoria = acao.dados.categoria === 'pj' ? 'pj' : 'pf'
-        const tiposContaValidos = ['corrente','poupanca','investimento','cartao_credito','cartao_debito','carteira','outro']
-        const tipoConta = tiposContaValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'corrente'
+        // ⛔ NUNCA aceita cartao_credito ou cartao_debito aqui — deve usar cadastrar_cartao
+        const tiposContaValidos = ['corrente','poupanca','investimento','carteira','digital','outro']
+        let tipoConta = tiposContaValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'corrente'
+        // Redireciona automaticamente se enviou tipo de cartão por engano
+        if (acao.dados.tipo === 'cartao_credito' || acao.dados.tipo === 'cartao_debito') {
+          tipoConta = 'corrente'
+        }
         const { data: novaConta, error } = await (supabase.from('contas') as any).insert({
           nome: acao.dados.nome || 'Conta via Elena',
           tipo: tipoConta,
@@ -889,9 +894,80 @@ export function useElenaSalvar({
         if (acao.dados.dia_vencimento) payload.dia_vencimento = Number(acao.dados.dia_vencimento)
         const { data: novoCartao, error } = await (supabase.from('contas') as any).insert(payload).select('id, nome').single()
         if (error) throw new Error(error.message)
+
+        // ── Auto-gera alertas e agenda se dia_vencimento foi informado ──
+        const diaVenc = acao.dados.dia_vencimento ? Number(acao.dados.dia_vencimento) : null
+        let agendaMsg = ''
+        if (diaVenc && diaVenc >= 1 && diaVenc <= 31) {
+          const nomeCartao = acao.dados.nome || 'Cartão'
+          const tituloEvento = `💳 Pagar ${nomeCartao}`
+          const agora2 = new Date()
+          let eventosCartao = 0
+
+          // Tenta criar na alertas_recorrentes (graceful — tabela pode não existir ainda)
+          try {
+            await (supabase.from('alertas_recorrentes') as any).insert({
+              user_id: uid,
+              descricao: nomeCartao,
+              dia_vencimento: diaVenc,
+              tipo: 'cartao',
+              categoria: 'outros',
+              conta_id: novoCartao?.id || null,
+              criado_pela_elena: true,
+            })
+          } catch { /* tabela pode não existir ainda — não bloqueia o fluxo */ }
+
+          // Cria eventos diretamente na agenda_eventos (não depende da migration)
+          for (let mOffset = 0; mOffset <= 1; mOffset++) {
+            const dataAlvo = new Date(agora2)
+            dataAlvo.setDate(1)
+            dataAlvo.setMonth(agora2.getMonth() + mOffset)
+            const ultimoDia2 = new Date(dataAlvo.getFullYear(), dataAlvo.getMonth() + 1, 0).getDate()
+            const diaReal2 = Math.min(diaVenc, ultimoDia2)
+            dataAlvo.setDate(diaReal2)
+
+            // Não cria no passado
+            if (dataAlvo < agora2 && dataAlvo.toDateString() !== agora2.toDateString()) continue
+
+            const anoMes2 = `${dataAlvo.getFullYear()}-${String(dataAlvo.getMonth() + 1).padStart(2, '0')}`
+            const diaStr2 = String(diaReal2).padStart(2, '0')
+            const chave2 = `AUTO_CARTAO_${novoCartao?.id}_${anoMes2}`
+
+            const { data: jaExiste2 } = await (supabase.from('agenda_eventos') as any)
+              .select('id').eq('user_id', uid).like('descricao', `%${chave2}%`).maybeSingle()
+            if (jaExiste2) continue
+
+            await (supabase.from('agenda_eventos') as any).insert({
+              user_id: uid, titulo: tituloEvento,
+              descricao: `[${chave2}] Gerado ao cadastrar cartão`,
+              data_inicio: `${anoMes2}-${diaStr2}T09:00:00`,
+              tipo: 'vencimento', status: 'pendente',
+            })
+            await (supabase.from('agenda_eventos') as any).insert({
+              user_id: uid, titulo: `✅ Verificar: Pagou o ${nomeCartao}?`,
+              descricao: `[${chave2}_CONF] Verificação noturna`,
+              data_inicio: `${anoMes2}-${diaStr2}T20:00:00`,
+              tipo: 'lembrete', status: 'pendente',
+            })
+            eventosCartao++
+          }
+
+          if (eventosCartao > 0) {
+            agendaMsg = `\n✅ Criei **${eventosCartao * 2}** alertas na agenda para o vencimento dia **${diaVenc}**!`
+            window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
+          }
+        }
+
         setAcaoStatus(msgId, acaoIdx, 'saved')
         exibirConfirmacaoSalvamento('cadastrar_cartao', acao.dados, acao.dados.nome, novoCartao?.id, 'contas')
+        if (agendaMsg) {
+          setMensagens(prev => [...prev, {
+            id: `cartao-${Date.now()}`, role: 'ai' as const,
+            texto: `💳 Cartão **${acao.dados.nome}** cadastrado na aba ${categoria === 'pj' ? 'Financeiro > Cartões PJ' : 'PF > Cartões'}!${agendaMsg}`,
+          }])
+        }
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
 
       // ── TRANSFERÊNCIA ────────────────────────────────────────
 
