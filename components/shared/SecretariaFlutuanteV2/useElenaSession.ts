@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 // ── useElenaSession.ts ────────────────────────────────────────
 // Responsável por: autenticação, sessão, histórico de mensagens e perfil de aprendizado.
 // NUNCA contém lógica de salvamento, voz ou IA.
@@ -120,6 +120,118 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
         const { data: perfil } = await (supabase.from('elena_perfil') as any)
           .select('*').eq('user_id', uid).maybeSingle()
         if (perfil) perfilRef.current = perfil
+
+        // ── BRIEFING MATINAL ─────────────────────────────────────
+        // Exibe 1x por dia na primeira abertura. Guarda a data no localStorage.
+        const hoje = new Date().toLocaleDateString('sv') // YYYY-MM-DD
+        const ultimoBriefing = localStorage.getItem(`elena_briefing_${uid}`)
+        if (ultimoBriefing !== hoje) {
+          localStorage.setItem(`elena_briefing_${uid}`, hoje)
+          setTimeout(async () => {
+            try {
+              const agora = new Date()
+              const horaAtual = agora.getHours()
+              const saudacao = horaAtual < 12 ? '☀️ Bom dia'
+                : horaAtual < 18 ? '🌤️ Boa tarde' : '🌙 Boa noite'
+
+              // 1. Eventos de hoje
+              const hojeIso = hoje
+              const amanha = new Date(agora)
+              amanha.setDate(amanha.getDate() + 1)
+              const amanhaIso = amanha.toLocaleDateString('sv')
+
+              const { data: eventosHoje } = await (supabase.from('agenda_eventos') as any)
+                .select('titulo, data_inicio, tipo')
+                .eq('user_id', uid)
+                .neq('status', 'cancelado')
+                .neq('status', 'concluido')
+                .gte('data_inicio', `${hojeIso}T00:00:00`)
+                .lte('data_inicio', `${hojeIso}T23:59:59`)
+                .order('data_inicio')
+
+              // 2. Vencimentos nos próximos 7 dias
+              const em7d = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000)
+              const { data: venc7d } = await (supabase.from('agenda_eventos') as any)
+                .select('titulo, data_inicio')
+                .eq('user_id', uid)
+                .eq('tipo', 'vencimento')
+                .neq('status', 'cancelado')
+                .neq('status', 'concluido')
+                .gte('data_inicio', agora.toISOString())
+                .lte('data_inicio', em7d.toISOString())
+                .order('data_inicio')
+
+              const vencReais = (venc7d || []).filter((ev: any) => {
+                const t = (ev.titulo || '').toLowerCase()
+                return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
+              })
+
+              // 3. Saldo financeiro do mês
+              const inicioMes = `${hojeIso.substring(0, 7)}-01`
+              const [{ data: gastosM }, { data: receitasM }] = await Promise.all([
+                (supabase.from('gastos_pessoais') as any)
+                  .select('valor').eq('user_id', uid).gte('data', inicioMes),
+                (supabase.from('receitas_pessoais') as any)
+                  .select('valor').eq('user_id', uid).gte('data', inicioMes),
+              ])
+              const totalGastos = (gastosM || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+              const totalReceitas = (receitasM || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+              const saldoMes = totalReceitas - totalGastos
+              const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+
+              // 4. Monta o briefing
+              const diaSemana = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+              let briefing = `${saudacao}, Sr. Max! 👋\n`
+              briefing += `📅 Hoje é **${diaSemana}**\n\n`
+
+              // Agenda do dia
+              const eventosHojeList = (eventosHoje || [])
+              if (eventosHojeList.length > 0) {
+                briefing += `📌 **Sua agenda de hoje:**\n`
+                eventosHojeList.forEach((ev: any) => {
+                  const hora = new Date(ev.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                  briefing += `  • ${hora}h — ${ev.titulo}\n`
+                })
+                briefing += '\n'
+              } else {
+                briefing += `📌 **Agenda:** Dia livre — nenhum compromisso agendado.\n\n`
+              }
+
+              // Vencimentos urgentes
+              if (vencReais.length > 0) {
+                briefing += `⚠️ **Vencimentos nos próximos 7 dias:**\n`
+                vencReais.forEach((ev: any) => {
+                  const dt = new Date(ev.data_inicio)
+                  const diffDias = Math.ceil((dt.getTime() - agora.setHours(0,0,0,0)) / (24*60*60*1000))
+                  const dtFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                  const quando = diffDias === 0 ? '**HOJE**' : diffDias === 1 ? 'amanhã' : `em ${diffDias} dias`
+                  const urgencia = diffDias <= 2 ? '🔴' : '🟡'
+                  briefing += `  ${urgencia} [${dtFmt}] ${ev.titulo} — ${quando}\n`
+                })
+                briefing += '\n'
+              }
+
+              // Financeiro do mês
+              briefing += `💰 **Financeiro do mês:**\n`
+              briefing += `  • Entradas: ${fmt(totalReceitas)}\n`
+              briefing += `  • Saídas: ${fmt(totalGastos)}\n`
+              briefing += `  • Saldo: ${saldoMes >= 0 ? '🟢' : '🔴'} **${fmt(saldoMes)}**\n\n`
+
+              briefing += `_Como posso ajudá-lo hoje, Sr. Max?_ 💼`
+
+              setMensagens(prev => {
+                // Evita duplicar se já existe o briefing hoje
+                const jaTemBriefing = prev.some(m => m.texto?.includes('Bom dia, Sr. Max') || m.texto?.includes('Boa tarde, Sr. Max') || m.texto?.includes('Boa noite, Sr. Max'))
+                if (jaTemBriefing) return prev
+                return [...prev, {
+                  id: `briefing-${Date.now()}`,
+                  role: 'ai' as const,
+                  texto: briefing,
+                }]
+              })
+            } catch { /* silencioso — não bloqueia se falhar */ }
+          }, 1500) // Delay de 1,5s para carregar após o histórico
+        }
       }
     })
 
