@@ -757,9 +757,71 @@ export function useElenaSalvar({
         setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto: texto.trim() }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
+
+      // ── BUSCAR VENCIMENTOS PRÓXIMOS ───────────────────────────
+      } else if ((acao.tipo as string) === 'buscar_vencimentos') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const dias = Math.min(Number(acao.dados.dias) || 30, 90)
+        const agora = new Date()
+        const ate = new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000)
+
+        // Busca eventos tipo vencimento ou lembrete com palavras-chave de pagamento
+        const { data: eventos, error: errEv } = await (supabase.from('agenda_eventos') as any)
+          .select('id, titulo, data_inicio, tipo, descricao')
+          .eq('user_id', uid)
+          .in('tipo', ['vencimento', 'lembrete', 'prazo'])
+          .neq('status', 'cancelado')
+          .neq('status', 'concluido')
+          .gte('data_inicio', agora.toISOString())
+          .lte('data_inicio', ate.toISOString())
+          .order('data_inicio', { ascending: true })
+
+        if (errEv) throw new Error(errEv.message)
+
+        if (!eventos || eventos.length === 0) {
+          setMensagens(prev => [...prev, {
+            id: `venc-${Date.now()}`, role: 'ai' as const,
+            texto: `📅 Nenhum vencimento encontrado nos próximos ${dias} dias, Sr. Max.`,
+          }])
+        } else {
+          // Filtra para mostrar só os que parecem contas a pagar (não confirmações)
+          const pagamentos = (eventos as any[]).filter(ev => {
+            const tit = (ev.titulo || '').toLowerCase()
+            // Exclui eventos de "confirmação" (que são os T20 de verificação)
+            return !tit.includes('confirmação') && !tit.includes('pagou') && !tit.startsWith('✅')
+          })
+
+          let texto = `📋 **Vencimentos dos próximos ${dias} dias:**\n\n`
+          const hoje = new Date()
+          hoje.setHours(0, 0, 0, 0)
+
+          pagamentos.forEach((ev: any) => {
+            const dt = new Date(ev.data_inicio)
+            const diffDias = Math.ceil((dt.getTime() - hoje.getTime()) / (24 * 60 * 60 * 1000))
+            const dtFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+            const urgencia = diffDias <= 2 ? '🔴' : diffDias <= 7 ? '🟡' : '🟢'
+            const quando = diffDias === 0 ? 'HOJE' : diffDias === 1 ? 'amanhã' : `em ${diffDias} dias`
+            texto += `${urgencia} [${dtFmt}] **${ev.titulo}** — ${quando}\n`
+          })
+
+          const totalUrgente = pagamentos.filter((ev: any) => {
+            const dt = new Date(ev.data_inicio)
+            const diff = Math.ceil((dt.getTime() - hoje.getTime()) / (24 * 60 * 60 * 1000))
+            return diff <= 7
+          }).length
+
+          if (totalUrgente > 0) {
+            texto += `\n⚠️ _${totalUrgente} vencimento(s) nos próximos 7 dias!_`
+          }
+          texto += `\n\n_Total: ${pagamentos.length} compromisso(s)_`
+          setMensagens(prev => [...prev, { id: `venc-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
       // ── AÇÃO DESCONHECIDA → ignora silenciosamente ───────────
       } else {
         setAcaoStatus(msgId, acaoIdx, 'saved')
+
       }
 
     } catch (err: any) {
