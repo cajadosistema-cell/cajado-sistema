@@ -35,7 +35,9 @@ export function useSupabaseQuery<T>(
 
       if (options?.filters) {
         for (const [key, value] of Object.entries(options.filters)) {
-          query = query.eq(key, value)
+          if (value !== undefined && value !== null) {
+            query = query.eq(key, value)
+          }
         }
       }
 

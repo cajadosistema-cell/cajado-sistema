@@ -140,6 +140,7 @@ function ModalConta({ onClose, onSave, isAdmin = false, empresaId = '' }: {
           nome: sc.banco ? `${sc.banco} — ${sc.nome}` : sc.nome,
           tipo: sc.tipo,
           categoria: form.categoria,
+          empresa_id: empresaId || undefined,
           saldo_inicial: parseFloat(sc.saldo) || 0,
           saldo_atual: parseFloat(sc.saldo) || 0,
           ativo: true,
