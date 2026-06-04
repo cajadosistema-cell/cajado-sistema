@@ -10,6 +10,8 @@ export async function POST(req: Request) {
       messages: rawMessages,
       imageBase64,
       imageMime,
+      temperature: reqTemperature,
+      max_tokens: reqMaxTokens,
     } = await req.json()
 
     if (!process.env.OPENROUTER_API_KEY) {
@@ -22,8 +24,8 @@ export async function POST(req: Request) {
     const system = systemInstruction
       || 'Você é um assistente IA especialista em negócios, finanças e tecnologia da Cajado Soluções. Responda sempre em português brasileiro.'
 
-    // GPT-4o suporta texto e visão — usado como modelo padrão em todos os casos
-    const model = reqModel || 'openai/gpt-4o'
+    // Claude Opus 4.5 é o padrão premium — melhor compreensão de contexto e JSON estruturado
+    const model = reqModel || 'anthropic/claude-opus-4.5'
 
     let messages: { role: string; content: any }[]
 
@@ -68,8 +70,8 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: 2048,
-        temperature: 0.7,
+        max_tokens: reqMaxTokens ?? 4096,
+        temperature: reqTemperature ?? 0.4,
       }),
     })
 

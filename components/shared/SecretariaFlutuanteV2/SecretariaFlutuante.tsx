@@ -354,6 +354,9 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         prompt: promptFinal,
         context: contexto,
         systemInstruction: buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro),
+        model: 'anthropic/claude-opus-4.5',   // Modelo premium para Elena
+        temperature: 0.3,                       // Baixo para JSON preciso
+        max_tokens: 4096,                       // Mais espaço para análises longas
       }
       if (fileSnap?.isImage) {
         body.imageBase64 = fileSnap.base64
