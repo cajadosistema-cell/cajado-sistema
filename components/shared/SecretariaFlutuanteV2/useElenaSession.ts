@@ -197,14 +197,18 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
               // Vencimentos urgentes
               if (vencReais.length > 0) {
                 briefing += `⚠️ **Vencimentos nos próximos 7 dias:**\n`
-                vencReais.forEach((ev: any) => {
-                  const dt = new Date(ev.data_inicio)
-                  const diffDias = Math.ceil((dt.getTime() - agora.setHours(0,0,0,0)) / (24*60*60*1000))
-                  const dtFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                  const quando = diffDias === 0 ? '**HOJE**' : diffDias === 1 ? 'amanhã' : `em ${diffDias} dias`
-                  const urgencia = diffDias <= 2 ? '🔴' : '🟡'
-                  briefing += `  ${urgencia} [${dtFmt}] ${ev.titulo} — ${quando}\n`
-                })
+                const hoje0h = new Date(agora)
+              hoje0h.setHours(0, 0, 0, 0)
+              const hoje0hTs = hoje0h.getTime()
+
+              vencReais.forEach((ev: any) => {
+                const dt = new Date(ev.data_inicio)
+                const diffDias = Math.ceil((dt.getTime() - hoje0hTs) / (24 * 60 * 60 * 1000))
+                const dtFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                const quando = diffDias === 0 ? '**HOJE**' : diffDias === 1 ? 'amanhã' : `em ${diffDias} dias`
+                const urgencia = diffDias <= 2 ? '🔴' : '🟡'
+                briefing += `  ${urgencia} [${dtFmt}] ${ev.titulo} — ${quando}\n`
+              })
                 briefing += '\n'
               }
 
@@ -315,7 +319,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
   }
 
   const handleClearChat = () => {
-    if (!confirm('Deseja iniciar um NOVO assunto? O assunto atual ficará salvo no banco para consultas futuras.')) return
+    // Não pede confirmação — histórico sempre salvo no banco automaticamente
     setMensagens([SAUDACAO_INICIAL])
     setSessaoId(Date.now().toString())
   }
