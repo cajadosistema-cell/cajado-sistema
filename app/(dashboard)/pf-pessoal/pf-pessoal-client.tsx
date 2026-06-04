@@ -67,11 +67,11 @@ export default function PfPessoalClient() {
   const { data: gastos,     refetch: refetchGastos     } = useSupabaseQuery<GastoPessoal>('gastos_pessoais',     { filters: { user_id: authUserId }, orderBy: { column: 'data',           ascending: false }, enabled: !!authUserId })
   const { data: receitas,   refetch: refetchReceitas   } = useSupabaseQuery<ReceitaPessoal>('receitas_pessoais', { filters: { user_id: authUserId }, orderBy: { column: 'data',           ascending: false }, enabled: !!authUserId })
   const { data: orcamentos, refetch: refetchOrcamentos } = useSupabaseQuery<OrcamentoPessoal>('orcamentos_pessoais', { filters: { user_id: authUserId }, orderBy: { column: 'mes_referencia', ascending: false }, enabled: !!authUserId })
-  const { data: contas          } = useSupabaseQuery<any>('contas', { filters: { ativo: true, categoria: 'pf', user_id: authUserId }, enabled: !!authUserId })
+  const { data: contas, refetch: refetchContas } = useSupabaseQuery<any>('contas', { filters: { ativo: true, categoria: 'pf', user_id: authUserId }, enabled: !!authUserId })
   // ativos e projetos_patrimonio são isolados por empresa_id via RLS — sem filtro user_id
   const { data: ativos          } = useSupabaseQuery<any>('ativos', { enabled: !!authUserId })
   const { data: patrimonioFisico} = useSupabaseQuery<any>('projetos_patrimonio', { enabled: !!authUserId })
-  const refreshTudo = () => { refetchGastos(); refetchReceitas(); refetchOrcamentos() }
+  const refreshTudo = () => { refetchGastos(); refetchReceitas(); refetchOrcamentos(); refetchContas() }
 
   // Quando o authUserId chega (assíncrono), força recarregar todos os dados
   useEffect(() => {
@@ -83,7 +83,7 @@ export default function PfPessoalClient() {
     const handleElenaLancamento = () => refreshTudo()
     window.addEventListener('elena:lancamento-salvo', handleElenaLancamento)
     return () => window.removeEventListener('elena:lancamento-salvo', handleElenaLancamento)
-  }, [refetchGastos, refetchReceitas, refetchOrcamentos])
+  }, [refetchGastos, refetchReceitas, refetchOrcamentos, refetchContas])
 
   const mesAtual      = new Date().toISOString().slice(0, 7)
   const gastosMes     = gastos.filter(g  => g.data.startsWith(mesAtual))

@@ -983,6 +983,14 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
 
   useEffect(() => { if (userId) carregarContas() }, [userId, carregarContas])
 
+  // Recarrega cartões quando Elena registra algo novo
+  useEffect(() => {
+    const handleElena = () => { if (userId) carregarContas() }
+    window.addEventListener('elena:lancamento-salvo', handleElena)
+    return () => window.removeEventListener('elena:lancamento-salvo', handleElena)
+  }, [userId, carregarContas])
+
+
   // Filtro por mês e cartão
   const todosCombinados = [
     ...gastos.map(g => ({ ...g, _tipoLanc: 'gasto' as const })),

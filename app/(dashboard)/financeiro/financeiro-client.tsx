@@ -765,6 +765,15 @@ export default function FinanceiroClient() {
     refetchLancamentos();
   }
 
+  // Recarrega ao receber evento da Elena (cadastro de conta/cartão)
+  useEffect(() => {
+    const handleElena = () => refreshAll()
+    window.addEventListener('elena:lancamento-salvo', handleElena)
+    return () => window.removeEventListener('elena:lancamento-salvo', handleElena)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetchContas, refetchLancamentos])
+
+
   const saldoTotal = contas.reduce((a, c) => a + (c.saldo_atual ?? 0), 0)
   
   const todayStr = new Date().toISOString().substring(0, 10)
