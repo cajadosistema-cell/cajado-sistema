@@ -19,13 +19,15 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
 
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Usuario gerencia proprias subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Usuario gerencia proprias subscriptions"
   ON public.push_subscriptions FOR ALL TO authenticated
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
-CREATE INDEX idx_push_sub_user ON public.push_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_push_sub_user ON public.push_subscriptions(user_id);
 
+DROP TRIGGER IF EXISTS set_updated_at_push_sub ON public.push_subscriptions;
 CREATE TRIGGER set_updated_at_push_sub
   BEFORE UPDATE ON public.push_subscriptions
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
