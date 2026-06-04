@@ -697,7 +697,7 @@ export function useElenaSalvar({
         URL.revokeObjectURL(url)
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
-      // ── ALERTAR RECORRENTE (cadastra conta fixa mensal) ───────
+      // ── ALERTAR RECORRENTE (cadastra conta fixa + cria eventos imediatos) ─
       } else if ((acao.tipo as string) === 'alertar_recorrente') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const tiposValidos = ['boleto','cartao','agua','energia','internet','telefone','aluguel','condominio','plano_saude','financiamento','outro']
@@ -706,31 +706,90 @@ export function useElenaSalvar({
         if (!dia || dia < 1 || dia > 31) throw new Error('Dia de vencimento inválido (1–31).')
         if (!acao.dados.descricao) throw new Error('Descrição da conta é obrigatória.')
 
-        const { data: novo, error } = await (supabase.from('alertas_recorrentes') as any).insert({
-          user_id:          uid,
-          descricao:        acao.dados.descricao,
-          valor:            acao.dados.valor ? Number(acao.dados.valor) : null,
-          dia_vencimento:   dia,
-          tipo,
-          categoria:        acao.dados.categoria || 'outros',
-          criado_pela_elena: true,
-        }).select('id').single()
-
-        if (error) throw new Error(error.message)
-        setAcaoStatus(msgId, acaoIdx, 'saved')
-
         const emojiMap: Record<string, string> = {
           agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
           aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
           financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
         }
         const emoji = emojiMap[tipo] || '📋'
-        const valorStr = acao.dados.valor ? ` — R$ ${Number(acao.dados.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+        const valorNum = acao.dados.valor ? Number(acao.dados.valor) : null
+        const valorStr = valorNum ? ` — R$ ${valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+        const tituloEvento = `${emoji} Pagar ${acao.dados.descricao}${valorStr}`
+
+        // 1. Salva na tabela alertas_recorrentes
+        const { data: novoRec, error: errRec } = await (supabase.from('alertas_recorrentes') as any).insert({
+          user_id:          uid,
+          descricao:        acao.dados.descricao,
+          valor:            valorNum,
+          dia_vencimento:   dia,
+          tipo,
+          categoria:        acao.dados.categoria || 'outros',
+          criado_pela_elena: true,
+        }).select('id').single()
+
+        if (errRec) throw new Error(errRec.message)
+
+        // 2. Cria IMEDIATAMENTE os eventos na agenda (mês atual + próximo mês)
+        const agora = new Date()
+        let eventosImedatos = 0
+
+        for (let mOffset = 0; mOffset <= 1; mOffset++) {
+          const dataAlvo = new Date(agora)
+          dataAlvo.setDate(1)
+          dataAlvo.setMonth(agora.getMonth() + mOffset)
+
+          // Ajusta se o dia não existe no mês (ex: dia 31 em fevereiro)
+          const ultimoDia = new Date(dataAlvo.getFullYear(), dataAlvo.getMonth() + 1, 0).getDate()
+          const diaReal = Math.min(dia, ultimoDia)
+          dataAlvo.setDate(diaReal)
+
+          // Não cria eventos no passado
+          if (dataAlvo < agora && dataAlvo.toDateString() !== agora.toDateString()) continue
+
+          const anoMes = `${dataAlvo.getFullYear()}-${String(dataAlvo.getMonth() + 1).padStart(2, '0')}`
+          const diaStr = String(diaReal).padStart(2, '0')
+          const chaveUnica = `AUTO_REC_${novoRec?.id}_${anoMes}`
+
+          // Verifica deduplicação
+          const { data: jaExiste } = await (supabase.from('agenda_eventos') as any)
+            .select('id')
+            .eq('user_id', uid)
+            .like('descricao', `%${chaveUnica}%`)
+            .maybeSingle()
+
+          if (jaExiste) continue
+
+          // Cria evento manhã (dispara alerta)
+          await (supabase.from('agenda_eventos') as any).insert({
+            user_id:     uid,
+            titulo:      tituloEvento,
+            descricao:   `[${chaveUnica}] Gerado automaticamente`,
+            data_inicio:  `${anoMes}-${diaStr}T09:00:00`,
+            tipo:        'vencimento',
+            status:      'pendente',
+          })
+
+          // Cria confirmação noturna
+          await (supabase.from('agenda_eventos') as any).insert({
+            user_id:     uid,
+            titulo:      `✅ Verificar: ${acao.dados.descricao}${valorStr}`,
+            descricao:   `[${chaveUnica}_CONF] Verificação noturna`,
+            data_inicio:  `${anoMes}-${diaStr}T20:00:00`,
+            tipo:        'lembrete',
+            status:      'pendente',
+          })
+
+          eventosImedatos++
+        }
+
+        setAcaoStatus(msgId, acaoIdx, 'saved')
         setMensagens(prev => [...prev, {
           id: `rec-${Date.now()}`, role: 'ai' as const,
-          texto: `${emoji} **${acao.dados.descricao}** cadastrada nas contas recorrentes!\n📅 Todo dia **${dia}** o sistema criará automaticamente o alerta de vencimento${valorStr}.\n\n_Não precisa mais lembrar manualmente, Sr. Max!_ ✅`,
+          texto: `${emoji} **${acao.dados.descricao}** cadastrada como recorrente!\n📅 Todo dia **${dia}** de cada mês o sistema criará o alerta automaticamente${valorStr}.\n${eventosImedatos > 0 ? `\n✅ Já criei **${eventosImedatos}** evento(s) na agenda para este e o próximo mês!` : ''}\n\n_Pode verificar na aba Agenda, Sr. Max!_ 📋`,
         }])
+        window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
 
       // ── LISTAR RECORRENTES (mostra contas fixas cadastradas) ──
       } else if ((acao.tipo as string) === 'listar_recorrentes') {
