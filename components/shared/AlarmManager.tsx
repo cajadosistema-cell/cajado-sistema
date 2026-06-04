@@ -57,40 +57,78 @@ function tocarChime(tipo: 'aviso' | 'urgente' = 'aviso') {
   }
 }
 
-// ── Voz sintetizada (TTS) ────────────────────────────────────────────
-function falarTexto(texto: string, urgente = false) {
+// ── Cache global de vozes (carrega uma vez e reutiliza) ─────────────────
+let vozCache: SpeechSynthesisVoice[] = []
+let vozCacheCarregado = false
+
+function carregarVozes() {
+  if (!('speechSynthesis' in window)) return
+  const vs = window.speechSynthesis.getVoices()
+  if (vs.length > 0) {
+    vozCache = vs
+    vozCacheCarregado = true
+  }
+}
+
+// Dispara assim que as vozes ficarem disponíveis (lazy load do browser)
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => carregarVozes()
+  carregarVozes() // tenta imediatamente (já pode estar carregado)
+}
+
+function escolherVoz(): SpeechSynthesisVoice | null {
+  const vs = vozCacheCarregado ? vozCache : window.speechSynthesis?.getVoices() || []
+  return vs.find(v => v.lang === 'pt-BR')
+    || vs.find(v => v.lang.startsWith('pt'))
+    || vs[0]
+    || null
+}
+
+// ── Voz sintetizada (TTS) — robusta como Shopee/Mercado Livre ───────────
+function falarTexto(texto: string, urgente = false, tentativas = 0) {
   try {
     if (!('speechSynthesis' in window)) return
-    // Cancela qualquer fala em andamento
-    window.speechSynthesis.cancel()
+
+    const ss = window.speechSynthesis
+
+    // Desbloqueia mobile (Chrome Android pausa speechSynthesis automaticamente)
+    if (ss.paused) ss.resume()
+    ss.cancel() // cancela qualquer fala anterior
+
+    const voz = escolherVoz()
+
+    // Se vozes ainda não carregaram e não excedeu tentativas → retry em 300ms
+    if (!voz && tentativas < 5) {
+      setTimeout(() => falarTexto(texto, urgente, tentativas + 1), 300)
+      return
+    }
 
     const utterance = new SpeechSynthesisUtterance()
     utterance.text = urgente
       ? `Atenção! ${texto}`
       : `Lembrete: ${texto}`
     utterance.lang = 'pt-BR'
-    utterance.rate = 0.95
+    utterance.rate = 0.92
     utterance.pitch = 1.05
-    utterance.volume = 1
+    utterance.volume = 1.0
+    if (voz) utterance.voice = voz
 
-    // Tenta usar voz em português brasileiro
-    const vozes = window.speechSynthesis.getVoices()
-    const vozPtBR = vozes.find(v => v.lang === 'pt-BR')
-      || vozes.find(v => v.lang.startsWith('pt'))
-    if (vozPtBR) utterance.voice = vozPtBR
-
-    // Se vozes ainda não carregaram, espera e tenta de novo
-    if (vozes.length === 0) {
-      window.speechSynthesis.onvoiceschanged = () => {
-        const vs = window.speechSynthesis.getVoices()
-        const voz = vs.find(v => v.lang === 'pt-BR') || vs.find(v => v.lang.startsWith('pt'))
-        if (voz) utterance.voice = voz
-        window.speechSynthesis.speak(utterance)
-      }
-      return
+    // Workaround Chrome Android: speechSynthesis pausa sozinho após ~15s
+    // Fazemos resume() periódico enquanto fala
+    let keepAlive: ReturnType<typeof setInterval> | null = null
+    utterance.onstart = () => {
+      keepAlive = setInterval(() => {
+        if (ss.speaking && ss.paused) ss.resume()
+      }, 5000)
+    }
+    utterance.onend = () => {
+      if (keepAlive) clearInterval(keepAlive)
+    }
+    utterance.onerror = () => {
+      if (keepAlive) clearInterval(keepAlive)
     }
 
-    window.speechSynthesis.speak(utterance)
+    ss.speak(utterance)
   } catch { /* SpeechSynthesis indisponível */ }
 }
 
