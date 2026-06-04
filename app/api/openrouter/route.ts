@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 
+// Aumenta o timeout para 60s — Claude Opus 4.5 pode demorar em respostas longas
+export const maxDuration = 60
+
 export async function POST(req: Request) {
   try {
     const {

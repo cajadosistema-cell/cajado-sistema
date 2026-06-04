@@ -54,7 +54,23 @@ export function useElenaSalvar({
 }: UseElenaSalvarProps): UseElenaSalvarReturn {
 
   // Cache da conta PJ padrão para evitar queries repetidas
-  const contaPjIdRef = useRef<string | null>(null)
+  const contaPjIdRef   = useRef<string | null>(null)
+  // Cache do empresa_id do usuário (necessário para RLS de contas PJ)
+  const empresaIdRef   = useRef<string | null>(null)
+
+  // Busca e cacheia o empresa_id do usuário
+  const getEmpresaId = async (uid: string): Promise<string | null> => {
+    if (empresaIdRef.current) return empresaIdRef.current
+    try {
+      const { data } = await (supabase.from('perfis') as any)
+        .select('empresa_id').eq('id', uid).maybeSingle()
+      if (data?.empresa_id) {
+        empresaIdRef.current = data.empresa_id
+        return data.empresa_id
+      }
+    } catch { /* silencioso */ }
+    return null
+  }
 
   // ── Helpers internos ──────────────────────────────────────────
   const hoje = () => new Date().toISOString().split('T')[0]
@@ -134,10 +150,12 @@ export function useElenaSalvar({
           const nomeNovo = contaNome.trim()
           const bandeira = Object.entries(BANDEIRAS_MAP).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
           const tipo = bandeira ? 'cartao_credito' : 'corrente'
+          const empresaId = await getEmpresaId(uid)
           const { data: nova, error } = await (supabase.from('contas') as any).insert({
-            user_id: uid, // ⚠️ obrigatório para isolação
+            user_id: uid,
             nome: nomeNovo, tipo, categoria: 'pj', bandeira,
             saldo_inicial: 0, saldo_atual: 0, ativo: true,
+            ...(empresaId ? { empresa_id: empresaId } : {}),
           }).select('id, nome').single()
           if (!error && nova) return { id: nova.id, nome: nova.nome }
         } catch { /* silencioso */ }
@@ -862,7 +880,9 @@ export function useElenaSalvar({
         if (acao.dados.tipo === 'cartao_credito' || acao.dados.tipo === 'cartao_debito') {
           tipoConta = 'corrente'
         }
-        const { data: novaConta, error } = await (supabase.from('contas') as any).insert({
+
+        // Para contas PJ: inclui empresa_id (obrigatório pela RLS da migration 050)
+        const payloadConta: Record<string, any> = {
           nome: acao.dados.nome || 'Conta via Elena',
           tipo: tipoConta,
           categoria,
@@ -870,7 +890,14 @@ export function useElenaSalvar({
           saldo_atual: Number(acao.dados.saldo_inicial) || 0,
           ativo: true,
           user_id: uid,
-        }).select('id, nome').single()
+        }
+        if (categoria === 'pj') {
+          const empresaId = await getEmpresaId(uid)
+          if (empresaId) payloadConta.empresa_id = empresaId
+        }
+
+        const { data: novaConta, error } = await (supabase.from('contas') as any)
+          .insert(payloadConta).select('id, nome').single()
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
         exibirConfirmacaoSalvamento('cadastrar_conta', acao.dados, acao.dados.nome, novaConta?.id, 'contas')
@@ -886,7 +913,9 @@ export function useElenaSalvar({
         const bandeira = bandeirasValidas.includes(bandeiraNome)
           ? bandeiraNome
           : (Object.entries(BANDEIRAS_MAP).find(([k]) => nomeLower.includes(k))?.[1] || null)
-        const payload: Record<string, any> = {
+
+        // Para cartões PJ: inclui empresa_id (obrigatório pela RLS da migration 050)
+        const payloadCartao: Record<string, any> = {
           nome: acao.dados.nome || 'Cartão via Elena',
           tipo: 'cartao_credito',
           categoria,
@@ -896,10 +925,16 @@ export function useElenaSalvar({
           ativo: true,
           user_id: uid,
         }
-        if (acao.dados.limite) payload.limite = Number(acao.dados.limite)
-        if (acao.dados.dia_fechamento) payload.dia_fechamento = Number(acao.dados.dia_fechamento)
-        if (acao.dados.dia_vencimento) payload.dia_vencimento = Number(acao.dados.dia_vencimento)
-        const { data: novoCartao, error } = await (supabase.from('contas') as any).insert(payload).select('id, nome').single()
+        if (acao.dados.limite)          payloadCartao.limite = Number(acao.dados.limite)
+        if (acao.dados.dia_fechamento)  payloadCartao.dia_fechamento = Number(acao.dados.dia_fechamento)
+        if (acao.dados.dia_vencimento)  payloadCartao.dia_vencimento = Number(acao.dados.dia_vencimento)
+        if (categoria === 'pj') {
+          const empresaId = await getEmpresaId(uid)
+          if (empresaId) payloadCartao.empresa_id = empresaId
+        }
+
+        const { data: novoCartao, error } = await (supabase.from('contas') as any)
+          .insert(payloadCartao).select('id, nome').single()
         if (error) throw new Error(error.message)
 
         // ── Auto-gera alertas e agenda se dia_vencimento foi informado ──
