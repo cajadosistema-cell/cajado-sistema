@@ -1047,10 +1047,36 @@ export function useElenaSalvar({
 
       // ── DEFINIR META ─────────────────────────────────────────
       } else if (acao.tipo === 'definir_meta') {
-        const metasStr = localStorage.getItem(`elena_metas_${uid}`)
-        const metas: Record<string, number> = metasStr ? JSON.parse(metasStr) : {}
-        metas[acao.dados.categoria || 'total'] = Number(acao.dados.valor_limite) || 0
-        localStorage.setItem(`elena_metas_${uid}`, JSON.stringify(metas))
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const categoria = acao.dados.categoria || 'geral'
+        const valorLimite = Number(acao.dados.valor_limite) || 0
+
+        // Verifica se já existe um limite para essa categoria
+        const { data: existente } = await (supabase.from('limites_orcamento') as any)
+          .select('id')
+          .eq('user_id', uid)
+          .eq('categoria', categoria)
+          .eq('tipo', 'pf')
+          .eq('ativo', true)
+          .maybeSingle()
+
+        if (existente?.id) {
+          // Atualiza o limite existente
+          await (supabase.from('limites_orcamento') as any)
+            .update({ limite_mensal: valorLimite, updated_at: new Date().toISOString() })
+            .eq('id', existente.id)
+        } else {
+          // Cria novo limite
+          await (supabase.from('limites_orcamento') as any).insert({
+            user_id: uid,
+            nome: `Meta ${categoria}`,
+            categoria,
+            tipo: 'pf',
+            limite_mensal: valorLimite,
+            ativo: true,
+          })
+        }
+
         setAcaoStatus(msgId, acaoIdx, 'saved')
         exibirConfirmacaoSalvamento('definir_meta', acao.dados)
 

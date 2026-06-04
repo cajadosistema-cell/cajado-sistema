@@ -354,11 +354,19 @@ function BudgetWidget({ gastosMes, cartoesPagamento }: {
 
 // ── Main Dashboard ────────────────────────────────────────────
 export default function DashboardPessoalClient() {
-  const { data: gastos }   = useSupabaseQuery<Gasto>('gastos_pessoais',   { orderBy: { column: 'data', ascending: false } })
-  const { data: receitas } = useSupabaseQuery<Receita>('receitas_pessoais', { orderBy: { column: 'data', ascending: false } })
-  const { data: eventos }  = useSupabaseQuery<Evento>('agenda_eventos',   { orderBy: { column: 'data_inicio', ascending: true } })
-  const { data: ativos }   = useSupabaseQuery<Ativo>('ativos')
-  const { data: imoveis }  = useSupabaseQuery<Imovel>('projetos_patrimonio')
+  const [authUserId, setAuthUserId] = useState('')
+
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => {
+      if (data.user) setAuthUserId(data.user.id)
+    })
+  }, [])
+
+  const { data: gastos }   = useSupabaseQuery<Gasto>('gastos_pessoais',   { filters: { user_id: authUserId }, orderBy: { column: 'data', ascending: false }, enabled: !!authUserId })
+  const { data: receitas } = useSupabaseQuery<Receita>('receitas_pessoais', { filters: { user_id: authUserId }, orderBy: { column: 'data', ascending: false }, enabled: !!authUserId })
+  const { data: eventos }  = useSupabaseQuery<Evento>('agenda_eventos',   { filters: { user_id: authUserId }, orderBy: { column: 'data_inicio', ascending: true }, enabled: !!authUserId })
+  const { data: ativos }   = useSupabaseQuery<Ativo>('ativos', { enabled: !!authUserId })
+  const { data: imoveis }  = useSupabaseQuery<Imovel>('projetos_patrimonio', { enabled: !!authUserId })
 
   const [drill, setDrill] = useState<{ title: string; items: any[] } | null>(null)
 
