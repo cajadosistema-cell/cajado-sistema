@@ -1,6 +1,7 @@
 'use client'
 
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatCurrency, formatRelative } from '@/lib/utils'
 import { StatusBadge } from '@/components/shared/ui'
 import Link from 'next/link'
@@ -37,15 +38,17 @@ function SectionHeader({ title, href }: { title: string; href: string }) {
 }
 
 export default function DashboardHome() {
-  const { data: contas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true } })
-  const { data: lancamentos } = useSupabaseQuery<Lancamento>('lancamentos', { orderBy: { column: 'created_at', ascending: false }, limit: 5 })
-  const { data: leads } = useSupabaseQuery<Lead>('leads', { orderBy: { column: 'created_at', ascending: false } })
-  const { data: operacoes } = useSupabaseQuery<Operacao>('operacoes')
-  const { data: ativos } = useSupabaseQuery<Ativo>('ativos')
-  const { data: projetos } = useSupabaseQuery<Projeto>('projetos', { filters: { status: 'ativo' } })
-  const { data: patrimonio } = useSupabaseQuery<ProjetoPatrimonio>('projetos_patrimonio')
-  const { data: numerosWA } = useSupabaseQuery<NumeroWA>('numeros_whatsapp')
-  const { data: tendencias } = useSupabaseQuery<Tendencia>('tendencias', { filters: { status: 'monitorando' }, limit: 3 })
+  const { empresaId } = useEmpresaId()
+
+  const { data: contas } = useSupabaseQuery<Conta>('contas', { filters: { ativo: true, empresa_id: empresaId || undefined }, enabled: !!empresaId })
+  const { data: lancamentos } = useSupabaseQuery<Lancamento>('lancamentos', { filters: { empresa_id: empresaId || undefined }, orderBy: { column: 'created_at', ascending: false }, limit: 5, enabled: !!empresaId })
+  const { data: leads } = useSupabaseQuery<Lead>('leads', { orderBy: { column: 'created_at', ascending: false }, enabled: !!empresaId })
+  const { data: operacoes } = useSupabaseQuery<Operacao>('operacoes', { enabled: !!empresaId })
+  const { data: ativos } = useSupabaseQuery<Ativo>('ativos', { enabled: !!empresaId })
+  const { data: projetos } = useSupabaseQuery<Projeto>('projetos', { filters: { status: 'ativo' }, enabled: !!empresaId })
+  const { data: patrimonio } = useSupabaseQuery<ProjetoPatrimonio>('projetos_patrimonio', { enabled: !!empresaId })
+  const { data: numerosWA } = useSupabaseQuery<NumeroWA>('numeros_whatsapp', { enabled: !!empresaId })
+  const { data: tendencias } = useSupabaseQuery<Tendencia>('tendencias', { filters: { status: 'monitorando' }, limit: 3, enabled: !!empresaId })
 
   // Financeiro
   const saldoTotal = contas.reduce((a, c) => a + (c.saldo_atual ?? 0), 0)

@@ -146,6 +146,7 @@ serve(async (req) => {
       .select('id, user_id, titulo, data_inicio, tipo')
       .neq('status', 'cancelado')
       .neq('status', 'concluido')
+      .is('push_enviado', null)
       .gte('data_inicio', ha1min.toISOString())
       .lte('data_inicio', em5min.toISOString())
 
@@ -220,6 +221,8 @@ serve(async (req) => {
 
           if (status === 200 || status === 201) {
             enviados++
+            // Marca push_enviado para evitar duplicatas
+            await supabase.from('agenda_eventos').update({ push_enviado: new Date().toISOString() }).eq('id', ev.id)
           } else if (status === 410 || status === 404) {
             // Subscription expirada — remove
             await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
