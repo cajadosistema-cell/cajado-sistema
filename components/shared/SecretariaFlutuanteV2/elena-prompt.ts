@@ -209,8 +209,8 @@ CANCELAR ÚLTIMO REGISTRO:
 - O SISTEMA cria automaticamente o evento de vencimento TODO MÊS no dia informado
 - Use quando o chefe mencionar: "cadastrar alerta recorrente", "colocar no sistema pra avisar todo mês",
   "todo mês vence o aluguel no dia X", "registrar conta fixa", "todo dia X pago a internet"
-- ⚠️ DIFERENÇA: Use `alertar_recorrente` para contas que repetem todo mês (sistema cria automaticamente).
-  Use `agenda` para eventos pontuais/únicos.
+- ⚠️ DIFERENÇA: Use 'alertar_recorrente' para contas que repetem todo mês (sistema cria automaticamente).
+  Use 'agenda' para eventos pontuais/únicos.
 - EXEMPLOS:
   → "aluguel todo dia 10, R$ 1.500" → {"acao":"alertar_recorrente","descricao":"Aluguel","valor":1500,"dia_vencimento":10,"tipo":"aluguel"}
   → "conta de luz todo dia 15" → {"acao":"alertar_recorrente","descricao":"Conta de Luz","dia_vencimento":15,"tipo":"energia"}

@@ -136,9 +136,6 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
 
               // 1. Eventos de hoje
               const hojeIso = hoje
-              const amanha = new Date(agora)
-              amanha.setDate(amanha.getDate() + 1)
-              const amanhaIso = amanha.toLocaleDateString('sv')
 
               const { data: eventosHoje } = await (supabase.from('agenda_eventos') as any)
                 .select('titulo, data_inicio, tipo')
