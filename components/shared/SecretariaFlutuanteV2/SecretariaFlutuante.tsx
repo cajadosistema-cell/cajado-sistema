@@ -277,17 +277,40 @@ export function SecretariaFlutuante() {
         const ultimaElena = [...session.mensagens].reverse().find(m => m.role === 'ai' && m.texto && m.texto !== '...')
 
         // ── ATALHO DIRETO: ações pendentes → executa sem re-consultar IA ──
-        // Evita recálculo de horário quando o usuário confirma minutos depois
         const acoesPendentes = ultimaElena?.acoes?.filter(a => a.status === 'pending')
         if (acoesPendentes && acoesPendentes.length > 0 && ultimaElena && uid) {
-          session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))
-          setLoading(false)
-          try {
-            await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid)
-          } finally {
-            isSendingRef.current = false  // só libera após executar
+
+          // Verifica se alguma ação de agenda tem horário expirado (passou o tempo)
+          // Isso acontece quando o usuário pede "daqui 10 minutos" mas demora para confirmar
+          const agora = Date.now()
+          const temAgendaExpirada = acoesPendentes.some(a => {
+            if (a.tipo !== 'agenda') return false
+            const dataAcao = new Date(a.dados.data_inicio || 0)
+            return !isNaN(dataAcao.getTime()) && dataAcao.getTime() < agora
+          })
+
+          if (!temAgendaExpirada) {
+            // Todos os horários ainda são válidos → executa diretamente ✅
+            session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))
+            setLoading(false)
+            try {
+              await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid)
+            } finally {
+              isSendingRef.current = false
+            }
+            return
           }
-          return
+
+          // Horário expirado → cai no fallback da IA para recalcular a partir de agora
+          // A IA vai usar o horário atual e recriar o agendamento com tempo relativo correto
+          const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          if (ultimaElena) {
+            promptFinal = `[INSTRUÇÃO PRIORITÁRIA DO SISTEMA]: O usuário confirmou agora (${horaAtual}), mas o horário proposto já passou. RECALCULE o horário relativo a partir de AGORA (${horaAtual}) e gere o JSON IMEDIATAMENTE com o novo horário.
+
+Mensagem anterior da Elena: "${ultimaElena.texto.substring(0, 500)}"
+
+Ação: recalcule os minutos/horas relativas do pedido original, somando ao horário atual ${horaAtual}. Execute agora.`
+          }
         }
 
         // Fallback: re-consulta IA se Elena só fez pergunta textual (sem JSON ainda)
