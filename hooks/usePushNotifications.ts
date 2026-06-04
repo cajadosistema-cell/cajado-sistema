@@ -3,8 +3,9 @@
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// Chave pública VAPID (gerada via web-push generate-vapid-keys)
-const VAPID_PUBLIC_KEY = 'BK96VFaA8zwI3cFHHl6SU5vMkMMoVdWWx5c42NnBgwK2FhDtDsaHf3auUwLYNRz9idukghmYXTnDPCRmdvzvQdE'
+// Chave pública VAPID — usa a variável de ambiente (mesma chave do servidor)
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  || 'BDTr-UnYGrhffBkUnBtgNOultBRobUHHysKflg8b2kgZ0FLL2zia_vet1Kzv6pD3UUb7XVM3aMhcFORUESEo0iw'
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
