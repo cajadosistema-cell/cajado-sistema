@@ -204,17 +204,16 @@ export function AlarmManager({ userId }: { userId: string }) {
   const verificarAlarmes = useCallback(async () => {
     if (!userId) return
     const agora = new Date()
-    const em16min = new Date(agora.getTime() + 16 * 60 * 1000)
-    // Inclui também eventos dos últimos 2 minutos (para não perder alarmes
-    // criados na brecha entre verificações de 30 segundos)
+    const em5min = new Date(agora.getTime() + 5 * 60 * 1000)
+    // Inclui eventos dos últimos 2 minutos (brecha entre verificações de 30s)
     const ha2min = new Date(agora.getTime() - 2 * 60 * 1000)
 
-    // Busca eventos dos últimos 2 min até os próximos 16 min
+    // Busca eventos dos últimos 2 min até os próximos 5 min
     const { data } = await (supabase.from('agenda_eventos') as any)
       .select('id,titulo,data_inicio,tipo,descricao')
       .eq('user_id', userId)
       .gte('data_inicio', ha2min.toISOString())
-      .lte('data_inicio', em16min.toISOString())
+      .lte('data_inicio', em5min.toISOString())
       .order('data_inicio')
 
     if (!data) return
@@ -227,40 +226,49 @@ export function AlarmManager({ userId }: { userId: string }) {
       // Para eventos no passado recente (até -2 min) → trata como "AGORA"
       const jaPassou = diffMs < 0
 
-      // Chave única por evento + janela de tempo
-      const janela = (jaPassou || diffMin <= 1) ? '0min' : '15min'
+      // ── Determina a janela de disparo ──────────────────────────────────
+      // Janela '3min': alerta de antecedência (3-4 min antes) — principal
+      // Janela '0min': evento está começando (≤1 min) ou já passou — urgente
+      // Cada janela dispara UMA VEZ por evento por dia
+      let janela: string | null = null
+      if (jaPassou || diffMin <= 1) {
+        janela = '0min'
+      } else if (diffMin >= 3 && diffMin <= 4) {
+        janela = '3min'  // alerta 3 minutos antes ⏰
+      }
+
+      if (!janela) continue  // fora das janelas de interesse
+
       const chave = `${agora.toISOString().split('T')[0]}_${evento.id}_${janela}`
-
-      if (firedRef.current.has(chave)) continue // já disparou esta janela
-
+      if (firedRef.current.has(chave)) continue
       salvarFired(chave)
 
-      // Tipo de som
-      const urgente = jaPassou || diffMin <= 1
+      // ── Som e voz ──────────────────────────────────────────────────────
+      const urgente = janela === '0min'
       tocarChime(urgente ? 'urgente' : 'aviso')
+      setTimeout(() => falarTexto(
+        janela === '3min' ? `Em 3 minutos: ${evento.titulo}` : evento.titulo,
+        urgente
+      ), 800)
 
-      // Voz sintetizada (TTS) — fala o título do evento
-      // Pequeno delay para o chime terminar antes da voz
-      setTimeout(() => falarTexto(evento.titulo, urgente), 800)
-
-      // Notificação do navegador
+      // ── Notificação do navegador ────────────────────────────────────────
       await notificarNavegador(
         evento.titulo,
         urgente
           ? jaPassou
             ? `Lembrete: esse evento já passou (${Math.abs(diffMin)} min atrás)`
             : 'O evento está começando AGORA!'
-          : `Começa em ${diffMin} minuto${diffMin !== 1 ? 's' : ''}`
+          : `⏰ Começa em 3 minutos!`
       )
 
-      // Toast visual in-app
+      // ── Toast visual in-app ─────────────────────────────────────────────
       const toastId = `${evento.id}_${janela}`
       setToasts(prev => {
         if (prev.find(t => t.id === toastId)) return prev
         return [...prev, {
           id: toastId,
           titulo: evento.titulo,
-          minutosRestantes: urgente ? 0 : diffMin,
+          minutosRestantes: urgente ? 0 : 3,
           tipo: evento.tipo,
         }]
       })
