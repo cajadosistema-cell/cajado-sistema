@@ -449,15 +449,39 @@ export function TabAssistente() {
         <select
           value={modelo}
           onChange={e => setModelo(e.target.value)}
-          className="text-[10px] bg-muted border border-border-subtle text-fg-secondary rounded-lg px-2 py-1 focus:outline-none focus:border-fuchsia-500/40 cursor-pointer"
+          className="text-[10px] bg-muted border border-border-subtle text-fg-secondary rounded-lg px-2 py-1 focus:outline-none focus:border-fuchsia-500/40 cursor-pointer max-w-[160px]"
         >
-          <option value="openai/gpt-4o-mini">GPT-4o mini 🚀</option>
-          <option value="openai/gpt-4o">GPT-4o 🧠</option>
-          <option value="anthropic/claude-3-haiku">Claude Haiku ⚡</option>
-          <option value="anthropic/claude-3.5-sonnet">Claude Sonnet 💎</option>
-          <option value="google/gemini-flash-1.5">Gemini Flash 🔥</option>
-          <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 (Free)</option>
+          <optgroup label="── OpenAI ──────────────">
+            <option value="openai/gpt-4o-mini">GPT-4o mini 🚀 (rápido)</option>
+            <option value="openai/gpt-4o">GPT-4o 🧠</option>
+            <option value="openai/o3-mini">o3 Mini 🔬</option>
+            <option value="openai/o3">o3 🏆</option>
+          </optgroup>
+          <optgroup label="── Anthropic ───────────">
+            <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku ⚡ (rápido)</option>
+            <option value="anthropic/claude-haiku-4.5">Claude Haiku 4.5 ⚡</option>
+            <option value="anthropic/claude-sonnet-4.5">Claude Sonnet 4.5 💎</option>
+            <option value="anthropic/claude-opus-4">Claude Opus 4 🏅</option>
+            <option value="~anthropic/claude-opus-latest">Claude Opus Latest 👑</option>
+          </optgroup>
+          <optgroup label="── Google ──────────────">
+            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash 🔥</option>
+            <option value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite ⚡</option>
+            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro ✨</option>
+            <option value="google/gemini-3.5-flash">Gemini 3.5 Flash 🌟</option>
+            <option value="~google/gemini-flash-latest">Gemini Flash Latest 🔥</option>
+            <option value="~google/gemini-pro-latest">Gemini Pro Latest 🌟</option>
+          </optgroup>
+          <optgroup label="── DeepSeek ────────────">
+            <option value="deepseek/deepseek-v4-flash">DeepSeek V4 Flash ⚡</option>
+            <option value="deepseek/deepseek-v4-pro">DeepSeek V4 Pro 🧩</option>
+            <option value="deepseek/deepseek-r1-0528">DeepSeek R1 🧠</option>
+          </optgroup>
+          <optgroup label="── Meta (Grátis) ────────">
+            <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B (Free) 🦙</option>
+          </optgroup>
         </select>
+
         <button onClick={limparChat} title="Limpar" className="text-fg-disabled hover:text-fg-secondary text-xs px-2 py-1 rounded-lg hover:bg-muted">🗑</button>
       </div>
 
