@@ -25,10 +25,12 @@ function tocarChime(tipo: 'aviso' | 'urgente' = 'aviso') {
   try {
     const Ctx = window.AudioContext || (window as any).webkitAudioContext
     if (!Ctx) return
-    const ctx = new Ctx()
-    if (ctx.state === 'suspended') {
-      ctx.resume()
-    }
+
+    // Usa o contexto global se disponível (criado no gesto do usuário — iOS)
+    // Caso contrário cria um novo (Android/Desktop funciona sem gesto)
+    const ctx = audioCtxGlobal || new Ctx()
+    if (!audioCtxGlobal) audioCtxGlobal = ctx
+    if (ctx.state === 'suspended') ctx.resume()
 
     // Acorde: C5 - E5 - G5 (aviso) | A4 - C5 - E5 (urgente)
     const notas = tipo === 'aviso'
@@ -195,12 +197,33 @@ function AlarmToastUI({ alarms, onDismiss }: {
   )
 }
 
+// ── AudioContext global reutilizável (iOS exige ser criado em gesture) ──
+let audioCtxGlobal: AudioContext | null = null
+let audioDesbloqueado = false
+
+function desbloquearAudio() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext
+    if (!audioCtxGlobal) audioCtxGlobal = new Ctx()
+    if (audioCtxGlobal.state === 'suspended') audioCtxGlobal.resume()
+    audioDesbloqueado = true
+    // Testa fala silenciosa para desbloqueio do iOS
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(' ')
+      u.volume = 0
+      window.speechSynthesis.speak(u)
+    }
+  } catch {}
+}
+
 // ── Componente Principal ─────────────────────────────────────────
 export function AlarmManager({ userId }: { userId: string }) {
   const supabase = createClient()
   const [toasts, setToasts] = useState<AlarmToast[]>([])
   const [permissao, setPermissao] = useState<NotificationPermission>('default')
+  const [audioAtivado, setAudioAtivado] = useState(audioDesbloqueado)
   const firedRef = useRef<Set<string>>(new Set())
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
 
   // Carrega eventos disparados anteriormente do localStorage
   useEffect(() => {
@@ -208,8 +231,8 @@ export function AlarmManager({ userId }: { userId: string }) {
       const saved = localStorage.getItem('cajado_alarms_fired')
       if (saved) {
         const arr: string[] = JSON.parse(saved)
-        // Só guarda do dia atual para não acumular eternamente
-        const hoje = new Date().toISOString().split('T')[0]
+        // Usa data LOCAL (não UTC) para não perder alarmes na virada do dia
+        const hoje = new Date().toLocaleDateString('sv') // YYYY-MM-DD local
         arr.forEach(id => {
           if (id.startsWith(hoje)) firedRef.current.add(id)
         })
@@ -351,8 +374,33 @@ export function AlarmManager({ userId }: { userId: string }) {
       {/* Toast visual */}
       <AlarmToastUI alarms={toasts} onDismiss={dispensar} />
 
-      {/* Banner de permissão (só aparece se negado ou não respondido) */}
-      {permissao === 'default' && (
+      {/* Banner iOS: toque para ativar áudio */}
+      {isIOS && !audioAtivado && (
+        <div className="fixed bottom-24 left-4 z-[9998] max-w-xs">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#1a1f2e] border border-amber-500/20 shadow-lg">
+            <span className="text-lg">🔔</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-white">Ativar alertas sonoros</p>
+              <p className="text-[10px] text-fg-disabled">iPhone requer um toque para liberar o som</p>
+            </div>
+            <button
+              onClick={() => {
+                desbloquearAudio()
+                setAudioAtivado(true)
+                if (!('Notification' in window)) return
+                localStorage.setItem(NOTIF_ASKED_KEY, '1')
+                Notification.requestPermission().then(r => setPermissao(r))
+              }}
+              className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-500 text-black hover:bg-amber-400 transition-all shrink-0 animate-pulse"
+            >
+              🔊 Ativar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Banner Android/Desktop: pedir permissão de notificação */}
+      {!isIOS && permissao === 'default' && (
         <div className="fixed bottom-24 left-4 z-[9998] max-w-xs">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#1a1f2e] border border-amber-500/20 shadow-lg">
             <span className="text-lg">🔔</span>
@@ -361,7 +409,7 @@ export function AlarmManager({ userId }: { userId: string }) {
               <p className="text-[10px] text-fg-disabled">Avisos de agenda com som</p>
             </div>
             <button
-              onClick={pedirPermissao}
+              onClick={() => { desbloquearAudio(); setAudioAtivado(true); pedirPermissao() }}
               className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-all shrink-0"
             >
               Ativar
