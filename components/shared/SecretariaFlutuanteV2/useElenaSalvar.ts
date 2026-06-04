@@ -232,7 +232,14 @@ export function useElenaSalvar({
     // Lê userId da ref — nunca fica stale
     const uid = userIdRef.current
 
+    // ⚠️ Guard crítico: sem uid não salva nada
+    if (!uid) {
+      setAcaoStatus(msgId, acaoIdx, 'error', 'Sessão expirada. Recarregue a página.')
+      return
+    }
+
     try {
+
       // ── GASTO PF ─────────────────────────────────────────────
       if (acao.tipo === 'gasto') {
         const dataGasto = validarData(acao.dados.data)

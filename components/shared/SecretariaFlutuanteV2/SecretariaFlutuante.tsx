@@ -7,6 +7,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ModalRelatorio } from '../ModalRelatorio'
+import { ElenaErrorBoundary } from './ElenaErrorBoundary'
 
 // Hooks
 import { useElenaSession }  from './useElenaSession'
@@ -67,10 +68,12 @@ async function processarArquivo(
         if (texto) {
           setAttachedFile({ base64: texto, mime: 'text/plain', name: file.name, isImage: false })
         } else {
-          alert('PDF sem texto legível. Tente converter para imagem.')
+          console.error('[Elena] PDF sem texto legível')
+          setAttachedFile(null)
         }
-      } catch {
-        alert('Erro ao processar o PDF. Tente novamente.')
+      } catch (e) {
+        console.error('[Elena] Erro ao processar PDF:', e)
+        setAttachedFile(null)
       }
       setProcessingFile(false)
     }
@@ -79,8 +82,8 @@ async function processarArquivo(
   }
 }
 
-// ── Componente principal ──────────────────────────────────────
-export function SecretariaFlutuante() {
+// ── Componente interno ───────────────────────────────────────
+function SecretariaFlutuanteWidget() {
   const supabase = createClient()
 
   // ── Estado local simples (apenas UI) ─────────────────────────
@@ -243,13 +246,30 @@ export function SecretariaFlutuante() {
 
     let uid = session.userIdRef.current
     if (!uid) {
-      const { data: auth } = await supabase.auth.getUser()
-      uid = auth.user?.id || ''
-      if (uid) session.setUserId(uid)
+      try {
+        const { data: auth } = await supabase.auth.getUser()
+        uid = auth.user?.id || ''
+        if (uid) session.setUserId(uid)
+      } catch {
+        // Auth falhou — uid continua vazio
+      }
+    }
+
+    // ⚠️ Guard: se uid ainda vazio, mostra erro amigável e libera o lock
+    if (!uid) {
+      session.setMensagens(prev => prev.map(m =>
+        m.id === aiMsgId
+          ? { ...m, texto: '🔐 Sessão expirada. Por favor, recarregue a página e faça login novamente.' }
+          : m
+      ))
+      setLoading(false)
+      isSendingRef.current = false
+      return
     }
 
     const fileSnap = currentFile
     setAttachedFile(null)
+
 
     try {
       const colaboradoresCtx = session.colaboradores.length > 0
@@ -952,8 +972,13 @@ Aqui está tudo o que você pode me pedir para fazer:
       )}
     </>
   )
+
+// ── Exportação com ErrorBoundary ─────────────────────────────
+// Envolve o widget com ErrorBoundary para não quebrar a página
+export function SecretariaFlutuante() {
+  return (
+    <ElenaErrorBoundary>
+      <SecretariaFlutuanteWidget />
+    </ElenaErrorBoundary>
+  )
 }
-
-
-
-

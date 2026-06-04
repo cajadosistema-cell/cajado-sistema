@@ -3,3 +3,4 @@
 // Importe sempre daqui: import { SecretariaFlutuante } from '@/components/SecretariaFlutuante'
 
 export { SecretariaFlutuante } from './SecretariaFlutuante'
+export { ElenaErrorBoundary }  from './ElenaErrorBoundary'
