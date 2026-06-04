@@ -1054,6 +1054,52 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
         exibirConfirmacaoSalvamento('definir_meta', acao.dados)
 
+      // ── RELATÓRIO DE COLABORADORES ────────────────────────────
+      } else if (acao.tipo === 'relatorio_colaboradores') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const { data: ocorrencias } = await (supabase.from('ocorrencias') as any)
+          .select('tipo, impacto, funcionario_id, created_at, funcionarios(nome)')
+          .order('created_at', { ascending: false })
+          .limit(100)
+
+        if (!ocorrencias || ocorrencias.length === 0) {
+          setMensagens(prev => [...prev, {
+            id: `colab-${Date.now()}`, role: 'ai' as const,
+            texto: '👥 Nenhuma ocorrência registrada para os colaboradores ainda, Sr. Max.',
+          }])
+        } else {
+          // Agrupa por colaborador
+          const porColab: Record<string, { nome: string; total: number; tipos: Record<string, number>; impactos: Record<string, number> }> = {}
+          for (const oc of ocorrencias as any[]) {
+            const nome = oc.funcionarios?.nome || 'Sem nome'
+            const fid = oc.funcionario_id || 'unknown'
+            if (!porColab[fid]) porColab[fid] = { nome, total: 0, tipos: {}, impactos: {} }
+            porColab[fid].total++
+            const tipo = oc.tipo || 'outro'
+            porColab[fid].tipos[tipo] = (porColab[fid].tipos[tipo] || 0) + 1
+            const imp = oc.impacto || 'baixo'
+            porColab[fid].impactos[imp] = (porColab[fid].impactos[imp] || 0) + 1
+          }
+
+          const sorted = Object.values(porColab).sort((a, b) => b.total - a.total)
+          let texto = `👥 **RELATÓRIO DE PERFORMANCE — EQUIPE**\n\n`
+          texto += `_${ocorrencias.length} ocorrência(s) registrada(s)_\n\n`
+
+          for (const c of sorted) {
+            const impAlto = c.impactos['alto'] || 0
+            const impMedio = c.impactos['medio'] || 0
+            const icon = impAlto > 2 ? '🔴' : impAlto > 0 || impMedio > 2 ? '🟡' : '🟢'
+            texto += `${icon} **${c.nome}** — ${c.total} ocorrência(s)\n`
+            const tiposStr = Object.entries(c.tipos).map(([t, n]) => `${t}: ${n}`).join(', ')
+            texto += `  📋 ${tiposStr}\n`
+            if (impAlto > 0) texto += `  ⚠️ ${impAlto} de alto impacto\n`
+            texto += '\n'
+          }
+
+          setMensagens(prev => [...prev, { id: `colab-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
       // ── REGISTRO LIVRE ───────────────────────────────────────
       } else if (acao.tipo === 'registro_livre') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
