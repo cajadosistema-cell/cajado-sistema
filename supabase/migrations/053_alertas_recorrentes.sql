@@ -27,6 +27,9 @@ CREATE INDEX IF NOT EXISTS idx_alertas_recorrentes_ativo ON alertas_recorrentes(
 -- RLS
 ALTER TABLE alertas_recorrentes ENABLE ROW LEVEL SECURITY;
 
+-- Drop policies se já existirem (para reexecução idempotente)
+DROP POLICY IF EXISTS "Users see own alertas" ON alertas_recorrentes;
+
 CREATE POLICY "Users see own alertas" ON alertas_recorrentes
   FOR ALL USING (auth.uid() = user_id);
 
@@ -35,6 +38,9 @@ CREATE OR REPLACE FUNCTION update_alertas_recorrentes_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
 $$ LANGUAGE plpgsql;
+
+-- Drop trigger se já existir
+DROP TRIGGER IF EXISTS trg_alertas_recorrentes_updated_at ON alertas_recorrentes;
 
 CREATE TRIGGER trg_alertas_recorrentes_updated_at
   BEFORE UPDATE ON alertas_recorrentes
