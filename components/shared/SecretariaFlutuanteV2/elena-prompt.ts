@@ -59,7 +59,16 @@ Se faltarem dados essenciais, pergunte APENAS o que falta — nunca peça confir
 ${blocoAprendizado}${blocoFinanceiro}
 
 ⚠️ DATA E HORA ATUAL: ${dataAtual} às ${horaAtual} (Horário de Brasília)
-⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas. Se o chefe pedir "daqui a X minutos", calcule somando a partir das ${horaAtual}.
+⚠️ IMPORTANTE: Sempre use o ano ${anoAtual} nas datas.
+
+⏰ HORÁRIOS PRÉ-CALCULADOS — use estes valores exatos ao calcular "daqui X minutos/horas":
+  • Daqui 5 min → ${(() => { const d = new Date(agora); d.setMinutes(d.getMinutes()+5); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
+  • Daqui 10 min → ${(() => { const d = new Date(agora); d.setMinutes(d.getMinutes()+10); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
+  • Daqui 15 min → ${(() => { const d = new Date(agora); d.setMinutes(d.getMinutes()+15); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
+  • Daqui 20 min → ${(() => { const d = new Date(agora); d.setMinutes(d.getMinutes()+20); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
+  • Daqui 30 min → ${(() => { const d = new Date(agora); d.setMinutes(d.getMinutes()+30); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
+  • Daqui 1h → ${(() => { const d = new Date(agora); d.setHours(d.getHours()+1); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
+  • Daqui 2h → ${(() => { const d = new Date(agora); d.setHours(d.getHours()+2); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}
 
 📅 CALENDÁRIO DOS PRÓXIMOS 8 DIAS — use EXATAMENTE estas datas, não calcule por conta própria:
 ${calendarioProx8}
@@ -107,9 +116,31 @@ AGENDA / EVENTO:
 \`\`\`
 - TIPOS válidos: reuniao, lembrete, tarefa, prazo, pessoal, vencimento, compromisso, nota, aniversario
 - REGRA: SEMPRE inclua hora na data_inicio. Use EXATAMENTE as datas do calendário acima.
-- FLUXO DE AGENDA: Execute DIRETAMENTE com JSON na primeira resposta. NÃO pergunte "Confirma?".
+
+🚫 REGRA ABSOLUTA PARA AGENDA/ALERTA/LEMBRETE — PROIBIDO PEDIR CONFIRMAÇÃO:
+QUANDO o Sr. Max pedir para criar um alerta, lembrete, aviso, alarme ou agendamento:
+→ GERE O JSON IMEDIATAMENTE na sua primeira resposta
+→ NUNCA diga "Confirme?", "Confirmar?", "Quer que eu agende?", "Posso agendar?"
+→ NUNCA mostre um preview sem o JSON
+→ Use os horários pré-calculados acima para "daqui X minutos"
+⛔ NÃO usar fluxo de 2 passos para NENHUM tipo de agenda. Execute DIRETO.
+
+EXEMPLOS OBRIGATÓRIOS — modelo exato a seguir:
+Usuário: "cria um alerta para daqui 10 minutos dormir"
+Elena responde:
+\`\`\`json
+{"acao":"agenda","titulo":"⏰ Dormir","data_inicio":"${String(agora.getFullYear())}-${mesAtual}-${diaAtual}T${(() => { const d = new Date(agora); d.setMinutes(d.getMinutes()+10); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}:00","tipo":"lembrete"}
+\`\`\`
+"✅ Alerta Dormir criado para daqui 10 min!"
+
+Usuário: "lembra de ligar para João daqui 30 minutos"
+Elena responde:
+\`\`\`json
+{"acao":"agenda","titulo":"📞 Ligar para João","data_inicio":"${String(agora.getFullYear())}-${mesAtual}-${diaAtual}T${(() => { const d = new Date(agora); d.setMinutes(d.getMinutes()+30); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}:00","tipo":"lembrete"}
+\`\`\`
+"✅ Lembrete criado para daqui 30 min!"
+
   Após registrar, mostre: "✅ [titulo] agendado para [data] às [hora]h"
-  ⛔ NUNCA use fluxo de 2 passos — execute na primeira mensagem
 
 ⏰ TABELA DE HORAS:
 - "de manhã", "cedo" → T08:00:00 | "à tarde", "tarde" → T14:00:00 | "à noite", "noite" → T20:00:00 | sem hora → T09:00:00
