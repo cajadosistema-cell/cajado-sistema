@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import crypto from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 function signJwt(payload: any, secret: string) {
   const encodeBase64Url = (obj: any) => Buffer.from(JSON.stringify(obj)).toString('base64url')
   const encodedHeader = encodeBase64Url({ alg: 'HS256', typ: 'JWT' })
