@@ -494,6 +494,191 @@ export function useElenaSalvar({
         setRelatorioData(dados)
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
+      // ── PROJEÇÃO DO PRÓXIMO MÊS(ES) ──────────────────────────
+      } else if (acao.tipo === 'projecao_mes') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const meses = Math.min(Number(acao.dados.meses) || 1, 3)
+        const agora = new Date()
+
+        // ── 1. Busca últimos 3 meses de gastos PF ──────────────
+        const inicio3m = new Date(agora)
+        inicio3m.setMonth(inicio3m.getMonth() - 3)
+        inicio3m.setDate(1)
+        const [{ data: gastos3m }, { data: receitas3m }] = await Promise.all([
+          (supabase.from('gastos_pessoais') as any)
+            .select('valor, categoria, data')
+            .eq('user_id', uid)
+            .gte('data', inicio3m.toISOString().split('T')[0])
+            .order('data'),
+          (supabase.from('receitas_pessoais') as any)
+            .select('valor, categoria, data')
+            .eq('user_id', uid)
+            .gte('data', inicio3m.toISOString().split('T')[0])
+            .order('data'),
+        ])
+
+        // ── 2. Calcula médias mensais ──────────────────────────
+        const totalGastos = (gastos3m || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+        const totalReceitas = (receitas3m || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+        const mediaGastos = totalGastos / 3
+        const mediaReceitas = totalReceitas / 3
+
+        // Gastos por categoria
+        const porCategoria: Record<string, number> = {}
+        ;(gastos3m || []).forEach((g: any) => {
+          const cat = g.categoria || 'outros'
+          porCategoria[cat] = (porCategoria[cat] || 0) + Number(g.valor)
+        })
+        const mediaCategoria: Record<string, number> = {}
+        Object.entries(porCategoria).forEach(([cat, total]) => {
+          mediaCategoria[cat] = total / 3
+        })
+        const topCats = Object.entries(mediaCategoria)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+
+        // ── 3. Busca vencimentos futuros para incluir na projeção ─
+        const fimProjecao = new Date(agora)
+        fimProjecao.setMonth(fimProjecao.getMonth() + meses + 1)
+        const { data: vencFuturos } = await (supabase.from('agenda_eventos') as any)
+          .select('titulo, data_inicio, tipo')
+          .eq('user_id', uid)
+          .in('tipo', ['vencimento'])
+          .neq('status', 'cancelado')
+          .neq('status', 'concluido')
+          .gte('data_inicio', agora.toISOString())
+          .lte('data_inicio', fimProjecao.toISOString())
+          .order('data_inicio')
+
+        // Filtra apenas pagamentos (não confirmações)
+        const vencimentosReais = (vencFuturos || []).filter((ev: any) => {
+          const t = (ev.titulo || '').toLowerCase()
+          return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
+        })
+
+        // ── 4. Formata o relatório ─────────────────────────────
+        const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        const catEmoji: Record<string, string> = {
+          alimentacao: '🍽️', transporte: '🚗', saude: '💊', lazer: '🎮',
+          educacao: '📚', moradia: '🏠', vestuario: '👕', tecnologia: '💻',
+          investimento: '📈', outros: '📦',
+        }
+
+        const nomeMes = (offset: number) => {
+          const d = new Date(agora)
+          d.setMonth(d.getMonth() + offset)
+          return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        }
+
+        let texto = `📊 **PROJEÇÃO FINANCEIRA — ${meses === 1 ? 'PRÓXIMO MÊS' : `PRÓXIMOS ${meses} MESES`}**\n`
+        texto += `_Baseada na média dos últimos 3 meses_\n\n`
+
+        for (let m = 1; m <= meses; m++) {
+          texto += `---\n📅 **${nomeMes(m).toUpperCase()}**\n\n`
+          texto += `💰 **Entradas estimadas:** ${fmt(mediaReceitas)}\n`
+          texto += `💸 **Saídas estimadas:** ${fmt(mediaGastos)}\n`
+
+          const saldoProjetado = mediaReceitas - mediaGastos
+          const saldoIcon = saldoProjetado >= 0 ? '🟢' : '🔴'
+          texto += `${saldoIcon} **Saldo projetado:** ${fmt(saldoProjetado)}\n\n`
+
+          texto += `📂 **Top gastos por categoria:**\n`
+          topCats.forEach(([cat, media]) => {
+            const emoji = catEmoji[cat] || '📦'
+            texto += `  ${emoji} ${cat}: ${fmt(media)}/mês\n`
+          })
+
+          // Vencimentos do mês em questão
+          const inicioM = new Date(agora)
+          inicioM.setMonth(inicioM.getMonth() + m)
+          inicioM.setDate(1)
+          const fimM = new Date(inicioM)
+          fimM.setMonth(fimM.getMonth() + 1)
+
+          const vencMes = vencimentosReais.filter((ev: any) => {
+            const dt = new Date(ev.data_inicio)
+            return dt >= inicioM && dt < fimM
+          })
+
+          if (vencMes.length > 0) {
+            texto += `\n📄 **Vencimentos agendados:**\n`
+            vencMes.forEach((ev: any) => {
+              const dt = new Date(ev.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+              texto += `  📌 [${dt}] ${ev.titulo}\n`
+            })
+          }
+          texto += '\n'
+        }
+
+        if (gastos3m?.length === 0 && receitas3m?.length === 0) {
+          texto += `\n⚠️ _Sem dados históricos suficientes. Lance suas receitas e gastos para projeções mais precisas._`
+        } else {
+          texto += `\n_📈 Projeção baseada em ${gastos3m?.length || 0} gastos e ${receitas3m?.length || 0} receitas dos últimos 3 meses._`
+        }
+
+        setMensagens(prev => [...prev, { id: `proj-${Date.now()}`, role: 'ai' as const, texto }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // ── GERAR DASHBOARD (alias do relatório) ─────────────────
+      } else if (acao.tipo === 'gerar_dashboard') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const dados = await buscarDadosRelatorio(supabase, uid, 'mes_atual')
+        setRelatorioData(dados)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // ── GERAR CHECKLIST ──────────────────────────────────────
+      } else if (acao.tipo === 'gerar_checklist') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const agora2 = new Date()
+        const hoje2 = agora2.toISOString().split('T')[0]
+        const amanha2 = new Date(agora2)
+        amanha2.setDate(amanha2.getDate() + 1)
+        const amanha2Str = amanha2.toISOString().split('T')[0]
+        // Eventos de hoje e amanhã
+        const { data: eventosHoje } = await (supabase.from('agenda_eventos') as any)
+          .select('titulo, data_inicio, tipo')
+          .eq('user_id', uid)
+          .neq('status', 'cancelado')
+          .neq('status', 'concluido')
+          .gte('data_inicio', `${hoje2}T00:00:00`)
+          .lte('data_inicio', `${amanha2Str}T23:59:59`)
+          .order('data_inicio')
+        // Vencimentos próximos (7 dias)
+        const em7d = new Date(agora2.getTime() + 7 * 24 * 60 * 60 * 1000)
+        const { data: venc7d } = await (supabase.from('agenda_eventos') as any)
+          .select('titulo, data_inicio')
+          .eq('user_id', uid)
+          .eq('tipo', 'vencimento')
+          .neq('status', 'cancelado')
+          .neq('status', 'concluido')
+          .gte('data_inicio', agora2.toISOString())
+          .lte('data_inicio', em7d.toISOString())
+          .order('data_inicio')
+        const venc7dReais = (venc7d || []).filter((ev: any) => {
+          const t = (ev.titulo || '').toLowerCase()
+          return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
+        })
+        let chk = `✅ **CHECKLIST EXECUTIVO — ${agora2.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).toUpperCase()}**\n\n`
+        if (eventosHoje && eventosHoje.length > 0) {
+          chk += `📅 **Hoje e amanhã:**\n`
+          eventosHoje.forEach((ev: any) => {
+            const dt = new Date(ev.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+            chk += `  ☐ ${dt}h — ${ev.titulo}\n`
+          })
+          chk += '\n'
+        } else {
+          chk += `📅 **Hoje:** Nenhum compromisso agendado.\n\n`
+        }
+        if (venc7dReais.length > 0) {
+          chk += `⚠️ **Vencimentos nos próximos 7 dias:**\n`
+          venc7dReais.forEach((ev: any) => {
+            const dt = new Date(ev.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+            chk += `  ☐ [${dt}] ${ev.titulo}\n`
+          })
+        }
+        setMensagens(prev => [...prev, { id: `chk-${Date.now()}`, role: 'ai' as const, texto: chk }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
       // ── BACKUP CHAT ──────────────────────────────────────────
       } else if (acao.tipo === 'backup_chat') {
         const textoBackup = mensagensRef.current
