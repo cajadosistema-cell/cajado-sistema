@@ -972,6 +972,7 @@ Aqui está tudo o que você pode me pedir para fazer:
       )}
     </>
   )
+}
 
 // ── Exportação com ErrorBoundary ─────────────────────────────
 // Envolve o widget com ErrorBoundary para não quebrar a página
