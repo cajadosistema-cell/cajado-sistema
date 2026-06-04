@@ -352,6 +352,15 @@ export function TabAgenda({ userId }: { userId: string }) {
     return () => window.removeEventListener('elena:agenda-updated', handler)
   }, [userId, carregar])
 
+  // Recarrega quando o usuário volta para a página (aba em foco)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && userId) carregar()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [userId, carregar])
+
   // ── Concluir/Cancelar evento ────────────────────────────
   const handleStatus = async (id: string, status: StatusEvento) => {
     await (supabase.from('agenda_eventos') as any).update({ status }).eq('id', id)

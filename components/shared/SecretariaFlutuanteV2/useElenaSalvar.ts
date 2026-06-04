@@ -377,17 +377,21 @@ export function useElenaSalvar({
               ? tipoRaw
               : (TIPO_FALLBACK_PRE_MIGRATION[tipoRaw] || 'compromisso'))
         // ── Guard anti-duplicação ────────────────────────────────────────
-        // Verifica se já existe evento idêntico criado nos últimos 30s
-        const ha30s = new Date(Date.now() - 30000).toISOString()
+        // Compara título + data_inicio para evitar falso-positivo com mesmo nome em horários diferentes
+        const ha5s = new Date(Date.now() - 5000).toISOString()  // janela de 5s (só double-click)
         const tituloEvento = acao.dados.titulo || 'Evento via Elena'
+        const strDataParaDedup = String(acao.dados.data_inicio || '').substring(0, 16) // YYYY-MM-DDTHH:MM
         const { data: jaExiste } = await (supabase.from('agenda_eventos') as any)
-          .select('id')
+          .select('id, data_inicio')
           .eq('user_id', uid)
           .eq('titulo', tituloEvento)
-          .gte('created_at', ha30s)
-          .limit(1)
-        if (jaExiste && jaExiste.length > 0) {
-          // Evento duplicado — ignora silenciosamente
+          .gte('created_at', ha5s)
+          .limit(5)
+        // Só bloqueia se título E horário (até o minuto) forem idênticos
+        const isDuplicado = (jaExiste || []).some((ev: any) =>
+          String(ev.data_inicio || '').substring(0, 16) === strDataParaDedup
+        )
+        if (isDuplicado) {
           setAcaoStatus(msgId, acaoIdx, 'saved')
           return
         }
