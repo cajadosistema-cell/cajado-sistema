@@ -143,10 +143,14 @@ function SecretariaFlutuanteWidget() {
   })
 
   const voz = useElenaVoz({
-    onEnviar:         (texto) => handleEnviar(texto),
-    userId:           session.userId,
+    onEnviar:            (texto) => handleEnviar(texto),
+    onErro:              (msg) => session.setMensagens(prev => [...prev, {
+                           id: `voz-err-${Date.now()}`, role: 'ai',
+                           texto: `⚠️ ${msg}`,
+                         }]),
+    userId:              session.userId,
     salvarMicAutorizado: session.salvarMicAutorizado,
-    micPermitidoRef:  session.micPermitidoRef,
+    micPermitidoRef:     session.micPermitidoRef,
   })
 
   const alertas = useElenaAlertas(supabase, session.userId, session.setMensagens)

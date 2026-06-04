@@ -36,6 +36,7 @@ export class ElenaErrorBoundary extends React.Component<
         >
           <button
             onClick={() => this.setState({ hasError: false })}
+            title="Elena teve um problema. Clique para reiniciar."
             style={{
               width: 56,
               height: 56,
@@ -48,9 +49,7 @@ export class ElenaErrorBoundary extends React.Component<
               justifyContent: 'center',
               fontSize: 24,
               boxShadow: '0 4px 20px rgba(239,68,68,0.4)',
-              title: 'Elena teve um problema. Clique para reiniciar.',
             }}
-            title="Elena teve um problema. Clique para reiniciar."
           >
             🔄
           </button>

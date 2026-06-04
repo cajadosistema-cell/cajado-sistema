@@ -10,6 +10,7 @@ import { useState, useRef } from 'react'
 
 interface UseElenaVozProps {
   onEnviar: (texto: string) => void
+  onErro?: (msg: string) => void   // Callback para erros — evita alert() nativo
   userId: string
   salvarMicAutorizado: (uid: string) => Promise<void>
   micPermitidoRef: React.MutableRefObject<boolean>
@@ -28,6 +29,7 @@ interface UseElenaVozReturn {
 
 export function useElenaVoz({
   onEnviar,
+  onErro,
   userId,
   salvarMicAutorizado,
   micPermitidoRef,
@@ -100,11 +102,11 @@ export function useElenaVoz({
       if (e.error === 'not-allowed') {
         isListeningRef.current = false
         setIsListening(false)
-        alert('Microfone não acessível. Toque no cadeado 🔒 na barra de endereços e permita o microfone.')
+        onErro?.('🔒 Microfone bloqueado. Toque no cadeado na barra de endereços e permita o microfone.')
       } else if (e.error === 'audio-capture') {
         isListeningRef.current = false
         setIsListening(false)
-        alert('Nenhum microfone encontrado. Conecte um e tente novamente.')
+        onErro?.('🎙️ Nenhum microfone encontrado. Conecte um e tente novamente.')
       }
       // 'no-speech' e 'aborted' → silenciosos
     }
@@ -163,7 +165,10 @@ export function useElenaVoz({
   // ── Iniciar reconhecimento ────────────────────────────────────
   const iniciarReconhecimento = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) { alert('Use o Google Chrome para usar o microfone.'); return }
+    if (!SR) {
+      onErro?.('🌐 Use o Google Chrome ou Edge para usar o microfone.')
+      return
+    }
     if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
 
     transcriptRef.current = ''
@@ -178,7 +183,10 @@ export function useElenaVoz({
 
   const handlePressMic = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) { alert('Use Google Chrome ou Edge para usar o microfone.'); return }
+    if (!SR) {
+      onErro?.('🌐 Use o Google Chrome ou Edge para usar o microfone.')
+      return
+    }
     isListeningRef.current = true
     iniciarReconhecimento()
   }

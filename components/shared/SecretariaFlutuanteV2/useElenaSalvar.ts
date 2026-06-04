@@ -1223,7 +1223,16 @@ export function useElenaSalvar({
       }
 
     } catch (err: any) {
-      setAcaoStatus(msgId, acaoIdx, 'error', err?.message || 'Erro ao salvar')
+      const errMsg = err?.message || 'Erro ao salvar'
+      setAcaoStatus(msgId, acaoIdx, 'error', errMsg)
+
+      // ⚠️ Notifica o usuário no chat — action card pequeno pode passar despercebido
+      const erroCurto = errMsg.length > 120 ? errMsg.substring(0, 120) + '...' : errMsg
+      setMensagens(prev => [...prev, {
+        id: `err-${Date.now()}`,
+        role: 'ai' as const,
+        texto: `❌ **Ops! Não consegui salvar.** \n${erroCurto}\n\n_Se o problema persistir, verifique sua conexão e tente novamente._`,
+      }])
     }
   }, [
     supabase, userIdRef, mensagensRef, colaboradores, ultimoRegistroRef,
