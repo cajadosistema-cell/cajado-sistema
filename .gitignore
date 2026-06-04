@@ -9,3 +9,10 @@ build/
 
 # Backups de dados dos clientes — nunca comitar no git!
 backups/
+
+# Documentos pessoais — nunca comitar!
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
