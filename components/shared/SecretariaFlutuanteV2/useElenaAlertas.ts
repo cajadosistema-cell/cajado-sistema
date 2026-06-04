@@ -213,7 +213,7 @@ export function useElenaAlertas(supabase: SupabaseClient, userId: string, setMen
 
   useEffect(() => {
     if (!userId) return
-    gerarBriefingMatinal(userId)
+    // Briefing matinal é gerado pelo useElenaSession — aqui só verifica vencimentos e alertas
     const tVenc = setTimeout(() => verificarVencimentos(userId), 3000)
     const tAlert = setInterval(() => verificarAlertas(userId), 60_000)
 
@@ -221,7 +221,7 @@ export function useElenaAlertas(supabase: SupabaseClient, userId: string, setMen
       clearTimeout(tVenc)
       clearInterval(tAlert)
     }
-  }, [userId, verificarVencimentos, verificarAlertas, gerarBriefingMatinal])
+  }, [userId, verificarVencimentos, verificarAlertas])
 
   return {
     resumoFinanceiro, setResumoFinanceiro,

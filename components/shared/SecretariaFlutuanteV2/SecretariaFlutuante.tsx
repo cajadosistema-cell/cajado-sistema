@@ -891,7 +891,11 @@ Aqui está tudo o que você pode me pedir para fazer:
                   onClick={() => {
                     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
                     if (isIOS) {
-                      alert('O Modo Mãos-Livres (Voz Contínua) não é suportado no iPhone devido a restrições de privacidade da Apple (o iOS exige um clique físico para ativar o microfone a cada resposta). Por favor, use o botão do microfone comum para falar!')
+                      // Mostra mensagem no chat em vez de alert() que trava o iOS
+                      session.setMensagens(prev => [...prev, {
+                        id: `ios-${Date.now()}`, role: 'ai',
+                        texto: '📱 **Modo Mãos-Livres** não é suportado no iPhone (restrição da Apple). Use o botão de microfone comum para falar!',
+                      }])
                       return
                     }
                     const novo = !voz.modoVozContinuo

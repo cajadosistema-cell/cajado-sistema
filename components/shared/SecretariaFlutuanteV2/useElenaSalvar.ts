@@ -1169,10 +1169,17 @@ export function useElenaSalvar({
         }
 
         if (tipo === 'pj' || tipo === 'todos') {
-          const { data: lancPj } = await (supabase.from('lancamentos') as any)
-            .select('descricao, valor, tipo, data_competencia, categorias(nome)')
-            .order('data_competencia', { ascending: false })
-            .limit(limite)
+          // ⚠️ Filtra por contas do user_id para isolamento RLS
+          const { data: contasPjIds } = await (supabase.from('contas') as any)
+            .select('id').eq('user_id', uid).eq('categoria', 'pj')
+          const idsContas = (contasPjIds || []).map((c: any) => c.id)
+          const { data: lancPj } = idsContas.length > 0
+            ? await (supabase.from('lancamentos') as any)
+                .select('descricao, valor, tipo, data_competencia, categorias(nome)')
+                .in('conta_id', idsContas)
+                .order('data_competencia', { ascending: false })
+                .limit(limite)
+            : { data: [] }
           if (lancPj && lancPj.length > 0) {
             texto += '**🏢 Lançamentos Empresa (PJ):**\n'
             lancPj.forEach((l: any) => {
@@ -1251,11 +1258,70 @@ export function useElenaSalvar({
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
+      // ── BUSCAR LANCAMENTO (singular) → redireciona para buscar_lancamentos ──
+      } else if (acao.tipo === 'buscar_lancamento') {
+        // A IA pode gerar "buscar_lancamento" (singular) — redireciona para o handler plural
+        const acaoRedirecionada = { ...acao, tipo: 'buscar_lancamentos' as any, dados: { ...acao.dados, tipo: acao.dados.tipo || 'todos', limite: acao.dados.limite || 10 } }
+        await salvarAcao(msgId, acaoIdx, acaoRedirecionada)
+
+      // ── EDITAR LANÇAMENTO ─────────────────────────────────────
+      } else if (acao.tipo === 'editar_lancamento') {
+        if (!ultimoRegistroRef.current) throw new Error('Nenhum registro recente para editar.')
+        const { tabela, id } = ultimoRegistroRef.current
+        const updates: Record<string, any> = {}
+        if (acao.dados.novo_valor) {
+          updates.valor = Number(acao.dados.novo_valor)
+        }
+        if (acao.dados.nova_descricao) {
+          updates.descricao = acao.dados.nova_descricao
+        }
+        if (Object.keys(updates).length === 0) throw new Error('Nenhuma alteração informada.')
+        const { error } = await (supabase.from(tabela) as any).update(updates).eq('id', id)
+        if (error) throw new Error(error.message)
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        setMensagens(prev => [...prev, {
+          id: `edit-${Date.now()}`, role: 'ai' as const,
+          texto: `✏️ Registro atualizado com sucesso!${updates.valor ? ` Novo valor: R$ ${Number(updates.valor).toFixed(2)}` : ''}${updates.descricao ? ` Nova descrição: ${updates.descricao}` : ''}`,
+        }])
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      // ── IMPORTAR EXTRATO (batch de lançamentos) ────────────────
+      } else if (acao.tipo === 'importar_extrato') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const itens = Array.isArray(acao.dados.itens) ? acao.dados.itens : []
+        if (itens.length === 0) throw new Error('Nenhum item encontrado no extrato.')
+        let sucesso = 0
+        for (const item of itens) {
+          try {
+            const isReceita = ['receita', 'credito', 'crédito', 'entrada'].includes(String(item.tipo || '').toLowerCase())
+            const dataItem = validarData(item.data)
+            const valor = Math.abs(Number(item.valor) || 0)
+            if (valor === 0) continue
+            if (isReceita) {
+              await (supabase.from('receitas_pessoais') as any).insert({
+                user_id: uid, descricao: item.descricao || 'Extrato', valor,
+                categoria: 'outros', data: dataItem, notas: 'Importado via extrato — Elena',
+              })
+            } else {
+              await (supabase.from('gastos_pessoais') as any).insert({
+                user_id: uid, descricao: item.descricao || 'Extrato', valor,
+                categoria: item.categoria || 'outros', forma_pagamento: 'transferencia',
+                data: dataItem, notas: 'Importado via extrato — Elena',
+              })
+            }
+            sucesso++
+          } catch { /* pula item com erro */ }
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        setMensagens(prev => [...prev, {
+          id: `extrato-${Date.now()}`, role: 'ai' as const,
+          texto: `🏦 **Extrato importado!** ${sucesso} de ${itens.length} lançamento(s) registrado(s) com sucesso.`,
+        }])
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
       // ── AÇÃO DESCONHECIDA → ignora silenciosamente ───────────
       } else {
-        setAcaoStatus(msgId, acaoIdx, 'saved')
-
-      }
+        setAcaoStatus(msgId, acaoIdx, 'saved')      }
 
     } catch (err: any) {
       const errMsg = err?.message || 'Erro ao salvar'
@@ -1280,7 +1346,12 @@ export function useElenaSalvar({
   const executarAcoesAuto = useCallback(async (msgId: string, acoes: AcaoIA[], uid: string) => {
     for (let i = 0; i < acoes.length; i++) {
       if (acoes[i].status === 'pending') {
-        await salvarAcao(msgId, i, acoes[i])
+        try {
+          await salvarAcao(msgId, i, acoes[i])
+        } catch (err: any) {
+          // Erro em ação #i NÃO impede ação #(i+1) de rodar
+          console.error(`[Elena] Erro na ação ${i}:`, err?.message)
+        }
       }
     }
   }, [salvarAcao])
