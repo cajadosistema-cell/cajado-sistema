@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 
 const NOTIF_ASKED_KEY = 'cajado-notif-asked'
 
@@ -225,6 +226,27 @@ export function AlarmManager({ userId }: { userId: string }) {
   const firedRef = useRef<Set<string>>(new Set())
   const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
 
+  // ── Registra SW + push subscription (iOS PWA + Android) ─────────────
+  usePushNotifications(userId || null)
+
+  // ── Dispara Edge Function server-side (para alertas com app fechado) ─
+  // Chama a cada 30s enquanto app está aberto; o servidor também pode chamar via cron
+  const chamarEdgeFunction = useCallback(async () => {
+    if (!userId) return
+    try {
+      const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (!supaUrl) return
+      await fetch(`${supaUrl}/functions/v1/send-push`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ userId }),
+      })
+    } catch { /* silencioso */ }
+  }, [userId])
+
   // Carrega eventos disparados anteriormente do localStorage
   useEffect(() => {
     try {
@@ -349,16 +371,17 @@ export function AlarmManager({ userId }: { userId: string }) {
     }
   }, [userId, supabase])
 
-  // Roda imediatamente e depois a cada 30 segundos
-  // (reduzido de 60s para minimizar janela de perda de alarmes)
-  // IMPORTANTE: userId pode chegar vazio na primeira renderização (assíncrono).
+  // Polling local (app aberto) + Edge Function server-side (iOS background / app fechado)
   useEffect(() => {
     if (!userId) return
-    // Dispara imediatamente para não esperar
     verificarAlarmes()
-    const interval = setInterval(verificarAlarmes, 30_000)  // 30s
+    chamarEdgeFunction() // envia push server-side imediatamente
+    const interval = setInterval(() => {
+      verificarAlarmes()
+      chamarEdgeFunction()
+    }, 30_000)
     return () => clearInterval(interval)
-  }, [userId, verificarAlarmes])
+  }, [userId, verificarAlarmes, chamarEdgeFunction])
 
   // Solicita permissão de notificação se ainda não concedida
   const pedirPermissao = async () => {
