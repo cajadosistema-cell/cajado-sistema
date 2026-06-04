@@ -2,6 +2,9 @@
 // ── useElenaVoz.ts ────────────────────────────────────────────
 // Responsável por: microfone, SpeechRecognition, modo mãos-livres.
 // Completamente isolado — não sabe nada de salvamento ou IA.
+//
+// FIX v2: pausa curta do browser NÃO envia mais o texto parcial.
+// O texto só é enviado quando o usuário clica novamente no mic (toggleMic/handleReleaseMic).
 
 import { useState, useRef } from 'react'
 
@@ -34,38 +37,42 @@ export function useElenaVoz({
   const [interimTranscript, setInterimTranscript] = useState('')
 
   // Refs síncronos — evitam stale closure nos handlers da SpeechRecognition
-  const isListeningRef  = useRef(false)
-  const modoVozRef      = useRef(false)
-  const recognitionRef  = useRef<any>(null)
-  const transcriptRef   = useRef('')
-  const silenceTimerRef = useRef<any>(null)
+  const isListeningRef       = useRef(false)
+  const modoVozRef           = useRef(false)
+  const recognitionRef       = useRef<any>(null)
+  const transcriptRef        = useRef('')
+  const silenceTimerRef      = useRef<any>(null)
+  // Flag: handleReleaseMic já enviou o texto — onend não deve reenviar
+  const enviadoPorReleaseRef = useRef(false)
 
   const setModoVozContinuo = (v: boolean) => {
     modoVozRef.current = v
     setModoVozContinuoState(v)
   }
 
-  // ── Timer de silêncio (8s sem fala → para automaticamente) ───
+  // ── Timer de silêncio (10s → para automaticamente apenas no modo mãos-livres) ─
   const resetSilenceTimer = () => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
     silenceTimerRef.current = setTimeout(() => {
       if (!isListeningRef.current) return
+      // Auto-para SOMENTE no modo mãos-livres (contínuo)
+      if (!modoVozRef.current) return
       isListeningRef.current = false
       try { recognitionRef.current?.stop() } catch {}
       recognitionRef.current = null
       setIsListening(false)
       setInterimTranscript('')
-    }, 8000)
+    }, 10000)
   }
 
   // ── Cria instância da SpeechRecognition ──────────────────────
-  const criarInstancia = () => {
+  const criarInstancia = (): any => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) return null
 
     const r = new SR()
     r.lang = 'pt-BR'
-    r.continuous = false      // Anti-duplicação: cada sentença é independente
+    r.continuous = false      // O browser finaliza por sentença — reiniciamos manualmente para acumular
     r.interimResults = true
     r.maxAlternatives = 1
 
@@ -110,41 +117,44 @@ export function useElenaVoz({
     }
 
     r.onend = () => {
+      // ─── CASO 1: handleReleaseMic já enviou → apenas limpa ──────────────
+      if (enviadoPorReleaseRef.current) {
+        enviadoPorReleaseRef.current = false
+        setIsListening(false)
+        setInterimTranscript('')
+        recognitionRef.current = null
+        return
+      }
+
+      // ─── CASO 2: parou via silence-timer ou clique manual ───────────────
       if (!isListeningRef.current) {
-        // Usuário parou manualmente → envia o que tiver
         const texto = transcriptRef.current.trim()
         transcriptRef.current = ''
         setInterimTranscript('')
         setIsListening(false)
+        recognitionRef.current = null
         if (texto) setTimeout(() => onEnviar(texto), 100)
         return
       }
 
-      // Ainda no modo escuta (mãos-livres)
-      const texto = transcriptRef.current.trim()
-      if (texto) {
-        // Tem texto acumulado → auto-envia e continua escutando
-        transcriptRef.current = ''
-        setInterimTranscript('🎤 Enviado! Pode falar novamente...')
-        onEnviar(texto)
-        setTimeout(() => {
-          if (!isListeningRef.current) return
+      // ─── CASO 3: pausa curta do browser DURANTE a fala — NÃO ENVIA! ────
+      // O usuário ainda está gravando. Reinicia silenciosamente acumulando o texto.
+      setTimeout(() => {
+        if (!isListeningRef.current) {
+          // Usuário parou enquanto reiniciávamos → envia o acumulado
+          const texto = transcriptRef.current.trim()
+          transcriptRef.current = ''
           setInterimTranscript('')
-          const nova = criarInstancia()
-          if (!nova) return
-          recognitionRef.current = nova
-          try { nova.start() } catch {}
-        }, 600)
-      } else {
-        // Sem texto (pausa antes de falar) → reinicia imediatamente
-        setTimeout(() => {
-          if (!isListeningRef.current) return
-          const nova = criarInstancia()
-          if (!nova) return
-          recognitionRef.current = nova
-          try { nova.start() } catch {}
-        }, 100)
-      }
+          setIsListening(false)
+          recognitionRef.current = null
+          if (texto) onEnviar(texto)
+          return
+        }
+        const nova = criarInstancia()
+        if (!nova) return
+        recognitionRef.current = nova
+        try { nova.start() } catch {}
+      }, 150)
     }
 
     return r
@@ -157,6 +167,7 @@ export function useElenaVoz({
     if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
 
     transcriptRef.current = ''
+    enviadoPorReleaseRef.current = false
     setInterimTranscript('')
 
     const instancia = criarInstancia()
@@ -175,16 +186,26 @@ export function useElenaVoz({
   const handleReleaseMic = () => {
     isListeningRef.current = false
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+
+    // Captura o texto ANTES de chamar stop() — evita race condition com onend
     const textCapturado = transcriptRef.current.trim()
     transcriptRef.current = ''
     setInterimTranscript('')
+
     if (recognitionRef.current) {
+      // Sinaliza que o release já vai enviar → onend não duplica
+      if (textCapturado) enviadoPorReleaseRef.current = true
       try { recognitionRef.current.stop() } catch {}
     }
+
     if (!textCapturado) {
       setIsListening(false)
       recognitionRef.current = null
+      return
     }
+
+    // Envia diretamente (não espera o onend)
+    setTimeout(() => onEnviar(textCapturado), 100)
   }
 
   const toggleMic = () => {
