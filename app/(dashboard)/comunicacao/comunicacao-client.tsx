@@ -221,7 +221,8 @@ export default function ComunicacaoClient() {
     setTexto('')
     if (textareaRef.current) { textareaRef.current.style.height = 'auto' }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.from('chat_interno') as any).insert(msg)
+    const { error } = await (supabase.from('chat_interno') as any).insert(msg)
+    if (error) { console.error('Erro ao enviar mensagem:', error.message); return }
     sendPush(activeChat, textoMsg)
   }
 
@@ -244,13 +245,13 @@ export default function ComunicacaoClient() {
         reader.onloadend = async () => {
           if (currentUser) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabase.from('chat_interno') as any).insert({
+            const { error } = await (supabase.from('chat_interno') as any).insert({
               remetente_id: currentUser.id,
               destinatario_id: activeChat,
               texto: null,
               audio_base64: reader.result as string,
             })
-            sendPush(activeChat, '🎤 Mensagem de voz')
+            if (!error) sendPush(activeChat, '🎤 Mensagem de voz')
           }
         }
         stream.getTracks().forEach(t => t.stop())

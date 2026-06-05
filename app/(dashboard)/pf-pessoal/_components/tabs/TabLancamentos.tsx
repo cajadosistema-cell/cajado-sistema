@@ -48,13 +48,15 @@ export function TabLancamentos({ gastos, receitas, contas, onUpdate, onNovoGasto
 
   const excluirGasto = async (id: string) => {
     if (!confirm('Deseja realmente excluir este gasto?')) return
-    await (supabase.from('gastos_pessoais') as any).delete().eq('id', id)
+    const { error } = await (supabase.from('gastos_pessoais') as any).delete().eq('id', id)
+    if (error) { alert('Erro ao excluir gasto: ' + error.message); return }
     onUpdate()
   }
 
   const excluirReceita = async (id: string) => {
     if (!confirm('Deseja realmente excluir esta receita?')) return
-    await (supabase.from('receitas_pessoais') as any).delete().eq('id', id)
+    const { error } = await (supabase.from('receitas_pessoais') as any).delete().eq('id', id)
+    if (error) { alert('Erro ao excluir receita: ' + error.message); return }
     onUpdate()
   }
 

@@ -37,7 +37,8 @@ export function TabTarefas({ tarefas, colaboradores, onUpdate, onNova }: Props) 
   const supabase = createClient()
 
   const moverTarefa = async (id: string, novoStatus: Tarefa['status']) => {
-    await (supabase.from('tarefas') as any).update({ status: novoStatus }).eq('id', id)
+    const { error } = await (supabase.from('tarefas') as any).update({ status: novoStatus }).eq('id', id)
+    if (error) { alert('Erro ao mover tarefa: ' + error.message); return }
     onUpdate()
   }
 

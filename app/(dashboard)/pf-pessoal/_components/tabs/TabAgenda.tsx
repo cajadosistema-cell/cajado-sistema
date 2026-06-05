@@ -363,13 +363,15 @@ export function TabAgenda({ userId }: { userId: string }) {
 
   // ── Concluir/Cancelar evento ────────────────────────────
   const handleStatus = async (id: string, status: StatusEvento) => {
-    await (supabase.from('agenda_eventos') as any).update({ status }).eq('id', id)
+    const { error } = await (supabase.from('agenda_eventos') as any).update({ status }).eq('id', id)
+    if (error) { alert('Erro ao atualizar evento: ' + error.message); return }
     carregar()
     success(status === 'concluido' ? '✅ Marcado como concluído!' : 'Evento cancelado.')
   }
 
   const handleDelete = async (id: string, titulo: string) => {
-    await (supabase.from('agenda_eventos') as any).delete().eq('id', id)
+    const { error } = await (supabase.from('agenda_eventos') as any).delete().eq('id', id)
+    if (error) { alert('Erro ao excluir evento: ' + error.message); return }
     carregar()
     success(`"${titulo}" excluído.`)
   }

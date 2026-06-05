@@ -27,7 +27,8 @@ export function TabOcorrencias({ ocorrencias, colaboradores, onUpdate, onNova }:
   const [filtroColaborador, setFiltroColaborador] = useState<string>('todos')
 
   const resolver = async (id: string) => {
-    await (supabase.from('ocorrencias') as any).update({ resolvida: true }).eq('id', id)
+    const { error } = await (supabase.from('ocorrencias') as any).update({ resolvida: true }).eq('id', id)
+    if (error) { alert('Erro ao resolver ocorrência: ' + error.message); return }
     onUpdate()
   }
 

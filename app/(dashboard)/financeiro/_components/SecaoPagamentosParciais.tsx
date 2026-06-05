@@ -69,13 +69,15 @@ function ModalPagamentoParcial({
     if (!valor || valor <= 0) return
     setLoading(true)
 
-    await (supabase.from('pagamentos_parciais') as any).insert({
+    const { error } = await (supabase.from('pagamentos_parciais') as any).insert({
       lancamento_id: lancamento.id,
       valor_pago: valor,
       data_pagamento: form.data_pagamento,
       forma_pagamento: form.forma_pagamento,
       observacoes: form.observacoes || null,
     })
+
+    if (error) { setLoading(false); alert('Erro ao registrar pagamento: ' + error.message); return }
 
     // Se quitado totalmente, marcar lançamento como validado
     if (valor >= pendente) {

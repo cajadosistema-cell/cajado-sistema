@@ -55,7 +55,8 @@ export function TabOportunidades() {
   }
 
   const moverStatus = async (id: string, novoStatus: string) => {
-    await (supabase.from('oportunidades_expansao') as any).update({ status: novoStatus }).eq('id', id)
+    const { error } = await (supabase.from('oportunidades_expansao') as any).update({ status: novoStatus }).eq('id', id)
+    if (error) { console.error('Erro ao mover oportunidade:', error.message); return }
     refetch()
   }
 

@@ -134,8 +134,10 @@ function ModalLimiteMensal({ conta, onClose, onSave }: { conta: any; onClose: ()
   const [loading, setLoading] = useState(false)
   const handleSave = async () => {
     setLoading(true)
-    await (supabase.from('contas') as any).update({ limite_gasto_mensal: parseFloat(limite) || null }).eq('id', conta.id)
-    setLoading(false); onSave(); onClose()
+    const { error } = await (supabase.from('contas') as any).update({ limite_gasto_mensal: parseFloat(limite) || null }).eq('id', conta.id)
+    setLoading(false)
+    if (error) { alert('Erro ao definir limite: ' + error.message); return }
+    onSave(); onClose()
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -168,13 +170,15 @@ function ModalFaturaPrevista({ conta, mesSel, faturas, onClose, onSave }: { cont
     setLoading(true)
     const val = parseFloat(valor.replace(',', '.'))
     if (isNaN(val)) {
-      await (supabase.from('faturas_cartoes') as any).delete().match({ conta_id: conta.id, mes_referencia: mesSel })
+      const { error } = await (supabase.from('faturas_cartoes') as any).delete().match({ conta_id: conta.id, mes_referencia: mesSel })
+      if (error) { setLoading(false); alert('Erro ao remover fatura: ' + error.message); return }
     } else {
-      await (supabase.from('faturas_cartoes') as any).upsert({
+      const { error } = await (supabase.from('faturas_cartoes') as any).upsert({
         conta_id: conta.id,
         mes_referencia: mesSel,
         valor_fechado: val
       }, { onConflict: 'conta_id,mes_referencia' })
+      if (error) { setLoading(false); alert('Erro ao salvar fatura: ' + error.message); return }
     }
     setLoading(false); onSave(); onClose()
   }

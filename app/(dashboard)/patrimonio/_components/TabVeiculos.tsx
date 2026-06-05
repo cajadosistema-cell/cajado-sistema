@@ -400,16 +400,19 @@ export function TabVeiculos() {
       status: form.status,
     }
     if (editId) {
-      await (supabase.from('veiculos') as any).update(payload).eq('id', editId)
+      const { error } = await (supabase.from('veiculos') as any).update(payload).eq('id', editId)
+      if (error) { alert('Erro ao atualizar veículo: ' + error.message); return }
     } else {
-      await (supabase.from('veiculos') as any).insert(payload)
+      const { error } = await (supabase.from('veiculos') as any).insert(payload)
+      if (error) { alert('Erro ao cadastrar veículo: ' + error.message); return }
     }
     setShowForm(false); setEditId(null); refetch(); setForm(FORM_INICIAL)
   }
 
   const handleExcluir = async (id: string, titulo: string) => {
     if (!confirm(`Excluir o veículo "${titulo}"?`)) return
-    await (supabase.from('veiculos') as any).delete().eq('id', id)
+    const { error } = await (supabase.from('veiculos') as any).delete().eq('id', id)
+    if (error) { alert('Erro ao excluir veículo: ' + error.message); return }
     refetch()
   }
 
@@ -434,7 +437,8 @@ export function TabVeiculos() {
   }
 
   const mudarStatus = async (id: string, status: Veiculo['status']) => {
-    await (supabase.from('veiculos') as any).update({ status }).eq('id', id)
+    const { error } = await (supabase.from('veiculos') as any).update({ status }).eq('id', id)
+    if (error) { alert('Erro ao mudar status: ' + error.message); return }
     refetch()
   }
 

@@ -71,12 +71,14 @@ export function TabOKRs() {
   }
 
   const updateKRProgress = async (id: string, newVal: number) => {
-    await (supabase.from('okr_resultados') as any).update({ atual_valor: newVal }).eq('id', id)
+    const { error } = await (supabase.from('okr_resultados') as any).update({ atual_valor: newVal }).eq('id', id)
+    if (error) { console.error('Erro ao atualizar KR:', error.message); return }
     refetch()
   }
 
   const updateOKRStatus = async (id: string, newVal: string) => {
-    await (supabase.from('okrs') as any).update({ status: newVal }).eq('id', id)
+    const { error } = await (supabase.from('okrs') as any).update({ status: newVal }).eq('id', id)
+    if (error) { console.error('Erro ao atualizar OKR:', error.message); return }
     refetch()
   }
 

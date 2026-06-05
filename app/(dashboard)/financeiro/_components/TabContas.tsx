@@ -47,7 +47,7 @@ function ModalLancamentoConta({ contas, categorias, onClose, onSave }: {
           valor: valor / parcelas, tipo: form.tipo, regime: form.regime,
           status: 'pendente', data_competencia: d.toISOString().split('T')[0],
           categoria_id: form.categoria_id || null, parcela_atual: i, total_parcelas: parcelas,
-        })
+        }).then(({ error }: any) => { if (error) console.error('Erro ao inserir parcela:', error.message) })
       }
     } else {
       await insert({
@@ -186,17 +186,20 @@ function ModalEditarConta({ conta, onClose, onSave }: { conta: Conta; onClose: (
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    await (supabase.from('contas') as any).update({
+    const { error } = await (supabase.from('contas') as any).update({
       nome: form.nome, tipo: form.tipo,
       saldo_atual: Number(form.saldo_atual) || 0,
       cor: form.cor,
     }).eq('id', conta.id)
-    setLoading(false); onSave(); onClose()
+    setLoading(false)
+    if (error) { alert('Erro ao atualizar conta: ' + error.message); return }
+    onSave(); onClose()
   }
 
   const arquivar = async () => {
     if (!confirm(`Arquivar a conta "${conta.nome}"?\n\nOs lançamentos vinculados NÃO serão apagados. A conta ficará inativa.`)) return
-    await (supabase.from('contas') as any).update({ ativo: false }).eq('id', conta.id)
+    const { error } = await (supabase.from('contas') as any).update({ ativo: false }).eq('id', conta.id)
+    if (error) { alert('Erro ao arquivar conta: ' + error.message); return }
     onSave(); onClose()
   }
 

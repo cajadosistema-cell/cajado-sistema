@@ -33,19 +33,22 @@ function ModalEditarCartaoPJ({ conta, onClose, onSave }: { conta: any; onClose: 
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true)
-    await (supabase.from('contas') as any).update({
+    const { error } = await (supabase.from('contas') as any).update({
       nome: form.nome_cartao, nome_cartao: form.nome_cartao,
       bandeira: form.bandeira, cor: band.cor,
       limite:         form.limite         ? Number(form.limite)         : null,
       dia_fechamento: form.dia_fechamento ? Number(form.dia_fechamento) : null,
       dia_vencimento: form.dia_vencimento ? Number(form.dia_vencimento) : null,
     }).eq('id', conta.id)
-    setLoading(false); onSave(); onClose()
+    setLoading(false)
+    if (error) { alert('Erro ao atualizar cartão: ' + error.message); return }
+    onSave(); onClose()
   }
 
   const arquivar = async () => {
     if (!confirm(`Arquivar o cartão "${conta.nome_cartao || conta.nome}"?\n\nOs lançamentos vinculados NÃO serão apagados.`)) return
-    await (supabase.from('contas') as any).update({ ativo: false }).eq('id', conta.id)
+    const { error } = await (supabase.from('contas') as any).update({ ativo: false }).eq('id', conta.id)
+    if (error) { alert('Erro ao arquivar cartão: ' + error.message); return }
     onSave(); onClose()
   }
 

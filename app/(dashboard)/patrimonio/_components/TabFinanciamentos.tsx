@@ -48,9 +48,11 @@ export function TabFinanciamentos() {
     }
 
     if (editId) {
-      await (supabase.from('financiamentos') as any).update(payload).eq('id', editId)
+      const { error } = await (supabase.from('financiamentos') as any).update(payload).eq('id', editId)
+      if (error) { alert('Erro ao atualizar financiamento: ' + error.message); return }
     } else {
-      await (supabase.from('financiamentos') as any).insert(payload)
+      const { error } = await (supabase.from('financiamentos') as any).insert(payload)
+      if (error) { alert('Erro ao cadastrar financiamento: ' + error.message); return }
     }
 
     setShowForm(false)
@@ -61,7 +63,8 @@ export function TabFinanciamentos() {
 
   const handleExcluir = async (id: string, banco: string) => {
     if (!confirm(`Tem certeza que deseja excluir o financiamento do banco "${banco}"?`)) return
-    await (supabase.from('financiamentos') as any).delete().eq('id', id)
+    const { error } = await (supabase.from('financiamentos') as any).delete().eq('id', id)
+    if (error) { alert('Erro ao excluir financiamento: ' + error.message); return }
     refetch()
   }
 
@@ -80,7 +83,8 @@ export function TabFinanciamentos() {
   }
 
   const addParcelaPaga = async (f: Financiamento) => {
-    await (supabase.from('financiamentos') as any).update({ parcelas_pagas: f.parcelas_pagas + 1 }).eq('id', f.id)
+    const { error } = await (supabase.from('financiamentos') as any).update({ parcelas_pagas: f.parcelas_pagas + 1 }).eq('id', f.id)
+    if (error) { alert('Erro ao registrar parcela: ' + error.message); return }
     refetch()
   }
 

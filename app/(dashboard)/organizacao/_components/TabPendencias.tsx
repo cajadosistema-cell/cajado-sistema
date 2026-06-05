@@ -95,7 +95,8 @@ export function TabPendencias({ projetos }: Props) {
   }
 
   const alterarStatus = async (id: string, status: Pendencia['status']) => {
-    await (supabase.from('pendencias_projeto') as any).update({ status }).eq('id', id)
+    const { error } = await (supabase.from('pendencias_projeto') as any).update({ status }).eq('id', id)
+    if (error) { alert('Erro ao alterar status: ' + error.message); return }
     refetch()
   }
 

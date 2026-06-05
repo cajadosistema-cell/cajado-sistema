@@ -693,7 +693,8 @@ export function TabImoveis() {
     }
     
     if (editId) {
-      await (supabase.from('imoveis') as any).update(payload).eq('id', editId)
+      const { error } = await (supabase.from('imoveis') as any).update(payload).eq('id', editId)
+      if (error) { alert('Erro ao atualizar imóvel: ' + error.message); return }
     } else {
       // empresa_id = UUID da empresa (exigido pela RLS policy)
       const { data: userData } = await supabase.auth.getUser()
@@ -702,7 +703,8 @@ export function TabImoveis() {
           .from('perfis').select('empresa_id').eq('id', userData.user.id).single()
         if (perf?.empresa_id) payload.empresa_id = perf.empresa_id
       }
-      await (supabase.from('imoveis') as any).insert(payload)
+      const { error } = await (supabase.from('imoveis') as any).insert(payload)
+      if (error) { alert('Erro ao cadastrar imóvel: ' + error.message); return }
     }
     setShowForm(false); setEditId(null); refetch(); setForm(FORM_INICIAL)
   }
@@ -744,7 +746,8 @@ export function TabImoveis() {
   }
 
   const mudarStatus = async (id: string, status: Imovel['status']) => {
-    await (supabase.from('imoveis') as any).update({ status }).eq('id', id)
+    const { error } = await (supabase.from('imoveis') as any).update({ status }).eq('id', id)
+    if (error) { alert('Erro ao mudar status: ' + error.message); return }
     refetch()
   }
 
