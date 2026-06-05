@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS public.parceiro_servicos (
     data_criacao TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Garantir que a coluna empresa_id existe caso a tabela já tivesse sido criada antes
+ALTER TABLE public.parceiro_servicos ADD COLUMN IF NOT EXISTS empresa_id UUID REFERENCES public.empresas(id) ON DELETE CASCADE;
+
 -- Habilitar RLS
 ALTER TABLE public.parceiro_servicos ENABLE ROW LEVEL SECURITY;
 
