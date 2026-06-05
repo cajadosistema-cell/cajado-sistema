@@ -623,9 +623,16 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
   const supabase = createClient()
 
   const fetchFaturas = useCallback(async () => {
-    const { data } = await (supabase.from('faturas_cartoes') as any).select('*')
+    const cartaoIds = contas
+      .filter(c => c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito')
+      .map(c => c.id)
+    if (cartaoIds.length === 0) return
+    // Filtra apenas pelas contas já isoladas por empresa (defense in depth)
+    const { data } = await (supabase.from('faturas_cartoes') as any)
+      .select('*')
+      .in('conta_id', cartaoIds)
     if (data) setFaturas(data)
-  }, [supabase])
+  }, [supabase, contas])
 
   useEffect(() => { fetchFaturas() }, [fetchFaturas])
 
