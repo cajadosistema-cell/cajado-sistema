@@ -36,6 +36,7 @@ export function TabOportunidades() {
   const { data: oportunidades, refetch } = useSupabaseQuery<Oportunidade>('oportunidades_expansao', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    limit: 100,
     enabled: !!empresaId,
   } as any)
 

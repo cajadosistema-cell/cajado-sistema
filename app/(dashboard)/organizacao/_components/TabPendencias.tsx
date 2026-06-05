@@ -64,6 +64,7 @@ export function TabPendencias({ projetos }: Props) {
   const { data: pendencias, refetch } = useSupabaseQuery<Pendencia>('pendencias_projeto', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    limit: 200,
     enabled: !!empresaId,
   })
 

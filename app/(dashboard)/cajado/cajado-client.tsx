@@ -577,6 +577,7 @@ function TabParceiros() {
   const { data: parceiros, refetch } = useSupabaseQuery<Parceiro>('parceiros', {
     filters: { empresa_id: empresaIdParceiros || undefined },
     orderBy: { column: 'total_comissao', ascending: false },
+    limit: 100,
     enabled: !!empresaIdParceiros,
   })
   const { insert, loading } = useSupabaseMutation('parceiros')
@@ -848,6 +849,7 @@ export default function CajadoClient() {
     select: '*, parceiros(nome), perfis(nome)',
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'updated_at', ascending: false },
+    limit: 200,
     enabled: !!empresaId,
   })
   const { data: perfis } = useSupabaseQuery<any>('perfis', { select: 'id, nome', filters: { empresa_id: empresaId || undefined }, enabled: !!empresaId })

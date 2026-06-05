@@ -38,6 +38,7 @@ export function TabOKRs() {
     select: '*, perfis(nome), okr_resultados(*)',
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    limit: 50,
     enabled: !!empresaId,
   } as any)
 

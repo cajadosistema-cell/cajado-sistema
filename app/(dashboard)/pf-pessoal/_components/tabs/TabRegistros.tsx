@@ -232,6 +232,7 @@ export function TabRegistros({ userId }: { userId: string }) {
   useEffect(() => { carregar() }, [carregar])
 
   const excluir = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este registro?')) return
     await (supabase.from('elena_registros') as any).delete().eq('id', id)
     setRegistros(prev => prev.filter(r => r.id !== id))
   }

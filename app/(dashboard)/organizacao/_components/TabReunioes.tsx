@@ -51,6 +51,7 @@ export function TabReunioes({ projetos }: Props) {
   const { data: reunioes, refetch } = useSupabaseQuery<Reuniao>('reunioes', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'data_reuniao', ascending: false },
+    limit: 100,
     enabled: !!empresaId,
   })
 
