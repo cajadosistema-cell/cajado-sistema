@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState, StatusBadge } from '@/components/shared/ui'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +28,7 @@ type OKRResultado = {
 
 export function TabOKRs() {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ ciclo: 'Q1', objetivo: '', status: 'no_prazo' as OKR['status'] })
   const [formKR, setFormKR] = useState({ okr_id: '', resultado_chave: '', meta_valor: '', atual_valor: '0', unidade: '%' })
@@ -34,7 +36,9 @@ export function TabOKRs() {
   // Nested eager loading of results!
   const { data: okrs, refetch } = useSupabaseQuery<OKR>('okrs', {
     select: '*, perfis(nome), okr_resultados(*)',
-    orderBy: { column: 'created_at', ascending: false }
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   } as any)
 
   const { insert: insertOkr } = useSupabaseMutation('okrs')

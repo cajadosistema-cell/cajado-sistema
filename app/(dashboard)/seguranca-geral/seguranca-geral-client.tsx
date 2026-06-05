@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatRelative, cn } from '@/lib/utils'
 import { PageHeader, EmptyState } from '@/components/shared/ui'
 
@@ -59,17 +60,22 @@ export default function SegurancaGeralClient() {
   const [tab, setTab] = useState<'logs' | 'auditoria' | 'status'>('status')
   const [filtroAcao, setFiltroAcao] = useState('todos')
   const [filtroSucesso, setFiltroSucesso] = useState('todos')
+  const { empresaId } = useEmpresaId()
 
   const { data: logs } = useSupabaseQuery<LogAcesso>('log_acesso', {
     select: '*, perfis(nome, email)',
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
     limit: 100,
+    enabled: !!empresaId,
   })
 
   const { data: auditoria } = useSupabaseQuery<AuditLog>('audit_log', {
     select: '*, perfis(nome)',
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
     limit: 100,
+    enabled: !!empresaId,
   })
 
   // Métricas

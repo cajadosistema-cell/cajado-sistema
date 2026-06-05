@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
@@ -652,6 +653,7 @@ Retorne APENAS JSON válido sem markdown:
 // ── Componente principal ──────────────────────────────────
 export function TabImoveis() {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [showImportIA, setShowImportIA] = useState(false)
@@ -660,7 +662,9 @@ export function TabImoveis() {
   const [form, setForm] = useState(FORM_INICIAL)
 
   const { data: imoveis, refetch } = useSupabaseQuery<Imovel>('imoveis', {
-    orderBy: { column: 'criado_em', ascending: false }
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'criado_em', ascending: false },
+    enabled: !!empresaId,
   } as any)
 
   const handleSalvar = async (e: React.FormEvent) => {

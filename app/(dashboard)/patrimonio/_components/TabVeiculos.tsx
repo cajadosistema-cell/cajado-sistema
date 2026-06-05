@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
@@ -362,6 +363,7 @@ function ModalAnalisarQuitacao({ item, onClose }: {
 // ── Componente principal ────────────────────────────────────────
 export function TabVeiculos() {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [showImportIA, setShowImportIA] = useState(false)
@@ -369,7 +371,9 @@ export function TabVeiculos() {
   const [form, setForm] = useState(FORM_INICIAL)
 
   const { data: veiculos, refetch } = useSupabaseQuery<Veiculo>('veiculos', {
-    orderBy: { column: 'criado_em', ascending: false }
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'criado_em', ascending: false },
+    enabled: !!empresaId,
   } as any)
 
   const handleSalvar = async (e: React.FormEvent) => {

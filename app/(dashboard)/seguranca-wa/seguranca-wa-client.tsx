@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatRelative, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 
@@ -239,12 +240,17 @@ export default function SegurancaWAClient() {
   const [tab, setTab] = useState<'numeros' | 'mensagens' | 'checkins'>('numeros')
   const [modalNumero, setModalNumero] = useState(false)
   const [editando, setEditando] = useState<NumeroWA | null>(null)
+  const { empresaId } = useEmpresaId()
 
   const { data: numerosDB, refetch: refetchNumeros } = useSupabaseQuery<NumeroWA>('numeros_whatsapp', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'status', ascending: true },
+    enabled: !!empresaId,
   })
   const { data: mensagensDB, refetch: refetchMensagens } = useSupabaseQuery<MensagemPadrao>('mensagens_padrao', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'categoria', ascending: true },
+    enabled: !!empresaId,
   })
   const { insert: insertMensagem, loading: loadingMsg } = useSupabaseMutation('mensagens_padrao')
   const [formMsg, setFormMsg] = useState({ titulo: '', conteudo: '', categoria: 'prospeccao' })
@@ -256,8 +262,10 @@ export default function SegurancaWAClient() {
     perfis?: { nome: string }
   }>('checkins', {
     select: '*, perfis(nome)',
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'timestamp', ascending: false },
     limit: 20,
+    enabled: !!empresaId,
   })
 
   // Injetar mock data se o banco estiver vazio (para demonstração)

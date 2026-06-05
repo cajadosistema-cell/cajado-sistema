@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState, StatusBadge } from '@/components/shared/ui'
 import { formatCurrency, formatRelative, cn } from '@/lib/utils'
 
@@ -25,6 +26,7 @@ const KANBAN_STATUS = [
 
 export function TabOportunidades() {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     titulo: '', descricao: '', status: 'ideia' as Oportunidade['status'],
@@ -32,7 +34,9 @@ export function TabOportunidades() {
   })
 
   const { data: oportunidades, refetch } = useSupabaseQuery<Oportunidade>('oportunidades_expansao', {
-    orderBy: { column: 'created_at', ascending: false }
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   } as any)
 
   const handleSalvar = async (e: React.FormEvent) => {

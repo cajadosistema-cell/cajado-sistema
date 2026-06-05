@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatDate } from '@/lib/utils'
 
@@ -48,6 +49,7 @@ type Props = {
 
 export function TabPendencias({ projetos }: Props) {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [projetoFiltro, setProjetoFiltro] = useState('todos')
   const [statusFiltro, setStatusFiltro] = useState<'todas' | Pendencia['status']>('todas')
   const [showForm, setShowForm] = useState(false)
@@ -60,7 +62,9 @@ export function TabPendencias({ projetos }: Props) {
   })
 
   const { data: pendencias, refetch } = useSupabaseQuery<Pendencia>('pendencias_projeto', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'created_at', ascending: false },
+    enabled: !!empresaId,
   })
 
   const pendenciasFiltradas = pendencias.filter(p => {

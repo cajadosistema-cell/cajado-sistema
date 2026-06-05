@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
@@ -511,6 +512,7 @@ export default function PatrimonioClient() {
   const [modalCusto, setModalCusto] = useState<string | null>(null)
   const [projetoAberto, setProjetoAberto] = useState<string | null>(null)
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
 
   const handleDeleteProjeto = async (p: ProjetoPatrimonio) => {
     if (!confirm(`Excluir "${p.titulo}"? Esta ação removerá o bem e todos os custos associados.`)) return
@@ -536,14 +538,20 @@ export default function PatrimonioClient() {
   }
 
   const { data: projetosDB, refetch } = useSupabaseQuery<ProjetoPatrimonio>('projetos_patrimonio', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'valor_investido_total', ascending: false },
+    enabled: !!empresaId,
   })
   const { data: custosDB, refetch: refetchCustos } = useSupabaseQuery<CustoPatrimonio>('custos_patrimonio', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'data', ascending: false },
+    enabled: !!empresaId,
   })
   // Busca imóveis da tabela dedicada para exibir na Visão Geral
   const { data: imoveisDB, refetch: refetchImoveis } = useSupabaseQuery<any>('imoveis', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'criado_em', ascending: false },
+    enabled: !!empresaId,
   } as any)
 
   // Converte imóveis para o formato ProjetoPatrimonio para exibição na Visão Geral

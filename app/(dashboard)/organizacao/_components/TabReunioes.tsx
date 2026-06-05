@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatDate } from '@/lib/utils'
 
@@ -31,6 +32,7 @@ type Props = {
 
 export function TabReunioes({ projetos }: Props) {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [projetoFiltro, setProjetoFiltro] = useState('todos')
   const [showForm, setShowForm] = useState(false)
   const [expandida, setExpandida] = useState<string | null>(null)
@@ -47,7 +49,9 @@ export function TabReunioes({ projetos }: Props) {
   })
 
   const { data: reunioes, refetch } = useSupabaseQuery<Reuniao>('reunioes', {
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'data_reuniao', ascending: false },
+    enabled: !!empresaId,
   })
 
   const reunioesFiltradas = reunioes.filter(r =>

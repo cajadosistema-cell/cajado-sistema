@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency } from '@/lib/utils'
 
@@ -20,6 +21,7 @@ type Financiamento = {
 
 export function TabFinanciamentos() {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -28,7 +30,9 @@ export function TabFinanciamentos() {
   })
 
   const { data: financiamentos, refetch } = useSupabaseQuery<Financiamento>('financiamentos', {
-    orderBy: { column: 'criado_em', ascending: false }
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'criado_em', ascending: false },
+    enabled: !!empresaId,
   } as any)
 
   const handleSalvar = async (e: React.FormEvent) => {

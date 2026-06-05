@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatCurrency, formatRelative, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 
@@ -85,9 +86,11 @@ function ModalLead({
   lead?: Lead | null
 }) {
   const { insert, update, loading } = useSupabaseMutation('leads')
+  const { empresaId: _empresaIdModal } = useEmpresaId()
   const { data: parceiros } = useSupabaseQuery<Parceiro>('parceiros', {
-    filters: { status: 'ativo' },
+    filters: { status: 'ativo', empresa_id: _empresaIdModal || undefined },
     orderBy: { column: 'nome', ascending: true },
+    enabled: !!_empresaIdModal,
   })
   const [form, setForm] = useState({
     nome: lead?.nome ?? '',
@@ -570,8 +573,11 @@ function LeadCard({ lead, onClick, onDragStart }: { lead: Lead; onClick: () => v
 // ── Aba Parceiros ────────────────────────────────────────────
 function TabParceiros() {
   const [modalOpen, setModalOpen] = useState(false)
+  const { empresaId: empresaIdParceiros } = useEmpresaId()
   const { data: parceiros, refetch } = useSupabaseQuery<Parceiro>('parceiros', {
+    filters: { empresa_id: empresaIdParceiros || undefined },
     orderBy: { column: 'total_comissao', ascending: false },
+    enabled: !!empresaIdParceiros,
   })
   const { insert, loading } = useSupabaseMutation('parceiros')
   const [form, setForm] = useState({ nome: '', telefone: '', email: '', comissao_percentual: '10', meta_mensal: '' })
@@ -836,12 +842,15 @@ export default function CajadoClient() {
   const [busca, setBusca] = useState('')
   const [atendenteFiltro, setAtendenteFiltro] = useState('todos')
   const [toastAtivo, setToastAtivo] = useState('')
+  const { empresaId } = useEmpresaId()
 
   const { data: leads, refetch } = useSupabaseQuery<Lead>('leads', {
     select: '*, parceiros(nome), perfis(nome)',
+    filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'updated_at', ascending: false },
+    enabled: !!empresaId,
   })
-  const { data: perfis } = useSupabaseQuery<any>('perfis', { select: 'id, nome' })
+  const { data: perfis } = useSupabaseQuery<any>('perfis', { select: 'id, nome', filters: { empresa_id: empresaId || undefined }, enabled: !!empresaId })
   const { update: updateLead } = useSupabaseMutation('leads')
 
   const registrarComissaoParceiroDrop = async (lead: Lead) => {

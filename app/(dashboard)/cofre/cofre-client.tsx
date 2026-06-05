@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/shared/ui'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { cn } from '@/lib/utils'
 
 // ── AES-256-GCM via WebCrypto ────────────────────────────────────
@@ -280,6 +281,7 @@ function CardEntrada({ item, senhaMestra, onEdit, onDelete }: {
 // ── Page principal ────────────────────────────────────────────────
 export default function CofreClient() {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [entradas, setEntradas] = useState<Entrada[]>([])
   const [loading, setLoading] = useState(true)
   const [senhaMestra, setSenhaMestra] = useState<string | null>(null)
@@ -291,14 +293,15 @@ export default function CofreClient() {
   const [catFiltro, setCatFiltro] = useState('')
 
   const load = async () => {
+    if (!empresaId) return
     setLoading(true)
     const { data } = await (supabase.from('cofre_senhas') as any)
-      .select('*').order('favorito', { ascending: false }).order('created_at', { ascending: false })
+      .select('*').eq('empresa_id', empresaId).order('favorito', { ascending: false }).order('created_at', { ascending: false })
     setEntradas(data ?? [])
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [empresaId])
 
   const pedirSenha = (acao: 'abrir' | 'nova') => {
     if (senhaMestra) { executarAcao(acao, senhaMestra); return }
