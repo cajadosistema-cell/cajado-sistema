@@ -282,10 +282,13 @@ function DrawerOS({
     success(`Pagamento marcado como "${novoPagamento}"`)
   }
 
+  const { empresaId } = useEmpresaId()
+
   const { data: itens, refetch: refetchItens } = useSupabaseQuery<ItemVenda>('itens_venda', {
-    filters: { venda_id: venda.id },
+    filters: { venda_id: venda.id, empresa_id: empresaId || undefined },
     select: '*, produto:produtos(nome, unidade)',
     orderBy: { column: 'created_at', ascending: true },
+    enabled: !!empresaId,
   })
 
   const recalcularTotal = async (itensAtuais: ItemVenda[]) => {

@@ -310,8 +310,10 @@ function ModalPagamento({ parceiros, onClose, onRefresh }: { parceiros: Parceiro
 }
 
 function ModalGerenciarServicos({ parceiro, onClose, onRefresh }: { parceiro: Parceiro, onClose: () => void, onRefresh: () => void }) {
+  const { empresaId } = useEmpresaId()
   const { data: servicos, refetch } = useSupabaseQuery<ParceiroServico>('parceiro_servicos', {
-    filter: { column: 'parceiro_id', value: parceiro.id }
+    filters: { parceiro_id: parceiro.id, empresa_id: empresaId || undefined },
+    enabled: !!empresaId
   })
   const { insert: insertServico, loading: loadingServico } = useSupabaseMutation('parceiro_servicos')
   const { update: updateParceiro } = useSupabaseMutation('parceiros')
