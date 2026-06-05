@@ -29,8 +29,11 @@ async function getSessionEmpresa() {
   )
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data: perfil } = await supabase.from('perfis').select('empresa_id').eq('id', user.id).single()
-  return perfil?.empresa_id ? { user, empresa_id: perfil.empresa_id } : null
+  const { data: perfil } = await supabase.from('perfis').select('empresa_id, role').eq('id', user.id).single()
+  if (!perfil?.empresa_id) return null
+  // Somente admin/owner podem usar rotas admin
+  if (!['admin', 'owner'].includes(perfil.role || '')) return null
+  return { user, empresa_id: perfil.empresa_id, role: perfil.role }
 }
 
 export async function POST(req: NextRequest) {

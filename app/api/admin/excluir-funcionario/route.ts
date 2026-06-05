@@ -29,8 +29,9 @@ async function getEmpresaId() {
   )
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data: perfil } = await supabase.from('perfis').select('empresa_id').eq('id', user.id).single()
-  return perfil?.empresa_id ?? null
+  const { data: perfil } = await supabase.from('perfis').select('empresa_id, role').eq('id', user.id).single()
+  if (!perfil?.empresa_id || !['admin', 'owner'].includes(perfil.role || '')) return null
+  return perfil.empresa_id
 }
 
 export async function POST(req: NextRequest) {

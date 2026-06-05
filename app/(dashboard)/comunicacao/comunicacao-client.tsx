@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/shared/toast'
 
@@ -94,6 +95,7 @@ const ContactItem = ({ id, name, subtitle, isActive, online, isGeral, onClick }:
 
 export default function ComunicacaoClient() {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [equipe, setEquipe] = useState<Funcionario[]>([])
   const [allUsers, setAllUsers] = useState<any[]>([])
@@ -120,11 +122,12 @@ export default function ComunicacaoClient() {
     let chatSub: ReturnType<typeof supabase.channel> | null = null
 
     async function loadInitialData() {
+      if (!empresaId) return
       const { data: { session } } = await supabase.auth.getSession()
       if (!session || !mounted) return
       setCurrentUser(session.user)
 
-      const { data: funcs } = await supabase.from('funcionarios').select('*').order('nome')
+      const { data: funcs } = await supabase.from('funcionarios').select('*').eq('empresa_id', empresaId).order('nome')
       if (funcs && mounted) setEquipe(funcs)
 
       const { data: vwUsers } = await supabase.from('vw_usuarios_chat').select('*')
@@ -133,6 +136,7 @@ export default function ComunicacaoClient() {
       const { data: msgs } = await supabase
         .from('chat_interno')
         .select('*')
+        .eq('empresa_id', empresaId)
         .order('created_at', { ascending: true })
         .limit(150)
       if (msgs && mounted) setMensagens(msgs as MensagemChat[])
@@ -176,7 +180,7 @@ export default function ComunicacaoClient() {
       if (chatSub) supabase.removeChannel(chatSub)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [empresaId])
 
 
   // Auto-scroll

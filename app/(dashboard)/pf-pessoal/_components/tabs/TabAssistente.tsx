@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/shared/toast'
 import { createClient } from '@/lib/supabase/client'
+import DOMPurify from 'dompurify'
 
 // ── Types ────────────────────────────────────────────────────
 interface Mensagem {
@@ -86,12 +87,13 @@ const SUGESTOES = [
 function formatarTexto(texto: string) {
   // Remove blocos JSON antes de formatar
   const semJson = texto.replace(/```json[\s\S]*?```/g, '').trim()
-  return semJson
+  const html = semJson
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/^- (.+)/gm, '<li>$1</li>')
     .replace(/((<li>[\s\S]*?<\/li>\s*)+)/, '<ul class="list-disc pl-4 space-y-1">$1</ul>')
     .replace(/\n/g, '<br/>')
+  return DOMPurify.sanitize(html)
 }
 
 // ── Extrai ações JSON do texto da IA ────────────────────────
