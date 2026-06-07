@@ -877,7 +877,7 @@ Aqui está tudo o que você pode me pedir para fazer:
                 onChange={e => { const f = e.target.files?.[0]; if (f) processarArquivo(f, setAttachedFile, setProcessingFile); e.target.value = '' }}
               />
               <div className="flex items-center gap-2 bg-page rounded-xl p-1 border border-border-subtle focus-within:border-amber-500/40 transition-colors">
-                {/* Botão microfone (Toggle) */}
+                {/* Botão microfone (Toggle) — iOS Safari suporta webkitSpeechRecognition */}
                 <button
                   onClick={voz.toggleMic}
                   className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all',
@@ -891,10 +891,9 @@ Aqui está tudo o que você pode me pedir para fazer:
                   onClick={() => {
                     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
                     if (isIOS) {
-                      // Mostra mensagem no chat em vez de alert() que trava o iOS
                       session.setMensagens(prev => [...prev, {
                         id: `ios-${Date.now()}`, role: 'ai',
-                        texto: '📱 **Modo Mãos-Livres** não é suportado no iPhone (restrição da Apple). Use o botão de microfone comum para falar!',
+                        texto: '📱 **Modo Mãos-Livres** não é suportado no iPhone (restrição da Apple).\n\nUse o botão do **microfone 🎙️** para falar normalmente!',
                       }])
                       return
                     }

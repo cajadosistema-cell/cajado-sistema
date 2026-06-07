@@ -166,7 +166,11 @@ export function useElenaVoz({
   const iniciarReconhecimento = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) {
-      onErro?.('🌐 Use o Google Chrome ou Edge para usar o microfone.')
+      // iOS Safari não suporta mais — orienta sobre alternativa
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      onErro?.(isIOS
+        ? '📱 Safari iOS não suporta reconhecimento de voz neste dispositivo. Tente digitar sua mensagem.'
+        : '🌐 Reconhecimento de voz não disponível. Use Google Chrome ou Microsoft Edge.')
       return
     }
     if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {} }
@@ -184,7 +188,10 @@ export function useElenaVoz({
   const handlePressMic = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) {
-      onErro?.('🌐 Use o Google Chrome ou Edge para usar o microfone.')
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      onErro?.(isIOS
+        ? '📱 Safari iOS não suporta reconhecimento de voz neste dispositivo. Tente digitar sua mensagem.'
+        : '🌐 Reconhecimento de voz não disponível. Use Google Chrome ou Microsoft Edge.')
       return
     }
     isListeningRef.current = true
