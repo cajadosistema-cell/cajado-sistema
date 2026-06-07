@@ -69,6 +69,8 @@ export const MAPA_CONFIRMACAO: Record<string, { modulo: string; rota: string; ic
   cadastrar_cartao:     { modulo: 'Cartões',          rota: '/financeiro', icone: '💳' },
   registrar_patrimonio: { modulo: 'Patrimônio',       rota: '/patrimonio', icone: '🏠' },
   buscar_patrimonio:    { modulo: 'Patrimônio',       rota: '/patrimonio', icone: '🔍' },
+  diario:               { modulo: 'Diário Pessoal',   rota: '/diario',     icone: '📓' },
+  buscar_diario:        { modulo: 'Diário Pessoal',   rota: '/diario',     icone: '📖' },
 }
 
 // Detecção de bandeira pelo nome da conta

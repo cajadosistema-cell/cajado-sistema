@@ -1115,6 +1115,77 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
 
+      // ── DIÁRIO PESSOAL ────────────────────────────────────────
+      } else if (acao.tipo === 'diario') {
+        const tiposValidos = ['diario', 'decisao', 'snapshot', 'marco', 'espiritual']
+        const catsValidas = ['geral', 'decisao', 'aprendizado', 'patrimonio', 'financeiro_pf', 'financeiro_pj', 'trading', 'mercado', 'projeto', 'ideia', 'reserva', 'meta']
+        const humoresValidos = ['otimo', 'bom', 'neutro', 'ruim', 'critico']
+
+        const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'diario'
+        const categoria = catsValidas.includes(acao.dados.categoria) ? acao.dados.categoria : 'geral'
+        const humor = humoresValidos.includes(acao.dados.humor) ? acao.dados.humor : 'neutro'
+
+        const empresaId = await getEmpresaId(uid)
+
+        const payload: Record<string, any> = {
+          titulo: acao.dados.titulo || null,
+          texto: acao.dados.texto || acao.dados.conteudo || 'Entrada via Elena',
+          tipo,
+          categoria,
+          humor,
+          fixada: acao.dados.fixada ?? false,
+          gratidao: acao.dados.gratidao || null,
+          intencao: acao.dados.intencao || null,
+        }
+        if (empresaId) payload.empresa_id = empresaId
+
+        const { data: novaEntrada, error } = await (supabase.from('diario_entradas') as any)
+          .insert(payload).select('id').single()
+        if (error) throw new Error(error.message)
+        if (novaEntrada?.id) ultimoRegistroRef.current = { tabela: 'diario_entradas', id: novaEntrada.id }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirConfirmacaoSalvamento('diario', acao.dados, undefined, novaEntrada?.id, 'diario_entradas')
+
+      // ── BUSCAR DIÁRIO ─────────────────────────────────────────
+      } else if (acao.tipo === 'buscar_diario') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const empresaId = await getEmpresaId(uid)
+        const limite = Math.min(Number(acao.dados.limite) || 5, 15)
+
+        let query = (supabase.from('diario_entradas') as any)
+          .select('titulo, texto, tipo, categoria, humor, fixada, gratidao, intencao, created_at')
+          .order('created_at', { ascending: false })
+          .limit(limite)
+        if (empresaId) query = query.eq('empresa_id', empresaId)
+        if (acao.dados.tipo && acao.dados.tipo !== 'todos') query = query.eq('tipo', acao.dados.tipo)
+        const { data: entradas } = await query
+
+        const humorEmoji: Record<string, string> = { otimo: '😄', bom: '🙂', neutro: '😐', ruim: '😕', critico: '😰' }
+        const tipoIcon: Record<string, string> = { diario: '📓', decisao: '⚡', snapshot: '📸', marco: '🏆', espiritual: '🙏' }
+
+        if (!entradas || entradas.length === 0) {
+          setMensagens(prev => [...prev, {
+            id: `diario-${Date.now()}`, role: 'ai' as const,
+            texto: '📓 Nenhuma entrada no diário ainda, Sr. Max.\n\nDiga-me algo como: _\"anotar no diário: hoje foi um dia produtivo\"_ e eu registro pra você!',
+          }])
+        } else {
+          let texto = `📓 **DIÁRIO PESSOAL — Últimas ${entradas.length} entradas**\n\n`
+          entradas.forEach((e: any) => {
+            const dt = e.created_at ? new Date(e.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
+            const emoji = humorEmoji[e.humor] || '📓'
+            const icon = tipoIcon[e.tipo] || '📓'
+            texto += `${icon} **${e.titulo || 'Sem título'}** ${emoji}\n`
+            texto += `   _${dt}_ · ${e.categoria || 'geral'}\n`
+            texto += `   ${(e.texto || '').substring(0, 120)}${(e.texto || '').length > 120 ? '...' : ''}\n`
+            if (e.gratidao) texto += `   🙏 ${e.gratidao.substring(0, 80)}\n`
+            texto += '\n'
+          })
+          texto += `_Veja todas as entradas em Diário Pessoal._`
+          setMensagens(prev => [...prev, { id: `diario-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+
       // ── TRANSFERÊNCIA ────────────────────────────────────────
 
       } else if (acao.tipo === 'transferencia') {

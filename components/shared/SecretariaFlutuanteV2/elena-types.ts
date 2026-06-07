@@ -60,6 +60,8 @@ export type AcaoTipo =
   | 'cadastrar_cartao'
   | 'registrar_patrimonio'
   | 'buscar_patrimonio'
+  | 'diario'
+  | 'buscar_diario'
 
 export interface AcaoIA {
   tipo: AcaoTipo

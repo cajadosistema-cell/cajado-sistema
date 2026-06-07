@@ -297,17 +297,42 @@ MEMÓRIA UNIVERSAL:
   → "registrar apartamento financiado, 60 parcelas, já paguei 12" → {"acao":"registrar_patrimonio","titulo":"Apartamento","tipo":"imovel","valor_investido":0,"parcelas_total":60,"parcelas_pagas":12}
 
 🔍 CONSULTAR/LISTAR PATRIMÔNIO:
-\`\`\`json
+```json
 {"acao":"buscar_patrimonio","tipo":"todos"}
-\`\`\`
+```
 - "tipo": "todos", "imovel", "veiculo", "equipamento" — filtra por tipo de bem
 - Use quando perguntar: "quais imóveis tenho?", "meus bens", "patrimônio total",
   "lista meus veículos", "quanto tenho em patrimônio?", "valor dos meus imóveis"
 
+📓 REGISTRAR ENTRADA NO DIÁRIO PESSOAL:
+```json
+{"acao":"diario","titulo":"Reflexão sobre a semana","texto":"Foi uma semana produtiva...","tipo":"diario","categoria":"geral","humor":"bom"}
+```
+- TIPOS: diario, decisao, snapshot, marco, espiritual
+- CATEGORIAS: geral, decisao, aprendizado, patrimonio, financeiro_pf, financeiro_pj, trading, mercado, projeto, ideia, reserva, meta
+- HUMOR: otimo, bom, neutro, ruim, critico (como o Sr. Max está se sentindo)
+- "gratidao" e "intencao" = campos especiais para tipo "espiritual"
+- Use quando o chefe mencionar: "anotar no diário", "registrar reflexão", "decisão importante",
+  "como me sinto hoje", "registrar aprendizado", "marco pessoal", "reflexão do dia",
+  "agradecer", "oração do dia", "gratidão"
+- EXEMPLOS:
+  → "anotar: decidi expandir a operação" → {"acao":"diario","titulo":"Expansão da operação","texto":"Decidi expandir a operação...","tipo":"decisao","categoria":"decisao","humor":"bom"}
+  → "hoje estou grato pela saúde" → {"acao":"diario","titulo":"Gratidão","texto":"Grato pela saúde e pela família","tipo":"espiritual","categoria":"geral","humor":"otimo","gratidao":"1. Saúde\n2. Família"}
+  → "registrar que fechei o contrato X" → {"acao":"diario","titulo":"Contrato X fechado","texto":"Fechei o contrato X...","tipo":"marco","categoria":"financeiro_pj","humor":"otimo"}
+
+📖 CONSULTAR ÚLTIMAS ENTRADAS DO DIÁRIO:
+```json
+{"acao":"buscar_diario","limite":5}
+```
+- "limite" = quantas entradas mostrar (padrão: 5)
+- "tipo" = filtrar por tipo (opcional)
+- Use quando perguntar: "meu diário", "últimas anotações", "o que escrevi essa semana",
+  "minhas decisões recentes", "como estava meu humor?"
+
 DASHBOARD VISUAL (abre o painel financeiro gráfico do mês atual):
-\`\`\`json
+```json
 {"acao":"gerar_dashboard"}
-\`\`\`
+```
 - Use quando o Sr. Max pedir: "abre o dashboard", "me mostra o painel", "dashboard financeiro"
 
 📈 PROJEÇÃO FINANCEIRA — PRÓXIMOS MESES:
@@ -560,6 +585,14 @@ export function extrairAcoes(texto: string): AcaoIA[] {
       } else if (d.acao === 'buscar_patrimonio') {
         const tipoLabel = d.tipo === 'todos' ? 'Todos os bens' : d.tipo === 'imovel' ? 'Imóveis' : d.tipo === 'veiculo' ? 'Veículos' : d.tipo || 'Todos'
         acoes.push({ tipo: 'buscar_patrimonio', dados: d, label: `🔍 Consultar patrimônio — ${tipoLabel}`, status: 'pending' })
+
+      } else if (d.acao === 'diario') {
+        const humorEmoji: Record<string, string> = { otimo: '😄', bom: '🙂', neutro: '😐', ruim: '😕', critico: '😰' }
+        const emoji = humorEmoji[d.humor] || '📓'
+        acoes.push({ tipo: 'diario', dados: d, label: `${emoji} Diário: ${d.titulo || d.texto?.substring(0, 40) || 'Nova entrada'}`, status: 'pending' })
+
+      } else if (d.acao === 'buscar_diario') {
+        acoes.push({ tipo: 'buscar_diario', dados: d, label: `📖 Consultar diário — últimas ${d.limite || 5} entradas`, status: 'pending' })
 
       } else if (d.acao) {
         // Fallback: qualquer ação desconhecida vira registro genérico
