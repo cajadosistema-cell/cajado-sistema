@@ -1011,6 +1011,110 @@ export function useElenaSalvar({
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
 
+      // ── REGISTRAR PATRIMÔNIO ──────────────────────────────────
+      } else if (acao.tipo === 'registrar_patrimonio') {
+        const tiposValidos = ['imovel', 'veiculo', 'equipamento', 'reforma', 'outro']
+        const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'imovel'
+        const vi = Number(acao.dados.valor_investido) || 0
+        const vm = acao.dados.valor_mercado ? Number(acao.dados.valor_mercado) : null
+        const roi = vm && vi > 0 ? ((vm - vi) / vi) * 100 : null
+        const pt = acao.dados.parcelas_total ? Number(acao.dados.parcelas_total) : null
+        const pp = acao.dados.parcelas_pagas ? Number(acao.dados.parcelas_pagas) : null
+
+        // Busca empresa_id para RLS
+        const empresaId = await getEmpresaId(uid)
+
+        const payload: Record<string, any> = {
+          titulo: acao.dados.titulo || 'Patrimônio via Elena',
+          tipo,
+          descricao: acao.dados.descricao || null,
+          valor_investido_total: vi,
+          valor_mercado_atual: vm,
+          roi_percentual: roi,
+          data_aquisicao: acao.dados.data_aquisicao || null,
+          status: 'ativo',
+          parcelas_total: pt,
+          parcelas_pagas: pp,
+        }
+        if (empresaId) payload.empresa_id = empresaId
+
+        const { data: novoPat, error } = await (supabase.from('projetos_patrimonio') as any)
+          .insert(payload).select('id').single()
+        if (error) throw new Error(error.message)
+        if (novoPat?.id) ultimoRegistroRef.current = { tabela: 'projetos_patrimonio', id: novoPat.id }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirConfirmacaoSalvamento('registrar_patrimonio', acao.dados, undefined, novoPat?.id, 'projetos_patrimonio')
+
+      // ── BUSCAR PATRIMÔNIO ─────────────────────────────────────
+      } else if (acao.tipo === 'buscar_patrimonio') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const empresaId = await getEmpresaId(uid)
+        const filtroTipo = acao.dados.tipo && acao.dados.tipo !== 'todos' ? acao.dados.tipo : null
+
+        // Busca projetos_patrimonio
+        let queryProj = (supabase.from('projetos_patrimonio') as any)
+          .select('titulo, tipo, descricao, valor_investido_total, valor_mercado_atual, data_aquisicao, status, parcelas_total, parcelas_pagas')
+          .order('valor_investido_total', { ascending: false })
+        if (empresaId) queryProj = queryProj.eq('empresa_id', empresaId)
+        if (filtroTipo) queryProj = queryProj.eq('tipo', filtroTipo)
+        const { data: projetos } = await queryProj
+
+        // Busca tabela imoveis (se não filtrando por veiculo/equipamento)
+        let imoveisLista: any[] = []
+        if (!filtroTipo || filtroTipo === 'imovel') {
+          let queryIm = (supabase.from('imoveis') as any)
+            .select('titulo, valor_compra, valor_mercado, data_aquisicao, parcelas_total, parcelas_pagas, construtora, unidade')
+            .order('valor_compra', { ascending: false })
+          if (empresaId) queryIm = queryIm.eq('empresa_id', empresaId)
+          const { data: ims } = await queryIm
+          imoveisLista = (ims || []).map((im: any) => ({
+            titulo: im.titulo, tipo: 'imovel',
+            descricao: [im.construtora, im.unidade].filter(Boolean).join(' · ') || null,
+            valor_investido_total: im.valor_compra || 0,
+            valor_mercado_atual: im.valor_mercado || null,
+            parcelas_total: im.parcelas_total, parcelas_pagas: im.parcelas_pagas,
+          }))
+        }
+
+        const todos = [...(projetos || []), ...imoveisLista]
+        const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        const tipoEmoji: Record<string, string> = { imovel: '🏠', veiculo: '🚗', equipamento: '⚙️', reforma: '🔨', outro: '📦' }
+
+        if (todos.length === 0) {
+          setMensagens(prev => [...prev, {
+            id: `pat-${Date.now()}`, role: 'ai' as const,
+            texto: '📋 Nenhum patrimônio cadastrado ainda, Sr. Max.\n\nDiga-me, por exemplo: _\"registrar apartamento no centro, paguei 350 mil\"_ e eu cuido do resto!',
+          }])
+        } else {
+          const totalInvestido = todos.reduce((a: number, p: any) => a + (p.valor_investido_total || 0), 0)
+          const totalMercado = todos.reduce((a: number, p: any) => a + (p.valor_mercado_atual || p.valor_investido_total || 0), 0)
+          const valoriz = totalMercado - totalInvestido
+
+          let texto = `🏠 **SEU PATRIMÔNIO${filtroTipo ? ` — ${filtroTipo.toUpperCase()}` : ''}**\n\n`
+          texto += `💰 Total investido: **${fmt(totalInvestido)}**\n`
+          texto += `📊 Valor de mercado: **${fmt(totalMercado)}**\n`
+          texto += `${valoriz >= 0 ? '🟢' : '🔴'} Valorização: **${valoriz >= 0 ? '+' : ''}${fmt(valoriz)}**\n\n`
+          texto += `---\n\n`
+
+          todos.forEach((p: any) => {
+            const emoji = tipoEmoji[p.tipo] || '📦'
+            const vm = p.valor_mercado_atual || p.valor_investido_total
+            const roi = p.valor_investido_total > 0 ? ((vm - p.valor_investido_total) / p.valor_investido_total * 100).toFixed(1) : '0'
+            texto += `${emoji} **${p.titulo}**\n`
+            texto += `   Investido: ${fmt(p.valor_investido_total)} · Mercado: ${fmt(vm)} · ROI: ${Number(roi) >= 0 ? '+' : ''}${roi}%\n`
+            if (p.parcelas_total) {
+              const pagas = p.parcelas_pagas || 0
+              texto += `   📅 Parcelas: ${pagas}/${p.parcelas_total} (${Math.round(pagas / p.parcelas_total * 100)}%)\n`
+            }
+            texto += '\n'
+          })
+
+          texto += `_Total: ${todos.length} bem(ns) cadastrado(s). Veja mais detalhes em Patrimônio._`
+          setMensagens(prev => [...prev, { id: `pat-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+
       // ── TRANSFERÊNCIA ────────────────────────────────────────
 
       } else if (acao.tipo === 'transferencia') {

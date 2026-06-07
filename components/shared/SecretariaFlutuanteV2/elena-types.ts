@@ -58,6 +58,8 @@ export type AcaoTipo =
   | 'fatura_cartao'
   | 'cadastrar_conta'
   | 'cadastrar_cartao'
+  | 'registrar_patrimonio'
+  | 'buscar_patrimonio'
 
 export interface AcaoIA {
   tipo: AcaoTipo

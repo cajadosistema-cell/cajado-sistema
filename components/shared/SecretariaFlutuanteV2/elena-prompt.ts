@@ -280,6 +280,30 @@ MEMÓRIA UNIVERSAL:
 {"acao":"registro_livre","tipo":"preferencia","chave":"banco_preferido","titulo":"Banco preferido do Sr. Max","conteudo":"Nubank","importante":true}
 \`\`\`
 
+🏠 REGISTRAR PATRIMÔNIO (imóvel, veículo, equipamento ou outro bem):
+\`\`\`json
+{"acao":"registrar_patrimonio","titulo":"Apartamento Centro","tipo":"imovel","descricao":"Apto 2 quartos, 85m², Rua X","valor_investido":350000,"valor_mercado":420000,"data_aquisicao":"2023-01-15"}
+\`\`\`
+- TIPOS: imovel, veiculo, equipamento, reforma, outro
+- "valor_investido" = quanto pagou (obrigatório)
+- "valor_mercado" = valor atual estimado (opcional)
+- "data_aquisicao" = data de compra (opcional, formato YYYY-MM-DD)
+- "parcelas_total" e "parcelas_pagas" = se for financiado (opcionais)
+- Use quando o chefe mencionar: "registrar imóvel", "cadastrar veículo", "adicionar patrimônio",
+  "comprei um carro", "tenho um apartamento", "terreno no valor de", "maquinário novo"
+- EXEMPLOS:
+  → "comprei um terreno por 200 mil" → {"acao":"registrar_patrimonio","titulo":"Terreno","tipo":"imovel","valor_investido":200000}
+  → "tenho uma Hilux 2024, paguei 280 mil" → {"acao":"registrar_patrimonio","titulo":"Toyota Hilux 2024","tipo":"veiculo","valor_investido":280000}
+  → "registrar apartamento financiado, 60 parcelas, já paguei 12" → {"acao":"registrar_patrimonio","titulo":"Apartamento","tipo":"imovel","valor_investido":0,"parcelas_total":60,"parcelas_pagas":12}
+
+🔍 CONSULTAR/LISTAR PATRIMÔNIO:
+\`\`\`json
+{"acao":"buscar_patrimonio","tipo":"todos"}
+\`\`\`
+- "tipo": "todos", "imovel", "veiculo", "equipamento" — filtra por tipo de bem
+- Use quando perguntar: "quais imóveis tenho?", "meus bens", "patrimônio total",
+  "lista meus veículos", "quanto tenho em patrimônio?", "valor dos meus imóveis"
+
 DASHBOARD VISUAL (abre o painel financeiro gráfico do mês atual):
 \`\`\`json
 {"acao":"gerar_dashboard"}
@@ -526,6 +550,16 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'listar_recorrentes') {
         acoes.push({ tipo: 'listar_recorrentes' as any, dados: d, label: `📋 Listando contas recorrentes cadastradas`, status: 'pending' })
+
+      } else if (d.acao === 'registrar_patrimonio') {
+        const tipoIcons: Record<string, string> = { imovel: '🏠', veiculo: '🚗', equipamento: '⚙️', reforma: '🔨', outro: '📦' }
+        const icon = tipoIcons[d.tipo] || '🏠'
+        const valorStr = d.valor_investido ? ` R$ ${Number(d.valor_investido).toLocaleString('pt-BR')}` : ''
+        acoes.push({ tipo: 'registrar_patrimonio', dados: d, label: `${icon} Registrar patrimônio: ${d.titulo}${valorStr}`, status: 'pending' })
+
+      } else if (d.acao === 'buscar_patrimonio') {
+        const tipoLabel = d.tipo === 'todos' ? 'Todos os bens' : d.tipo === 'imovel' ? 'Imóveis' : d.tipo === 'veiculo' ? 'Veículos' : d.tipo || 'Todos'
+        acoes.push({ tipo: 'buscar_patrimonio', dados: d, label: `🔍 Consultar patrimônio — ${tipoLabel}`, status: 'pending' })
 
       } else if (d.acao) {
         // Fallback: qualquer ação desconhecida vira registro genérico

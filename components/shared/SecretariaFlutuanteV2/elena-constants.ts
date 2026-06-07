@@ -67,6 +67,8 @@ export const MAPA_CONFIRMACAO: Record<string, { modulo: string; rota: string; ic
   registro_livre:       { modulo: 'Memória da Elena', rota: '',            icone: '🧠' },
   cadastrar_conta:      { modulo: 'Contas',           rota: '/financeiro', icone: '🏦' },
   cadastrar_cartao:     { modulo: 'Cartões',          rota: '/financeiro', icone: '💳' },
+  registrar_patrimonio: { modulo: 'Patrimônio',       rota: '/patrimonio', icone: '🏠' },
+  buscar_patrimonio:    { modulo: 'Patrimônio',       rota: '/patrimonio', icone: '🔍' },
 }
 
 // Detecção de bandeira pelo nome da conta
