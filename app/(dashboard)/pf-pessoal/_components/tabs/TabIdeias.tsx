@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { useVozSimples } from '@/hooks/useVozSimples'
 
 // ── Tipos ──────────────────────────────────────────────────────
 type Categoria = 'negocio' | 'produto' | 'pessoal' | 'financeiro' | 'saude' | 'criativo' | 'geral'
@@ -317,6 +318,79 @@ export function TabIdeias({ userId }: { userId: string }) {
       .update({ status, progresso: autoProgress[status] }).eq('id', id)
   }, [supabase])
 
+  // ── Captura por Voz ──────────────────────────────────────────
+  type VozEstado = 'idle' | 'gravando' | 'organizando' | 'preview'
+  const [vozEstado, setVozEstado] = useState<VozEstado>('idle')
+  const [vozPreview, setVozPreview] = useState<{ titulo: string; descricao: string; categoria: Categoria } | null>(null)
+  const [vozTextoOriginal, setVozTextoOriginal] = useState('')
+
+  const handleTextoFinal = useCallback(async (texto: string) => {
+    if (!texto.trim()) { setVozEstado('idle'); return }
+    setVozTextoOriginal(texto)
+    setVozEstado('organizando')
+    try {
+      const res = await fetch('/api/organizar-ideia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setVozPreview({
+        titulo: data.titulo || texto.substring(0, 120),
+        descricao: data.descricao || texto,
+        categoria: (data.categoria || 'geral') as Categoria,
+      })
+      setVozEstado('preview')
+    } catch {
+      // Fallback: usa texto bruto
+      setVozPreview({ titulo: texto.substring(0, 120), descricao: texto, categoria: 'geral' })
+      setVozEstado('preview')
+    }
+  }, [])
+
+  const voz = useVozSimples(handleTextoFinal)
+
+  const salvarVozPreview = useCallback(async () => {
+    if (!vozPreview) return
+    const payload = {
+      user_id: userId,
+      titulo: vozPreview.titulo,
+      descricao: vozPreview.descricao || null,
+      categoria: vozPreview.categoria,
+      status: 'rascunho',
+      progresso: 0,
+      notas: null,
+    }
+    await (supabase.from('elena_ideias') as any).insert(payload)
+    setVozEstado('idle')
+    setVozPreview(null)
+    setVozTextoOriginal('')
+    voz.limpar()
+    carregar()
+  }, [vozPreview, userId, supabase, voz, carregar])
+
+  const cancelarVozPreview = useCallback(() => {
+    setVozEstado('idle')
+    setVozPreview(null)
+    setVozTextoOriginal('')
+    voz.limpar()
+  }, [voz])
+
+  const editarVozPreview = useCallback(() => {
+    if (!vozPreview) return
+    setEditando(null)
+    setModalOpen(true)
+    setTimeout(() => {
+      setEditando({ titulo: vozPreview.titulo, descricao: vozPreview.descricao, categoria: vozPreview.categoria } as any)
+      setModalOpen(true)
+    }, 50)
+    setVozEstado('idle')
+    setVozPreview(null)
+    setVozTextoOriginal('')
+    voz.limpar()
+  }, [vozPreview, voz])
+
   const ideiasVisiveis = filtro === 'todas'
     ? ideias.filter(i => i.status !== 'arquivada')
     : ideias.filter(i => i.status === filtro)
@@ -358,6 +432,120 @@ export function TabIdeias({ userId }: { userId: string }) {
           </button>
         </div>
       </div>
+
+      {/* ── Captura Rápida por Voz ───────────────────────────── */}
+      {vozEstado === 'idle' && (
+        <button
+          onClick={() => {
+            if (!voz.suportado) {
+              // Fallback: abre o modal manual
+              setEditando(null)
+              setModalOpen(true)
+              return
+            }
+            setVozEstado('gravando')
+            voz.toggleMic()
+          }}
+          className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border-2 border-dashed border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 hover:border-amber-500/50 transition-all group"
+        >
+          <span className="text-2xl group-hover:scale-110 transition-transform">🎙️</span>
+          <div className="text-left">
+            <p className="text-sm font-bold text-amber-400">Gravar Ideia por Voz</p>
+            <p className="text-[10px] text-fg-tertiary">Toque e fale — a IA organiza automaticamente</p>
+          </div>
+        </button>
+      )}
+
+      {vozEstado === 'gravando' && (
+        <div className="w-full rounded-2xl border-2 border-red-500/40 bg-red-500/5 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-sm font-bold text-red-400">Ouvindo...</span>
+            </div>
+            <button
+              onClick={() => {
+                voz.toggleMic()
+                // onTextoFinal callback vai cuidar do resto
+              }}
+              className="px-4 py-2 rounded-xl bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+            >
+              ⏹ Parar
+            </button>
+          </div>
+          {voz.transcript && (
+            <p className="text-sm text-fg-secondary leading-relaxed bg-white/5 rounded-xl p-3 border border-white/5">
+              "{voz.transcript}"
+            </p>
+          )}
+          {!voz.transcript && (
+            <p className="text-xs text-fg-disabled text-center py-2">Fale sua ideia... o texto aparecerá aqui</p>
+          )}
+        </div>
+      )}
+
+      {vozEstado === 'organizando' && (
+        <div className="w-full rounded-2xl border border-purple-500/30 bg-purple-500/5 p-5 flex items-center justify-center gap-3">
+          <svg className="w-5 h-5 animate-spin text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          <span className="text-sm font-bold text-purple-400">🧠 Organizando sua ideia com IA...</span>
+        </div>
+      )}
+
+      {vozEstado === 'preview' && vozPreview && (
+        <div className="w-full rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{CAT_CONFIG[vozPreview.categoria]?.icon || '💡'}</span>
+            <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded border', CAT_CONFIG[vozPreview.categoria]?.bg || 'bg-zinc-500/10 border-zinc-500/20 text-zinc-300')}>
+              {CAT_CONFIG[vozPreview.categoria]?.label || 'Geral'}
+            </span>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">{vozPreview.titulo}</p>
+            {vozPreview.descricao && (
+              <p className="text-xs text-fg-secondary mt-1.5 leading-relaxed">{vozPreview.descricao}</p>
+            )}
+          </div>
+          {vozTextoOriginal !== vozPreview.descricao && (
+            <details className="text-[10px] text-fg-disabled">
+              <summary className="cursor-pointer hover:text-fg-tertiary">Ver texto original</summary>
+              <p className="mt-1 p-2 bg-white/3 rounded-lg">"{vozTextoOriginal}"</p>
+            </details>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={salvarVozPreview}
+              className="flex-1 py-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-xs font-bold hover:bg-emerald-500/25 transition-all"
+            >
+              ✅ Salvar Ideia
+            </button>
+            <button
+              onClick={() => {
+                setEditando(null)
+                setModalOpen(true)
+                // Pré-preenche o modal com os dados da voz
+                setTimeout(() => {
+                  setEditando({
+                    titulo: vozPreview.titulo,
+                    descricao: vozPreview.descricao,
+                    categoria: vozPreview.categoria,
+                  } as any)
+                  setModalOpen(true)
+                }, 50)
+                cancelarVozPreview()
+              }}
+              className="px-4 py-2.5 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold hover:bg-blue-500/20 transition-all"
+            >
+              ✏️ Editar
+            </button>
+            <button
+              onClick={cancelarVozPreview}
+              className="px-4 py-2.5 rounded-xl bg-white/5 text-fg-tertiary border border-white/10 text-xs font-bold hover:bg-white/10 transition-all"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Barra de progresso geral */}
       <div className="bg-surface border border-white/5 rounded-2xl p-4 space-y-3">

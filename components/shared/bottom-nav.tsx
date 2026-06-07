@@ -24,6 +24,7 @@ const moreItems = [
   // Pessoal
   { href: '/dashboard-pessoal', label: 'Painel P.',   icon: '🏠' },
   { href: '/pf-pessoal',   label: 'Fin. Pessoal',     icon: '💎' },
+  { href: '/ideias',       label: 'Ideias',           icon: '💡' },
   { href: '/diario',       label: 'Diário',           icon: '📓' },
   { href: '/patrimonio',   label: 'Patrimônio',       icon: '🏠' },
   { href: '/investimentos',label: 'Investimentos',    icon: '📈' },
