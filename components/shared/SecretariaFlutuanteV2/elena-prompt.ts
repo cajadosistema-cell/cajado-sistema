@@ -297,17 +297,17 @@ MEMÓRIA UNIVERSAL:
   → "registrar apartamento financiado, 60 parcelas, já paguei 12" → {"acao":"registrar_patrimonio","titulo":"Apartamento","tipo":"imovel","valor_investido":0,"parcelas_total":60,"parcelas_pagas":12}
 
 🔍 CONSULTAR/LISTAR PATRIMÔNIO:
-```json
+\`\`\`json
 {"acao":"buscar_patrimonio","tipo":"todos"}
-```
+\`\`\`
 - "tipo": "todos", "imovel", "veiculo", "equipamento" — filtra por tipo de bem
 - Use quando perguntar: "quais imóveis tenho?", "meus bens", "patrimônio total",
   "lista meus veículos", "quanto tenho em patrimônio?", "valor dos meus imóveis"
 
 📓 REGISTRAR ENTRADA NO DIÁRIO PESSOAL:
-```json
+\`\`\`json
 {"acao":"diario","titulo":"Reflexão sobre a semana","texto":"Foi uma semana produtiva...","tipo":"diario","categoria":"geral","humor":"bom"}
-```
+\`\`\`
 - TIPOS: diario, decisao, snapshot, marco, espiritual
 - CATEGORIAS: geral, decisao, aprendizado, patrimonio, financeiro_pf, financeiro_pj, trading, mercado, projeto, ideia, reserva, meta
 - HUMOR: otimo, bom, neutro, ruim, critico (como o Sr. Max está se sentindo)
@@ -321,18 +321,18 @@ MEMÓRIA UNIVERSAL:
   → "registrar que fechei o contrato X" → {"acao":"diario","titulo":"Contrato X fechado","texto":"Fechei o contrato X...","tipo":"marco","categoria":"financeiro_pj","humor":"otimo"}
 
 📖 CONSULTAR ÚLTIMAS ENTRADAS DO DIÁRIO:
-```json
+\`\`\`json
 {"acao":"buscar_diario","limite":5}
-```
+\`\`\`
 - "limite" = quantas entradas mostrar (padrão: 5)
 - "tipo" = filtrar por tipo (opcional)
 - Use quando perguntar: "meu diário", "últimas anotações", "o que escrevi essa semana",
   "minhas decisões recentes", "como estava meu humor?"
 
 📈 REGISTRAR INVESTIMENTO / ATIVO:
-```json
+\`\`\`json
 {"acao":"registrar_investimento","ticker":"PETR4","nome":"Petrobras PN","tipo":"acao","quantidade":100,"preco_medio":35.50,"preco_atual":38.40,"liquidez":"diaria","corretora":"XP"}
-```
+\`\`\`
 - "tipo": acao, fii, fundo, cdb, lci, lca, tesouro, cripto, poupanca, previdencia, outro
 - "quantidade" e "preco_medio" são OBRIGATÓRIOS.
 - "liquidez": diaria, semanal, mensal, no_vencimento
@@ -343,17 +343,17 @@ MEMÓRIA UNIVERSAL:
   → "apliquei 10 mil num cdb do inter" → {"acao":"registrar_investimento","nome":"CDB Banco Inter","tipo":"cdb","quantidade":1,"preco_medio":10000,"corretora":"Inter","liquidez":"no_vencimento"}
 
 🔍 CONSULTAR INVESTIMENTOS / CARTEIRA:
-```json
+\`\`\`json
 {"acao":"buscar_investimentos","tipo":"todos"}
-```
+\`\`\`
 - "tipo" = "todos" ou filtre (ex: "acao", "fii", "cdb")
 - Use quando perguntar: "como estão meus investimentos?", "minha rentabilidade", "qual o total investido?",
   "lista minhas ações", "minha carteira de cripto"
 
 DASHBOARD VISUAL (abre o painel financeiro gráfico do mês atual):
-```json
+\`\`\`json
 {"acao":"gerar_dashboard"}
-```
+\`\`\`
 - Use quando o Sr. Max pedir: "abre o dashboard", "me mostra o painel", "dashboard financeiro"
 
 📈 PROJEÇÃO FINANCEIRA — PRÓXIMOS MESES:
