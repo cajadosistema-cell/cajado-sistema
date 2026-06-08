@@ -252,6 +252,7 @@ export default function PfPessoalClient() {
           userId={authUserId}
           contas={contas}
           modalAberto={modalNovaConta}
+          onModalOpen={() => setModalNovaConta(true)}
           onModalClose={() => setModalNovaConta(false)}
         />
       )}
@@ -289,8 +290,8 @@ export default function PfPessoalClient() {
 // ── Aba Contas PF (inline no client para acessar refetch) ─────────
 // Sub-abas: 🏦 Contas Bancárias | 💳 Cartões PF
 function TabContasPFInline({
-  userId, contas, modalAberto, onModalClose
-}: { userId: string; contas: any[]; modalAberto: boolean; onModalClose: () => void }) {
+  userId, contas, modalAberto, onModalOpen, onModalClose
+}: { userId: string; contas: any[]; modalAberto: boolean; onModalOpen: () => void; onModalClose: () => void }) {
   const supabase = createClient()
   const { data: todasContas, refetch } = useSupabaseQuery<any>('contas', {
     filters: { ativo: true, categoria: 'pf', user_id: userId },
@@ -410,7 +411,7 @@ function TabContasPFInline({
             <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{cartoesPF.length}</span>
           </button>
         </div>
-        <button onClick={onModalClose} className="btn-primary text-xs h-8 px-3">
+        <button onClick={onModalOpen} className="btn-primary text-xs h-8 px-3">
           {subAbaContas === 'bancarias' ? '🏦 Nova Conta' : '💳 Novo Cartão'}
         </button>
       </div>
@@ -427,7 +428,7 @@ function TabContasPFInline({
               ? 'Adicione suas contas bancárias: Bradesco, C6 Bank, Nubank, Itaú, poupança...'
               : 'Adicione seus cartões de crédito ou débito pessoais.'}
           </p>
-          <button onClick={onModalClose} className="btn-primary mx-auto">
+          <button onClick={onModalOpen} className="btn-primary mx-auto">
             {subAbaContas === 'bancarias' ? '🏦 Adicionar Primeira Conta' : '💳 Adicionar Primeiro Cartão'}
           </button>
         </div>
@@ -473,7 +474,7 @@ function TabContasPFInline({
             )
           })}
           {/* Card para adicionar */}
-          <button onClick={onModalClose}
+          <button onClick={onModalOpen}
             className={cn(
               'border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 transition-all min-h-[160px]',
               subAbaContas === 'bancarias'

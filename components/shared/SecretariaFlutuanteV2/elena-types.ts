@@ -62,6 +62,8 @@ export type AcaoTipo =
   | 'buscar_patrimonio'
   | 'diario'
   | 'buscar_diario'
+  | 'registrar_investimento'
+  | 'buscar_investimentos'
 
 export interface AcaoIA {
   tipo: AcaoTipo
