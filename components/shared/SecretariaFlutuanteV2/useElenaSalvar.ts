@@ -1186,6 +1186,88 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
 
+      // ── INVESTIMENTOS ─────────────────────────────────────────
+      } else if (acao.tipo === 'registrar_investimento') {
+        const tiposValidos = ['acao', 'fii', 'fundo', 'cdb', 'lci', 'lca', 'tesouro', 'cripto', 'poupanca', 'previdencia', 'outro']
+        const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'outro'
+        const qtd = Number(acao.dados.quantidade) || 1
+        const pm = Number(acao.dados.preco_medio) || 0
+        const pa = acao.dados.preco_atual ? Number(acao.dados.preco_atual) : null
+        const vi = qtd * pm
+
+        const empresaId = await getEmpresaId(uid)
+
+        const payload: Record<string, any> = {
+          ticker: acao.dados.ticker?.toUpperCase() || null,
+          nome: acao.dados.nome || (acao.dados.ticker ? acao.dados.ticker.toUpperCase() : 'Investimento via Elena'),
+          tipo,
+          quantidade: qtd,
+          preco_medio: pm,
+          preco_atual: pa,
+          valor_investido: vi,
+          valor_atual: pa ? qtd * pa : null,
+          liquidez: acao.dados.liquidez || 'diaria',
+          risco_nivel: 3,
+          corretora: acao.dados.corretora || null,
+        }
+        if (empresaId) payload.empresa_id = empresaId
+
+        const { data: novoAtivo, error } = await (supabase.from('ativos') as any)
+          .insert(payload).select('id').single()
+        if (error) throw new Error(error.message)
+        if (novoAtivo?.id) ultimoRegistroRef.current = { tabela: 'ativos', id: novoAtivo.id }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        exibirConfirmacaoSalvamento('registrar_investimento', acao.dados, undefined, novoAtivo?.id, 'ativos')
+
+      } else if (acao.tipo === 'buscar_investimentos') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const empresaId = await getEmpresaId(uid)
+        const filtroTipo = acao.dados.tipo && acao.dados.tipo !== 'todos' ? acao.dados.tipo : null
+
+        let query = (supabase.from('ativos') as any)
+          .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, corretora')
+          .order('valor_investido', { ascending: false })
+        if (empresaId) query = query.eq('empresa_id', empresaId)
+        if (filtroTipo) query = query.eq('tipo', filtroTipo)
+        const { data: ativos } = await query
+
+        const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        const tipoColors: Record<string, string> = { acao: '🔵', fii: '🟢', fundo: '🟣', cdb: '🟠', tesouro: '🔴', cripto: '🟣', poupanca: '🟠' }
+
+        if (!ativos || ativos.length === 0) {
+          setMensagens(prev => [...prev, {
+            id: `inv-${Date.now()}`, role: 'ai' as const,
+            texto: '📈 Nenhum investimento cadastrado ainda, Sr. Max.\n\nDiga-me, por exemplo: _\"comprei 100 ações de PETR4 a 35 reais\"_ e eu adiciono à sua carteira!',
+          }])
+        } else {
+          const totalInvestido = ativos.reduce((a: number, p: any) => a + (p.valor_investido || 0), 0)
+          const totalMercado = ativos.reduce((a: number, p: any) => a + (p.valor_atual || p.valor_investido || 0), 0)
+          const valoriz = totalMercado - totalInvestido
+          const rentPct = totalInvestido > 0 ? (valoriz / totalInvestido) * 100 : 0
+
+          let texto = `📈 **SUA CARTEIRA${filtroTipo ? ` — ${filtroTipo.toUpperCase()}` : ''}**\n\n`
+          texto += `💰 Total investido: **${fmt(totalInvestido)}**\n`
+          texto += `📊 Valor atual: **${fmt(totalMercado)}**\n`
+          texto += `${valoriz >= 0 ? '🟢' : '🔴'} Resultado: **${valoriz >= 0 ? '+' : ''}${fmt(valoriz)} (${rentPct.toFixed(2)}%)**\n\n`
+          texto += `---\n\n`
+
+          ativos.forEach((a: any) => {
+            const emoji = tipoColors[a.tipo] || '⚪'
+            const va = a.valor_atual || a.valor_investido
+            const res = va - a.valor_investido
+            const rent = a.valor_investido > 0 ? (res / a.valor_investido) * 100 : 0
+            texto += `${emoji} **${a.ticker || a.nome}**\n`
+            texto += `   Investido: ${fmt(a.valor_investido)} · Atual: ${fmt(va)}\n`
+            texto += `   ${res >= 0 ? '🟢 +' : '🔴 '}${rent.toFixed(2)}%\n`
+            texto += '\n'
+          })
+
+          texto += `_Total: ${ativos.length} ativo(s)._`
+          setMensagens(prev => [...prev, { id: `inv-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+
       // ── TRANSFERÊNCIA ────────────────────────────────────────
 
       } else if (acao.tipo === 'transferencia') {

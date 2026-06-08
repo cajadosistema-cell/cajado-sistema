@@ -329,6 +329,27 @@ MEMÓRIA UNIVERSAL:
 - Use quando perguntar: "meu diário", "últimas anotações", "o que escrevi essa semana",
   "minhas decisões recentes", "como estava meu humor?"
 
+📈 REGISTRAR INVESTIMENTO / ATIVO:
+```json
+{"acao":"registrar_investimento","ticker":"PETR4","nome":"Petrobras PN","tipo":"acao","quantidade":100,"preco_medio":35.50,"preco_atual":38.40,"liquidez":"diaria","corretora":"XP"}
+```
+- "tipo": acao, fii, fundo, cdb, lci, lca, tesouro, cripto, poupanca, previdencia, outro
+- "quantidade" e "preco_medio" são OBRIGATÓRIOS.
+- "liquidez": diaria, semanal, mensal, no_vencimento
+- Use quando o chefe mencionar: "comprei 100 ações de...", "investi em um CDB", "apliquei na poupança",
+  "adicione PETR4 na minha carteira", "comprei bitcoin"
+- EXEMPLOS:
+  → "comprei 200 ações de vale3 a 60 reais na clear" → {"acao":"registrar_investimento","ticker":"VALE3","nome":"Vale ON","tipo":"acao","quantidade":200,"preco_medio":60,"corretora":"Clear","liquidez":"diaria"}
+  → "apliquei 10 mil num cdb do inter" → {"acao":"registrar_investimento","nome":"CDB Banco Inter","tipo":"cdb","quantidade":1,"preco_medio":10000,"corretora":"Inter","liquidez":"no_vencimento"}
+
+🔍 CONSULTAR INVESTIMENTOS / CARTEIRA:
+```json
+{"acao":"buscar_investimentos","tipo":"todos"}
+```
+- "tipo" = "todos" ou filtre (ex: "acao", "fii", "cdb")
+- Use quando perguntar: "como estão meus investimentos?", "minha rentabilidade", "qual o total investido?",
+  "lista minhas ações", "minha carteira de cripto"
+
 DASHBOARD VISUAL (abre o painel financeiro gráfico do mês atual):
 ```json
 {"acao":"gerar_dashboard"}
@@ -593,6 +614,13 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'buscar_diario') {
         acoes.push({ tipo: 'buscar_diario', dados: d, label: `📖 Consultar diário — últimas ${d.limite || 5} entradas`, status: 'pending' })
+
+      } else if (d.acao === 'registrar_investimento') {
+        const t = d.ticker ? ` (${d.ticker.toUpperCase()})` : ''
+        acoes.push({ tipo: 'registrar_investimento', dados: d, label: `📈 Investimento: ${d.nome}${t} — R$ ${(Number(d.preco_medio || 0) * Number(d.quantidade || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, status: 'pending' })
+
+      } else if (d.acao === 'buscar_investimentos') {
+        acoes.push({ tipo: 'buscar_investimentos', dados: d, label: `🔍 Consultar investimentos — ${d.tipo && d.tipo !== 'todos' ? d.tipo.toUpperCase() : 'Todos'}`, status: 'pending' })
 
       } else if (d.acao) {
         // Fallback: qualquer ação desconhecida vira registro genérico
