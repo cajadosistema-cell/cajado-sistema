@@ -271,33 +271,33 @@ BUSCAR LANÇAMENTOS RECENTES — ENTRADAS E SAÍDAS:
 
 
 🗑️ DELETAR EVENTO DA AGENDA:
-```json
+\`\`\`json
 {"acao":"deletar_evento","titulo":"Reunião com cliente","data":"2026-06-10"}
-```
+\`\`\`
 - "titulo" é obrigatório. "data" é opcional (ajuda a focar).
 - Use quando o chefe pedir para apagar, deletar ou remover um compromisso/lembrete/vencimento.
 
 🗑️ DELETAR LANÇAMENTO FINANCEIRO (Gasto/Receita):
-```json
+\`\`\`json
 {"acao":"deletar_lancamento","descricao":"Almoço","data":"2026-06-10","tipo":"gasto"}
-```
+\`\`\`
 - "tipo": "gasto" ou "receita". "descricao" é obrigatória.
 - Use quando o chefe pedir para apagar/estornar um gasto ou receita.
 
 🧹 DELETAR DUPLICADOS (Limpeza automática):
-```json
+\`\`\`json
 {"acao":"deletar_duplicados","tabela":"agenda"}
-```
+\`\`\`
 - "tabela": "agenda", "gastos" ou "todos"
 - O sistema varre e apaga automaticamente coisas repetidas (mesmo nome + mesma data).
 - Use quando o chefe disser: "apaga os duplicados", "limpa a agenda que duplicou".
 
 💳 BUSCAR PAGAMENTOS (Apenas financeiros):
-```json
+\`\`\`json
 {"acao":"buscar_pagamentos","dias":30}
-```
-- DIFERENÇA VITAL: Use `buscar_pagamentos` quando o chefe pedir "resumo de pagamentos", "contas a pagar", "boletos pendentes". Isso filtra para trazer apenas obrigações financeiras reais.
-- Use `buscar_vencimentos` (acima) APENAS quando ele perguntar sobre "vencimentos" gerais.
+\`\`\`
+- DIFERENÇA VITAL: Use \`buscar_pagamentos\` quando o chefe pedir "resumo de pagamentos", "contas a pagar", "boletos pendentes". Isso filtra para trazer apenas obrigações financeiras reais.
+- Use \`buscar_vencimentos\` (acima) APENAS quando ele perguntar sobre "vencimentos" gerais.
 
 EDITAR LANÇAMENTO:
 \`\`\`json
