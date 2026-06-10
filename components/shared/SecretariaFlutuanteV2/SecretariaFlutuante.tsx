@@ -377,46 +377,55 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       // ── Busca dados reais do banco para injetar no prompt ─────
       // Isso resolve: Elena voltando a perguntar dados já salvos,
       // e Elena confundindo/alterando datas e vencimentos de cartões.
-      let blocoCartoes = ''
+        let blocoCartoes = ''
       try {
         const { data: contasMax } = await (supabase.from('contas') as any)
           .select('nome, tipo, dia_vencimento, dia_fechamento, limite, categoria, bandeira')
-          .eq('user_id', uid)
-          .eq('ativo', true)
-          .order('nome', { ascending: true })
+          .eq('user_id', uid).eq('ativo', true).order('nome', { ascending: true })
 
-        if (contasMax && contasMax.length > 0) {
-          const cartoes   = contasMax.filter((c: any) => c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito')
-          const bancarias = contasMax.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito')
+        const { data: imoveisMax } = await (supabase.from('imoveis') as any)
+          .select('titulo, parcelas_total, parcelas_pagas')
+          .eq('user_id', uid).not('parcelas_total', 'is', null)
 
+        if ((contasMax && contasMax.length > 0) || (imoveisMax && imoveisMax.length > 0)) {
           blocoCartoes = '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
           blocoCartoes += '[DADOS REAIS DO SISTEMA — USE EXATAMENTE ESSES DADOS]\n'
           blocoCartoes += '⚠️ REGRA CRÍTICA: Esses dados já estão cadastrados. NÃO volte a perguntar.\n'
           blocoCartoes += 'NÃO altere datas ou valores sem ordem explícita do Sr. Max.\n\n'
 
-          if (cartoes.length > 0) {
-            blocoCartoes += '💳 CARTÕES CADASTRADOS:\n'
-            cartoes.forEach((c: any) => {
-              const venc   = c.dia_vencimento ? `vencimento: dia ${c.dia_vencimento}` : 'vencimento: não informado'
-              const fech   = c.dia_fechamento ? ` | fechamento: dia ${c.dia_fechamento}` : ''
-              const lim    = c.limite         ? ` | limite: R$ ${Number(c.limite).toLocaleString('pt-BR')}` : ''
-              const cat    = c.categoria      ? ` | ${c.categoria.toUpperCase()}` : ''
-              blocoCartoes += `  • "${c.nome}" | ${venc}${fech}${lim}${cat}\n`
+          if (contasMax && contasMax.length > 0) {
+            const cartoes   = contasMax.filter((c: any) => c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito')
+            const bancarias = contasMax.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito')
+
+            if (cartoes.length > 0) {
+              blocoCartoes += '💳 CARTÕES CADASTRADOS:\n'
+              cartoes.forEach((c: any) => {
+                const venc = c.dia_vencimento ? `vencimento: dia ${c.dia_vencimento}` : 'vencimento: não informado'
+                const fech = c.dia_fechamento ? ` | fechamento: dia ${c.dia_fechamento}` : ''
+                const lim  = c.limite         ? ` | limite: R$ ${Number(c.limite).toLocaleString('pt-BR')}` : ''
+                blocoCartoes += `  • "${c.nome}" | ${venc}${fech}${lim}\n`
+              })
+              blocoCartoes += '\n'
+            }
+
+            if (bancarias.length > 0) {
+              blocoCartoes += '🏦 CONTAS BANCÁRIAS CADASTRADAS:\n'
+              bancarias.forEach((c: any) => {
+                blocoCartoes += `  • "${c.nome}" | tipo: ${c.tipo}\n`
+              })
+              blocoCartoes += '\n'
+            }
+          }
+
+          if (imoveisMax && imoveisMax.length > 0) {
+            blocoCartoes += '🏠 IMÓVEIS PARCELADOS (EM ABERTO):\n'
+            imoveisMax.forEach((im: any) => {
+              blocoCartoes += `  • "${im.titulo}" | parcelas pagas: ${im.parcelas_pagas||0}/${im.parcelas_total}\n`
             })
             blocoCartoes += '\n'
           }
 
-          if (bancarias.length > 0) {
-            blocoCartoes += '🏦 CONTAS BANCÁRIAS CADASTRADAS:\n'
-            bancarias.forEach((c: any) => {
-              const cat = c.categoria ? ` | ${c.categoria.toUpperCase()}` : ''
-              blocoCartoes += `  • "${c.nome}" | tipo: ${c.tipo}${cat}\n`
-            })
-            blocoCartoes += '\n'
-          }
-
-          blocoCartoes += 'INSTRUÇÕES: Para atualizar um cartão existente, use acao "atualizar_cartao" com o nome EXATO.\n'
-          blocoCartoes += 'NUNCA cadastre novamente algo que já aparece na lista acima.\n'
+          blocoCartoes += 'INSTRUÇÕES: NUNCA cadastre novamente algo que já aparece na lista acima.\n'
           blocoCartoes += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
         }
       } catch { /* não bloqueia se falhar */ }

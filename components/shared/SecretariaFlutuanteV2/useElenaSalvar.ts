@@ -402,23 +402,36 @@ export function useElenaSalvar({
               ? tipoRaw
               : (TIPO_FALLBACK_PRE_MIGRATION[tipoRaw] || 'compromisso'))
         // ── Guard anti-duplicação ────────────────────────────────────────
-        // Compara título + data_inicio para evitar falso-positivo com mesmo nome em horários diferentes
-        const ha5s = new Date(Date.now() - 5000).toISOString()  // janela de 5s (só double-click)
+        // Janela de 60s para evitar duplo-clique e re-confirmações rápidas.
+        // Para vencimentos (recorrentes mensais), verifica sem limite de tempo.
+        const ha60s = new Date(Date.now() - 60000).toISOString()
         const tituloEvento = acao.dados.titulo || 'Evento via Elena'
         const strDataParaDedup = String(acao.dados.data_inicio || '').substring(0, 16) // YYYY-MM-DDTHH:MM
-        const { data: jaExiste } = await (supabase.from('agenda_eventos') as any)
-          .select('id, data_inicio')
-          .eq('user_id', uid)
-          .eq('titulo', tituloEvento)
-          .gte('created_at', ha5s)
-          .limit(5)
-        // Só bloqueia se título E horário (até o minuto) forem idênticos
-        const isDuplicado = (jaExiste || []).some((ev: any) =>
-          String(ev.data_inicio || '').substring(0, 16) === strDataParaDedup
-        )
-        if (isDuplicado) {
-          setAcaoStatus(msgId, acaoIdx, 'saved')
-          return
+        const tipoParaDedup = tipoEvento
+
+        // Vencimentos: nunca duplicar no mesmo mês+dia (independente de hora)
+        const strDiaParaDedup = String(acao.dados.data_inicio || '').substring(0, 10) // YYYY-MM-DD
+        if (tipoParaDedup === 'vencimento') {
+          const { data: jaExisteVenc } = await (supabase.from('agenda_eventos') as any)
+            .select('id').eq('user_id', uid).eq('titulo', tituloEvento).eq('tipo', 'vencimento')
+            .gte('data_inicio', `${strDiaParaDedup}T00:00:00`)
+            .lte('data_inicio', `${strDiaParaDedup}T23:59:59`).limit(1)
+          if (jaExisteVenc?.length) {
+            setAcaoStatus(msgId, acaoIdx, 'saved')
+            return
+          }
+        } else {
+          // Outros tipos: janela de 60s + mesmo título+horário
+          const { data: jaExiste } = await (supabase.from('agenda_eventos') as any)
+            .select('id, data_inicio').eq('user_id', uid).eq('titulo', tituloEvento)
+            .gte('created_at', ha60s).limit(5)
+          const isDuplicado = (jaExiste || []).some((ev: any) =>
+            String(ev.data_inicio || '').substring(0, 16) === strDataParaDedup
+          )
+          if (isDuplicado) {
+            setAcaoStatus(msgId, acaoIdx, 'saved')
+            return
+          }
         }
 
         // ── Timezone: adiciona offset local para salvar corretamente no Supabase ──────
@@ -1527,18 +1540,18 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
 
-      // ── BUSCAR VENCIMENTOS PRÓXIMOS ───────────────────────────
+      // ── BUSCAR VENCIMENTOS PRÓXIMOS (só tipo 'vencimento') ───────────
       } else if ((acao.tipo as string) === 'buscar_vencimentos') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const dias = Math.min(Number(acao.dados.dias) || 30, 90)
         const agora = new Date()
         const ate = new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000)
 
-        // Busca eventos tipo vencimento ou lembrete com palavras-chave de pagamento
+        // Busca APENAS tipo vencimento — não mistura com lembretes genéricos
         const { data: eventos, error: errEv } = await (supabase.from('agenda_eventos') as any)
           .select('id, titulo, data_inicio, tipo, descricao')
           .eq('user_id', uid)
-          .in('tipo', ['vencimento', 'lembrete', 'prazo'])
+          .eq('tipo', 'vencimento')
           .neq('status', 'cancelado')
           .neq('status', 'concluido')
           .gte('data_inicio', agora.toISOString())
@@ -1553,10 +1566,8 @@ export function useElenaSalvar({
             texto: `📅 Nenhum vencimento encontrado nos próximos ${dias} dias, Sr. Max.`,
           }])
         } else {
-          // Filtra para mostrar só os que parecem contas a pagar (não confirmações)
           const pagamentos = (eventos as any[]).filter(ev => {
             const tit = (ev.titulo || '').toLowerCase()
-            // Exclui eventos de "confirmação" (que são os T20 de verificação)
             return !tit.includes('confirmação') && !tit.includes('pagou') && !tit.startsWith('✅')
           })
 
@@ -1573,17 +1584,56 @@ export function useElenaSalvar({
             texto += `${urgencia} [${dtFmt}] **${ev.titulo}** — ${quando}\n`
           })
 
-          const totalUrgente = pagamentos.filter((ev: any) => {
-            const dt = new Date(ev.data_inicio)
-            const diff = Math.ceil((dt.getTime() - hoje.getTime()) / (24 * 60 * 60 * 1000))
-            return diff <= 7
-          }).length
+          const totalUrgente = pagamentos.filter((ev: any) =>
+            Math.ceil((new Date(ev.data_inicio).getTime() - hoje.getTime()) / (24 * 60 * 60 * 1000)) <= 7
+          ).length
 
-          if (totalUrgente > 0) {
-            texto += `\n⚠️ _${totalUrgente} vencimento(s) nos próximos 7 dias!_`
-          }
-          texto += `\n\n_Total: ${pagamentos.length} compromisso(s)_`
+          if (totalUrgente > 0) texto += `\n⚠️ _${totalUrgente} vencimento(s) nos próximos 7 dias!_`
+          texto += `\n\n_Total: ${pagamentos.length} compromisso(s) financeiro(s)_`
           setMensagens(prev => [...prev, { id: `venc-${Date.now()}`, role: 'ai' as const, texto }])
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // ── BUSCAR PAGAMENTOS (filtro financeiro inteligente) ─────────────
+      } else if ((acao.tipo as string) === 'buscar_pagamentos') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const dias = Math.min(Number(acao.dados.dias) || 30, 90)
+        const agora = new Date()
+        const ate = new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000)
+
+        const { data: eventosP } = await (supabase.from('agenda_eventos') as any)
+          .select('id, titulo, data_inicio, tipo, descricao')
+          .eq('user_id', uid)
+          .in('tipo', ['vencimento', 'lembrete', 'prazo'])
+          .neq('status', 'cancelado').neq('status', 'concluido')
+          .gte('data_inicio', agora.toISOString())
+          .lte('data_inicio', ate.toISOString())
+          .order('data_inicio', { ascending: true })
+
+        const PALAVRAS_PAG = ['pagar','cartão','fatura','boleto','conta','vencimento','aluguel','energia','internet','agua','água','mensalidade','parcela','financiamento','condomínio','condominio','plano','seguro']
+        const pagamentosF = (eventosP || []).filter((ev: any) => {
+          const txt = `${ev.titulo} ${ev.descricao || ''}`.toLowerCase()
+          if (txt.includes('confirmação') || txt.includes('pagou') || txt.startsWith('✅')) return false
+          if (ev.tipo === 'vencimento') return true
+          return PALAVRAS_PAG.some(p => txt.includes(p))
+        })
+
+        if (!pagamentosF.length) {
+          setMensagens(prev => [...prev, { id: `pag-${Date.now()}`, role: 'ai' as const,
+            texto: `💳 Nenhum compromisso financeiro encontrado nos próximos ${dias} dias, Sr. Max.` }])
+        } else {
+          const hoje2 = new Date(); hoje2.setHours(0,0,0,0)
+          let texto = `💳 **Compromissos financeiros — próximos ${dias} dias:**\n\n`
+          pagamentosF.forEach((ev: any) => {
+            const dt = new Date(ev.data_inicio)
+            const diff = Math.ceil((dt.getTime() - hoje2.getTime()) / (24*60*60*1000))
+            const dtFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+            const urg = diff <= 2 ? '🔴' : diff <= 7 ? '🟡' : '🟢'
+            const quando = diff === 0 ? 'HOJE' : diff === 1 ? 'amanhã' : `dia ${dtFmt}`
+            texto += `${urg} **${ev.titulo}** — ${quando}\n`
+          })
+          texto += `\n_Total: ${pagamentosF.length} compromisso(s)_`
+          setMensagens(prev => [...prev, { id: `pag-${Date.now()}`, role: 'ai' as const, texto }])
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
@@ -1648,6 +1698,96 @@ export function useElenaSalvar({
         }])
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
+
+      // -- DELETAR EVENTO DA AGENDA -----------------------------------------
+      } else if ((acao.tipo as string) === 'deletar_evento') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const tituloDelete = acao.dados.titulo || ''
+        const dataDelete   = acao.dados.data   || ''
+        if (!tituloDelete) throw new Error('Informe o titulo do evento a deletar.')
+        let query = (supabase.from('agenda_eventos') as any)
+          .select('id, titulo').eq('user_id', uid).ilike('titulo', `%${tituloDelete}%`)
+        if (dataDelete) query = query
+          .gte('data_inicio', `${dataDelete.substring(0,10)}T00:00:00`)
+          .lte('data_inicio', `${dataDelete.substring(0,10)}T23:59:59`)
+        const { data: encontrados } = await query.limit(5)
+        if (!encontrados?.length) {
+          setMensagens(prev => [...prev, { id: `del-${Date.now()}`, role: 'ai' as const,
+            texto: `Nenhum evento encontrado com "${tituloDelete}".` }])
+        } else {
+          await (supabase.from('agenda_eventos') as any).delete().in('id', encontrados.map((e: any) => e.id))
+          setMensagens(prev => [...prev, { id: `del-${Date.now()}`, role: 'ai' as const,
+            texto: `Deletei ${encontrados.length} evento(s): ${encontrados.map((e: any) => e.titulo).join(', ')}` }])
+          window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // -- DELETAR LANCAMENTO (GASTO/RECEITA) --------------------------------
+      } else if ((acao.tipo as string) === 'deletar_lancamento') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const descDelete  = acao.dados.descricao || ''
+        const dataDelete2 = acao.dados.data || ''
+        const tipoDelete  = acao.dados.tipo || 'gasto'
+        const tabelaDel   = tipoDelete === 'receita' ? 'receitas_pessoais' : 'gastos_pessoais'
+        if (!descDelete) throw new Error('Informe a descricao do lancamento a deletar.')
+        let q2 = (supabase.from(tabelaDel) as any).select('id, descricao, valor').eq('user_id', uid)
+          .ilike('descricao', `%${descDelete}%`)
+        if (dataDelete2) q2 = q2.gte('data', dataDelete2.substring(0,10)).lte('data', dataDelete2.substring(0,10))
+        const { data: lancs } = await q2.limit(3)
+        if (!lancs?.length) {
+          setMensagens(prev => [...prev, { id: `del2-${Date.now()}`, role: 'ai' as const,
+            texto: `Nenhum lancamento encontrado com "${descDelete}".` }])
+        } else {
+          await (supabase.from(tabelaDel) as any).delete().in('id', lancs.map((l: any) => l.id))
+          const total = lancs.reduce((s: number, l: any) => s + Number(l.valor), 0)
+          setMensagens(prev => [...prev, { id: `del2-${Date.now()}`, role: 'ai' as const,
+            texto: `Deletei ${lancs.length} lancamento(s) — R$ ${total.toFixed(2)}` }])
+          window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // -- DELETAR DUPLICADOS ------------------------------------------------
+      } else if ((acao.tipo as string) === 'deletar_duplicados') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const alvo = acao.dados.tabela || 'agenda'
+        let totalRemovidos = 0
+        if (alvo === 'agenda' || alvo === 'todos') {
+          const { data: todosEvts } = await (supabase.from('agenda_eventos') as any)
+            .select('id, titulo, data_inicio, created_at').eq('user_id', uid)
+            .order('created_at', { ascending: true })
+          const vis = new Map<string, string>(); const idsE: string[] = []
+          ;(todosEvts || []).forEach((ev: any) => {
+            const ch = `${(ev.titulo||'').toLowerCase().trim()}_${String(ev.data_inicio||'').substring(0,16)}`
+            if (vis.has(ch)) { idsE.push(ev.id) } else { vis.set(ch, ev.id) }
+          })
+          if (idsE.length > 0) {
+            for (let i = 0; i < idsE.length; i += 50)
+              await (supabase.from('agenda_eventos') as any).delete().in('id', idsE.slice(i, i+50))
+            totalRemovidos += idsE.length
+            window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
+          }
+        }
+        if (alvo === 'gastos' || alvo === 'todos') {
+          const { data: todosG } = await (supabase.from('gastos_pessoais') as any)
+            .select('id, descricao, valor, data, created_at').eq('user_id', uid)
+            .order('created_at', { ascending: true })
+          const visG = new Map<string, string>(); const idsG: string[] = []
+          ;(todosG || []).forEach((g: any) => {
+            const ch = `${(g.descricao||'').toLowerCase().trim()}_${g.data}_${g.valor}`
+            if (visG.has(ch)) { idsG.push(g.id) } else { visG.set(ch, g.id) }
+          })
+          if (idsG.length > 0) {
+            for (let i = 0; i < idsG.length; i += 50)
+              await (supabase.from('gastos_pessoais') as any).delete().in('id', idsG.slice(i, i+50))
+            totalRemovidos += idsG.length
+            window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+          }
+        }
+        setMensagens(prev => [...prev, { id: `dedup-${Date.now()}`, role: 'ai' as const,
+          texto: totalRemovidos > 0
+            ? `Limpeza concluida! Removi ${totalRemovidos} duplicata(s) da ${alvo}.`
+            : `Nenhuma duplicata encontrada — tudo limpo, Sr. Max!` }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
       // ── AÇÃO DESCONHECIDA → ignora silenciosamente ───────────
       } else {
         setAcaoStatus(msgId, acaoIdx, 'saved')      }

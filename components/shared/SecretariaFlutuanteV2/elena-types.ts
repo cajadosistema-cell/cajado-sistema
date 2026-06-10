@@ -64,6 +64,11 @@ export type AcaoTipo =
   | 'buscar_diario'
   | 'registrar_investimento'
   | 'buscar_investimentos'
+  | 'buscar_pagamentos'
+  | 'buscar_vencimentos'
+  | 'deletar_evento'
+  | 'deletar_lancamento'
+  | 'deletar_duplicados'
 
 export interface AcaoIA {
   tipo: AcaoTipo
