@@ -65,6 +65,10 @@ bootstrap().then(() => {
   // ── Cron de Alarmes Push (iPhone/Android) ──────────────────
   const { iniciarCronAlarmes } = require('./src/routes/push-alarmes.routes')
   iniciarCronAlarmes()
+
+  // ── Cron de Alertas WhatsApp (definitivo: funciona com app fechado) ─────
+  const { iniciarCronAlertasWhatsApp } = require('./src/routes/alertas-whatsapp.routes')
+  iniciarCronAlertasWhatsApp()
 }).catch(console.error);
 
 // ─── CANAIS EM MEMÓRIA ───────────────────────────────────────────────────
@@ -109,6 +113,9 @@ app.use('/api/whatsapp', require('./src/routes/whatsapp.routes'));
 
 // ─── PUSH NOTIFICATIONS (alarmes iPhone/Android) ─────────────────
 app.use('/api', require('./src/routes/push-alarmes.routes').router);
+
+// ─── ALERTAS WHATSAPP (definitivo para celular/background) ─────────
+app.use('/api', require('./src/routes/alertas-whatsapp.routes').router);
 
 // O index.js agora atua apenas como orquestrador e ponto de entrada.
 // Todas as rotas foram modularizadas em src/routes/.
