@@ -26,9 +26,6 @@ const INSTANCIA_ALERTA = process.env.ALERTA_WHATSAPP_INSTANCIA
   || process.env.INSTANCE
   || 'botwhatsapp01'
 
-// ─── Função principal ────────────────────────────────────────────────────────
-async function verificarEEnviarAlertas() {
-
 // --- Relatório Matinal Automático (Executa às 08:00 todos os dias) ---
 async function enviarRelatorioMatinal() {
   try {
@@ -106,6 +103,9 @@ async function enviarRelatorioMatinal() {
     console.error('[Alertas-WA] Erro no resumo matinal:', err.message)
   }
 }
+
+// ─── Função principal ────────────────────────────────────────────────────────
+async function verificarEEnviarAlertas() {
   try {
     const agora   = new Date()
     const em15min = new Date(agora.getTime() + 15 * 60 * 1000)
