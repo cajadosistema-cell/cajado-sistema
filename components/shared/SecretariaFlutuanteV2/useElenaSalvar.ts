@@ -1034,29 +1034,68 @@ export function useElenaSalvar({
         const pt = acao.dados.parcelas_total ? Number(acao.dados.parcelas_total) : null
         const pp = acao.dados.parcelas_pagas ? Number(acao.dados.parcelas_pagas) : null
 
+        const dataAq = acao.dados.data_aquisicao || null
+
         // Busca empresa_id para RLS
         const empresaId = await getEmpresaId(uid)
 
-        const payload: Record<string, any> = {
-          titulo: acao.dados.titulo || 'Patrimônio via Elena',
-          tipo,
-          descricao: acao.dados.descricao || null,
-          valor_investido_total: vi,
-          valor_mercado_atual: vm,
-          roi_percentual: roi,
-          data_aquisicao: acao.dados.data_aquisicao || null,
-          status: 'ativo',
-          parcelas_total: pt,
-          parcelas_pagas: pp,
-        }
-        if (empresaId) payload.empresa_id = empresaId
+        let tabelaDestino = 'projetos_patrimonio'
+        let insertId: string | undefined
 
-        const { data: novoPat, error } = await (supabase.from('projetos_patrimonio') as any)
-          .insert(payload).select('id').single()
-        if (error) throw new Error(error.message)
-        if (novoPat?.id) ultimoRegistroRef.current = { tabela: 'projetos_patrimonio', id: novoPat.id }
+        if (tipo === 'imovel') {
+          tabelaDestino = 'imoveis'
+          const payloadImovel: Record<string, any> = {
+            titulo: acao.dados.titulo || 'Imóvel via Elena',
+            valor_compra: vi,
+            valor_mercado: vm,
+            data_aquisicao: dataAq,
+            parcelas_total: pt,
+            parcelas_pagas: pp || 0,
+            status: 'ativo'
+          }
+          if (empresaId) payloadImovel.empresa_id = empresaId
+          const { data, error } = await (supabase.from('imoveis') as any).insert(payloadImovel).select('id').single()
+          if (error) throw new Error(error.message)
+          insertId = data?.id
+
+        } else if (tipo === 'veiculo') {
+          tabelaDestino = 'veiculos'
+          const payloadVeiculo: Record<string, any> = {
+            titulo: acao.dados.titulo || 'Veículo via Elena',
+            valor_compra: vi,
+            valor_mercado: vm,
+            parcelas_total: pt,
+            parcelas_pagas: pp || 0,
+            status: 'ativo'
+          }
+          if (empresaId) payloadVeiculo.empresa_id = empresaId
+          const { data, error } = await (supabase.from('veiculos') as any).insert(payloadVeiculo).select('id').single()
+          if (error) throw new Error(error.message)
+          insertId = data?.id
+
+        } else {
+          tabelaDestino = 'projetos_patrimonio'
+          const payloadProj: Record<string, any> = {
+            titulo: acao.dados.titulo || 'Patrimônio via Elena',
+            tipo,
+            descricao: acao.dados.descricao || null,
+            valor_investido_total: vi,
+            valor_mercado_atual: vm,
+            roi_percentual: roi,
+            data_aquisicao: dataAq,
+            status: 'ativo',
+            parcelas_total: pt,
+            parcelas_pagas: pp,
+          }
+          if (empresaId) payloadProj.empresa_id = empresaId
+          const { data, error } = await (supabase.from('projetos_patrimonio') as any).insert(payloadProj).select('id').single()
+          if (error) throw new Error(error.message)
+          insertId = data?.id
+        }
+
+        if (insertId) ultimoRegistroRef.current = { tabela: tabelaDestino, id: insertId }
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirConfirmacaoSalvamento('registrar_patrimonio', acao.dados, undefined, novoPat?.id, 'projetos_patrimonio')
+        exibirConfirmacaoSalvamento('registrar_patrimonio', acao.dados, undefined, insertId, tabelaDestino)
 
       // ── BUSCAR PATRIMÔNIO ─────────────────────────────────────
       } else if (acao.tipo === 'buscar_patrimonio') {
