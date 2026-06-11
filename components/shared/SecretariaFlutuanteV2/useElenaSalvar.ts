@@ -1051,7 +1051,7 @@ export function useElenaSalvar({
             data_aquisicao: dataAq,
             parcelas_total: pt,
             parcelas_pagas: pp || 0,
-            status: 'ativo'
+            status: 'disponivel'
           }
           if (empresaId) payloadImovel.empresa_id = empresaId
           const { data, error } = await (supabase.from('imoveis') as any).insert(payloadImovel).select('id').single()
