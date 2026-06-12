@@ -289,18 +289,22 @@ function SecretariaFlutuanteWidget() {
 
           if (m.role === 'ai') {
             // Mensagens de resultado/sistema da Elena → comprimir para evitar poluição de contexto
+            // mas mantendo resumo breve para recapitulação
             const t = m.texto
-            // Confirmações de salvamento → resumir drasticamente
+            // Confirmações de salvamento → manter resumo breve do que foi salvo
             if (t.includes('✅') || t.includes('Registrado') || t.includes('Registrando') || t.includes('⏳')) {
-              return `[${dtStr}] Elena: [SISTEMA: dado já registrado com sucesso]`
+              // Extrai a primeira linha significativa como resumo
+              const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\n')[0].substring(0, 120)
+              return `[${dtStr}] Elena: [JÁ SALVO: ${resumo}] — NÃO pedir esses dados de novo`
             }
-            // Resultados de busca (patrimônio, contas, lançamentos) → resumir
+            // Resultados de busca (patrimônio, contas, lançamentos) → manter resumo do que foi listado
             if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {
-              return `[${dtStr}] Elena: [SISTEMA: lista de dados exibida ao usuário — NÃO repetir perguntas sobre dados já mostrados]`
+              const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\n').slice(0, 3).join(' | ').substring(0, 150)
+              return `[${dtStr}] Elena: [LISTOU: ${resumo}] — dados já exibidos, NÃO repetir perguntas`
             }
             // Mensagens de erro → resumir
             if (t.startsWith('❌') || t.includes('Ops!')) {
-              return `[${dtStr}] Elena: [SISTEMA: erro ao salvar — usuário já foi notificado]`
+              return `[${dtStr}] Elena: [ERRO: ${t.substring(0, 80)}]`
             }
             // Respostas normais da Elena → manter com limite
             return `[${dtStr}] Elena: ${t.substring(0, 400)}`
