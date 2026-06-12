@@ -843,7 +843,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // ── ALERTAR RECORRENTE (cadastra conta fixa + cria eventos imediatos) ─
-      } else if ((acao.tipo as string) === 'alertar_recorrente') {
+      } else if (acao.tipo === 'alertar_recorrente') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const tiposValidos = ['boleto','cartao','agua','energia','internet','telefone','aluguel','condominio','plano_saude','financiamento','outro']
         const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'boleto'
@@ -937,7 +937,7 @@ export function useElenaSalvar({
 
 
       // ── LISTAR RECORRENTES (mostra contas fixas cadastradas) ──
-      } else if ((acao.tipo as string) === 'listar_recorrentes') {
+      } else if (acao.tipo === 'listar_recorrentes') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const { data: recs, error } = await (supabase.from('alertas_recorrentes') as any)
           .select('descricao, valor, dia_vencimento, tipo, ativo')
@@ -1530,7 +1530,7 @@ export function useElenaSalvar({
       } else if (acao.tipo === 'relatorio_colaboradores') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const { data: ocorrencias } = await (supabase.from('ocorrencias') as any)
-          .select('tipo, impacto, funcionario_id, created_at, funcionarios(nome)')
+          .select('tipo, impacto, colaborador_id, created_at, perfis!colaborador_id(nome)')
           .order('created_at', { ascending: false })
           .limit(100)
 
@@ -1543,8 +1543,8 @@ export function useElenaSalvar({
           // Agrupa por colaborador
           const porColab: Record<string, { nome: string; total: number; tipos: Record<string, number>; impactos: Record<string, number> }> = {}
           for (const oc of ocorrencias as any[]) {
-            const nome = oc.funcionarios?.nome || 'Sem nome'
-            const fid = oc.funcionario_id || 'unknown'
+            const nome = oc.perfis?.nome || 'Sem nome'
+            const fid = oc.colaborador_id || 'unknown'
             if (!porColab[fid]) porColab[fid] = { nome, total: 0, tipos: {}, impactos: {} }
             porColab[fid].total++
             const tipo = oc.tipo || 'outro'
@@ -1617,7 +1617,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // ── BUSCAR CONTAS E CARTÕES ───────────────────────────────
-      } else if ((acao.tipo as string) === 'buscar_contas') {
+      } else if (acao.tipo === 'buscar_contas') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const cat = acao.dados.categoria || 'todos'
         // IMPORTANTE: sempre filtra por user_id para evitar vazamento entre contas
@@ -1656,7 +1656,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // ── BUSCAR LANÇAMENTOS RECENTES ───────────────────────────
-      } else if ((acao.tipo as string) === 'buscar_lancamentos') {
+      } else if (acao.tipo === 'buscar_lancamentos') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const tipo = acao.dados.tipo || 'todos'
         const limite = Math.min(Number(acao.dados.limite) || 10, 20)
@@ -1717,7 +1717,7 @@ export function useElenaSalvar({
 
 
       // ── BUSCAR VENCIMENTOS PRÓXIMOS (só tipo 'vencimento') ───────────
-      } else if ((acao.tipo as string) === 'buscar_vencimentos') {
+      } else if (acao.tipo === 'buscar_vencimentos') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const dias = Math.min(Number(acao.dados.dias) || 30, 90)
         const agora = new Date()
@@ -1771,7 +1771,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // ── BUSCAR PAGAMENTOS (filtro financeiro inteligente) ─────────────
-      } else if ((acao.tipo as string) === 'buscar_pagamentos') {
+      } else if (acao.tipo === 'buscar_pagamentos') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const dias = Math.min(Number(acao.dados.dias) || 30, 90)
         const agora = new Date()
@@ -1876,7 +1876,7 @@ export function useElenaSalvar({
 
 
       // -- DELETAR EVENTO DA AGENDA -----------------------------------------
-      } else if ((acao.tipo as string) === 'deletar_evento') {
+      } else if (acao.tipo === 'deletar_evento') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const tituloDelete = acao.dados.titulo || ''
         const dataDelete   = acao.dados.data   || ''
@@ -1899,7 +1899,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // -- DELETAR LANCAMENTO (GASTO/RECEITA) --------------------------------
-      } else if ((acao.tipo as string) === 'deletar_lancamento') {
+      } else if (acao.tipo === 'deletar_lancamento') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const descDelete  = acao.dados.descricao || ''
         const dataDelete2 = acao.dados.data || ''
@@ -1923,7 +1923,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // -- DELETAR DUPLICADOS ------------------------------------------------
-      } else if ((acao.tipo as string) === 'deletar_duplicados') {
+      } else if (acao.tipo === 'deletar_duplicados') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const alvo = acao.dados.tabela || 'agenda'
         let totalRemovidos = 0
