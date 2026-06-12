@@ -286,9 +286,31 @@ function SecretariaFlutuanteWidget() {
           const dtStr = m.created_at
             ? new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
             : 'Agora'
-          return `[${dtStr}] ${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto.substring(0, 500)}`
+
+          if (m.role === 'ai') {
+            // Mensagens de resultado/sistema da Elena → comprimir para evitar poluição de contexto
+            const t = m.texto
+            // Confirmações de salvamento → resumir drasticamente
+            if (t.includes('✅') || t.includes('Registrado') || t.includes('Registrando') || t.includes('⏳')) {
+              return `[${dtStr}] Elena: [SISTEMA: dado já registrado com sucesso]`
+            }
+            // Resultados de busca (patrimônio, contas, lançamentos) → resumir
+            if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {
+              return `[${dtStr}] Elena: [SISTEMA: lista de dados exibida ao usuário — NÃO repetir perguntas sobre dados já mostrados]`
+            }
+            // Mensagens de erro → resumir
+            if (t.startsWith('❌') || t.includes('Ops!')) {
+              return `[${dtStr}] Elena: [SISTEMA: erro ao salvar — usuário já foi notificado]`
+            }
+            // Respostas normais da Elena → manter com limite
+            return `[${dtStr}] Elena: ${t.substring(0, 400)}`
+          }
+
+          // Mensagens do USUÁRIO → manter completas (são os dados de entrada!)
+          return `[${dtStr}] Sr. Max: ${m.texto.substring(0, 600)}`
         })
         .join('\n') + colaboradoresCtx
+
 
       let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
