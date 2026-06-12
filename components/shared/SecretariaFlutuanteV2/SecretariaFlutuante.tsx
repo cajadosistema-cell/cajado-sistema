@@ -109,6 +109,7 @@ function SecretariaFlutuanteWidget() {
   const atualizandoPerfilRef = useRef(false)
   const alertasDisparadosRef = useRef<Set<string>>(new Set())
   const ultimoRegistroRef    = useRef<{ tabela: string; id: string } | null>(null)
+  const confirmRetryRef      = useRef(0) // P5: anti-loop de confirmação
 
   // Arquivo anexado: ref + state sincronizados
   const attachedFileRef = useRef<AttachedFile | null>(null)
@@ -324,14 +325,27 @@ function SecretariaFlutuanteWidget() {
       const textoLower = userText?.trim().toLowerCase() || ''
       const eConfirmacao = PALAVRAS_CONFIRMACAO.some(p => textoLower === p || textoLower === p + '!' || textoLower === p + '.')
       if (eConfirmacao && session.mensagens.length >= 2 && !fileSnap) {
+        confirmRetryRef.current += 1
+
+        // P5: Anti-loop — se já confirmou 2x sem resultado, pede para repetir
+        if (confirmRetryRef.current > 2) {
+          confirmRetryRef.current = 0
+          session.setMensagens(prev => prev.map(m =>
+            m.id === aiMsgId ? { ...m, texto: '😅 Desculpe, Sr. Max — não consegui entender o que confirmar. Pode repetir o pedido completo? Por exemplo: "Gastei R$ 50 de almoço no pix"' } : m
+          ))
+          setLoading(false)
+          isSendingRef.current = false
+          return
+        }
+
         const ultimaElena = [...session.mensagens].reverse().find(m => m.role === 'ai' && m.texto && m.texto !== '...')
 
         // ── ATALHO DIRETO: ações pendentes → executa sem re-consultar IA ──
         const acoesPendentes = ultimaElena?.acoes?.filter(a => a.status === 'pending')
         if (acoesPendentes && acoesPendentes.length > 0 && ultimaElena && uid) {
+          confirmRetryRef.current = 0 // Reset: ações encontradas, sucesso
 
           // Verifica se alguma ação de agenda tem horário expirado (passou o tempo)
-          // Isso acontece quando o usuário pede "daqui 10 minutos" mas demora para confirmar
           const agora = Date.now()
           const temAgendaExpirada = acoesPendentes.some(a => {
             if (a.tipo !== 'agenda') return false
@@ -340,7 +354,6 @@ function SecretariaFlutuanteWidget() {
           })
 
           if (!temAgendaExpirada) {
-            // Todos os horários ainda são válidos → executa diretamente ✅
             session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))
             setLoading(false)
             try {
@@ -351,8 +364,7 @@ function SecretariaFlutuanteWidget() {
             return
           }
 
-          // Horário expirado → cai no fallback da IA para recalcular a partir de agora
-          // A IA vai usar o horário atual e recriar o agendamento com tempo relativo correto
+          // Horário expirado → recalcular
           const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
           if (ultimaElena) {
             promptFinal = `[INSTRUÇÃO PRIORITÁRIA DO SISTEMA]: O usuário confirmou agora (${horaAtual}), mas o horário proposto já passou. RECALCULE o horário relativo a partir de AGORA (${horaAtual}) e gere o JSON IMEDIATAMENTE com o novo horário.
@@ -363,10 +375,13 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           }
         }
 
-        // Fallback: re-consulta IA se Elena só fez pergunta textual (sem JSON ainda)
+        // Fallback: re-consulta IA se Elena só fez pergunta textual
         if (ultimaElena) {
           promptFinal = `[INSTRUÇÃO PRIORITÁRIA DO SISTEMA]: O usuário está CONFIRMANDO. Gere o bloco JSON IMEDIATAMENTE.\n\nMensagem anterior da Elena: "${ultimaElena.texto.substring(0, 500)}"\n\nEXECUTE usando EXATAMENTE os dados (data, hora, valor) já informados — NÃO recalcule.`
         }
+      } else {
+        // Mensagem normal (não confirmação) → reset do contador
+        confirmRetryRef.current = 0
       }
 
       if (userText && precisaBuscarHistorico(userText) && !fileSnap) {
@@ -456,29 +471,93 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         }
       } catch { /* não bloqueia se falhar */ }
 
+      // ── Montar array de mensagens nativo (role/content) ────────
+      // Isso dá à IA separação clara de turnos, em vez de contexto plano.
+      const mensagensApi: { role: string; content: any }[] = []
+
+      // Pega últimas 20 mensagens úteis da sessão (sem lixo)
+      const msgsUteis = session.mensagens
+        .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith('Olá, Sr. Max!') && !m.texto.startsWith('Histórico carregado'))
+        .slice(-20)
+
+      for (const m of msgsUteis) {
+        if (m.role === 'ai') {
+          const t = m.texto
+          // Comprimir mensagens de sistema para não poluir o contexto
+          let content: string
+          if (t.includes('✅') || t.includes('Registrado') || t.includes('Registrando') || t.includes('⏳')) {
+            const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\n')[0].substring(0, 120)
+            content = `[JÁ SALVO: ${resumo}] — NÃO pedir esses dados de novo`
+          } else if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {
+            const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\n').slice(0, 3).join(' | ').substring(0, 150)
+            content = `[LISTOU: ${resumo}] — dados já exibidos`
+          } else if (t.startsWith('❌') || t.includes('Ops!')) {
+            content = `[ERRO: ${t.substring(0, 80)}]`
+          } else {
+            content = t.substring(0, 500)
+          }
+          mensagensApi.push({ role: 'assistant', content })
+        } else {
+          // Mensagens do usuário: manter completas
+          mensagensApi.push({ role: 'user', content: m.texto.substring(0, 800) })
+        }
+      }
+
+      // Adiciona a mensagem atual do usuário
+      const userContentParts: any[] = []
+      userContentParts.push({ type: 'text', text: promptFinal })
+      if (fileSnap?.isImage) {
+        userContentParts.push({
+          type: 'image_url',
+          image_url: { url: `data:${fileSnap.mime || 'image/jpeg'};base64,${fileSnap.base64}`, detail: 'high' },
+        })
+      }
+
+      mensagensApi.push({
+        role: 'user',
+        content: fileSnap?.isImage ? userContentParts : promptFinal,
+      })
+
       const body: Record<string, any> = {
-        prompt: promptFinal,
-        context: contexto,
+        messages: mensagensApi,
         systemInstruction: buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro) + blocoCartoes,
         model: 'anthropic/claude-opus-4.5',   // Modelo premium para Elena
         temperature: 0.3,                       // Baixo para JSON preciso
         max_tokens: 4096,                       // Mais espaço para análises longas
-      }
-      if (fileSnap?.isImage) {
-        body.imageBase64 = fileSnap.base64
-        body.imageMime   = fileSnap.mime
       }
 
       sessionMsgCountRef.current += 1
       userMsgCountRef.current   += 1
       sugestaoCountRef.current  += 1
 
-      const res = await fetch('/api/openrouter', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error)
+      // ── Fetch com retry automático (1x) ────────────────────────
+      const chamarIA = async (): Promise<{ result: string }> => {
+        const res = await fetch('/api/openrouter', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!res.ok || data.error) throw new Error(data.error || `Erro ${res.status}`)
+        return data
+      }
+
+      let data: { result: string }
+      try {
+        data = await chamarIA()
+      } catch (firstErr: any) {
+        // Retry 1x após 2s (cobre timeout, rate limit, rede instável)
+        session.setMensagens(prev => prev.map(m =>
+          m.id === aiMsgId ? { ...m, texto: '🔄 Tentando novamente...' } : m
+        ))
+        await new Promise(r => setTimeout(r, 2000))
+        try {
+          data = await chamarIA()
+        } catch (retryErr: any) {
+          // Ambas falharam — erro definitivo
+          const errMsg = retryErr?.message || retryErr?.details || retryErr?.error_description || 'Erro desconhecido'
+          throw new Error(errMsg)
+        }
+      }
 
       const resposta: string = data.result ?? ''
       const acoes = extrairAcoes(resposta)
@@ -501,9 +580,9 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       }
 
     } catch (err: any) {
-      const errMsg = err?.message || 'Erro desconhecido'
+      const errMsg = err?.message || err?.details || err?.error_description || 'Erro desconhecido'
       session.setMensagens(prev => prev.map(m =>
-        m.id === aiMsgId ? { ...m, texto: `Perdão, chefe. Tive um problema: ${errMsg.substring(0, 120)}` } : m
+        m.id === aiMsgId ? { ...m, texto: `Perdão, chefe. Tive um problema: ${errMsg.substring(0, 120)}. Pode repetir o pedido?` } : m
       ))
     } finally {
       setLoading(false)

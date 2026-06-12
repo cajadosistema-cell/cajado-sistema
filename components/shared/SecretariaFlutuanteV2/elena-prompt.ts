@@ -518,18 +518,45 @@ export function extrairAcoes(texto: string): AcaoIA[] {
     conteudo.split('\n').forEach(l => linhasCapturadas.add(l.trim()))
   }
 
-  // Formato 2: JSON cru em linha — APENAS linhas NÃO capturadas no Formato 1
-  texto.split('\n').forEach(linha => {
+  // Formato 2: JSON cru — single-line e MULTI-LINE (sem backticks)
+  // Concatena linhas que formam um JSON quando a IA quebra em várias linhas
+  const linhas = texto.split('\n')
+  let buffer = ''
+  let braceCount = 0
+
+  for (const linha of linhas) {
     const t = linha.trim()
-    if (
-      t.startsWith('{') &&
-      t.includes('"acao"') &&
-      t.endsWith('}') &&
-      !linhasCapturadas.has(t)   // ⚠️ evita duplicar do bloco ```json```
-    ) {
-      candidatos.push(t)
+
+    // Detecta início de JSON de ação
+    if (!buffer && t.startsWith('{') && t.includes('"acao"')) {
+      buffer = t
+      braceCount = (t.match(/{/g) || []).length - (t.match(/}/g) || []).length
+      if (braceCount <= 0 && !linhasCapturadas.has(t)) {
+        candidatos.push(buffer)
+        buffer = ''
+        braceCount = 0
+      }
+      continue
     }
-  })
+
+    // Continuação de JSON multi-linha
+    if (buffer) {
+      buffer += ' ' + t
+      braceCount += (t.match(/{/g) || []).length - (t.match(/}/g) || []).length
+      if (braceCount <= 0) {
+        if (!linhasCapturadas.has(buffer.trim())) {
+          candidatos.push(buffer.trim())
+        }
+        buffer = ''
+        braceCount = 0
+      }
+      // Safety: se buffer ficou muito longo sem fechar, desiste
+      if (buffer.length > 2000) {
+        buffer = ''
+        braceCount = 0
+      }
+    }
+  }
 
   for (const candidato of candidatos) {
     try {
@@ -623,20 +650,20 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'buscar_contas') {
         const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : d.categoria === 'pf' ? 'Pessoal (PF)' : 'Todas'
-        acoes.push({ tipo: 'buscar_contas' as any, dados: d, label: `🏦 Buscando contas — ${catLabel}`, status: 'pending' })
+        acoes.push({ tipo: 'buscar_contas', dados: d, label: `🏦 Buscando contas — ${catLabel}`, status: 'pending' })
 
       } else if (d.acao === 'buscar_lancamentos') {
         const tipoLabel = d.tipo === 'pf' ? 'Pessoal (PF)' : d.tipo === 'pj' ? 'Empresa (PJ)' : 'Todos'
-        acoes.push({ tipo: 'buscar_lancamentos' as any, dados: d, label: `🔍 Buscando lançamentos — ${tipoLabel}`, status: 'pending' })
+        acoes.push({ tipo: 'buscar_lancamentos', dados: d, label: `🔍 Buscando lançamentos — ${tipoLabel}`, status: 'pending' })
 
       } else if (d.acao === 'buscar_vencimentos') {
-        acoes.push({ tipo: 'buscar_vencimentos' as any, dados: d, label: `📋 Verificando vencimentos dos próximos ${d.dias || 30} dias`, status: 'pending' })
+        acoes.push({ tipo: 'buscar_vencimentos', dados: d, label: `📋 Verificando vencimentos dos próximos ${d.dias || 30} dias`, status: 'pending' })
 
       } else if (d.acao === 'alertar_recorrente') {
-        acoes.push({ tipo: 'alertar_recorrente' as any, dados: d, label: `📌 Cadastrar alerta recorrente: ${d.descricao} — dia ${d.dia_vencimento}`, status: 'pending' })
+        acoes.push({ tipo: 'alertar_recorrente', dados: d, label: `📌 Cadastrar alerta recorrente: ${d.descricao} — dia ${d.dia_vencimento}`, status: 'pending' })
 
       } else if (d.acao === 'listar_recorrentes') {
-        acoes.push({ tipo: 'listar_recorrentes' as any, dados: d, label: `📋 Listando contas recorrentes cadastradas`, status: 'pending' })
+        acoes.push({ tipo: 'listar_recorrentes', dados: d, label: `📋 Listando contas recorrentes cadastradas`, status: 'pending' })
 
       } else if (d.acao === 'registrar_patrimonio') {
         const tipoIcons: Record<string, string> = { imovel: '🏠', veiculo: '🚗', equipamento: '⚙️', reforma: '🔨', outro: '📦' }
@@ -662,6 +689,21 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'buscar_investimentos') {
         acoes.push({ tipo: 'buscar_investimentos', dados: d, label: `🔍 Consultar investimentos — ${d.tipo && d.tipo !== 'todos' ? d.tipo.toUpperCase() : 'Todos'}`, status: 'pending' })
+
+      } else if (d.acao === 'buscar_pagamentos') {
+        acoes.push({ tipo: 'buscar_pagamentos', dados: d, label: `💳 Verificando pagamentos dos próximos ${d.dias || 30} dias`, status: 'pending' })
+
+      } else if (d.acao === 'deletar_evento') {
+        acoes.push({ tipo: 'deletar_evento', dados: d, label: `🗑️ Deletar evento: ${d.titulo || 'sem título'}`, status: 'pending' })
+
+      } else if (d.acao === 'deletar_lancamento') {
+        acoes.push({ tipo: 'deletar_lancamento', dados: d, label: `🗑️ Deletar ${d.tipo || 'lançamento'}: ${d.descricao || 'sem descrição'}`, status: 'pending' })
+
+      } else if (d.acao === 'deletar_duplicados') {
+        acoes.push({ tipo: 'deletar_duplicados', dados: d, label: `🧹 Limpar duplicados: ${d.tabela || 'agenda'}`, status: 'pending' })
+
+      } else if (d.acao === 'backup_chat') {
+        acoes.push({ tipo: 'backup_chat', dados: d, label: `📥 Exportar histórico da conversa`, status: 'pending' })
 
       } else if (d.acao) {
         // Fallback: qualquer ação desconhecida vira registro genérico

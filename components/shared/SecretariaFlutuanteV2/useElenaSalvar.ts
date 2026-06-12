@@ -1969,7 +1969,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saved')      }
 
     } catch (err: any) {
-      const errMsg = err?.message || 'Erro ao salvar'
+      const errMsg = err?.message || err?.details || err?.error_description || err?.hint || 'Erro ao salvar'
       setAcaoStatus(msgId, acaoIdx, 'error', errMsg)
 
       // ⚠️ Notifica o usuário no chat — action card pequeno pode passar despercebido

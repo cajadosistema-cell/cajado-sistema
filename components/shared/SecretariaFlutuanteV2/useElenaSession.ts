@@ -100,7 +100,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
           .select('id, role, texto, acoes, created_at, sessao_id')
           .eq('user_id', uid)
           .order('created_at', { ascending: false })
-          .limit(60)
+          .limit(30)
 
         if (hist && hist.length > 0) {
           const historico: Msg[] = (hist as any[]).reverse().map((r: any) => ({
