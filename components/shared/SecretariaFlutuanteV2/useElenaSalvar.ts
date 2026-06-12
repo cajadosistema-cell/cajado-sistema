@@ -1051,7 +1051,11 @@ export function useElenaSalvar({
             data_aquisicao: dataAq,
             parcelas_total: pt,
             parcelas_pagas: pp || 0,
-            status: 'disponivel'
+            status: 'disponivel',
+            // Campos adicionais de imóvel
+            construtora: acao.dados.construtora || null,
+            unidade: acao.dados.unidade || null,
+            endereco: acao.dados.endereco || null,
           }
           if (empresaId) payloadImovel.empresa_id = empresaId
           const { data, error } = await (supabase.from('imoveis') as any).insert(payloadImovel).select('id').single()
@@ -1066,7 +1070,16 @@ export function useElenaSalvar({
             valor_mercado: vm,
             parcelas_total: pt,
             parcelas_pagas: pp || 0,
-            status: 'ativo'
+            status: 'ativo',
+            // Campos adicionais de veículo
+            marca: acao.dados.marca || null,
+            modelo: acao.dados.modelo || null,
+            ano_fabricacao: acao.dados.ano ? Number(acao.dados.ano) : null,
+            ano_modelo: acao.dados.ano_modelo ? Number(acao.dados.ano_modelo) : (acao.dados.ano ? Number(acao.dados.ano) : null),
+            placa: acao.dados.placa || null,
+            cor: acao.dados.cor || null,
+            combustivel: acao.dados.combustivel || 'flex',
+            km_atual: acao.dados.km ? Number(acao.dados.km) : null,
           }
           if (empresaId) payloadVeiculo.empresa_id = empresaId
           const { data, error } = await (supabase.from('veiculos') as any).insert(payloadVeiculo).select('id').single()
@@ -1128,7 +1141,24 @@ export function useElenaSalvar({
           }))
         }
 
-        const todos = [...(projetos || []), ...imoveisLista]
+        // Busca tabela veiculos (se não filtrando por imovel/equipamento)
+        let veiculosLista: any[] = []
+        if (!filtroTipo || filtroTipo === 'veiculo') {
+          let queryVe = (supabase.from('veiculos') as any)
+            .select('titulo, marca, modelo, ano_modelo, placa, valor_compra, valor_mercado, parcelas_total, parcelas_pagas')
+            .order('valor_compra', { ascending: false })
+          if (empresaId) queryVe = queryVe.eq('empresa_id', empresaId)
+          const { data: veics } = await queryVe
+          veiculosLista = (veics || []).map((ve: any) => ({
+            titulo: ve.titulo, tipo: 'veiculo',
+            descricao: [ve.marca, ve.modelo, ve.ano_modelo, ve.placa].filter(Boolean).join(' · ') || null,
+            valor_investido_total: ve.valor_compra || 0,
+            valor_mercado_atual: ve.valor_mercado || null,
+            parcelas_total: ve.parcelas_total, parcelas_pagas: ve.parcelas_pagas,
+          }))
+        }
+
+        const todos = [...(projetos || []), ...imoveisLista, ...veiculosLista]
         const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
         const tipoEmoji: Record<string, string> = { imovel: '🏠', veiculo: '🚗', equipamento: '⚙️', reforma: '🔨', outro: '📦' }
 

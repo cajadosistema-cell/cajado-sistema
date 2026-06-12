@@ -311,19 +311,23 @@ MEMÓRIA UNIVERSAL:
 
 🏠 REGISTRAR PATRIMÔNIO (imóvel, veículo, equipamento ou outro bem):
 \`\`\`json
-{"acao":"registrar_patrimonio","titulo":"Apartamento Centro","tipo":"imovel","descricao":"Apto 2 quartos, 85m², Rua X","valor_investido":350000,"valor_mercado":420000,"data_aquisicao":"2023-01-15"}
+{"acao":"registrar_patrimonio","titulo":"Apartamento Centro","tipo":"imovel","descricao":"Apto 2 quartos, 85m², Rua X","valor_investido":350000,"valor_mercado":420000,"data_aquisicao":"2023-01-15","construtora":"MRV","unidade":"Bloco A, Apto 302","endereco":"Rua X, 100 - Centro"}
 \`\`\`
 - TIPOS: imovel, veiculo, equipamento, reforma, outro
 - "valor_investido" = quanto pagou (obrigatório)
 - "valor_mercado" = valor atual estimado (opcional)
 - "data_aquisicao" = data de compra (opcional, formato YYYY-MM-DD)
 - "parcelas_total" e "parcelas_pagas" = se for financiado (opcionais)
+- CAMPOS EXTRAS DE IMÓVEL (opcionais): "construtora", "unidade", "endereco"
+- CAMPOS EXTRAS DE VEÍCULO (opcionais): "marca", "modelo", "ano" (número), "placa", "cor", "km" (quilometragem), "combustivel" (flex/gasolina/diesel/eletrico)
 - Use quando o chefe mencionar: "registrar imóvel", "cadastrar veículo", "adicionar patrimônio",
   "comprei um carro", "tenho um apartamento", "terreno no valor de", "maquinário novo"
 - EXEMPLOS:
   → "comprei um terreno por 200 mil" → {"acao":"registrar_patrimonio","titulo":"Terreno","tipo":"imovel","valor_investido":200000}
-  → "tenho uma Hilux 2024, paguei 280 mil" → {"acao":"registrar_patrimonio","titulo":"Toyota Hilux 2024","tipo":"veiculo","valor_investido":280000}
+  → "tenho uma Hilux 2024, paguei 280 mil" → {"acao":"registrar_patrimonio","titulo":"Toyota Hilux 2024","tipo":"veiculo","valor_investido":280000,"marca":"Toyota","modelo":"Hilux","ano":2024}
   → "registrar apartamento financiado, 60 parcelas, já paguei 12" → {"acao":"registrar_patrimonio","titulo":"Apartamento","tipo":"imovel","valor_investido":0,"parcelas_total":60,"parcelas_pagas":12}
+  → "comprei um Gol prata 2023, placa ABC1234, 45 mil km, paguei 65 mil" → {"acao":"registrar_patrimonio","titulo":"VW Gol 2023","tipo":"veiculo","valor_investido":65000,"marca":"Volkswagen","modelo":"Gol","ano":2023,"placa":"ABC1234","cor":"prata","km":45000}
+  → "registrar apartamento da MRV, bloco C apto 201, Rua Y centro" → {"acao":"registrar_patrimonio","titulo":"Apartamento MRV","tipo":"imovel","valor_investido":0,"construtora":"MRV","unidade":"Bloco C, Apto 201","endereco":"Rua Y - Centro"}
 
 🔍 CONSULTAR/LISTAR PATRIMÔNIO:
 \`\`\`json
