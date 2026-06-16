@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-// Aumenta o timeout para 60s — Claude Opus 4.5 pode demorar em respostas longas
+// Aumenta o timeout para 60s — modelos podem demorar em respostas longas
 export const maxDuration = 60
 
 export async function POST(req: Request) {
@@ -27,8 +27,8 @@ export async function POST(req: Request) {
     const system = systemInstruction
       || 'Você é um assistente IA especialista em negócios, finanças e tecnologia da Cajado Soluções. Responda sempre em português brasileiro.'
 
-    // Claude Opus 4.5 é o padrão premium — melhor compreensão de contexto e JSON estruturado
-    const model = reqModel || 'anthropic/claude-opus-4.5'
+    // Claude Sonnet 4 — melhor custo-benefício para JSON estruturado + instruções longas
+    const model = reqModel || 'anthropic/claude-sonnet-4'
 
     let messages: { role: string; content: any }[]
 

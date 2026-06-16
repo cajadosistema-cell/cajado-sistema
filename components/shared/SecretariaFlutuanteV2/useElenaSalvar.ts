@@ -262,6 +262,7 @@ export function useElenaSalvar({
       if (acao.tipo === 'gasto') {
         const dataGasto = validarData(acao.dados.data)
         const valor = Number(acao.dados.valor) || 0
+        if (valor <= 0) throw new Error('Valor inválido. Informe o valor do gasto antes de salvar.')
         const { data: dups } = await supabase.from('gastos_pessoais').select('id')
           .eq('user_id', uid).eq('data', dataGasto).eq('valor', valor)
         if (dups && dups.length > 0 && !acao.dados.forcar) {
@@ -298,6 +299,7 @@ export function useElenaSalvar({
       } else if (acao.tipo === 'receita') {
         const dataReceita = validarData(acao.dados.data)
         const valor = Number(acao.dados.valor) || 0
+        if (valor <= 0) throw new Error('Valor inválido. Informe o valor da receita antes de salvar.')
         const { data: dups } = await supabase.from('receitas_pessoais').select('id')
           .eq('user_id', uid).eq('data', dataReceita).eq('valor', valor)
         if (dups && dups.length > 0 && !acao.dados.forcar) {
@@ -326,6 +328,7 @@ export function useElenaSalvar({
       } else if (acao.tipo === 'gasto_empresa') {
         const dataComp = validarData(acao.dados.data)
         const valor = Number(acao.dados.valor) || 0
+        if (valor <= 0) throw new Error('Valor inválido. Informe o valor da despesa antes de salvar.')
         const { id: contaId, nome: contaNome } = await resolverContaPj(acao.dados.conta_nome)
         if (!contaId) throw new Error('Nenhuma conta PJ cadastrada. Cadastre uma conta PJ em Financeiro > Contas.')
         const { data: dups } = await supabase.from('lancamentos').select('id')
@@ -352,6 +355,7 @@ export function useElenaSalvar({
       } else if (acao.tipo === 'receita_empresa') {
         const dataComp = validarData(acao.dados.data)
         const valor = Number(acao.dados.valor) || 0
+        if (valor <= 0) throw new Error('Valor inválido. Informe o valor da receita antes de salvar.')
         const { id: contaId, nome: contaNome } = await resolverContaPj(acao.dados.conta_nome)
         if (!contaId) throw new Error('Nenhuma conta PJ cadastrada.')
         const { data: dups } = await supabase.from('lancamentos').select('id')
