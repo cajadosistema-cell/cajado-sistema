@@ -83,8 +83,7 @@ export async function POST(req: Request) {
           body: JSON.stringify({
             model: tentativaModel,
             messages,
-            max_tokens: reqMaxTokens ?? 4096,
-            temperature: reqTemperature ?? 0.4,
+            max_tokens: reqMaxTokens ?? 4096,\n            temperature: reqTemperature ?? 0.2,  // Baixo para JSON preciso e números exatos
           }),
         })
 

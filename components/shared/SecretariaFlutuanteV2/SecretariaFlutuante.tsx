@@ -277,45 +277,15 @@ function SecretariaFlutuanteWidget() {
 
 
     try {
-      const colaboradoresCtx = session.colaboradores.length > 0
-        ? `\n[COLABORADORES ATIVOS: ${session.colaboradores.map(c => c.nome).join(', ')}]`
-        : ''
-      const contexto = session.mensagens
-        .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith('Olá, Sr. Max!'))
-        .slice(-30)
-        .map(m => {
-          const dtStr = m.created_at
-            ? new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-            : 'Agora'
-
-          if (m.role === 'ai') {
-            // Mensagens de resultado/sistema da Elena → comprimir para evitar poluição de contexto
-            // mas mantendo resumo breve para recapitulação
-            const t = m.texto
-            // Confirmações de salvamento → manter resumo breve do que foi salvo
-            if (t.includes('✅') || t.includes('Registrado') || t.includes('Registrando') || t.includes('⏳')) {
-              // Extrai a primeira linha significativa como resumo
-              const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\n')[0].substring(0, 120)
-              return `[${dtStr}] Elena: [JÁ SALVO: ${resumo}] — NÃO pedir esses dados de novo`
-            }
-            // Resultados de busca (patrimônio, contas, lançamentos) → manter resumo do que foi listado
-            if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {
-              const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\n').slice(0, 3).join(' | ').substring(0, 150)
-              return `[${dtStr}] Elena: [LISTOU: ${resumo}] — dados já exibidos, NÃO repetir perguntas`
-            }
-            // Mensagens de erro → resumir
-            if (t.startsWith('❌') || t.includes('Ops!')) {
-              return `[${dtStr}] Elena: [ERRO: ${t.substring(0, 80)}]`
-            }
-            // Respostas normais da Elena → manter com limite
-            return `[${dtStr}] Elena: ${t.substring(0, 400)}`
-          }
-
-          // Mensagens do USUÁRIO → manter completas (são os dados de entrada!)
-          return `[${dtStr}] Sr. Max: ${m.texto.substring(0, 600)}`
-        })
-        .join('\n') + colaboradoresCtx
-
+      const colaboradoresCtx = session.colaboradores.length > 0\r
+        ? `\n[COLABORADORES ATIVOS: ${session.colaboradores.map(c => c.nome).join(', ')}]`\r
+        : ''\r
+      // Contexto simplificado (só usado na busca web)\r
+      const contexto = session.mensagens\r
+        .filter(m => m.texto && m.texto !== '...')\r
+        .slice(-5)\r
+        .map(m => `${m.role === 'ai' ? 'Elena' : 'Sr. Max'}: ${m.texto.substring(0, 200)}`)\r
+        .join('\n') + colaboradoresCtx\r
 
       let promptFinal = userText || 'Analise este arquivo e extraia as informações financeiras relevantes.'
       if (fileSnap && !fileSnap.isImage && fileSnap.mime === 'text/plain') {
@@ -471,59 +441,97 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         }
       } catch { /* não bloqueia se falhar */ }
 
-      // ── Montar array de mensagens nativo (role/content) ────────
-      // Isso dá à IA separação clara de turnos, em vez de contexto plano.
-      const mensagensApi: { role: string; content: any }[] = []
-
-      // Pega últimas 20 mensagens úteis da sessão (sem lixo)
-      const msgsUteis = session.mensagens
-        .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith('Olá, Sr. Max!') && !m.texto.startsWith('Histórico carregado'))
-        .slice(-20)
-
-      for (const m of msgsUteis) {
-        if (m.role === 'ai') {
-          const t = m.texto
-          // Comprimir mensagens de sistema para não poluir o contexto
-          let content: string
-          if (t.includes('✅') || t.includes('Registrado') || t.includes('Registrando') || t.includes('⏳')) {
-            const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\n')[0].substring(0, 120)
-            content = `[JÁ SALVO: ${resumo}] — NÃO pedir esses dados de novo`
-          } else if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {
-            const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\n').slice(0, 3).join(' | ').substring(0, 150)
-            content = `[LISTOU: ${resumo}] — dados já exibidos`
-          } else if (t.startsWith('❌') || t.includes('Ops!')) {
-            content = `[ERRO: ${t.substring(0, 80)}]`
-          } else {
-            content = t.substring(0, 500)
-          }
-          mensagensApi.push({ role: 'assistant', content })
-        } else {
-          // Mensagens do usuário: manter completas
-          mensagensApi.push({ role: 'user', content: m.texto.substring(0, 800) })
-        }
-      }
-
-      // Adiciona a mensagem atual do usuário
-      const userContentParts: any[] = []
-      userContentParts.push({ type: 'text', text: promptFinal })
-      if (fileSnap?.isImage) {
-        userContentParts.push({
-          type: 'image_url',
-          image_url: { url: `data:${fileSnap.mime || 'image/jpeg'};base64,${fileSnap.base64}`, detail: 'high' },
-        })
-      }
-
-      mensagensApi.push({
-        role: 'user',
-        content: fileSnap?.isImage ? userContentParts : promptFinal,
+      // ── Montar array de mensagens nativo (role/content) ────────\r
+      // Isso dá à IA separação clara de turnos, em vez de contexto plano.\r
+      const mensagensApi: { role: string; content: any }[] = []\r
+\r
+      // ── Helper: extrair dados-chave de ações salvas para contexto ──\r
+      const resumirAcoesSalvas = (acoes?: AcaoIA[]): string => {\r
+        if (!acoes || acoes.length === 0) return ''\r
+        return acoes\r
+          .filter(a => a.status === 'saved')\r
+          .map(a => {\r
+            const d = a.dados || {}\r
+            const partes: string[] = [a.tipo]\r
+            if (d.descricao || d.titulo) partes.push(d.descricao || d.titulo)\r
+            if (d.valor) partes.push(`R$ ${Number(d.valor).toFixed(2)}`)\r
+            if (d.parcelas && Number(d.parcelas) > 1) partes.push(`${d.parcelas}x`)\r
+            if (d.parcelas_pagas && d.parcelas_total) partes.push(`parcela ${d.parcelas_pagas}/${d.parcelas_total}`)\r
+            if (d.data) partes.push(d.data)\r
+            if (d.conta_nome) partes.push(`conta: ${d.conta_nome}`)\r
+            if (d.data_inicio) partes.push(d.data_inicio.substring(0, 16))\r
+            return partes.join(' | ')\r
+          })\r
+          .join('; ')\r
+      }\r
+\r
+      // Pega últimas 25 mensagens úteis da sessão (sem lixo)\r
+      const msgsUteis = session.mensagens\r
+        .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith('Olá, Sr. Max!') && !m.texto.startsWith('Histórico carregado'))\r
+        .slice(-25)\r
+\r
+      // ── Construir estado da sessão (resumo de tudo já salvo) ────\r
+      const acoesSalvasNaSessao: string[] = []\r
+\r
+      for (const m of msgsUteis) {\r
+        if (m.role === 'ai') {\r
+          const t = m.texto\r
+          let content: string\r
+\r
+          // Confirmações de salvamento → PRESERVAR dados numéricos\r
+          if (t.includes('✅') || t.includes('Registrado') || t.includes('Registrando') || t.includes('⏳')) {\r
+            const dadosAcoes = resumirAcoesSalvas(m.acoes)\r
+            if (dadosAcoes) {\r
+              content = `[JÁ SALVO: ${dadosAcoes}] — NÃO pedir esses dados de novo`\r
+              acoesSalvasNaSessao.push(dadosAcoes)\r
+            } else {\r
+              // Fallback: pegar primeira linha com mais espaço\r
+              const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\\n')[0].substring(0, 200)\r
+              content = `[JÁ SALVO: ${resumo}] — NÃO pedir esses dados de novo`\r
+            }\r
+          // Resultados de busca → resumo compacto\r
+          } else if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {\r
+            const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\\n').slice(0, 5).join(' | ').substring(0, 300)\r
+            content = `[LISTOU: ${resumo}] — dados já exibidos`\r
+          // Erros → resumo\r
+          } else if (t.startsWith('❌') || t.includes('Ops!')) {\r
+            content = `[ERRO: ${t.substring(0, 120)}]`\r
+          // Respostas normais → mais espaço para preservar contexto\r
+          } else {\r
+            content = t.substring(0, 800)\r
+          }\r
+          mensagensApi.push({ role: 'assistant', content })\r
+        } else {\r
+          // Mensagens do USUÁRIO: NUNCA truncar — são os dados de entrada!\r
+          mensagensApi.push({ role: 'user', content: m.texto })\r
+        }\r
+      }\r
+\r
+      // ── Injetar resumo de estado da sessão (anti-confusão) ─────\r
+      if (acoesSalvasNaSessao.length > 0) {\r
+        const estadoResumo = `[ESTADO DA SESSÃO — ${acoesSalvasNaSessao.length} registro(s) já salvo(s) nesta conversa]:\n${acoesSalvasNaSessao.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\n⚠️ NÃO peça dados desses itens novamente. Use EXATAMENTE esses valores se precisar recapitular.`\r
+        mensagensApi.push({ role: 'user', content: `[SISTEMA] ${estadoResumo}` })\r
+      }\r
+\r
+      // Adiciona a mensagem atual do usuário\r
+      const userContentParts: any[] = []\r
+      userContentParts.push({ type: 'text', text: promptFinal })\r
+      if (fileSnap?.isImage) {\r
+        userContentParts.push({\r
+          type: 'image_url',\r
+          image_url: { url: `data:${fileSnap.mime || 'image/jpeg'};base64,${fileSnap.base64}`, detail: 'high' },\r
+        })\r
+      }\r
+\r
+      mensagensApi.push({\r
+        role: 'user',\r
+        content: fileSnap?.isImage ? userContentParts : promptFinal,\r
       })
 
-      const body: Record<string, any> = {
-        messages: mensagensApi,
-        systemInstruction: buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro) + blocoCartoes,
-        model: 'anthropic/claude-opus-4.5',   // Modelo premium para Elena
-        temperature: 0.3,                       // Baixo para JSON preciso
-        max_tokens: 4096,                       // Mais espaço para análises longas
+      const body: Record<string, any> = {\r
+        messages: mensagensApi,\r
+        systemInstruction: buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro) + blocoCartoes,\r
+        // model, temperature e max_tokens são controlados pelo route.ts\r
       }
 
       sessionMsgCountRef.current += 1
