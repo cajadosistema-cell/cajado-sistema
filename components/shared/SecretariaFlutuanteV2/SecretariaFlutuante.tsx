@@ -486,12 +486,12 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
               acoesSalvasNaSessao.push(dadosAcoes)\r
             } else {\r
               // Fallback: pegar primeira linha com mais espaço\r
-              const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\\n')[0].substring(0, 200)\r
+              const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\n')[0].substring(0, 200)\r
               content = `[JÁ SALVO: ${resumo}] — NÃO pedir esses dados de novo`\r
             }\r
           // Resultados de busca → resumo compacto\r
           } else if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {\r
-            const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\\n').slice(0, 5).join(' | ').substring(0, 300)\r
+            const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\n').slice(0, 5).join(' | ').substring(0, 300)\r
             content = `[LISTOU: ${resumo}] — dados já exibidos`\r
           // Erros → resumo\r
           } else if (t.startsWith('❌') || t.includes('Ops!')) {\r
