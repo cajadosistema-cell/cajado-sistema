@@ -403,6 +403,12 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           .select('titulo, marca, modelo, parcelas_total, parcelas_pagas, valor_parcela, financiado')
           .eq('status', 'ativo')
 
+        // Investimentos / carteira de ativos
+        const { data: ativosMax } = await (supabase.from('ativos') as any)
+          .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, corretora')
+          .order('valor_investido', { ascending: false })
+          .limit(20)
+
         // Gastos e receitas do mês atual
         const inicioMes = new Date().toISOString().substring(0, 7) + '-01'
         const [{ data: gastosM }, { data: receitasM }] = await Promise.all([
@@ -419,8 +425,9 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         const temImoveis = imoveisMax && imoveisMax.length > 0
         const temVeiculos = veiculosMax && veiculosMax.filter((v: any) => v.financiado && v.parcelas_total).length > 0
         const temFinanceiro = totalGastos > 0 || totalReceitas > 0
+        const temInvestimentos = ativosMax && ativosMax.length > 0
 
-        if (temContas || temImoveis || temVeiculos || temFinanceiro) {
+        if (temContas || temImoveis || temVeiculos || temFinanceiro || temInvestimentos) {
           blocoCartoes = '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
           blocoCartoes += '[DADOS REAIS DO SISTEMA — USE EXATAMENTE ESSES DADOS]\n'
           blocoCartoes += '⚠️ REGRA CRÍTICA: Esses dados já estão cadastrados. NÃO volte a perguntar.\n'
@@ -478,6 +485,24 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
             blocoCartoes += `  • Entradas: ${fmt(totalReceitas)}\n`
             blocoCartoes += `  • Saídas: ${fmt(totalGastos)}\n`
             blocoCartoes += `  • Saldo: ${saldoMes >= 0 ? '🟢' : '🔴'} ${fmt(saldoMes)}\n\n`
+          }
+
+          if (temInvestimentos) {
+            const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            const totalInv = ativosMax.reduce((a: number, p: any) => a + (Number(p.valor_investido) || 0), 0)
+            const totalAtual = ativosMax.reduce((a: number, p: any) => a + (Number(p.valor_atual) || Number(p.valor_investido) || 0), 0)
+            const resultado = totalAtual - totalInv
+            blocoCartoes += `📈 CARTEIRA DE INVESTIMENTOS (${ativosMax.length} ativo(s)):\n`
+            blocoCartoes += `  • Total investido: ${fmt(totalInv)}\n`
+            blocoCartoes += `  • Valor atual: ${fmt(totalAtual)}\n`
+            blocoCartoes += `  • Resultado: ${resultado >= 0 ? '🟢 +' : '🔴 '}${fmt(Math.abs(resultado))}\n`
+            ativosMax.slice(0, 10).forEach((a: any) => {
+              const label = a.ticker || a.nome
+              const vi = Number(a.valor_investido) || 0
+              const va = Number(a.valor_atual) || vi
+              blocoCartoes += `  • ${label} (${a.tipo}) — investido: ${fmt(vi)} | atual: ${fmt(va)}\n`
+            })
+            blocoCartoes += '\n'
           }
 
           blocoCartoes += 'INSTRUÇÕES: NUNCA cadastre novamente algo que já aparece na lista acima.\n'
