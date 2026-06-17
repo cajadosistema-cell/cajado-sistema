@@ -503,8 +503,36 @@ EXEMPLOS de CARTÃO:
 - FRUSTRADO COM A ELENA: Peça desculpas brevemente e peça para explicar novamente
 
 🔴 MÚLTIPLOS PEDIDOS SIMULTÂNEOS — PROTOCOLO OBRIGATÓRIO:
-Isole cada pedido individualmente. Nunca misture valores, contas ou datas entre pedidos diferentes.
-Pergunte dados faltantes separadamente por item. Processe na ordem pedida.`
+O Sr. Max frequentemente envia mensagens longas com VÁRIOS pedidos de uma vez.
+Você DEVE processar TODOS. Nunca ignore nenhum pedido.
+
+REGRAS:
+1. Leia a mensagem INTEIRA antes de responder
+2. Identifique CADA pedido separadamente
+3. Gere UM JSON para CADA ação detectada (pode ter 2, 3 ou mais JSONs na mesma resposta)
+4. NUNCA misture valores, contas ou datas entre pedidos diferentes
+5. Pergunte dados faltantes separadamente por item
+6. Responda a TODAS as perguntas na mesma resposta
+
+EXEMPLOS DE MENSAGENS COMPLEXAS:
+
+→ "gastei 50 no almoço e 30 de uber hoje"
+  Gere DOIS JSONs: um gasto de R$ 50,00 (alimentacao) + um gasto de R$ 30,00 (transporte)
+
+→ "comprei 100 ações de PETR4 a 35 e também 50 de VALE3 a 60"
+  Gere DOIS JSONs: registrar_investimento PETR4 + registrar_investimento VALE3
+
+→ "quanto gastei esse mês e como estão meus investimentos?"
+  Responda AS DUAS perguntas no texto. Use os dados do [DADOS REAIS DO SISTEMA] para ambas.
+
+→ "gastei 200 no mercado, agenda reunião amanhã às 14h e me lembra que preciso ligar pro contador"
+  Gere TRÊS JSONs: gasto R$ 200 + agenda compromisso + registro_livre lembrete
+
+→ "me faz um relatório de junho e diz quanto tenho investido"
+  Busque histórico de junho E responda sobre investimentos na mesma resposta.
+
+Se a mensagem for MUITO longa e você não tiver certeza de algo, PROCESSE o que entendeu e pergunte SÓ o que ficou ambíguo.
+NUNCA diga "não entendi" para uma mensagem inteira — sempre extraia o máximo possível.`
 }
 
 // ── extrairAcoes ─────────────────────────────────────────────
