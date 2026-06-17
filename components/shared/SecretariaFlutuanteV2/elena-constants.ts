@@ -124,4 +124,11 @@ export const KEYWORDS_HISTORICO = [
   'como fui esse mês', 'como foi esse mês', 'quanto gastei', 'quanto recebi',
   'gastos do mês', 'receitas do mês', 'gráfico', 'fluxo do mês',
   'relatorio financeiro', 'relatório financeiro', 'relatorio completo', 'relatório completo',
+  // Meses — ativam busca com filtro de data
+  'janeiro', 'fevereiro', 'março', 'marco', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+  // Temporais relativos
+  'ontem', 'anteontem', 'essa semana', 'esta semana', 'esse mês', 'este mês',
+  'última semana', 'ultima semana',
 ]
+
