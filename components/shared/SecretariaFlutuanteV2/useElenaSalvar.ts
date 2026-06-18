@@ -2297,9 +2297,16 @@ export function useElenaSalvar({
         setMensagens(prev => [...prev, { id: `resumo-${Date.now()}`, role: 'ai' as const, texto }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
-      // ── AÇÃO DESCONHECIDA → ignora silenciosamente ───────────
+      // ── AÇÃO DESCONHECIDA → avisa o usuário (nunca finge que salvou) ──
       } else {
-        setAcaoStatus(msgId, acaoIdx, 'saved')      }
+        const tipoAcao = acao.tipo || 'desconhecida'
+        console.warn(`[Elena] Ação desconhecida no handler: ${tipoAcao}`)
+        setAcaoStatus(msgId, acaoIdx, 'error', `Ação "${tipoAcao}" não disponível`)
+        setMensagens(prev => [...prev, {
+          id: `unk-${Date.now()}`, role: 'ai' as const,
+          texto: `⚠️ **Essa funcionalidade ainda não está disponível no sistema.** _(${tipoAcao})_\n\nMe diga o que precisa e eu sugiro o que posso fazer! 💬`,
+        }])
+      }
 
     } catch (err: any) {
       const errMsg = err?.message || err?.details || err?.error_description || err?.hint || 'Erro ao salvar'
