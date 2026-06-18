@@ -73,6 +73,8 @@ export const MAPA_CONFIRMACAO: Record<string, { modulo: string; rota: string; ic
   buscar_diario:        { modulo: 'Diário Pessoal',   rota: '/diario',     icone: '📖' },
   registrar_investimento: { modulo: 'Investimentos',   rota: '/investimentos', icone: '📈' },
   buscar_investimentos:   { modulo: 'Investimentos',   rota: '/investimentos', icone: '🔍' },
+  concluir_evento:        { modulo: 'Agenda',           rota: '/agenda',       icone: '✅' },
+  reagendar_evento:       { modulo: 'Agenda',           rota: '/agenda',       icone: '📅' },
 }
 
 // Detecção de bandeira pelo nome da conta

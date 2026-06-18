@@ -425,6 +425,12 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
             .order('data_inicio', { ascending: true }).limit(10),
         ])
 
+        // Contas recorrentes cadastradas
+        const { data: recorrentesMax } = await (supabase.from('alertas_recorrentes') as any)
+          .select('descricao, valor, dia_vencimento, tipo, ativo')
+          .eq('user_id', uid).eq('ativo', true)
+          .order('dia_vencimento', { ascending: true })
+
         // Gastos e receitas do mês atual
         const inicioMes = new Date().toISOString().substring(0, 7) + '-01'
         const [{ data: gastosM }, { data: receitasM }] = await Promise.all([
@@ -444,8 +450,9 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         const temInvestimentos = ativosMax && ativosMax.length > 0
         const temAgendaHoje = eventosHoje && eventosHoje.length > 0
         const temVencimentos = vencProximos && vencProximos.length > 0
+        const temRecorrentes = recorrentesMax && recorrentesMax.length > 0
 
-        if (temContas || temImoveis || temVeiculos || temFinanceiro || temInvestimentos || temAgendaHoje || temVencimentos) {
+        if (temContas || temImoveis || temVeiculos || temFinanceiro || temInvestimentos || temAgendaHoje || temVencimentos || temRecorrentes) {
           blocoCartoes = '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
           blocoCartoes += '[DADOS REAIS DO SISTEMA — USE EXATAMENTE ESSES DADOS]\n'
           blocoCartoes += '⚠️ REGRA CRÍTICA: Esses dados já estão cadastrados. NÃO volte a perguntar.\n'
@@ -543,6 +550,15 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
               blocoCartoes += `  • [${dtFmt}] ${v.titulo} — ${quando}\n`
             })
             blocoCartoes += '\n'
+          }
+
+          if (temRecorrentes) {
+            blocoCartoes += '🔁 CONTAS RECORRENTES CADASTRADAS (alertas automáticos):\n'
+            recorrentesMax.forEach((r: any) => {
+              const valor = r.valor ? ` R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              blocoCartoes += `  • Dia ${r.dia_vencimento} — ${r.descricao}${valor} (${r.tipo})\n`
+            })
+            blocoCartoes += '⚠️ NÃO cadastre novamente como recorrente algo que já aparece aqui.\n\n'
           }
 
           blocoCartoes += 'INSTRUÇÕES: NUNCA cadastre novamente algo que já aparece na lista acima.\n'

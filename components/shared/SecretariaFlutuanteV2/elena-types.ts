@@ -73,6 +73,8 @@ export type AcaoTipo =
   | 'deletar_evento'
   | 'deletar_lancamento'
   | 'deletar_duplicados'
+  | 'concluir_evento'
+  | 'reagendar_evento'
 
 export interface AcaoIA {
   tipo: AcaoTipo

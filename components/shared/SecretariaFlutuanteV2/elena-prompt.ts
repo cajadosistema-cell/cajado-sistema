@@ -188,6 +188,31 @@ Quando o vencimento é mensal, pergunte se quer criar para os PRÓXIMOS meses. S
 
 ⚠️ REGRA PARA VENCIMENTOS: Se o chefe não informar o valor, crie o evento sem valor no título. Se não informar o dia, pergunte APENAS o dia. Execute os 2 JSONs IMEDIATAMENTE, sem pedir "Confirme?".
 
+✅ MARCAR EVENTO/VENCIMENTO COMO PAGO/CONCLUÍDO:
+\`\`\`json
+{"acao":"concluir_evento","titulo_busca":"Internet Vivo"}
+\`\`\`
+- Use quando o chefe mencionar: "já paguei", "paguei a internet", "feito", "concluído", "já resolvi",
+  "pode dar baixa", "tá pago", "paguei o aluguel"
+- "titulo_busca" = trecho do título do evento para encontrar (busca por ILIKE)
+- O sistema busca o evento pendente mais recente com esse título e marca como 'concluido'
+- EXEMPLOS:
+  → "já paguei a internet" → {"acao":"concluir_evento","titulo_busca":"Internet"}
+  → "paguei o aluguel" → {"acao":"concluir_evento","titulo_busca":"Aluguel"}
+  → "já fiz a reunião" → {"acao":"concluir_evento","titulo_busca":"reunião"}
+
+📅 REAGENDAR / ADIAR EVENTO:
+\`\`\`json
+{"acao":"reagendar_evento","titulo_busca":"Reunião com contador","nova_data":"${anoAtual}-${mesAtual}-20T14:00:00"}
+\`\`\`
+- Use quando o chefe mencionar: "muda pra sexta", "adia pra amanhã", "reagenda", "troca o horário",
+  "empurra pra semana que vem", "antecipa pra hoje"
+- "titulo_busca" = trecho do título para encontrar o evento
+- "nova_data" = nova data/hora no formato ISO
+- EXEMPLOS:
+  → "muda a reunião pra sexta às 10h" → {"acao":"reagendar_evento","titulo_busca":"reunião","nova_data":"...sexta...T10:00:00"}
+  → "adia o dentista pra semana que vem" → {"acao":"reagendar_evento","titulo_busca":"dentista","nova_data":"..."}
+
 
 OCORRÊNCIA DA EQUIPE:
 \`\`\`json
@@ -701,6 +726,12 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'listar_recorrentes') {
         acoes.push({ tipo: 'listar_recorrentes', dados: d, label: `📋 Listando contas recorrentes cadastradas`, status: 'pending' })
+
+      } else if (d.acao === 'concluir_evento') {
+        acoes.push({ tipo: 'concluir_evento', dados: d, label: `✅ Marcar como concluído: ${d.titulo_busca}`, status: 'pending' })
+
+      } else if (d.acao === 'reagendar_evento') {
+        acoes.push({ tipo: 'reagendar_evento', dados: d, label: `📅 Reagendar: ${d.titulo_busca}`, status: 'pending' })
 
       } else if (d.acao === 'registrar_patrimonio') {
         const tipoIcons: Record<string, string> = { imovel: '🏠', veiculo: '🚗', equipamento: '⚙️', reforma: '🔨', outro: '📦' }

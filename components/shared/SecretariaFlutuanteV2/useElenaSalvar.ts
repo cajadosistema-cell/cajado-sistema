@@ -975,6 +975,104 @@ export function useElenaSalvar({
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
+      // ── CONCLUIR EVENTO (marcar como pago/feito) ─────────────
+      } else if (acao.tipo === 'concluir_evento') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const busca = acao.dados.titulo_busca
+        if (!busca) throw new Error('Informe o nome do evento para marcar como concluído.')
+
+        // Busca evento pendente mais recente que contenha o trecho
+        const { data: eventos } = await (supabase.from('agenda_eventos') as any)
+          .select('id, titulo, data_inicio, tipo')
+          .eq('user_id', uid)
+          .eq('status', 'pendente')
+          .ilike('titulo', `%${busca}%`)
+          .order('data_inicio', { ascending: false })
+          .limit(5)
+
+        if (!eventos || eventos.length === 0) {
+          throw new Error(`Nenhum evento pendente encontrado com "${busca}". Verifique o nome.`)
+        }
+
+        // Marca o mais recente como concluído
+        const evento = eventos[0]
+        const { error } = await (supabase.from('agenda_eventos') as any)
+          .update({ status: 'concluido' })
+          .eq('id', evento.id)
+
+        if (error) throw new Error(error.message)
+
+        // Se for vencimento, marca também o lembrete de confirmação do mesmo dia
+        if (evento.tipo === 'vencimento') {
+          const diaEvento = String(evento.data_inicio).substring(0, 10)
+          await (supabase.from('agenda_eventos') as any)
+            .update({ status: 'concluido' })
+            .eq('user_id', uid)
+            .eq('status', 'pendente')
+            .eq('tipo', 'lembrete')
+            .ilike('titulo', `%${busca}%`)
+            .gte('data_inicio', `${diaEvento}T00:00:00`)
+            .lte('data_inicio', `${diaEvento}T23:59:59`)
+        }
+
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        setMensagens(prev => [...prev, {
+          id: `concl-${Date.now()}`, role: 'ai' as const,
+          texto: `✅ **${evento.titulo}** marcado como concluído!${evento.tipo === 'vencimento' ? '\n💳 Lembrete de confirmação também baixado automaticamente.' : ''}\n\n_Pode conferir na aba Agenda, Sr. Max!_ 📋`,
+        }])
+        window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
+
+      // ── REAGENDAR EVENTO ──────────────────────────────────────
+      } else if (acao.tipo === 'reagendar_evento') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const busca = acao.dados.titulo_busca
+        const novaData = acao.dados.nova_data
+        if (!busca) throw new Error('Informe o nome do evento para reagendar.')
+        if (!novaData) throw new Error('Informe a nova data/horário.')
+
+        // Busca evento pendente
+        const { data: eventos } = await (supabase.from('agenda_eventos') as any)
+          .select('id, titulo, data_inicio')
+          .eq('user_id', uid)
+          .eq('status', 'pendente')
+          .ilike('titulo', `%${busca}%`)
+          .order('data_inicio', { ascending: true })
+          .limit(5)
+
+        if (!eventos || eventos.length === 0) {
+          throw new Error(`Nenhum evento pendente encontrado com "${busca}".`)
+        }
+
+        const evento = eventos[0]
+
+        // Aplica timezone local
+        const tzOffset = (() => {
+          const off = new Date().getTimezoneOffset()
+          const sign = off <= 0 ? '+' : '-'
+          const h = String(Math.floor(Math.abs(off) / 60)).padStart(2, '0')
+          const m = String(Math.abs(off) % 60).padStart(2, '0')
+          return `${sign}${h}:${m}`
+        })()
+        const strNovaData = String(novaData).includes('T')
+          ? `${String(novaData).replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '')}${tzOffset}`
+          : `${novaData}T12:00:00${tzOffset}`
+
+        const { error } = await (supabase.from('agenda_eventos') as any)
+          .update({ data_inicio: strNovaData })
+          .eq('id', evento.id)
+
+        if (error) throw new Error(error.message)
+
+        const dtAnterior = new Date(evento.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+        const dtNova = new Date(strNovaData).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        setMensagens(prev => [...prev, {
+          id: `reag-${Date.now()}`, role: 'ai' as const,
+          texto: `📅 **${evento.titulo}** reagendado!\n• De: ${dtAnterior}\n• Para: ${dtNova}\n\n_Pode conferir na aba Agenda, Sr. Max!_ 📋`,
+        }])
+        window.dispatchEvent(new CustomEvent('elena:agenda-updated'))
+
       // ── FATURA CARTÃO ────────────────────────────────────────
 
       } else if (acao.tipo === 'fatura_cartao') {
