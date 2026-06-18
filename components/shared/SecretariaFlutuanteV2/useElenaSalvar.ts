@@ -1697,14 +1697,32 @@ export function useElenaSalvar({
             const { data: existing } = await (supabase.from('elena_registro') as any)
               .select('id').eq('user_id', uid).eq('chave', chave).maybeSingle()
             isUpdate = !!existing
-            const { error } = await (supabase.from('elena_registro') as any)
-              .upsert(payload, { onConflict: 'user_id,chave' })
-            if (!error) salvo = true
+            if (isUpdate && existing?.id) {
+              // Update direto ao invés de upsert — evita constraint issue
+              const { error } = await (supabase.from('elena_registro') as any)
+                .update({ ...payload, user_id: undefined }).eq('id', existing.id)
+              if (!error) salvo = true
+              else console.error('[Elena][registro_livre] Erro update:', error.message, error.code)
+            } else {
+              const { error } = await (supabase.from('elena_registro') as any).insert(payload)
+              if (!error) salvo = true
+              else console.error('[Elena][registro_livre] Erro insert com chave:', error.message, error.code)
+            }
           } else {
             const { error } = await (supabase.from('elena_registro') as any).insert(payload)
             if (!error) salvo = true
+            else console.error('[Elena][registro_livre] Erro insert:', error.message, error.code)
           }
-        } catch { /* silencioso */ }
+        } catch (regErr: any) {
+          console.error('[Elena][registro_livre] Exception:', regErr?.message)
+          // Retry: tenta insert simples sem chave como fallback
+          try {
+            const fallbackPayload = { ...payload }
+            delete fallbackPayload.chave
+            const { error } = await (supabase.from('elena_registro') as any).insert(fallbackPayload)
+            if (!error) salvo = true
+          } catch { /* esgotou tentativas */ }
+        }
 
         const icon = tipoReg === 'preferencia' ? '⭐' : tipoReg === 'regra_negocio' ? '📋'
           : tipoReg === 'contato' ? '📞' : tipoReg === 'acordo' ? '🤝'
@@ -2066,6 +2084,219 @@ export function useElenaSalvar({
             ? `Limpeza concluida! Removi ${totalRemovidos} duplicata(s) da ${alvo}.`
             : `Nenhuma duplicata encontrada — tudo limpo, Sr. Max!` }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // ── RESUMO MENSAL ESTRUTURADO ─────────────────────────────
+      } else if (acao.tipo === 'resumo_mensal') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const agora = new Date()
+        const mesRef = acao.dados.mes || `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`
+        const [anoRef, mesNumRef] = mesRef.split('-').map(Number)
+        const dataInicio = `${mesRef}-01`
+        const ultimoDia = new Date(anoRef, mesNumRef, 0).getDate()
+        const dataFim = `${mesRef}-${String(ultimoDia).padStart(2, '0')}`
+        const nomeMes = new Date(anoRef, mesNumRef - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+        const empresaId = await getEmpresaId(uid)
+        const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+
+        // ── Busca paralela de todos os dados necessários ────────
+        const [
+          { data: cartoes },
+          { data: faturas },
+          { data: imoveisData },
+          { data: veiculosData },
+          { data: alertasRec },
+          { data: gastosMes },
+          { data: receitasMes },
+        ] = await Promise.all([
+          // Cartões de crédito do usuário
+          (supabase.from('contas') as any)
+            .select('id, nome, bandeira, dia_vencimento, limite')
+            .eq('user_id', uid).eq('ativo', true)
+            .in('tipo', ['cartao_credito', 'cartao_debito'])
+            .order('nome'),
+          // Faturas do mês
+          (supabase.from('faturas_cartoes') as any)
+            .select('conta_id, valor_fechado, status, data_pagamento')
+            .eq('mes_referencia', mesRef),
+          // Imóveis com parcelas
+          (supabase.from('imoveis') as any)
+            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
+            .eq('empresa_id', empresaId || '')
+            .not('valor_parcela', 'is', null),
+          // Veículos financiados
+          (supabase.from('veiculos') as any)
+            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, vencimento_dia')
+            .eq('empresa_id', empresaId || '')
+            .eq('financiado', true),
+          // Contas recorrentes
+          (supabase.from('alertas_recorrentes') as any)
+            .select('descricao, valor, dia_vencimento, tipo')
+            .eq('user_id', uid).eq('ativo', true)
+            .order('dia_vencimento'),
+          // Gastos do mês
+          (supabase.from('gastos_pessoais') as any)
+            .select('descricao, valor, categoria, data, forma_pagamento')
+            .eq('user_id', uid)
+            .gte('data', dataInicio).lte('data', dataFim)
+            .order('data'),
+          // Receitas do mês
+          (supabase.from('receitas_pessoais') as any)
+            .select('descricao, valor, categoria, data')
+            .eq('user_id', uid)
+            .gte('data', dataInicio).lte('data', dataFim)
+            .order('data'),
+        ])
+
+        // ── SEÇÃO 1: CARTÕES ──────────────────────────────────────
+        let texto = `📊 **RESUMO MENSAL — ${nomeMes.toUpperCase()}**\n`
+        texto += `_Gerado em ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}_\n\n`
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        texto += `💳 **CARTÕES**\n`
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+
+        let totalCartoes = 0
+        let totalCartoesAbertos = 0
+        const cartoesLista = cartoes || []
+
+        if (cartoesLista.length === 0) {
+          texto += `_Nenhum cartão cadastrado._\n\n`
+        } else {
+          for (const cartao of cartoesLista) {
+            const fatura = (faturas || []).find((f: any) => f.conta_id === cartao.id)
+            const valor = fatura ? Number(fatura.valor_fechado) : 0
+            const statusRaw = fatura?.status || 'sem_fatura'
+            const statusIcon = statusRaw === 'pago' ? '✅ Pago'
+              : statusRaw === 'parcial' ? '🟡 Parcial'
+              : statusRaw === 'pendente' ? '🔴 Pendente'
+              : '⚪ Sem fatura'
+            const venc = cartao.dia_vencimento ? `dia ${cartao.dia_vencimento}` : '—'
+            const bandeira = cartao.bandeira ? ` (${cartao.bandeira})` : ''
+
+            texto += `💳 **${cartao.nome}${bandeira}**\n`
+            texto += `  📅 Vencimento: ${venc}\n`
+            texto += `  💰 Valor: **${valor > 0 ? fmt(valor) : '—'}**\n`
+            texto += `  📋 Status: ${statusIcon}\n\n`
+
+            totalCartoes += valor
+            if (statusRaw !== 'pago') totalCartoesAbertos += valor
+          }
+          texto += `**Total Cartões: ${fmt(totalCartoes)}**`
+          if (totalCartoesAbertos > 0 && totalCartoesAbertos < totalCartoes) {
+            texto += ` _(${fmt(totalCartoesAbertos)} em aberto)_`
+          }
+          texto += '\n\n'
+        }
+
+        // ── SEÇÃO 2: COMPROMISSOS (Imóveis + Veículos + Recorrentes) ──
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        texto += `🏠 **COMPROMISSOS / PARCELAS**\n`
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+
+        let totalCompromissos = 0
+        let temCompromissos = false
+
+        // Imóveis
+        if ((imoveisData || []).length > 0) {
+          for (const im of imoveisData) {
+            const restantes = (im.parcelas_total || 0) - (im.parcelas_pagas || 0)
+            if (restantes <= 0) continue
+            temCompromissos = true
+            const valor = Number(im.valor_parcela)
+            totalCompromissos += valor
+            const construtora = im.construtora ? ` (${im.construtora})` : ''
+            texto += `🏠 **${im.titulo}${construtora}**\n`
+            texto += `  💰 Parcela: **${fmt(valor)}** — ${im.parcelas_pagas}/${im.parcelas_total} pagas\n`
+            texto += `  📊 Restam: ${restantes} parcelas\n\n`
+          }
+        }
+
+        // Veículos
+        if ((veiculosData || []).length > 0) {
+          for (const ve of veiculosData) {
+            const restantes = (ve.parcelas_total || 0) - (ve.parcelas_pagas || 0)
+            if (restantes <= 0) continue
+            temCompromissos = true
+            const valor = Number(ve.valor_parcela)
+            totalCompromissos += valor
+            const diaVenc = ve.vencimento_dia ? ` — dia ${ve.vencimento_dia}` : ''
+            texto += `🚗 **${ve.titulo}${diaVenc}**\n`
+            texto += `  💰 Parcela: **${fmt(valor)}** — ${ve.parcelas_pagas}/${ve.parcelas_total} pagas\n`
+            texto += `  📊 Restam: ${restantes} parcelas\n\n`
+          }
+        }
+
+        // Contas recorrentes
+        if ((alertasRec || []).length > 0) {
+          const catEmoji: Record<string, string> = {
+            boleto: '📄', cartao: '💳', agua: '💧', energia: '⚡',
+            internet: '🌐', telefone: '📱', aluguel: '🏠', condominio: '🏢',
+            plano_saude: '🏥', financiamento: '🏦', outro: '📋'
+          }
+          for (const alerta of alertasRec) {
+            temCompromissos = true
+            const valor = Number(alerta.valor) || 0
+            totalCompromissos += valor
+            const emoji = catEmoji[alerta.tipo] || '📋'
+            texto += `${emoji} **${alerta.descricao}** — dia ${alerta.dia_vencimento}\n`
+            texto += `  💰 Valor: **${valor > 0 ? fmt(valor) : 'a definir'}**\n\n`
+          }
+        }
+
+        if (!temCompromissos) {
+          texto += `_Nenhum compromisso/parcela cadastrado._\n\n`
+        } else {
+          texto += `**Total Compromissos: ${fmt(totalCompromissos)}/mês**\n\n`
+        }
+
+        // ── SEÇÃO 3: RESUMO FINANCEIRO ────────────────────────────
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        texto += `💰 **RESUMO FINANCEIRO**\n`
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+
+        const totalGastos = (gastosMes || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+        const totalReceitas = (receitasMes || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+        const saldoMes = totalReceitas - totalGastos
+        const saldoIcon = saldoMes >= 0 ? '🟢' : '🔴'
+
+        texto += `📈 Entradas: **${fmt(totalReceitas)}** _(${(receitasMes || []).length} lançamentos)_\n`
+        texto += `📉 Saídas: **${fmt(totalGastos)}** _(${(gastosMes || []).length} lançamentos)_\n`
+        texto += `${saldoIcon} Saldo: **${fmt(saldoMes)}**\n\n`
+
+        // Top 5 categorias de gasto
+        const porCategoria: Record<string, number> = {}
+        ;(gastosMes || []).forEach((g: any) => {
+          const cat = g.categoria || 'outros'
+          porCategoria[cat] = (porCategoria[cat] || 0) + Number(g.valor)
+        })
+        const topCats = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]).slice(0, 5)
+        if (topCats.length > 0) {
+          texto += `📂 **Top gastos por categoria:**\n`
+          const catEmojis: Record<string, string> = {
+            alimentacao: '🍽️', transporte: '🚗', saude: '💊', lazer: '🎮',
+            educacao: '📚', moradia: '🏠', vestuario: '👕', tecnologia: '💻', outros: '📦',
+          }
+          topCats.forEach(([cat, val]) => {
+            const emoji = catEmojis[cat] || '📦'
+            texto += `  ${emoji} ${cat}: **${fmt(val)}**\n`
+          })
+          texto += '\n'
+        }
+
+        // Totalizador geral
+        const totalObrigacoes = totalCartoes + totalCompromissos
+        if (totalObrigacoes > 0) {
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+          texto += `🔒 **TOTAL OBRIGAÇÕES DO MÊS: ${fmt(totalObrigacoes)}**\n`
+          texto += `_(Cartões: ${fmt(totalCartoes)} + Compromissos: ${fmt(totalCompromissos)})_\n`
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        }
+
+        texto += `\n_Sempre que pedir "resumo do mês" usarei exatamente esse layout, salvo se solicitar diferente!_ 🎯`
+
+        setMensagens(prev => [...prev, { id: `resumo-${Date.now()}`, role: 'ai' as const, texto }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
       // ── AÇÃO DESCONHECIDA → ignora silenciosamente ───────────
       } else {
         setAcaoStatus(msgId, acaoIdx, 'saved')      }

@@ -75,6 +75,7 @@ export const MAPA_CONFIRMACAO: Record<string, { modulo: string; rota: string; ic
   buscar_investimentos:   { modulo: 'Investimentos',   rota: '/investimentos', icone: '🔍' },
   concluir_evento:        { modulo: 'Agenda',           rota: '/agenda',       icone: '✅' },
   reagendar_evento:       { modulo: 'Agenda',           rota: '/agenda',       icone: '📅' },
+  resumo_mensal:          { modulo: 'Resumo Mensal',    rota: '/pf-pessoal',   icone: '📊' },
 }
 
 // Detecção de bandeira pelo nome da conta

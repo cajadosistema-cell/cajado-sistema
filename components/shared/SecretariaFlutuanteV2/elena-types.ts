@@ -75,6 +75,7 @@ export type AcaoTipo =
   | 'deletar_duplicados'
   | 'concluir_evento'
   | 'reagendar_evento'
+  | 'resumo_mensal'
 
 export interface AcaoIA {
   tipo: AcaoTipo

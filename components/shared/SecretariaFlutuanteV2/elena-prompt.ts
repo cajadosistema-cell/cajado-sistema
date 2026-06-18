@@ -230,6 +230,16 @@ RELATÓRIO:
 \`\`\`
 PERÍODOS: mes_atual, ultimos_7_dias, ultimos_30_dias, ano_atual
 
+📊 RESUMO MENSAL ESTRUTURADO (formato padrão do Sr. Max):
+\`\`\`json
+{"acao":"resumo_mensal","mes":"${anoAtual}-${mesAtual}"}
+\`\`\`
+- GATILHOS: "resumo do mês", "resumo mensal", "como estou esse mês", "relatório mensal",
+  "me mostra o mês", "como ficou o mês", "balanço do mês", "fechamento do mês"
+- Este é o FORMATO PADRÃO que o Sr. Max prefere. Use SEMPRE que ele pedir resumo/relatório do mês.
+- Gera inline no chat com seções: 💳 Cartões → 🏠 Compromissos → 💰 Resumo
+- ⚠️ DIFERENÇA do 'relatorio': o 'relatorio' abre um modal. O 'resumo_mensal' exibe direto no chat com formato rico.
+
 TRANSFERÊNCIA ENTRE CONTAS:
 \`\`\`json
 {"acao":"transferencia","valor":500.00,"conta_origem":"nubank","conta_destino":"c6","descricao":"Reserva mensal"}
@@ -769,6 +779,10 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'deletar_duplicados') {
         acoes.push({ tipo: 'deletar_duplicados', dados: d, label: `🧹 Limpar duplicados: ${d.tabela || 'agenda'}`, status: 'pending' })
+
+      } else if (d.acao === 'resumo_mensal') {
+        const mesLabel = d.mes || 'mês atual'
+        acoes.push({ tipo: 'resumo_mensal', dados: d, label: `📊 Resumo mensal estruturado — ${mesLabel}`, status: 'pending' })
 
       } else if (d.acao === 'backup_chat') {
         acoes.push({ tipo: 'backup_chat', dados: d, label: `📥 Exportar histórico da conversa`, status: 'pending' })
