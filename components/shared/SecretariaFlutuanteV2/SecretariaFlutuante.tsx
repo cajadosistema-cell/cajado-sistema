@@ -433,38 +433,49 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
 
         // Gastos e receitas do mês atual
         const inicioMes = new Date().toISOString().substring(0, 7) + '-01'
-        const [{ data: gastosM }, { data: receitasM }] = await Promise.all([
+        const [{ data: gastosM }, { data: receitasM }, { data: gastosPjM }, { data: receitasPjM }] = await Promise.all([
           (supabase.from('gastos_pessoais') as any)
             .select('valor').eq('user_id', uid).gte('data', inicioMes),
           (supabase.from('receitas_pessoais') as any)
+            .select('valor').eq('user_id', uid).gte('data', inicioMes),
+          (supabase.from('gastos_empresa') as any)
+            .select('valor').eq('user_id', uid).gte('data', inicioMes),
+          (supabase.from('receitas_empresa') as any)
             .select('valor').eq('user_id', uid).gte('data', inicioMes),
         ])
         const totalGastos = (gastosM || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
         const totalReceitas = (receitasM || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
         const saldoMes = totalReceitas - totalGastos
+        const totalGastosPj = (gastosPjM || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+        const totalReceitasPj = (receitasPjM || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+        const saldoMesPj = totalReceitasPj - totalGastosPj
 
         const temContas = contasMax && contasMax.length > 0
         const temImoveis = imoveisMax && imoveisMax.length > 0
         const temVeiculos = veiculosMax && veiculosMax.filter((v: any) => v.financiado && v.parcelas_total).length > 0
         const temFinanceiro = totalGastos > 0 || totalReceitas > 0
+        const temFinanceiroPj = totalGastosPj > 0 || totalReceitasPj > 0
         const temInvestimentos = ativosMax && ativosMax.length > 0
         const temAgendaHoje = eventosHoje && eventosHoje.length > 0
         const temVencimentos = vencProximos && vencProximos.length > 0
         const temRecorrentes = recorrentesMax && recorrentesMax.length > 0
 
-        if (temContas || temImoveis || temVeiculos || temFinanceiro || temInvestimentos || temAgendaHoje || temVencimentos || temRecorrentes) {
+        if (temContas || temImoveis || temVeiculos || temFinanceiro || temFinanceiroPj || temInvestimentos || temAgendaHoje || temVencimentos || temRecorrentes) {
           blocoCartoes = '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
           blocoCartoes += '[DADOS REAIS DO SISTEMA — USE EXATAMENTE ESSES DADOS]\n'
           blocoCartoes += '⚠️ REGRA CRÍTICA: Esses dados já estão cadastrados. NÃO volte a perguntar.\n'
           blocoCartoes += 'NÃO altere datas ou valores sem ordem explícita do Sr. Max.\n\n'
 
           if (temContas) {
-            const cartoes   = contasMax.filter((c: any) => c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito')
-            const bancarias = contasMax.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito')
+            const cartoesPf = contasMax.filter((c: any) => (c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito') && c.categoria !== 'pj')
+            const cartoesPj = contasMax.filter((c: any) => (c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito') && c.categoria === 'pj')
+            const contasPf  = contasMax.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito' && c.categoria !== 'pj')
+            const contasPj  = contasMax.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito' && c.categoria === 'pj')
 
-            if (cartoes.length > 0) {
-              blocoCartoes += '💳 CARTÕES CADASTRADOS:\n'
-              cartoes.forEach((c: any) => {
+            const renderCartoes = (lista: any[], label: string) => {
+              if (lista.length === 0) return
+              blocoCartoes += `💳 ${label}:\n`
+              lista.forEach((c: any) => {
                 const venc = c.dia_vencimento ? `vencimento: dia ${c.dia_vencimento}` : 'vencimento: não informado'
                 const fech = c.dia_fechamento ? ` | fechamento: dia ${c.dia_fechamento}` : ''
                 const lim  = c.limite         ? ` | limite: R$ ${Number(c.limite).toLocaleString('pt-BR')}` : ''
@@ -473,14 +484,20 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
               blocoCartoes += '\n'
             }
 
-            if (bancarias.length > 0) {
-              blocoCartoes += '🏦 CONTAS BANCÁRIAS CADASTRADAS:\n'
-              bancarias.forEach((c: any) => {
+            const renderContas = (lista: any[], label: string) => {
+              if (lista.length === 0) return
+              blocoCartoes += `🏦 ${label}:\n`
+              lista.forEach((c: any) => {
                 const saldo = c.saldo_atual != null ? ` | saldo: R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
                 blocoCartoes += `  • "${c.nome}" | tipo: ${c.tipo}${saldo}\n`
               })
               blocoCartoes += '\n'
             }
+
+            renderCartoes(cartoesPf, 'CARTÕES PESSOAIS (PF)')
+            renderCartoes(cartoesPj, 'CARTÕES DA EMPRESA (PJ)')
+            renderContas(contasPf, 'CONTAS BANCÁRIAS PESSOAIS (PF)')
+            renderContas(contasPj, 'CONTAS BANCÁRIAS DA EMPRESA (PJ)')
           }
 
           if (temImoveis) {
@@ -506,10 +523,19 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           if (temFinanceiro) {
             const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
             const mesNome = new Date().toLocaleDateString('pt-BR', { month: 'long' })
-            blocoCartoes += `💰 FINANCEIRO DO MÊS (${mesNome}):\n`
+            blocoCartoes += `💰 FINANCEIRO PESSOAL (PF) — ${mesNome}:\n`
             blocoCartoes += `  • Entradas: ${fmt(totalReceitas)}\n`
             blocoCartoes += `  • Saídas: ${fmt(totalGastos)}\n`
             blocoCartoes += `  • Saldo: ${saldoMes >= 0 ? '🟢' : '🔴'} ${fmt(saldoMes)}\n\n`
+          }
+
+          if (temFinanceiroPj) {
+            const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+            const mesNome = new Date().toLocaleDateString('pt-BR', { month: 'long' })
+            blocoCartoes += `🏢 FINANCEIRO DA EMPRESA (PJ) — ${mesNome}:\n`
+            blocoCartoes += `  • Receitas PJ: ${fmt(totalReceitasPj)}\n`
+            blocoCartoes += `  • Despesas PJ: ${fmt(totalGastosPj)}\n`
+            blocoCartoes += `  • Resultado: ${saldoMesPj >= 0 ? '🟢' : '🔴'} ${fmt(saldoMesPj)}\n\n`
           }
 
           if (temInvestimentos) {
