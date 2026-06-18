@@ -878,11 +878,11 @@ export function useElenaSalvar({
 
         if (errRec) throw new Error(errRec.message)
 
-        // 2. Cria IMEDIATAMENTE os eventos na agenda (mês atual + próximo mês)
+        // 2. Cria IMEDIATAMENTE os eventos na agenda (mês atual + próximos 5 meses = 6 meses)
         const agora = new Date()
         let eventosImedatos = 0
 
-        for (let mOffset = 0; mOffset <= 1; mOffset++) {
+        for (let mOffset = 0; mOffset <= 5; mOffset++) {
           const dataAlvo = new Date(agora)
           dataAlvo.setDate(1)
           dataAlvo.setMonth(agora.getMonth() + mOffset)

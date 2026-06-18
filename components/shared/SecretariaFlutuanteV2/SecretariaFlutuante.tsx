@@ -409,6 +409,22 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           .order('valor_investido', { ascending: false })
           .limit(20)
 
+        // Agenda: eventos de hoje + vencimentos próximos 7 dias
+        const hojeStr = new Date().toISOString().split('T')[0]
+        const em7d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        const [{ data: eventosHoje }, { data: vencProximos }] = await Promise.all([
+          (supabase.from('agenda_eventos') as any)
+            .select('titulo, data_inicio, tipo')
+            .eq('user_id', uid).neq('status', 'cancelado').neq('status', 'concluido')
+            .gte('data_inicio', `${hojeStr}T00:00:00`).lte('data_inicio', `${hojeStr}T23:59:59`)
+            .order('data_inicio', { ascending: true }).limit(15),
+          (supabase.from('agenda_eventos') as any)
+            .select('titulo, data_inicio, tipo')
+            .eq('user_id', uid).eq('tipo', 'vencimento').neq('status', 'cancelado').neq('status', 'concluido')
+            .gte('data_inicio', new Date().toISOString()).lte('data_inicio', em7d)
+            .order('data_inicio', { ascending: true }).limit(10),
+        ])
+
         // Gastos e receitas do mês atual
         const inicioMes = new Date().toISOString().substring(0, 7) + '-01'
         const [{ data: gastosM }, { data: receitasM }] = await Promise.all([
@@ -426,8 +442,10 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         const temVeiculos = veiculosMax && veiculosMax.filter((v: any) => v.financiado && v.parcelas_total).length > 0
         const temFinanceiro = totalGastos > 0 || totalReceitas > 0
         const temInvestimentos = ativosMax && ativosMax.length > 0
+        const temAgendaHoje = eventosHoje && eventosHoje.length > 0
+        const temVencimentos = vencProximos && vencProximos.length > 0
 
-        if (temContas || temImoveis || temVeiculos || temFinanceiro || temInvestimentos) {
+        if (temContas || temImoveis || temVeiculos || temFinanceiro || temInvestimentos || temAgendaHoje || temVencimentos) {
           blocoCartoes = '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
           blocoCartoes += '[DADOS REAIS DO SISTEMA — USE EXATAMENTE ESSES DADOS]\n'
           blocoCartoes += '⚠️ REGRA CRÍTICA: Esses dados já estão cadastrados. NÃO volte a perguntar.\n'
@@ -505,7 +523,30 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
             blocoCartoes += '\n'
           }
 
+          if (temAgendaHoje) {
+            blocoCartoes += `📅 AGENDA DE HOJE (${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}):\n`
+            eventosHoje.forEach((ev: any) => {
+              const hora = new Date(ev.data_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+              const tipoEmoji = ev.tipo === 'vencimento' ? '💳' : ev.tipo === 'reuniao' ? '🤝' : ev.tipo === 'lembrete' ? '⏰' : '📌'
+              blocoCartoes += `  • ${tipoEmoji} ${hora}h — ${ev.titulo}\n`
+            })
+            blocoCartoes += '\n'
+          }
+
+          if (temVencimentos) {
+            blocoCartoes += '⚠️ VENCIMENTOS PRÓXIMOS 7 DIAS:\n'
+            vencProximos.forEach((v: any) => {
+              const dt = new Date(v.data_inicio)
+              const diffDias = Math.ceil((dt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+              const quando = diffDias <= 0 ? '🔴 HOJE' : diffDias === 1 ? '🟠 amanhã' : `🟡 em ${diffDias} dias`
+              const dtFmt = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+              blocoCartoes += `  • [${dtFmt}] ${v.titulo} — ${quando}\n`
+            })
+            blocoCartoes += '\n'
+          }
+
           blocoCartoes += 'INSTRUÇÕES: NUNCA cadastre novamente algo que já aparece na lista acima.\n'
+          blocoCartoes += 'Se o Sr. Max perguntar "o que tenho hoje" ou "meus vencimentos", use os dados acima.\n'
           blocoCartoes += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
         }
       } catch { /* não bloqueia se falhar */ }
