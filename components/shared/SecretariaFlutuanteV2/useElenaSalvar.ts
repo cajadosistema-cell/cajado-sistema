@@ -575,11 +575,12 @@ export function useElenaSalvar({
             .eq('user_id', uid)
             .gte('data', inicio3m.toISOString().split('T')[0])
             .order('data'),
-          // Contas fixas recorrentes (alertas_recorrentes)
-          (supabase.from('alertas_recorrentes') as any)
-            .select('descricao, valor, dia_vencimento, categoria, tipo')
+          // Contas fixas recorrentes (compromissos_fixos — tabela unificada)
+          (supabase.from('compromissos_fixos') as any)
+            .select('descricao, valor, dia_vencimento, categoria, tipo_detalhe')
             .eq('user_id', uid)
             .eq('ativo', true)
+            .eq('recorrente', true)
             .order('dia_vencimento'),
           // Receitas marcadas como recorrentes
           (supabase.from('receitas_pessoais') as any)
@@ -621,7 +622,7 @@ export function useElenaSalvar({
         const totalReceitas = (receitas3m || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
         const mediaReceitas = totalReceitas / 3
 
-        // ── 3. Contas fixas (alertas_recorrentes) ───────────────
+        // ── 3. Contas fixas (compromissos_fixos) ──────────────
         const totalContasFixas = (alertasRec || []).reduce((s: number, a: any) => s + (Number(a.valor) || 0), 0)
 
         // ── 4. Receitas recorrentes confirmadas ─────────────────
@@ -737,11 +738,11 @@ export function useElenaSalvar({
             texto += '\n'
           }
 
-          // 2. Contas fixas (alertas_recorrentes)
+          // 2. Contas fixas (compromissos_fixos)
           if ((alertasRec || []).length > 0) {
             texto += `🔒 **Contas fixas (${(alertasRec || []).length}):**\n`
             ;(alertasRec || []).forEach((a: any) => {
-              const emoji = contaEmoji[a.tipo] || '📋'
+              const emoji = contaEmoji[a.tipo_detalhe] || '📋'
               texto += `  ${emoji} **${a.descricao}** — dia ${a.dia_vencimento} — ${a.valor ? fmt(Number(a.valor)) : 'valor a definir'}\n`
             })
             texto += `  **Subtotal fixas: ${fmt(totalContasFixas)}**\n\n`
@@ -905,9 +906,10 @@ export function useElenaSalvar({
             .eq('user_id', uid).eq('ativo', true)
             .in('tipo', ['cartao_credito', 'cartao_debito'])
             .not('dia_vencimento', 'is', null),
-          (supabase.from('alertas_recorrentes') as any)
-            .select('descricao, dia_vencimento, valor, tipo')
-            .eq('user_id', uid).eq('ativo', true),
+          (supabase.from('compromissos_fixos') as any)
+            .select('descricao, dia_vencimento, valor, tipo_detalhe')
+            .eq('user_id', uid).eq('ativo', true)
+            .eq('recorrente', true),
         ])
 
         // Mesclar cartões e alertas que vencem nos próximos 7 dias
@@ -944,7 +946,7 @@ export function useElenaSalvar({
                 aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
                 financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
               }
-              const emoji = emojiMap[a.tipo] || '📋'
+              const emoji = emojiMap[a.tipo_detalhe] || '📋'
               const valorStr = a.valor ? ` — R$ ${Number(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
               extraVencChk.push({ titulo: `${emoji} ${a.descricao}${valorStr}`, data_inicio: dataVenc.toISOString() })
             }
@@ -1015,14 +1017,23 @@ export function useElenaSalvar({
         const valorStr = valorNum ? ` — R$ ${valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
         const tituloEvento = `${emoji} Pagar ${acao.dados.descricao}${valorStr}`
 
-        // 1. Salva na tabela alertas_recorrentes
-        const { data: novoRec, error: errRec } = await (supabase.from('alertas_recorrentes') as any).insert({
+        // Mapeia tipo → categoria de compromissos_fixos
+        const categoriaMap: Record<string, string> = {
+          cartao: 'cartao', financiamento: 'boleto_imovel', aluguel: 'boleto_imovel', condominio: 'boleto_imovel',
+          agua: 'conta_fixa', energia: 'conta_fixa', internet: 'conta_fixa', telefone: 'conta_fixa', plano_saude: 'conta_fixa',
+          boleto: 'outro', outro: 'outro',
+        }
+
+        // 1. Salva na tabela compromissos_fixos (tabela unificada)
+        const { data: novoRec, error: errRec } = await (supabase.from('compromissos_fixos') as any).insert({
           user_id:          uid,
           descricao:        acao.dados.descricao,
-          valor:            valorNum,
+          valor:            valorNum || 0,
           dia_vencimento:   dia,
-          tipo,
-          categoria:        acao.dados.categoria || 'outros',
+          categoria:        categoriaMap[tipo] || 'outro',
+          tipo_detalhe:     tipo,
+          recorrente:       true,
+          ativo:            true,
           criado_pela_elena: true,
         }).select('id').single()
 
@@ -1093,9 +1104,10 @@ export function useElenaSalvar({
       // ── LISTAR RECORRENTES (mostra contas fixas cadastradas) ──
       } else if (acao.tipo === 'listar_recorrentes') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
-        const { data: recs, error } = await (supabase.from('alertas_recorrentes') as any)
-          .select('descricao, valor, dia_vencimento, tipo, ativo')
+        const { data: recs, error } = await (supabase.from('compromissos_fixos') as any)
+          .select('descricao, valor, dia_vencimento, tipo_detalhe, ativo, recorrente')
           .eq('user_id', uid)
+          .eq('recorrente', true)
           .order('dia_vencimento', { ascending: true })
 
         if (error) throw new Error(error.message)
@@ -1115,7 +1127,7 @@ export function useElenaSalvar({
           }
           let texto = `📋 **Suas contas recorrentes cadastradas:**\n\n`
           ativas.forEach((r: any) => {
-            const emoji = emojiMap[r.tipo] || '📋'
+            const emoji = emojiMap[r.tipo_detalhe] || '📋'
             const valor = r.valor ? ` — R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
             texto += `${emoji} **${r.descricao}**${valor} — todo dia ${r.dia_vencimento}\n`
           })
@@ -1318,18 +1330,21 @@ export function useElenaSalvar({
           const agora2 = new Date()
           let eventosCartao = 0
 
-          // Tenta criar na alertas_recorrentes (graceful — tabela pode não existir ainda)
+          // Cria compromisso fixo recorrente para o cartão
           try {
-            await (supabase.from('alertas_recorrentes') as any).insert({
+            await (supabase.from('compromissos_fixos') as any).insert({
               user_id: uid,
               descricao: nomeCartao,
+              valor: 0,
               dia_vencimento: diaVenc,
-              tipo: 'cartao',
-              categoria: 'outros',
+              categoria: 'cartao',
+              tipo_detalhe: 'cartao',
+              recorrente: true,
+              ativo: true,
               conta_id: novoCartao?.id || null,
               criado_pela_elena: true,
             })
-          } catch { /* tabela pode não existir ainda — não bloqueia o fluxo */ }
+          } catch { /* graceful — não bloqueia o fluxo */ }
 
           // Cria eventos diretamente na agenda_eventos (não depende da migration)
           for (let mOffset = 0; mOffset <= 1; mOffset++) {
@@ -2280,10 +2295,11 @@ export function useElenaSalvar({
             .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, vencimento_dia')
             .eq('empresa_id', empresaId || '')
             .eq('financiado', true),
-          // Contas recorrentes
-          (supabase.from('alertas_recorrentes') as any)
-            .select('descricao, valor, dia_vencimento, tipo')
+          // Contas recorrentes (compromissos_fixos — tabela unificada)
+          (supabase.from('compromissos_fixos') as any)
+            .select('descricao, valor, dia_vencimento, tipo_detalhe')
             .eq('user_id', uid).eq('ativo', true)
+            .eq('recorrente', true)
             .order('dia_vencimento'),
           // Gastos do mês
           (supabase.from('gastos_pessoais') as any)
@@ -2393,7 +2409,7 @@ export function useElenaSalvar({
             temCompromissos = true
             const valor = Number(alerta.valor) || 0
             totalCompromissos += valor
-            const emoji = catEmoji[alerta.tipo] || '📋'
+            const emoji = catEmoji[alerta.tipo_detalhe] || '📋'
             texto += `${emoji} **${alerta.descricao}** — dia ${alerta.dia_vencimento}\n`
             texto += `  💰 Valor: **${valor > 0 ? fmt(valor) : 'a definir'}**\n\n`
           }

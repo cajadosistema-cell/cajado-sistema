@@ -1,6 +1,6 @@
 // supabase/functions/gerar-vencimentos/index.ts
 // Edge Function que roda 1x por dia (via cron-job.org às 07:00)
-// Lê cartões cadastrados + alertas_recorrentes e cria automaticamente
+// Lê cartões cadastrados + compromissos_fixos recorrentes e cria automaticamente
 // eventos de vencimento na agenda_eventos para os próximos 60 dias.
 // Garante idempotência via chave única no campo `descricao`.
 
@@ -32,7 +32,7 @@ serve(async (req) => {
     let totalCriados = 0
     let totalIgnorados = 0
 
-    // ── 1. Lista todos os usuários com cartões ou alertas_recorrentes ─
+    // ── 1. Lista todos os usuários com cartões ou compromissos_fixos ─
     const { data: usuarios } = await supabase.auth.admin.listUsers()
     if (!usuarios?.users?.length) {
       return new Response(JSON.stringify({ msg: 'Nenhum usuário encontrado' }), {
@@ -52,12 +52,13 @@ serve(async (req) => {
         .eq('ativo', true)
         .not('dia_vencimento', 'is', null)
 
-      // ── 2b. Alertas recorrentes (boletos, luz, internet, etc.) ──
+      // ── 2b. Compromissos fixos recorrentes (boletos, luz, internet, etc.) ──
       const { data: recorrentes } = await supabase
-        .from('alertas_recorrentes')
-        .select('id, descricao, valor, dia_vencimento, tipo, categoria')
+        .from('compromissos_fixos')
+        .select('id, descricao, valor, dia_vencimento, tipo_detalhe, categoria')
         .eq('user_id', uid)
         .eq('ativo', true)
+        .eq('recorrente', true)
 
       // ── Unifica as fontes em formato padrão ───────────────────
       type FonteVencimento = {
@@ -87,12 +88,12 @@ serve(async (req) => {
           aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
           financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
         }
-        const emoji = emojiTipo[r.tipo] || '📋'
+        const emoji = emojiTipo[r.tipo_detalhe] || '📋'
         fontes.push({
           descricao: `${emoji} Pagar ${r.descricao}${r.valor ? ` — R$ ${Number(r.valor).toFixed(2).replace('.', ',')}` : ''}`,
           valor: r.valor ? Number(r.valor) : null,
           dia: Number(r.dia_vencimento),
-          tipo: r.tipo || 'boleto',
+          tipo: r.tipo_detalhe || 'boleto',
           chave: `AUTO_REC_${r.id}`,
         })
       }

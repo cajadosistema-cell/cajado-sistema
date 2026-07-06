@@ -171,10 +171,11 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
                   .eq('user_id', uid).eq('ativo', true)
                   .in('tipo', ['cartao_credito', 'cartao_debito'])
                   .not('dia_vencimento', 'is', null),
-                // Contas fixas recorrentes (podem não ter evento na agenda)
-                (supabase.from('alertas_recorrentes') as any)
-                  .select('descricao, dia_vencimento, valor, tipo')
-                  .eq('user_id', uid).eq('ativo', true),
+                // Contas fixas recorrentes (compromissos_fixos — tabela unificada)
+                (supabase.from('compromissos_fixos') as any)
+                  .select('descricao, dia_vencimento, valor, tipo_detalhe')
+                  .eq('user_id', uid).eq('ativo', true)
+                  .eq('recorrente', true),
               ])
 
               // Mesclar: agenda + cartões + alertas que vencem nos próximos 7 dias
@@ -204,7 +205,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
                 }
               })
 
-              // Alertas recorrentes: inclui se dia_vencimento está nos próximos 7 dias e não tem evento
+              // Compromissos fixos: inclui se dia_vencimento está nos próximos 7 dias e não tem evento
               const alertasVenc: any[] = []
               ;(alertasRec || []).forEach((a: any) => {
                 const dia = a.dia_vencimento
@@ -220,7 +221,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
                       aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
                       financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
                     }
-                    const emoji = emojiMap[a.tipo] || '📋'
+                    const emoji = emojiMap[a.tipo_detalhe] || '📋'
                     const valorStr = a.valor ? ` — R$ ${Number(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
                     alertasVenc.push({ titulo: `${emoji} ${a.descricao}${valorStr}`, data_inicio: dataVenc.toISOString() })
                   }

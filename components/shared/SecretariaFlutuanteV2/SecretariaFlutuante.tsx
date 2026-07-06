@@ -395,19 +395,35 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           .select('nome, tipo, dia_vencimento, dia_fechamento, limite, categoria, bandeira, saldo_atual')
           .eq('user_id', uid).eq('ativo', true).order('nome', { ascending: true })
 
-        const { data: imoveisMax } = await (supabase.from('imoveis') as any)
-          .select('titulo, parcelas_total, parcelas_pagas, valor_parcela')
-          .eq('user_id', uid).not('parcelas_total', 'is', null)
+        // Resolve empresa_id do usuário para filtrar patrimônio
+        let empresaIdCtx: string | null = null
+        try {
+          const { data: perfilCtx } = await (supabase.from('perfis') as any)
+            .select('empresa_id').eq('id', uid).maybeSingle()
+          empresaIdCtx = perfilCtx?.empresa_id || null
+        } catch { /* silencioso */ }
 
-        const { data: veiculosMax } = await (supabase.from('veiculos') as any)
+        // Imóveis parcelados (filtrado por empresa_id)
+        let imoveisQuery = (supabase.from('imoveis') as any)
+          .select('titulo, parcelas_total, parcelas_pagas, valor_parcela')
+          .not('parcelas_total', 'is', null)
+        if (empresaIdCtx) imoveisQuery = imoveisQuery.eq('empresa_id', empresaIdCtx)
+        const { data: imoveisMax } = await imoveisQuery
+
+        // Veículos ativos (filtrado por empresa_id)
+        let veiculosQuery = (supabase.from('veiculos') as any)
           .select('titulo, marca, modelo, parcelas_total, parcelas_pagas, valor_parcela, financiado')
           .eq('status', 'ativo')
+        if (empresaIdCtx) veiculosQuery = veiculosQuery.eq('empresa_id', empresaIdCtx)
+        const { data: veiculosMax } = await veiculosQuery
 
-        // Investimentos / carteira de ativos
-        const { data: ativosMax } = await (supabase.from('ativos') as any)
+        // Investimentos / carteira de ativos (filtrado por empresa_id)
+        let ativosQuery = (supabase.from('ativos') as any)
           .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, corretora')
           .order('valor_investido', { ascending: false })
           .limit(20)
+        if (empresaIdCtx) ativosQuery = ativosQuery.eq('empresa_id', empresaIdCtx)
+        const { data: ativosMax } = await ativosQuery
 
         // Agenda: eventos de hoje + vencimentos próximos 7 dias
         const hojeStr = new Date().toISOString().split('T')[0]
@@ -425,10 +441,11 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
             .order('data_inicio', { ascending: true }).limit(10),
         ])
 
-        // Contas recorrentes cadastradas
-        const { data: recorrentesMax } = await (supabase.from('alertas_recorrentes') as any)
-          .select('descricao, valor, dia_vencimento, tipo, ativo')
+        // Contas recorrentes cadastradas (compromissos_fixos — tabela unificada)
+        const { data: recorrentesMax } = await (supabase.from('compromissos_fixos') as any)
+          .select('descricao, valor, dia_vencimento, tipo_detalhe, ativo')
           .eq('user_id', uid).eq('ativo', true)
+          .eq('recorrente', true)
           .order('dia_vencimento', { ascending: true })
 
         // Gastos e receitas do mês atual
