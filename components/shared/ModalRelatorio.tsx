@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // ── Tipos ──────────────────────────────────────────────────────
 interface RelatorioData {
@@ -320,7 +321,7 @@ export function ModalRelatorio({ dados, onClose }: Props) {
 
 // ── Hook para buscar dados do relatório ──────────────────────────
 export async function buscarDadosRelatorio(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any>,
   userId: string,
   periodo: string = 'mes_atual'
 ): Promise<RelatorioData> {

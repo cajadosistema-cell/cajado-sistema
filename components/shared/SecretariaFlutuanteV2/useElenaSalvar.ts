@@ -23,7 +23,7 @@ import {
 import { buscarDadosRelatorio } from '../ModalRelatorio'
 
 interface UseElenaSalvarProps {
-  supabase: SupabaseClient
+  supabase: any  // SupabaseClient — aceita qualquer variante (typed ou untyped)
   userIdRef: React.MutableRefObject<string>
   sessaoIdRef: React.MutableRefObject<string>
   mensagensRef: React.MutableRefObject<Msg[]>     // ref para evitar stale no backup_chat
