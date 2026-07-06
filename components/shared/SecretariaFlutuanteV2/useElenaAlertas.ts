@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Msg } from './elena-types'
 
-export function useElenaAlertas(supabase: SupabaseClient, userId: string, setMensagens: React.Dispatch<React.SetStateAction<Msg[]>>) {
+export function useElenaAlertas(supabase: any, userId: string, setMensagens: React.Dispatch<React.SetStateAction<Msg[]>>) {
   const [resumoFinanceiro, setResumoFinanceiro] = useState('')
   const alertasDisparadosRef = useRef<Set<string>>(new Set())
   const audioCtxRef = useRef<AudioContext | null>(null)

@@ -43,7 +43,7 @@ interface UseElenaSessionReturn {
   salvarHistorico: (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sessaoId?: string) => Promise<void>
 }
 
-export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn {
+export function useElenaSession(supabase: any): UseElenaSessionReturn {
   // ── Refs (nunca ficam stale em callbacks) ────────────────────
   const userIdRef  = useRef('')
   const sessaoIdRef = useRef('')
@@ -184,9 +184,9 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
               const anoAtual = agora.getFullYear()
 
               // Títulos já presentes na agenda (evita duplicatas)
-              const titulosAgenda = new Set(
+              const titulosAgenda: string[] = 
                 (venc7d || []).map((ev: any) => (ev.titulo || '').toLowerCase().replace(/[💳📄🚰💡📡📱🏠🏢💊🏦📋⚡]/g, '').trim())
-              )
+
 
               // Cartões PF: inclui se dia_vencimento está nos próximos 7 dias e não tem evento
               const cartoesVenc: any[] = []
@@ -198,7 +198,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
                 if (dataVenc < agora) dataVenc.setMonth(dataVenc.getMonth() + 1)
                 if (dataVenc >= agora && dataVenc <= em7d) {
                   const nomeNorm = (c.nome || '').toLowerCase()
-                  const jaTemEvento = [...titulosAgenda].some(t => t.includes(nomeNorm) || nomeNorm.includes(t))
+                  const jaTemEvento = titulosAgenda.some(t => t.includes(nomeNorm) || nomeNorm.includes(t))
                   if (!jaTemEvento) {
                     cartoesVenc.push({ titulo: `💳 Fatura ${c.nome}${c.bandeira ? ` (${c.bandeira})` : ''}`, data_inicio: dataVenc.toISOString() })
                   }
@@ -214,7 +214,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
                 if (dataVenc < agora) dataVenc.setMonth(dataVenc.getMonth() + 1)
                 if (dataVenc >= agora && dataVenc <= em7d) {
                   const descNorm = (a.descricao || '').toLowerCase()
-                  const jaTemEvento = [...titulosAgenda].some(t => t.includes(descNorm) || descNorm.includes(t))
+                  const jaTemEvento = titulosAgenda.some(t => t.includes(descNorm) || descNorm.includes(t))
                   if (!jaTemEvento) {
                     const emojiMap: Record<string, string> = {
                       agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
