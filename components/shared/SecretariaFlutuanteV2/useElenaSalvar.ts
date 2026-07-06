@@ -547,7 +547,7 @@ export function useElenaSalvar({
         const agora = new Date()
         const empresaId = await getEmpresaId(uid)
 
-        // ── 1. Busca últimos 3 meses de gastos e receitas PF ────
+        // ── 1. Busca todos os dados em paralelo ──────────────────
         const inicio3m = new Date(agora)
         inicio3m.setMonth(inicio3m.getMonth() - 3)
         inicio3m.setDate(1)
@@ -559,6 +559,9 @@ export function useElenaSalvar({
           { data: receitasRec },
           { data: imoveisFinanc },
           { data: veiculosFinanc },
+          { data: cartoesPf },
+          { data: faturasMes },
+          { data: ativosProj },
         ] = await Promise.all([
           // Gastos históricos (3 meses)
           (supabase.from('gastos_pessoais') as any)
@@ -576,7 +579,8 @@ export function useElenaSalvar({
           (supabase.from('alertas_recorrentes') as any)
             .select('descricao, valor, dia_vencimento, categoria, tipo')
             .eq('user_id', uid)
-            .eq('ativo', true),
+            .eq('ativo', true)
+            .order('dia_vencimento'),
           // Receitas marcadas como recorrentes
           (supabase.from('receitas_pessoais') as any)
             .select('descricao, valor, categoria')
@@ -585,18 +589,31 @@ export function useElenaSalvar({
             .order('valor', { ascending: false }),
           // Parcelas de imóveis (financiamentos ativos)
           (supabase.from('imoveis') as any)
-            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas')
+            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
             .eq('empresa_id', empresaId || '')
             .not('valor_parcela', 'is', null),
           // Parcelas de veículos (financiamentos ativos)
           (supabase.from('veiculos') as any)
-            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas')
+            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, vencimento_dia, financiado')
             .eq('empresa_id', empresaId || '')
             .eq('financiado', true),
+          // Cartões PF com dia de vencimento
+          (supabase.from('contas') as any)
+            .select('id, nome, bandeira, dia_vencimento, limite')
+            .eq('user_id', uid).eq('ativo', true)
+            .in('tipo', ['cartao_credito', 'cartao_debito']),
+          // Faturas do mês atual (para estimar próximo mês)
+          (supabase.from('faturas_cartoes') as any)
+            .select('conta_id, valor_fechado, status')
+            .eq('mes_referencia', `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`),
+          // Investimentos / Ativos
+          (supabase.from('ativos') as any)
+            .select('ticker, nome, tipo, valor_investido, valor_atual, data_vencimento, corretora')
+            .eq('empresa_id', empresaId || '')
+            .order('valor_investido', { ascending: false }),
         ])
 
         // ── 2. Calcula médias mensais (gastos variáveis) ────────
-        // Separa gastos variáveis (não recorrentes) para média
         const gastosVariaveis = (gastos3m || []).filter((g: any) => !g.recorrente)
         const totalGastosVar = gastosVariaveis.reduce((s: number, g: any) => s + Number(g.valor), 0)
         const mediaGastosVar = totalGastosVar / 3
@@ -611,22 +628,40 @@ export function useElenaSalvar({
         const totalReceitasRec = (receitasRec || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
 
         // ── 5. Parcelas de financiamento (imóveis + veículos) ───
-        const parcelasAtivas: { titulo: string; valor: number; restantes: number }[] = []
+        const parcelasAtivas: { titulo: string; valor: number; restantes: number; total: number; pagas: number; dia?: number }[] = []
         ;(imoveisFinanc || []).forEach((im: any) => {
           const restantes = (im.parcelas_total || 0) - (im.parcelas_pagas || 0)
           if (restantes > 0 && im.valor_parcela) {
-            parcelasAtivas.push({ titulo: `🏠 ${im.titulo}`, valor: Number(im.valor_parcela), restantes })
+            parcelasAtivas.push({ titulo: `🏠 ${im.titulo}${im.construtora ? ` (${im.construtora})` : ''}`, valor: Number(im.valor_parcela), restantes, total: im.parcelas_total || 0, pagas: im.parcelas_pagas || 0 })
           }
         })
         ;(veiculosFinanc || []).forEach((ve: any) => {
           const restantes = (ve.parcelas_total || 0) - (ve.parcelas_pagas || 0)
           if (restantes > 0 && ve.valor_parcela) {
-            parcelasAtivas.push({ titulo: `🚗 ${ve.titulo}`, valor: Number(ve.valor_parcela), restantes })
+            parcelasAtivas.push({ titulo: `🚗 ${ve.titulo}`, valor: Number(ve.valor_parcela), restantes, total: ve.parcelas_total || 0, pagas: ve.parcelas_pagas || 0, dia: ve.vencimento_dia })
           }
         })
         const totalParcelas = parcelasAtivas.reduce((s, p) => s + p.valor, 0)
 
-        // ── 6. Gastos por categoria (histórico completo) ────────
+        // ── 6. Cartões PF — estima fatura do próximo mês ────────
+        const cartoesLista = cartoesPf || []
+        const faturasMap = new Map((faturasMes || []).map((f: any) => [f.conta_id, f]))
+        let totalCartoes = 0
+        const cartoesDetalhe: { nome: string; bandeira: string; dia: number; valorEstimado: number; status: string }[] = []
+        cartoesLista.forEach((c: any) => {
+          const fat = faturasMap.get(c.id)
+          const valorEst = fat ? Number(fat.valor_fechado) || 0 : 0
+          const status = fat?.status || 'sem_fatura'
+          totalCartoes += valorEst
+          cartoesDetalhe.push({ nome: c.nome, bandeira: c.bandeira || '', dia: c.dia_vencimento || 0, valorEstimado: valorEst, status })
+        })
+
+        // ── 7. Investimentos — vencimentos futuros ──────────────
+        const ativosLista = ativosProj || []
+        const totalInvestido = ativosLista.reduce((s: number, a: any) => s + (Number(a.valor_investido) || 0), 0)
+        const totalMercado = ativosLista.reduce((s: number, a: any) => s + (Number(a.valor_atual) || Number(a.valor_investido) || 0), 0)
+
+        // ── 8. Gastos por categoria (top 5) ─────────────────────
         const porCategoria: Record<string, number> = {}
         ;(gastos3m || []).forEach((g: any) => {
           const cat = g.categoria || 'outros'
@@ -640,28 +675,6 @@ export function useElenaSalvar({
           .sort((a, b) => b[1] - a[1])
           .slice(0, 5)
 
-        // ── 7. Busca vencimentos futuros da agenda ──────────────
-        const fimProjecao = new Date(agora)
-        fimProjecao.setMonth(fimProjecao.getMonth() + meses + 1)
-        const { data: vencFuturos } = await (supabase.from('agenda_eventos') as any)
-          .select('titulo, data_inicio, tipo')
-          .eq('user_id', uid)
-          .in('tipo', ['vencimento'])
-          .neq('status', 'cancelado')
-          .neq('status', 'concluido')
-          .gte('data_inicio', agora.toISOString())
-          .lte('data_inicio', fimProjecao.toISOString())
-          .order('data_inicio')
-
-        const vencimentosReais = (vencFuturos || []).filter((ev: any) => {
-          const t = (ev.titulo || '').toLowerCase()
-          return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
-        })
-
-        // ── 8. Totais consolidados ──────────────────────────────
-        const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelas
-        const entradasMes = totalReceitasRec > 0 ? Math.max(mediaReceitas, totalReceitasRec) : mediaReceitas
-
         // ── 9. Formata o relatório ──────────────────────────────
         const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
         const catEmoji: Record<string, string> = {
@@ -671,6 +684,11 @@ export function useElenaSalvar({
           agua: '💧', telefone: '📱', aluguel: '🏠', condominio: '🏢',
           plano_saude: '🏥', financiamento: '🏦',
         }
+        const contaEmoji: Record<string, string> = {
+          agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
+          aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
+          financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
+        }
 
         const nomeMes = (offset: number) => {
           const d = new Date(agora)
@@ -678,95 +696,165 @@ export function useElenaSalvar({
           return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
         }
 
+        // ── Totais consolidados ──────────────────────────────────
+        const entradasMes = totalReceitasRec > 0 ? Math.max(mediaReceitas, totalReceitasRec) : mediaReceitas
+        const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelas + totalCartoes
+
         let texto = `📊 **PROJEÇÃO FINANCEIRA — ${meses === 1 ? 'PRÓXIMO MÊS' : `PRÓXIMOS ${meses} MESES`}**\n`
-        texto += `_Baseada em dados reais + contas fixas + financiamentos_\n\n`
+        texto += `_Baseada em dados reais + contas fixas + financiamentos + cartões + investimentos_\n\n`
 
         for (let m = 1; m <= meses; m++) {
-          texto += `---\n📅 **${nomeMes(m).toUpperCase()}**\n\n`
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+          texto += `📅 **${nomeMes(m).toUpperCase()}**\n`
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
 
-          // Entradas
-          texto += `💰 **Entradas estimadas:** ${fmt(entradasMes)}\n`
+          // ── ENTRADAS ────────────────────────────────────────────
+          texto += `💰 **ENTRADAS ESTIMADAS: ${fmt(entradasMes)}**\n`
           if (totalReceitasRec > 0) {
-            texto += `  _└ ${fmt(totalReceitasRec)} confirmados (recorrentes)_\n`
+            texto += `  _└ ${fmt(totalReceitasRec)} confirmados (receitas recorrentes)_\n`
+          }
+          if (mediaReceitas > 0 && totalReceitasRec !== mediaReceitas) {
+            texto += `  _└ Média histórica: ${fmt(mediaReceitas)} (últimos 3 meses)_\n`
+          }
+          texto += '\n'
+
+          // ── SAÍDAS DETALHADAS ───────────────────────────────────
+          texto += `💸 **SAÍDAS ESTIMADAS: ${fmt(totalSaidasMes)}**\n\n`
+
+          // 1. Cartões PF
+          if (cartoesDetalhe.length > 0) {
+            texto += `💳 **Cartões de crédito:**\n`
+            cartoesDetalhe.forEach(c => {
+              const bandeira = c.bandeira ? ` (${c.bandeira})` : ''
+              const dia = c.dia ? ` — vence dia ${c.dia}` : ''
+              const statusIcon = c.status === 'pago' ? '✅' : c.status === 'parcial' ? '🟡' : c.status === 'pendente' ? '🔴' : '⚪'
+              texto += `  ${statusIcon} **${c.nome}${bandeira}**${dia}\n`
+              texto += `     Fatura estimada: **${c.valorEstimado > 0 ? fmt(c.valorEstimado) : 'sem dados'}**\n`
+            })
+            if (totalCartoes > 0) {
+              texto += `  **Subtotal cartões: ${fmt(totalCartoes)}**\n`
+            }
+            texto += '\n'
           }
 
-          // Saídas detalhadas
-          texto += `💸 **Saídas estimadas:** ${fmt(totalSaidasMes)}\n`
-          if (totalContasFixas > 0) {
-            texto += `  _└ Contas fixas: ${fmt(totalContasFixas)} (${(alertasRec || []).length} contas)_\n`
+          // 2. Contas fixas (alertas_recorrentes)
+          if ((alertasRec || []).length > 0) {
+            texto += `🔒 **Contas fixas (${(alertasRec || []).length}):**\n`
+            ;(alertasRec || []).forEach((a: any) => {
+              const emoji = contaEmoji[a.tipo] || '📋'
+              texto += `  ${emoji} **${a.descricao}** — dia ${a.dia_vencimento} — ${a.valor ? fmt(Number(a.valor)) : 'valor a definir'}\n`
+            })
+            texto += `  **Subtotal fixas: ${fmt(totalContasFixas)}**\n\n`
           }
-          if (totalParcelas > 0) {
-            texto += `  _└ Financiamentos: ${fmt(totalParcelas)} (${parcelasAtivas.length} parcelas)_\n`
+
+          // 3. Financiamentos (parcelas detalhadas)
+          if (parcelasAtivas.length > 0) {
+            texto += `🏦 **Financiamentos ativos (${parcelasAtivas.length}):**\n`
+            parcelasAtivas.forEach(p => {
+              const pct = p.total > 0 ? Math.round(p.pagas / p.total * 100) : 0
+              const diaStr = p.dia ? ` — dia ${p.dia}` : ''
+              texto += `  ${p.titulo}${diaStr}\n`
+              texto += `     💰 Parcela: **${fmt(p.valor)}**/mês\n`
+              texto += `     📊 Progresso: **${p.pagas}/${p.total}** pagas (${pct}%) — faltam **${p.restantes}** parcelas\n`
+            })
+            texto += `  **Subtotal financiamentos: ${fmt(totalParcelas)}**\n\n`
           }
+
+          // 4. Gastos variáveis (média)
           if (mediaGastosVar > 0) {
-            texto += `  _└ Variáveis estimados: ${fmt(mediaGastosVar)} (média 3 meses)_\n`
+            texto += `📦 **Gastos variáveis estimados: ${fmt(mediaGastosVar)}**\n`
+            texto += `  _Média dos últimos 3 meses_\n`
+            if (topCats.length > 0) {
+              topCats.forEach(([cat, media]) => {
+                const emoji = catEmoji[cat] || '📦'
+                texto += `  ${emoji} ${cat}: ${fmt(media)}/mês\n`
+              })
+            }
+            texto += '\n'
           }
 
+          // ── SALDO PROJETADO ─────────────────────────────────────
           const saldoProjetado = entradasMes - totalSaidasMes
           const saldoIcon = saldoProjetado >= 0 ? '🟢' : '🔴'
-          texto += `${saldoIcon} **Saldo projetado:** ${fmt(saldoProjetado)}\n\n`
+          texto += `${saldoIcon} **SALDO PROJETADO: ${fmt(saldoProjetado)}**\n\n`
 
-          // Contas fixas detalhadas
-          if ((alertasRec || []).length > 0) {
-            texto += `🔒 **Contas fixas:**\n`
-            ;(alertasRec || []).forEach((a: any) => {
-              const emoji = catEmoji[a.tipo] || catEmoji[a.categoria] || '📋'
-              texto += `  ${emoji} ${a.descricao}: ${a.valor ? fmt(Number(a.valor)) : 'valor não definido'} (dia ${a.dia_vencimento})\n`
+          // ── INVESTIMENTOS ───────────────────────────────────────
+          if (ativosLista.length > 0) {
+            const valorizInv = totalMercado - totalInvestido
+            const rentPct = totalInvestido > 0 ? (valorizInv / totalInvestido) * 100 : 0
+            texto += `📈 **Carteira de investimentos:**\n`
+            texto += `  💰 Investido: **${fmt(totalInvestido)}**\n`
+            texto += `  📊 Mercado: **${fmt(totalMercado)}**\n`
+            texto += `  ${valorizInv >= 0 ? '🟢' : '🔴'} Resultado: **${valorizInv >= 0 ? '+' : ''}${fmt(valorizInv)} (${rentPct.toFixed(1)}%)**\n`
+
+            // Vencimentos de renda fixa no mês projetado
+            const inicioM = new Date(agora)
+            inicioM.setMonth(inicioM.getMonth() + m)
+            inicioM.setDate(1)
+            const fimM = new Date(inicioM)
+            fimM.setMonth(fimM.getMonth() + 1)
+            const ativosVencMes = ativosLista.filter((a: any) => {
+              if (!a.data_vencimento) return false
+              const dv = new Date(a.data_vencimento)
+              return dv >= inicioM && dv < fimM
             })
+            if (ativosVencMes.length > 0) {
+              texto += `\n  ⏰ **Investimentos vencendo neste mês:**\n`
+              ativosVencMes.forEach((a: any) => {
+                const dtV = new Date(a.data_vencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                texto += `    📌 [${dtV}] ${a.ticker || a.nome} — ${fmt(Number(a.valor_investido) || 0)}\n`
+              })
+            }
             texto += '\n'
           }
 
-          // Parcelas de financiamento
-          if (parcelasAtivas.length > 0) {
-            texto += `🏦 **Financiamentos ativos:**\n`
-            parcelasAtivas.forEach(p => {
-              texto += `  ${p.titulo}: ${fmt(p.valor)}/mês (${p.restantes} parcelas restantes)\n`
-            })
-            texto += '\n'
-          }
+          // ── VENCIMENTOS DA AGENDA ───────────────────────────────
+          const inicioMes = new Date(agora)
+          inicioMes.setMonth(inicioMes.getMonth() + m)
+          inicioMes.setDate(1)
+          const fimMes = new Date(inicioMes)
+          fimMes.setMonth(fimMes.getMonth() + 1)
+          const { data: vencFuturos } = await (supabase.from('agenda_eventos') as any)
+            .select('titulo, data_inicio, tipo')
+            .eq('user_id', uid)
+            .in('tipo', ['vencimento'])
+            .neq('status', 'cancelado')
+            .neq('status', 'concluido')
+            .gte('data_inicio', inicioMes.toISOString())
+            .lte('data_inicio', fimMes.toISOString())
+            .order('data_inicio')
 
-          // Top gastos variáveis por categoria
-          if (topCats.length > 0) {
-            texto += `📂 **Top gastos variáveis por categoria:**\n`
-            topCats.forEach(([cat, media]) => {
-              const emoji = catEmoji[cat] || '📦'
-              texto += `  ${emoji} ${cat}: ${fmt(media)}/mês\n`
-            })
-          }
-
-          // Vencimentos do mês em questão
-          const inicioM = new Date(agora)
-          inicioM.setMonth(inicioM.getMonth() + m)
-          inicioM.setDate(1)
-          const fimM = new Date(inicioM)
-          fimM.setMonth(fimM.getMonth() + 1)
-
-          const vencMes = vencimentosReais.filter((ev: any) => {
-            const dt = new Date(ev.data_inicio)
-            return dt >= inicioM && dt < fimM
+          const vencimentosReais = (vencFuturos || []).filter((ev: any) => {
+            const t = (ev.titulo || '').toLowerCase()
+            return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
           })
 
-          if (vencMes.length > 0) {
-            texto += `\n📄 **Vencimentos agendados:**\n`
-            vencMes.forEach((ev: any) => {
+          if (vencimentosReais.length > 0) {
+            texto += `📄 **Vencimentos agendados:**\n`
+            vencimentosReais.forEach((ev: any) => {
               const dt = new Date(ev.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
               texto += `  📌 [${dt}] ${ev.titulo}\n`
             })
+            texto += '\n'
           }
-          texto += '\n'
         }
 
-        // Rodapé com fontes
+        // ── RODAPÉ ───────────────────────────────────────────────
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        texto += `📋 **RESUMO DAS FONTES:**\n`
         const fontes: string[] = []
         if (gastos3m?.length > 0 || receitas3m?.length > 0) fontes.push(`${gastos3m?.length || 0} gastos e ${receitas3m?.length || 0} receitas (3 meses)`)
         if ((alertasRec || []).length > 0) fontes.push(`${(alertasRec || []).length} contas fixas`)
         if ((receitasRec || []).length > 0) fontes.push(`${(receitasRec || []).length} receitas recorrentes`)
         if (parcelasAtivas.length > 0) fontes.push(`${parcelasAtivas.length} financiamentos`)
+        if (cartoesDetalhe.length > 0) fontes.push(`${cartoesDetalhe.length} cartões`)
+        if (ativosLista.length > 0) fontes.push(`${ativosLista.length} investimentos`)
 
         if (fontes.length === 0) {
           texto += `\n⚠️ _Sem dados suficientes. Lance suas receitas, gastos e contas fixas para projeções mais precisas._`
         } else {
-          texto += `\n_📈 Fontes: ${fontes.join(' · ')}_`
+          texto += fontes.map(f => `  • ${f}`).join('\n')
+          texto += `\n\n_📈 Projeção baseada em dados reais do sistema. Para melhor precisão, mantenha seus lançamentos em dia!_`
         }
 
         setMensagens(prev => [...prev, { id: `proj-${Date.now()}`, role: 'ai' as const, texto }])
