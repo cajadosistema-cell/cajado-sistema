@@ -263,8 +263,9 @@ export function useElenaSalvar({
         const dataGasto = validarData(acao.dados.data)
         const valor = Number(acao.dados.valor) || 0
         if (valor <= 0) throw new Error('Valor inválido. Informe o valor do gasto antes de salvar.')
-        const { data: dups } = await supabase.from('gastos_pessoais').select('id')
-          .eq('user_id', uid).eq('data', dataGasto).eq('valor', valor)
+        let queryDups = supabase.from('gastos_pessoais').select('id').eq('user_id', uid).eq('data', dataGasto).eq('valor', valor)
+        if (acao.dados.descricao) queryDups = queryDups.eq('descricao', acao.dados.descricao)
+        const { data: dups } = await queryDups
         if (dups && dups.length > 0 && !acao.dados.forcar) {
           throw new Error('⚠️ Duplicidade! Já existe um gasto com este valor nesta data.')
         }
@@ -300,8 +301,9 @@ export function useElenaSalvar({
         const dataReceita = validarData(acao.dados.data)
         const valor = Number(acao.dados.valor) || 0
         if (valor <= 0) throw new Error('Valor inválido. Informe o valor da receita antes de salvar.')
-        const { data: dups } = await supabase.from('receitas_pessoais').select('id')
-          .eq('user_id', uid).eq('data', dataReceita).eq('valor', valor)
+        let queryDups = supabase.from('receitas_pessoais').select('id').eq('user_id', uid).eq('data', dataReceita).eq('valor', valor)
+        if (acao.dados.descricao) queryDups = queryDups.eq('descricao', acao.dados.descricao)
+        const { data: dups } = await queryDups
         if (dups && dups.length > 0 && !acao.dados.forcar) {
           throw new Error('⚠️ Duplicidade! Já existe uma receita com este valor nesta data.')
         }
@@ -331,8 +333,9 @@ export function useElenaSalvar({
         if (valor <= 0) throw new Error('Valor inválido. Informe o valor da despesa antes de salvar.')
         const { id: contaId, nome: contaNome } = await resolverContaPj(acao.dados.conta_nome)
         if (!contaId) throw new Error('Nenhuma conta PJ cadastrada. Cadastre uma conta PJ em Financeiro > Contas.')
-        const { data: dups } = await supabase.from('lancamentos').select('id')
-          .eq('conta_id', contaId).eq('data_competencia', dataComp).eq('valor', valor).eq('tipo', 'despesa')
+        let queryDups = supabase.from('lancamentos').select('id').eq('conta_id', contaId).eq('data_competencia', dataComp).eq('valor', valor).eq('tipo', 'despesa')
+        if (acao.dados.descricao) queryDups = queryDups.eq('descricao', acao.dados.descricao)
+        const { data: dups } = await queryDups
         if (dups && dups.length > 0 && !acao.dados.forcar) {
           throw new Error(`⚠️ Duplicidade! Já existe uma despesa de R$ ${valor} na conta ${contaNome} nesta data.`)
         }
@@ -358,8 +361,9 @@ export function useElenaSalvar({
         if (valor <= 0) throw new Error('Valor inválido. Informe o valor da receita antes de salvar.')
         const { id: contaId, nome: contaNome } = await resolverContaPj(acao.dados.conta_nome)
         if (!contaId) throw new Error('Nenhuma conta PJ cadastrada.')
-        const { data: dups } = await supabase.from('lancamentos').select('id')
-          .eq('conta_id', contaId).eq('data_competencia', dataComp).eq('valor', valor).eq('tipo', 'receita')
+        let queryDups = supabase.from('lancamentos').select('id').eq('conta_id', contaId).eq('data_competencia', dataComp).eq('valor', valor).eq('tipo', 'receita')
+        if (acao.dados.descricao) queryDups = queryDups.eq('descricao', acao.dados.descricao)
+        const { data: dups } = await queryDups
         if (dups && dups.length > 0 && !acao.dados.forcar) {
           throw new Error(`⚠️ Duplicidade! Já existe uma receita de R$ ${valor} na conta ${contaNome} nesta data.`)
         }
@@ -792,18 +796,76 @@ export function useElenaSalvar({
           .gte('data_inicio', `${hoje2}T00:00:00`)
           .lte('data_inicio', `${amanha2Str}T23:59:59`)
           .order('data_inicio')
-        // Vencimentos próximos (7 dias)
+        // Vencimentos próximos (7 dias) — agenda + cartões + alertas
         const em7d = new Date(agora2.getTime() + 7 * 24 * 60 * 60 * 1000)
-        const { data: venc7d } = await (supabase.from('agenda_eventos') as any)
-          .select('titulo, data_inicio')
-          .eq('user_id', uid)
-          .eq('tipo', 'vencimento')
-          .neq('status', 'cancelado')
-          .neq('status', 'concluido')
-          .gte('data_inicio', agora2.toISOString())
-          .lte('data_inicio', em7d.toISOString())
-          .order('data_inicio')
-        const venc7dReais = (venc7d || []).filter((ev: any) => {
+        const [
+          { data: venc7d },
+          { data: cartoesPfChk },
+          { data: alertasRecChk },
+        ] = await Promise.all([
+          (supabase.from('agenda_eventos') as any)
+            .select('titulo, data_inicio')
+            .eq('user_id', uid)
+            .eq('tipo', 'vencimento')
+            .neq('status', 'cancelado')
+            .neq('status', 'concluido')
+            .gte('data_inicio', agora2.toISOString())
+            .lte('data_inicio', em7d.toISOString())
+            .order('data_inicio'),
+          (supabase.from('contas') as any)
+            .select('nome, dia_vencimento, bandeira')
+            .eq('user_id', uid).eq('ativo', true)
+            .in('tipo', ['cartao_credito', 'cartao_debito'])
+            .not('dia_vencimento', 'is', null),
+          (supabase.from('alertas_recorrentes') as any)
+            .select('descricao, dia_vencimento, valor, tipo')
+            .eq('user_id', uid).eq('ativo', true),
+        ])
+
+        // Mesclar cartões e alertas que vencem nos próximos 7 dias
+        const diaHojeChk = agora2.getDate()
+        const mesAtualChk = agora2.getMonth()
+        const anoAtualChk = agora2.getFullYear()
+        const titulosAgendaChk = new Set(
+          (venc7d || []).map((ev: any) => (ev.titulo || '').toLowerCase().replace(/[💳📄🚰💡📡📱🏠🏢💊🏦📋⚡]/g, '').trim())
+        )
+
+        const extraVencChk: any[] = []
+        ;(cartoesPfChk || []).forEach((c: any) => {
+          const dia = c.dia_vencimento
+          if (!dia) return
+          const dataVenc = new Date(anoAtualChk, mesAtualChk, dia)
+          if (dataVenc < agora2) dataVenc.setMonth(dataVenc.getMonth() + 1)
+          if (dataVenc >= agora2 && dataVenc <= em7d) {
+            const nomeNorm = (c.nome || '').toLowerCase()
+            if (![...titulosAgendaChk].some(t => t.includes(nomeNorm) || nomeNorm.includes(t))) {
+              extraVencChk.push({ titulo: `💳 Fatura ${c.nome}${c.bandeira ? ` (${c.bandeira})` : ''}`, data_inicio: dataVenc.toISOString() })
+            }
+          }
+        })
+        ;(alertasRecChk || []).forEach((a: any) => {
+          const dia = a.dia_vencimento
+          if (!dia) return
+          const dataVenc = new Date(anoAtualChk, mesAtualChk, dia)
+          if (dataVenc < agora2) dataVenc.setMonth(dataVenc.getMonth() + 1)
+          if (dataVenc >= agora2 && dataVenc <= em7d) {
+            const descNorm = (a.descricao || '').toLowerCase()
+            if (![...titulosAgendaChk].some(t => t.includes(descNorm) || descNorm.includes(t))) {
+              const emojiMap: Record<string, string> = {
+                agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
+                aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
+                financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
+              }
+              const emoji = emojiMap[a.tipo] || '📋'
+              const valorStr = a.valor ? ` — R$ ${Number(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              extraVencChk.push({ titulo: `${emoji} ${a.descricao}${valorStr}`, data_inicio: dataVenc.toISOString() })
+            }
+          }
+        })
+
+        const todosVencChk = [...(venc7d || []), ...extraVencChk]
+          .sort((a: any, b: any) => new Date(a.data_inicio).getTime() - new Date(b.data_inicio).getTime())
+        const venc7dReais = todosVencChk.filter((ev: any) => {
           const t = (ev.titulo || '').toLowerCase()
           return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
         })

@@ -16,6 +16,7 @@ import { TabOrcamentos }  from './_components/tabs/TabOrcamentos'
 import { TabPrevisao }    from './_components/tabs/TabPrevisao'
 import { TabRegistros }   from './_components/tabs/TabRegistros'
 import { TabCartoesPF }   from './_components/tabs/TabCartoesPF'
+import { TabControleUnificado } from './_components/tabs/TabControleUnificado'
 import { SecretariaFlutuante }    from '@/components/shared/SecretariaFlutuante'
 import { ModalNovoGasto }         from './_components/modals/ModalNovoGasto'
 import { ModalNovaReceita }       from './_components/modals/ModalNovaReceita'
@@ -23,7 +24,7 @@ import { PainelComparativoMes }   from '@/components/shared/PainelComparativoMes
 import { PainelLimitesOrcamento } from '@/components/shared/LimitesOrcamento'
 import { VencimentosMesPF }       from './_components/VencimentosMesPF'
 
-type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros' | 'contas'
+type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros' | 'contas' | 'controle'
 
 // ── 3 grupos visuais — reduz carga cognitiva ──────────────────
 const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; emoji: string }[] }[] = [
@@ -40,6 +41,7 @@ const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; emoji: stri
   {
     label: '📅 Planejamento',
     tabs: [
+      { id: 'controle',  label: 'Controle',   emoji: '📋' },
       { id: 'previsao',  label: 'Previsão',   emoji: '🔮' },
       { id: 'cartoes',   label: 'Cartões PF', emoji: '💳' },
       { id: 'registros', label: 'Registros',  emoji: '🗂️' },
@@ -246,6 +248,7 @@ export default function PfPessoalClient() {
       {tab === 'cartoes' && (
         <TabCartoesPF userId={authUserId} gastos={gastos} receitas={receitas} onUpdate={refreshTudo} />
       )}
+      {tab === 'controle' && <TabControleUnificado userId={authUserId} />}
       {tab === 'registros' && <TabRegistros userId={authUserId} />}
       {tab === 'contas' && (
         <TabContasPFInline

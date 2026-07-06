@@ -91,14 +91,17 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
       if (!historyLoadedRef.current) {
         historyLoadedRef.current = true
 
-        const { data: lastMsg } = await (supabase.from('elena_conversas') as any)
-          .select('sessao_id').eq('user_id', uid).order('created_at', { ascending: false }).limit(1)
-        const sid = lastMsg?.[0]?.sessao_id ?? Date.now().toString()
+        let sid = localStorage.getItem(`elena_sessao_id_${uid}`)
+        if (!sid) {
+          sid = Date.now().toString()
+          localStorage.setItem(`elena_sessao_id_${uid}`, sid)
+        }
         setSessaoId(sid)
 
         const { data: hist } = await (supabase.from('elena_conversas') as any)
           .select('id, role, texto, acoes, created_at, sessao_id')
           .eq('user_id', uid)
+          .eq('sessao_id', sid)
           .order('created_at', { ascending: false })
           .limit(30)
 
@@ -146,19 +149,89 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
                 .lte('data_inicio', `${hojeIso}T23:59:59`)
                 .order('data_inicio')
 
-              // 2. Vencimentos nos próximos 7 dias
+              // 2. Vencimentos nos próximos 7 dias (agenda)
               const em7d = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000)
-              const { data: venc7d } = await (supabase.from('agenda_eventos') as any)
-                .select('titulo, data_inicio')
-                .eq('user_id', uid)
-                .eq('tipo', 'vencimento')
-                .neq('status', 'cancelado')
-                .neq('status', 'concluido')
-                .gte('data_inicio', agora.toISOString())
-                .lte('data_inicio', em7d.toISOString())
-                .order('data_inicio')
+              const [
+                { data: venc7d },
+                { data: cartoesPf },
+                { data: alertasRec },
+              ] = await Promise.all([
+                (supabase.from('agenda_eventos') as any)
+                  .select('titulo, data_inicio')
+                  .eq('user_id', uid)
+                  .eq('tipo', 'vencimento')
+                  .neq('status', 'cancelado')
+                  .neq('status', 'concluido')
+                  .gte('data_inicio', agora.toISOString())
+                  .lte('data_inicio', em7d.toISOString())
+                  .order('data_inicio'),
+                // Cartões PF com dia_vencimento (podem não ter evento na agenda)
+                (supabase.from('contas') as any)
+                  .select('nome, dia_vencimento, bandeira')
+                  .eq('user_id', uid).eq('ativo', true)
+                  .in('tipo', ['cartao_credito', 'cartao_debito'])
+                  .not('dia_vencimento', 'is', null),
+                // Contas fixas recorrentes (podem não ter evento na agenda)
+                (supabase.from('alertas_recorrentes') as any)
+                  .select('descricao, dia_vencimento, valor, tipo')
+                  .eq('user_id', uid).eq('ativo', true),
+              ])
 
-              const vencReais = (venc7d || []).filter((ev: any) => {
+              // Mesclar: agenda + cartões + alertas que vencem nos próximos 7 dias
+              const diaHoje = agora.getDate()
+              const mesAtual = agora.getMonth()
+              const anoAtual = agora.getFullYear()
+
+              // Títulos já presentes na agenda (evita duplicatas)
+              const titulosAgenda = new Set(
+                (venc7d || []).map((ev: any) => (ev.titulo || '').toLowerCase().replace(/[💳📄🚰💡📡📱🏠🏢💊🏦📋⚡]/g, '').trim())
+              )
+
+              // Cartões PF: inclui se dia_vencimento está nos próximos 7 dias e não tem evento
+              const cartoesVenc: any[] = []
+              ;(cartoesPf || []).forEach((c: any) => {
+                const dia = c.dia_vencimento
+                if (!dia) return
+                const dataVenc = new Date(anoAtual, mesAtual, dia)
+                // Se já passou neste mês, considerar próximo mês
+                if (dataVenc < agora) dataVenc.setMonth(dataVenc.getMonth() + 1)
+                if (dataVenc >= agora && dataVenc <= em7d) {
+                  const nomeNorm = (c.nome || '').toLowerCase()
+                  const jaTemEvento = [...titulosAgenda].some(t => t.includes(nomeNorm) || nomeNorm.includes(t))
+                  if (!jaTemEvento) {
+                    cartoesVenc.push({ titulo: `💳 Fatura ${c.nome}${c.bandeira ? ` (${c.bandeira})` : ''}`, data_inicio: dataVenc.toISOString() })
+                  }
+                }
+              })
+
+              // Alertas recorrentes: inclui se dia_vencimento está nos próximos 7 dias e não tem evento
+              const alertasVenc: any[] = []
+              ;(alertasRec || []).forEach((a: any) => {
+                const dia = a.dia_vencimento
+                if (!dia) return
+                const dataVenc = new Date(anoAtual, mesAtual, dia)
+                if (dataVenc < agora) dataVenc.setMonth(dataVenc.getMonth() + 1)
+                if (dataVenc >= agora && dataVenc <= em7d) {
+                  const descNorm = (a.descricao || '').toLowerCase()
+                  const jaTemEvento = [...titulosAgenda].some(t => t.includes(descNorm) || descNorm.includes(t))
+                  if (!jaTemEvento) {
+                    const emojiMap: Record<string, string> = {
+                      agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
+                      aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
+                      financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
+                    }
+                    const emoji = emojiMap[a.tipo] || '📋'
+                    const valorStr = a.valor ? ` — R$ ${Number(a.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+                    alertasVenc.push({ titulo: `${emoji} ${a.descricao}${valorStr}`, data_inicio: dataVenc.toISOString() })
+                  }
+                }
+              })
+
+              // Combina tudo e ordena por data
+              const todosVenc = [...(venc7d || []), ...cartoesVenc, ...alertasVenc]
+                .sort((a: any, b: any) => new Date(a.data_inicio).getTime() - new Date(b.data_inicio).getTime())
+
+              const vencReais = todosVenc.filter((ev: any) => {
                 const t = (ev.titulo || '').toLowerCase()
                 return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
               })
@@ -314,6 +387,7 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
       }))
       setMensagens([{ id: '1', role: 'ai', texto: 'Histórico carregado! O que faremos com ele?' }, ...historico])
       setSessaoId(sid)
+      localStorage.setItem(`elena_sessao_id_${uid}`, sid)
       setShowHistory(false)
     }
   }
@@ -321,7 +395,9 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
   const handleClearChat = () => {
     // Não pede confirmação — histórico sempre salvo no banco automaticamente
     setMensagens([SAUDACAO_INICIAL])
-    setSessaoId(Date.now().toString())
+    const newSid = Date.now().toString()
+    setSessaoId(newSid)
+    localStorage.setItem(`elena_sessao_id_${userIdRef.current}`, newSid)
   }
 
   return {

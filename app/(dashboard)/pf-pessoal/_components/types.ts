@@ -73,6 +73,52 @@ export function detectarCategoria(descricao: string): string {
   return 'outros'
 }
 
+// ── Compromissos Fixos (migration 060) ──
+export type CategoriaCompromisso = 'cartao' | 'boleto_imovel' | 'investimento' | 'conta_fixa' | 'outro'
+export type StatusPagamento = 'pendente' | 'pago' | 'parcial' | 'atrasado'
+
+export type CompromissoFixo = {
+  id: string
+  user_id: string
+  categoria: CategoriaCompromisso
+  descricao: string
+  valor: number
+  dia_vencimento: number | null
+  recorrente: boolean
+  ativo: boolean
+  conta_id: string | null
+  metadados: Record<string, any> | null
+  created_at: string
+  updated_at: string
+}
+
+export type HistoricoPagamentoMensal = {
+  id: string
+  user_id: string
+  compromisso_id: string
+  mes_referencia: string
+  status: StatusPagamento
+  valor_pago: number | null
+  data_pagamento: string | null
+  notas: string | null
+  created_at: string
+}
+
+export const CATEGORIA_COMPROMISSO: Record<CategoriaCompromisso, { label: string; icon: string; cor: string }> = {
+  cartao:        { label: 'Cartão',          icon: '💳', cor: '#f59e0b' },
+  boleto_imovel: { label: 'Boleto Imóvel',   icon: '🏠', cor: '#3b82f6' },
+  investimento:  { label: 'Investimento',     icon: '📈', cor: '#10b981' },
+  conta_fixa:    { label: 'Conta Fixa',       icon: '📋', cor: '#8b5cf6' },
+  outro:         { label: 'Outro',            icon: '📦', cor: '#6b7280' },
+}
+
+export const STATUS_CONFIG: Record<StatusPagamento, { label: string; icon: string; cor: string; bg: string }> = {
+  pendente: { label: 'Pendente', icon: '⏳', cor: '#f59e0b', bg: 'bg-amber-500/10 border-amber-500/20 text-amber-400' },
+  pago:     { label: 'Pago',     icon: '✅', cor: '#10b981', bg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' },
+  parcial:  { label: 'Parcial',  icon: '⚡', cor: '#3b82f6', bg: 'bg-blue-500/10 border-blue-500/20 text-blue-400' },
+  atrasado: { label: 'Atrasado', icon: '🚨', cor: '#ef4444', bg: 'bg-red-500/10 border-red-500/20 text-red-400' },
+}
+
 export function formatCurrency(v: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 }

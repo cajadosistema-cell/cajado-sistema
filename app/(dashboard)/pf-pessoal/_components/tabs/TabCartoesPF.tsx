@@ -324,11 +324,13 @@ function ModalLancamentoPF({ cartoes, userId, onClose, onSave }: {
           user_id: userId, descricao: desc,
           valor: valor / parcelas, categoria: form.categoria,
           data: dataStr, forma_pagamento: forma,
+          conta_id: cartaoId,
         })
       } else {
         await (supabase.from('receitas_pessoais') as any).insert({
           user_id: userId, descricao: desc,
           valor: valor / parcelas, categoria: form.categoria, data: dataStr,
+          conta_id: cartaoId,
         })
       }
     }
