@@ -552,6 +552,24 @@ export function useElenaSalvar({
         inicio3m.setMonth(inicio3m.getMonth() - 3)
         inicio3m.setDate(1)
 
+        const mesAtualRef = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`
+
+        // Build queries with empresa_id fallback
+        let qImoveis = (supabase.from('imoveis') as any)
+          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
+          .not('valor_parcela', 'is', null)
+        if (empresaId) qImoveis = qImoveis.eq('empresa_id', empresaId)
+
+        let qVeiculos = (supabase.from('veiculos') as any)
+          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, vencimento_dia, financiado')
+          .eq('financiado', true)
+        if (empresaId) qVeiculos = qVeiculos.eq('empresa_id', empresaId)
+
+        let qAtivos = (supabase.from('ativos') as any)
+          .select('ticker, nome, tipo, valor_investido, valor_atual, data_vencimento, corretora')
+          .order('valor_investido', { ascending: false })
+        if (empresaId) qAtivos = qAtivos.eq('empresa_id', empresaId)
+
         const [
           { data: gastos3m },
           { data: receitas3m },
@@ -562,6 +580,7 @@ export function useElenaSalvar({
           { data: cartoesPf },
           { data: faturasMes },
           { data: ativosProj },
+          { data: pagamentosMes },
         ] = await Promise.all([
           // Gastos históricos (3 meses)
           (supabase.from('gastos_pessoais') as any)
@@ -577,7 +596,7 @@ export function useElenaSalvar({
             .order('data'),
           // Contas fixas recorrentes (compromissos_fixos — tabela unificada)
           (supabase.from('compromissos_fixos') as any)
-            .select('descricao, valor, dia_vencimento, categoria, tipo_detalhe')
+            .select('id, descricao, valor, dia_vencimento, categoria, tipo_detalhe')
             .eq('user_id', uid)
             .eq('ativo', true)
             .eq('recorrente', true)
@@ -589,15 +608,9 @@ export function useElenaSalvar({
             .eq('recorrente', true)
             .order('valor', { ascending: false }),
           // Parcelas de imóveis (financiamentos ativos)
-          (supabase.from('imoveis') as any)
-            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
-            .eq('empresa_id', empresaId || '')
-            .not('valor_parcela', 'is', null),
+          qImoveis,
           // Parcelas de veículos (financiamentos ativos)
-          (supabase.from('veiculos') as any)
-            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, vencimento_dia, financiado')
-            .eq('empresa_id', empresaId || '')
-            .eq('financiado', true),
+          qVeiculos,
           // Cartões PF com dia de vencimento
           (supabase.from('contas') as any)
             .select('id, nome, bandeira, dia_vencimento, limite')
@@ -606,12 +619,15 @@ export function useElenaSalvar({
           // Faturas do mês atual (para estimar próximo mês)
           (supabase.from('faturas_cartoes') as any)
             .select('conta_id, valor_fechado, status')
-            .eq('mes_referencia', `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`),
+            .eq('user_id', uid)
+            .eq('mes_referencia', mesAtualRef),
           // Investimentos / Ativos
-          (supabase.from('ativos') as any)
-            .select('ticker, nome, tipo, valor_investido, valor_atual, data_vencimento, corretora')
-            .eq('empresa_id', empresaId || '')
-            .order('valor_investido', { ascending: false }),
+          qAtivos,
+          // Histórico de pagamentos do mês atual (compromissos já pagos)
+          (supabase.from('historico_pagamentos_mensal') as any)
+            .select('compromisso_id, status, valor_pago')
+            .eq('user_id', uid)
+            .eq('mes_referencia', mesAtualRef),
         ])
 
         // ── 2. Calcula médias mensais (gastos variáveis) ────────
@@ -622,8 +638,18 @@ export function useElenaSalvar({
         const totalReceitas = (receitas3m || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
         const mediaReceitas = totalReceitas / 3
 
-        // ── 3. Contas fixas (compromissos_fixos) ──────────────
-        const totalContasFixas = (alertasRec || []).reduce((s: number, a: any) => s + (Number(a.valor) || 0), 0)
+        // ── 3. Contas fixas (compromissos_fixos) — cruza com pagamentos ──
+        const pagosMap = new Map<string, any>((pagamentosMes || []).map((p: any) => [p.compromisso_id, p]))
+        const contasPendentes = (alertasRec || []).filter((a: any) => {
+          const pag = pagosMap.get(a.id)
+          return !pag || pag.status !== 'pago'
+        })
+        const contasPagas = (alertasRec || []).filter((a: any) => {
+          const pag = pagosMap.get(a.id)
+          return pag && pag.status === 'pago'
+        })
+        const totalContasFixas = contasPendentes.reduce((s: number, a: any) => s + (Number(a.valor) || 0), 0)
+        const totalContasPagas = contasPagas.reduce((s: number, a: any) => s + (Number(a.valor) || 0), 0)
 
         // ── 4. Receitas recorrentes confirmadas ─────────────────
         const totalReceitasRec = (receitasRec || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
@@ -646,11 +672,11 @@ export function useElenaSalvar({
 
         // ── 6. Cartões PF — estima fatura do próximo mês ────────
         const cartoesLista = cartoesPf || []
-        const faturasMap = new Map((faturasMes || []).map((f: any) => [f.conta_id, f]))
+        const faturasMap = new Map<string, any>((faturasMes || []).map((f: any) => [f.conta_id, f]))
         let totalCartoes = 0
         const cartoesDetalhe: { nome: string; bandeira: string; dia: number; valorEstimado: number; status: string }[] = []
         cartoesLista.forEach((c: any) => {
-          const fat = faturasMap.get(c.id)
+          const fat: any = faturasMap.get(c.id)
           const valorEst = fat ? Number(fat.valor_fechado) || 0 : 0
           const status = fat?.status || 'sem_fatura'
           totalCartoes += valorEst
@@ -738,14 +764,21 @@ export function useElenaSalvar({
             texto += '\n'
           }
 
-          // 2. Contas fixas (compromissos_fixos)
+          // 2. Contas fixas (compromissos_fixos) — com status de pagamento
           if ((alertasRec || []).length > 0) {
-            texto += `🔒 **Contas fixas (${(alertasRec || []).length}):**\n`
+            const totalFixas = (alertasRec || []).length
+            const qtdPagas = contasPagas.length
+            texto += `🔒 **Contas fixas (${totalFixas}${qtdPagas > 0 ? ` — ${qtdPagas} paga(s)` : ''}):**\n`
             ;(alertasRec || []).forEach((a: any) => {
+              const pag = pagosMap.get(a.id)
+              const statusIcon = pag?.status === 'pago' ? '✅' : pag?.status === 'parcial' ? '🟡' : '🔴'
               const emoji = contaEmoji[a.tipo_detalhe] || '📋'
-              texto += `  ${emoji} **${a.descricao}** — dia ${a.dia_vencimento} — ${a.valor ? fmt(Number(a.valor)) : 'valor a definir'}\n`
+              texto += `  ${statusIcon} ${emoji} **${a.descricao}** — dia ${a.dia_vencimento} — ${a.valor ? fmt(Number(a.valor)) : 'valor a definir'}\n`
             })
-            texto += `  **Subtotal fixas: ${fmt(totalContasFixas)}**\n\n`
+            if (totalContasPagas > 0) {
+              texto += `  ✅ Já pago: ${fmt(totalContasPagas)}\n`
+            }
+            texto += `  **Pendente: ${fmt(totalContasFixas)}**\n\n`
           }
 
           // 3. Financiamentos (parcelas detalhadas)
@@ -825,9 +858,18 @@ export function useElenaSalvar({
             .lte('data_inicio', fimMes.toISOString())
             .order('data_inicio')
 
+          // Deduplica: remove vencimentos da agenda que já foram listados como contas fixas ou financiamentos
+          const descFixas: string[] = (alertasRec || []).map((a: any) => (a.descricao || '').toLowerCase())
+          const titulosParcelas: string[] = parcelasAtivas.map(p => p.titulo.replace(/[🏠🚗⚙️🔨📦]/g, '').trim().toLowerCase())
+
           const vencimentosReais = (vencFuturos || []).filter((ev: any) => {
             const t = (ev.titulo || '').toLowerCase()
-            return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
+            if (t.includes('confirmação') || t.includes('pagou') || t.startsWith('✅')) return false
+            // Exclui se já listado como conta fixa
+            if (descFixas.some(d => t.includes(d) || d.includes(t.replace(/[💳📄🚰💡📡📱🏠🏢💊🏦📋⚡]/g, '').trim()))) return false
+            // Exclui se já listado como financiamento
+            if (titulosParcelas.some(p => t.includes(p) || p.includes(t))) return false
+            return true
           })
 
           if (vencimentosReais.length > 0) {
@@ -916,9 +958,9 @@ export function useElenaSalvar({
         const diaHojeChk = agora2.getDate()
         const mesAtualChk = agora2.getMonth()
         const anoAtualChk = agora2.getFullYear()
-        const titulosAgendaChk = new Set(
+        const titulosAgendaChk: string[] = 
           (venc7d || []).map((ev: any) => (ev.titulo || '').toLowerCase().replace(/[💳📄🚰💡📡📱🏠🏢💊🏦📋⚡]/g, '').trim())
-        )
+
 
         const extraVencChk: any[] = []
         ;(cartoesPfChk || []).forEach((c: any) => {
@@ -928,7 +970,7 @@ export function useElenaSalvar({
           if (dataVenc < agora2) dataVenc.setMonth(dataVenc.getMonth() + 1)
           if (dataVenc >= agora2 && dataVenc <= em7d) {
             const nomeNorm = (c.nome || '').toLowerCase()
-            if (![...titulosAgendaChk].some(t => t.includes(nomeNorm) || nomeNorm.includes(t))) {
+            if (!titulosAgendaChk.some(t => t.includes(nomeNorm) || nomeNorm.includes(t))) {
               extraVencChk.push({ titulo: `💳 Fatura ${c.nome}${c.bandeira ? ` (${c.bandeira})` : ''}`, data_inicio: dataVenc.toISOString() })
             }
           }
@@ -940,7 +982,7 @@ export function useElenaSalvar({
           if (dataVenc < agora2) dataVenc.setMonth(dataVenc.getMonth() + 1)
           if (dataVenc >= agora2 && dataVenc <= em7d) {
             const descNorm = (a.descricao || '').toLowerCase()
-            if (![...titulosAgendaChk].some(t => t.includes(descNorm) || descNorm.includes(t))) {
+            if (!titulosAgendaChk.some(t => t.includes(descNorm) || descNorm.includes(t))) {
               const emojiMap: Record<string, string> = {
                 agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
                 aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
@@ -2264,7 +2306,22 @@ export function useElenaSalvar({
         const empresaId = await getEmpresaId(uid)
         const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
-        // ── Busca paralela de todos os dados necessários ────────
+        // Build queries with empresa_id fallback
+        let qImoveisR = (supabase.from('imoveis') as any)
+          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
+          .not('valor_parcela', 'is', null)
+        if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
+
+        let qVeiculosR = (supabase.from('veiculos') as any)
+          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, vencimento_dia')
+          .eq('financiado', true)
+        if (empresaId) qVeiculosR = qVeiculosR.eq('empresa_id', empresaId)
+
+        let qAtivosR = (supabase.from('ativos') as any)
+          .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, data_vencimento, corretora')
+          .order('valor_investido', { ascending: false })
+        if (empresaId) qAtivosR = qAtivosR.eq('empresa_id', empresaId)
+
         const [
           { data: cartoes },
           { data: faturas },
@@ -2274,6 +2331,7 @@ export function useElenaSalvar({
           { data: gastosMes },
           { data: receitasMes },
           { data: ativosData },
+          { data: pagamentosResumo },
         ] = await Promise.all([
           // Cartões de crédito do usuário
           (supabase.from('contas') as any)
@@ -2284,20 +2342,15 @@ export function useElenaSalvar({
           // Faturas do mês
           (supabase.from('faturas_cartoes') as any)
             .select('conta_id, valor_fechado, status, data_pagamento')
+            .eq('user_id', uid)
             .eq('mes_referencia', mesRef),
           // Imóveis com parcelas
-          (supabase.from('imoveis') as any)
-            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
-            .eq('empresa_id', empresaId || '')
-            .not('valor_parcela', 'is', null),
+          qImoveisR,
           // Veículos financiados
-          (supabase.from('veiculos') as any)
-            .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, vencimento_dia')
-            .eq('empresa_id', empresaId || '')
-            .eq('financiado', true),
+          qVeiculosR,
           // Contas recorrentes (compromissos_fixos — tabela unificada)
           (supabase.from('compromissos_fixos') as any)
-            .select('descricao, valor, dia_vencimento, tipo_detalhe')
+            .select('id, descricao, valor, dia_vencimento, tipo_detalhe')
             .eq('user_id', uid).eq('ativo', true)
             .eq('recorrente', true)
             .order('dia_vencimento'),
@@ -2314,11 +2367,16 @@ export function useElenaSalvar({
             .gte('data', dataInicio).lte('data', dataFim)
             .order('data'),
           // Investimentos / Ativos
-          (supabase.from('ativos') as any)
-            .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, data_vencimento, corretora')
-            .eq('empresa_id', empresaId || '')
-            .order('valor_investido', { ascending: false }),
+          qAtivosR,
+          // Histórico de pagamentos do mês (compromissos já pagos)
+          (supabase.from('historico_pagamentos_mensal') as any)
+            .select('compromisso_id, status, valor_pago')
+            .eq('user_id', uid)
+            .eq('mes_referencia', mesRef),
         ])
+
+        // Mapa de pagamentos para cruzar com compromissos
+        const pagosMapResumo = new Map<string, any>((pagamentosResumo || []).map((p: any) => [p.compromisso_id, p]))
 
         // ── SEÇÃO 1: CARTÕES ──────────────────────────────────────
         let texto = `📊 **RESUMO MENSAL — ${nomeMes.toUpperCase()}**\n`
@@ -2398,20 +2456,28 @@ export function useElenaSalvar({
           }
         }
 
-        // Contas recorrentes
+        // Contas recorrentes — com status de pagamento
         if ((alertasRec || []).length > 0) {
           const catEmoji: Record<string, string> = {
             boleto: '📄', cartao: '💳', agua: '💧', energia: '⚡',
             internet: '🌐', telefone: '📱', aluguel: '🏠', condominio: '🏢',
             plano_saude: '🏥', financiamento: '🏦', outro: '📋'
           }
+          let contasPagasResumo = 0
+          let contasPendentesResumo = 0
           for (const alerta of alertasRec) {
             temCompromissos = true
             const valor = Number(alerta.valor) || 0
             totalCompromissos += valor
+            const pag = pagosMapResumo.get(alerta.id)
+            const statusIcon = pag?.status === 'pago' ? '✅' : pag?.status === 'parcial' ? '🟡' : '🔴'
+            if (pag?.status === 'pago') contasPagasResumo += valor; else contasPendentesResumo += valor
             const emoji = catEmoji[alerta.tipo_detalhe] || '📋'
-            texto += `${emoji} **${alerta.descricao}** — dia ${alerta.dia_vencimento}\n`
+            texto += `${statusIcon} ${emoji} **${alerta.descricao}** — dia ${alerta.dia_vencimento}\n`
             texto += `  💰 Valor: **${valor > 0 ? fmt(valor) : 'a definir'}**\n\n`
+          }
+          if (contasPagasResumo > 0) {
+            texto += `✅ Já pago: ${fmt(contasPagasResumo)} | 🔴 Pendente: ${fmt(contasPendentesResumo)}\n`
           }
         }
 
