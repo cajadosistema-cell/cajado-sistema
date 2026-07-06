@@ -236,13 +236,16 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
                 return !t.includes('confirmação') && !t.includes('pagou') && !t.startsWith('✅')
               })
 
-              // 3. Saldo financeiro do mês
+              // 3. Saldo financeiro do mês + investimentos
               const inicioMes = `${hojeIso.substring(0, 7)}-01`
-              const [{ data: gastosM }, { data: receitasM }] = await Promise.all([
+              const [{ data: gastosM }, { data: receitasM }, { data: ativosBriefing }] = await Promise.all([
                 (supabase.from('gastos_pessoais') as any)
                   .select('valor').eq('user_id', uid).gte('data', inicioMes),
                 (supabase.from('receitas_pessoais') as any)
                   .select('valor').eq('user_id', uid).gte('data', inicioMes),
+                (supabase.from('ativos') as any)
+                  .select('ticker, nome, tipo, valor_investido, valor_atual, data_vencimento')
+                  .order('valor_investido', { ascending: false }),
               ])
               const totalGastos = (gastosM || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
               const totalReceitas = (receitasM || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
@@ -290,6 +293,34 @@ export function useElenaSession(supabase: SupabaseClient): UseElenaSessionReturn
               briefing += `  • Entradas: ${fmt(totalReceitas)}\n`
               briefing += `  • Saídas: ${fmt(totalGastos)}\n`
               briefing += `  • Saldo: ${saldoMes >= 0 ? '🟢' : '🔴'} **${fmt(saldoMes)}**\n\n`
+
+              // Investimentos
+              const ativosB = ativosBriefing || []
+              if (ativosB.length > 0) {
+                const totalInv = ativosB.reduce((s: number, a: any) => s + (Number(a.valor_investido) || 0), 0)
+                const totalMerc = ativosB.reduce((s: number, a: any) => s + (Number(a.valor_atual) || Number(a.valor_investido) || 0), 0)
+                const valorizB = totalMerc - totalInv
+                briefing += `📈 **Carteira de investimentos:**\n`
+                briefing += `  • Investido: ${fmt(totalInv)}\n`
+                briefing += `  • Mercado: ${fmt(totalMerc)}\n`
+                briefing += `  • ${valorizB >= 0 ? '🟢 +' : '🔴 '}${fmt(Math.abs(valorizB))} (${totalInv > 0 ? ((valorizB / totalInv) * 100).toFixed(1) : '0'}%)\n`
+
+                // Ativos vencendo em 7 dias
+                const em7dInv = new Date(agora.getTime() + 7 * 24 * 60 * 60 * 1000)
+                const vencInv = ativosB.filter((a: any) => {
+                  if (!a.data_vencimento) return false
+                  const dv = new Date(a.data_vencimento)
+                  return dv >= agora && dv <= em7dInv
+                })
+                if (vencInv.length > 0) {
+                  briefing += `\n  ⏰ **Investimentos vencendo em 7 dias:**\n`
+                  vencInv.forEach((a: any) => {
+                    const dtV = new Date(a.data_vencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                    briefing += `    📌 [${dtV}] ${a.ticker || a.nome} — ${fmt(Number(a.valor_investido) || 0)}\n`
+                  })
+                }
+                briefing += '\n'
+              }
 
               briefing += `_Como posso ajudá-lo hoje, Sr. Max?_ 💼`
 

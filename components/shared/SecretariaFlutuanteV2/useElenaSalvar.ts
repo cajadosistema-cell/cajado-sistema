@@ -2170,6 +2170,7 @@ export function useElenaSalvar({
           { data: alertasRec },
           { data: gastosMes },
           { data: receitasMes },
+          { data: ativosData },
         ] = await Promise.all([
           // Cartões de crédito do usuário
           (supabase.from('contas') as any)
@@ -2208,6 +2209,11 @@ export function useElenaSalvar({
             .eq('user_id', uid)
             .gte('data', dataInicio).lte('data', dataFim)
             .order('data'),
+          // Investimentos / Ativos
+          (supabase.from('ativos') as any)
+            .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, data_vencimento, corretora')
+            .eq('empresa_id', empresaId || '')
+            .order('valor_investido', { ascending: false }),
         ])
 
         // ── SEÇÃO 1: CARTÕES ──────────────────────────────────────
@@ -2311,6 +2317,66 @@ export function useElenaSalvar({
           texto += `**Total Compromissos: ${fmt(totalCompromissos)}/mês**\n\n`
         }
 
+        // ── SEÇÃO 2.5: INVESTIMENTOS ──────────────────────────────
+        const ativosLista = ativosData || []
+        let totalInvestido = 0
+        let totalMercadoInv = 0
+
+        if (ativosLista.length > 0) {
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+          texto += `📈 **INVESTIMENTOS / CARTEIRA**\n`
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+
+          totalInvestido = ativosLista.reduce((s: number, a: any) => s + (Number(a.valor_investido) || 0), 0)
+          totalMercadoInv = ativosLista.reduce((s: number, a: any) => s + (Number(a.valor_atual) || Number(a.valor_investido) || 0), 0)
+          const valorizInv = totalMercadoInv - totalInvestido
+          const rentPct = totalInvestido > 0 ? (valorizInv / totalInvestido) * 100 : 0
+
+          texto += `💰 Total investido: **${fmt(totalInvestido)}**\n`
+          texto += `📊 Valor de mercado: **${fmt(totalMercadoInv)}**\n`
+          texto += `${valorizInv >= 0 ? '🟢' : '🔴'} Resultado: **${valorizInv >= 0 ? '+' : ''}${fmt(valorizInv)} (${rentPct.toFixed(2)}%)**\n\n`
+
+          const tipoEmoji: Record<string, string> = {
+            acao: '🔵', fii: '🟢', fundo: '🟣', cdb: '🟠', lci: '🟡', lca: '🟡',
+            tesouro: '🔴', cripto: '🟣', poupanca: '🟠', previdencia: '🔵', outro: '⚪'
+          }
+
+          // Ativos com vencimento próximo (30 dias)
+          const em30d = new Date()
+          em30d.setDate(em30d.getDate() + 30)
+          const ativosVencendo = ativosLista.filter((a: any) => {
+            if (!a.data_vencimento) return false
+            const dv = new Date(a.data_vencimento)
+            return dv >= new Date() && dv <= em30d
+          })
+
+          if (ativosVencendo.length > 0) {
+            texto += `⏰ **Vencimentos nos próximos 30 dias:**\n`
+            ativosVencendo.forEach((a: any) => {
+              const emoji = tipoEmoji[a.tipo] || '⚪'
+              const dtVenc = new Date(a.data_vencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+              texto += `  ${emoji} [${dtVenc}] **${a.ticker || a.nome}** — ${fmt(Number(a.valor_investido) || 0)}\n`
+            })
+            texto += '\n'
+          }
+
+          // Top 5 ativos por valor
+          ativosLista.slice(0, 5).forEach((a: any) => {
+            const emoji = tipoEmoji[a.tipo] || '⚪'
+            const vi2 = Number(a.valor_investido) || 0
+            const va2 = Number(a.valor_atual) || vi2
+            const res = va2 - vi2
+            const rent = vi2 > 0 ? (res / vi2) * 100 : 0
+            const corretora = a.corretora ? ` (${a.corretora})` : ''
+            texto += `${emoji} **${a.ticker || a.nome}**${corretora}\n`
+            texto += `   Investido: ${fmt(vi2)} · Atual: ${fmt(va2)} · ${res >= 0 ? '🟢 +' : '🔴 '}${rent.toFixed(1)}%\n`
+          })
+          if (ativosLista.length > 5) {
+            texto += `\n_...e mais ${ativosLista.length - 5} ativo(s). Diga "meus investimentos" para ver todos._\n`
+          }
+          texto += '\n'
+        }
+
         // ── SEÇÃO 3: RESUMO FINANCEIRO ────────────────────────────
         texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
         texto += `💰 **RESUMO FINANCEIRO**\n`
@@ -2347,10 +2413,13 @@ export function useElenaSalvar({
 
         // Totalizador geral
         const totalObrigacoes = totalCartoes + totalCompromissos
-        if (totalObrigacoes > 0) {
+        if (totalObrigacoes > 0 || totalInvestido > 0) {
           texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
           texto += `🔒 **TOTAL OBRIGAÇÕES DO MÊS: ${fmt(totalObrigacoes)}**\n`
           texto += `_(Cartões: ${fmt(totalCartoes)} + Compromissos: ${fmt(totalCompromissos)})_\n`
+          if (totalInvestido > 0) {
+            texto += `📈 **PATRIMÔNIO INVESTIDO: ${fmt(totalMercadoInv)}**\n`
+          }
           texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
         }
 
