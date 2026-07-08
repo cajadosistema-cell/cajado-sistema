@@ -1351,7 +1351,7 @@ export function useElenaSalvar({
           ativo: true,
           user_id: uid,
         }
-        if (acao.dados.limite)          payloadCartao.limite = Number(acao.dados.limite)
+        if (acao.dados.limite)          payloadCartao.limite_credito = Number(acao.dados.limite)
         if (acao.dados.dia_fechamento)  payloadCartao.dia_fechamento = Number(acao.dados.dia_fechamento)
         if (acao.dados.dia_vencimento)  payloadCartao.dia_vencimento = Number(acao.dados.dia_vencimento)
         if (categoria === 'pj') {
@@ -1948,7 +1948,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const cat = acao.dados.categoria || 'todos'
         // IMPORTANTE: sempre filtra por user_id para evitar vazamento entre contas
-        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo').eq('user_id', uid).eq('ativo', true).order('categoria').order('nome')
+        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo, dia_vencimento, dia_fechamento, limite_credito').eq('user_id', uid).eq('ativo', true).order('categoria').order('nome')
         if (cat === 'pf') query = query.eq('categoria', 'pf')
         else if (cat === 'pj') query = query.eq('categoria', 'pj')
         const { data: contas, error } = await query
@@ -1965,7 +1965,10 @@ export function useElenaSalvar({
             contasPf.forEach((c: any) => {
               const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
               const band = c.bandeira ? ` [${c.bandeira}]` : ''
-              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}\n`
+              const venc = c.dia_vencimento ? ` | 📅 dia ${c.dia_vencimento}` : ''
+              const lim = c.limite_credito ? ` | Limite: R$ ${Number(c.limite_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              const isCartao = c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito'
+              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}${isCartao ? venc + lim : ''}\n`
             })
             texto += '\n'
           }
@@ -1974,7 +1977,10 @@ export function useElenaSalvar({
             contasPj.forEach((c: any) => {
               const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
               const band = c.bandeira ? ` [${c.bandeira}]` : ''
-              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}\n`
+              const venc = c.dia_vencimento ? ` | 📅 dia ${c.dia_vencimento}` : ''
+              const lim = c.limite_credito ? ` | Limite: R$ ${Number(c.limite_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              const isCartao = c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito'
+              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}${isCartao ? venc + lim : ''}\n`
             })
           }
           texto += `\n_Total: ${contas.length} conta(s) ativa(s)_`
@@ -2335,7 +2341,7 @@ export function useElenaSalvar({
         ] = await Promise.all([
           // Cartões de crédito do usuário
           (supabase.from('contas') as any)
-            .select('id, nome, bandeira, dia_vencimento, limite')
+            .select('id, nome, bandeira, dia_vencimento, dia_fechamento, limite_credito')
             .eq('user_id', uid).eq('ativo', true)
             .in('tipo', ['cartao_credito', 'cartao_debito'])
             .order('nome'),
