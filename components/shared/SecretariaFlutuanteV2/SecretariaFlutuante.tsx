@@ -19,6 +19,9 @@ import { useElenaAlertas }  from './useElenaAlertas'
 // Lib
 import { buildSystemPrompt, extrairAcoes, formatarTexto, renderMarkdownHtml } from './elena-prompt'
 import { PALAVRAS_CONFIRMACAO, KEYWORDS_WEB, KEYWORDS_HISTORICO } from './elena-constants'
+import { comprimirHistorico } from './elena-history-compressor'
+import { detectarModulos, dadosNecessarios } from './elena-module-detector'
+import type { ElenaModulo } from './elena-module-detector'
 import type { AcaoIA, AttachedFile, Msg } from './elena-types'
 
 // ── processarArquivo: processa imagens e PDFs ──────────────────────
@@ -110,6 +113,14 @@ function SecretariaFlutuanteWidget() {
   const alertasDisparadosRef = useRef<Set<string>>(new Set())
   const ultimoRegistroRef    = useRef<{ tabela: string; id: string } | null>(null)
   const confirmRetryRef      = useRef(0) // P5: anti-loop de confirmação
+
+  // Cache de dados do banco (evita re-buscar a cada mensagem)
+  const dadosCacheRef = useRef<{
+    data: any
+    timestamp: number
+    moduloHash: string
+  } | null>(null)
+  const CACHE_TTL = 2 * 60 * 1000 // 2 minutos
 
   // Arquivo anexado: ref + state sincronizados
   const attachedFileRef = useRef<AttachedFile | null>(null)
@@ -608,77 +619,40 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           blocoCartoes += 'Se o Sr. Max perguntar "o que tenho hoje" ou "meus vencimentos", use os dados acima.\n'
           blocoCartoes += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
         }
-      } catch { /* não bloqueia se falhar */ }
+        } catch (dbErr) {
+          // ── Erro explícito: informar à IA que dados não foram carregados ──
+          blocoCartoes += '\n⚠️ [SISTEMA: Não foi possível carregar os dados do banco. NÃO invente dados. Informe ao Sr. Max que houve um problema e sugira verificar manualmente.]\n'
+          console.error('[Elena] Erro ao buscar dados do banco:', dbErr)
+        }
 
-      // ── Montar array de mensagens nativo (role/content) ────────
-      // Isso dá à IA separação clara de turnos, em vez de contexto plano.
+      // ── Detectar módulos ativos para prompt modular ──────────
+      const modulosAtivos: ElenaModulo[] = detectarModulos(userText || '')
+
+      // ── Montar array de mensagens nativo via COMPRESSOR ──────
+      // O compressor divide em: resumo do passado + mensagens recentes completas
+      const historyBlock = comprimirHistorico(session.mensagens)
       const mensagensApi: { role: string; content: any }[] = []
 
-      // ── Helper: extrair dados-chave de ações salvas para contexto ──
-      const resumirAcoesSalvas = (acoes?: AcaoIA[]): string => {
-        if (!acoes || acoes.length === 0) return ''
-        return acoes
-          .filter(a => a.status === 'saved')
-          .map(a => {
-            const d = a.dados || {}
-            const partes: string[] = [a.tipo]
-            if (d.descricao || d.titulo) partes.push(d.descricao || d.titulo)
-            if (d.valor) partes.push(`R$ ${Number(d.valor).toFixed(2)}`)
-            if (d.parcelas && Number(d.parcelas) > 1) partes.push(`${d.parcelas}x`)
-            if (d.parcelas_pagas && d.parcelas_total) partes.push(`parcela ${d.parcelas_pagas}/${d.parcelas_total}`)
-            if (d.data) partes.push(d.data)
-            if (d.conta_nome) partes.push(`conta: ${d.conta_nome}`)
-            if (d.data_inicio) partes.push(d.data_inicio.substring(0, 16))
-            return partes.join(' | ')
-          })
-          .join('; ')
+      // 1. Injetar resumo do passado (se houver) como mensagem de sistema
+      if (historyBlock.resumoPassado) {
+        mensagensApi.push({
+          role: 'user',
+          content: `[SISTEMA — CONTEXTO ANTERIOR]\n${historyBlock.resumoPassado}`,
+        })
       }
 
-      // Pega últimas 25 mensagens úteis da sessão (sem lixo)
-      const msgsUteis = session.mensagens
-        .filter(m => m.texto && m.texto !== '...' && !m.texto.startsWith('Olá, Sr. Max!') && !m.texto.startsWith('Histórico carregado'))
-        .slice(-25)
-
-      // ── Construir estado da sessão (resumo de tudo já salvo) ────
-      const acoesSalvasNaSessao: string[] = []
-
-      for (const m of msgsUteis) {
-        if (m.role === 'ai') {
-          const t = m.texto
-          let content: string
-
-          // Confirmações de salvamento → PRESERVAR dados numéricos
-          if (t.includes('✅') || t.includes('Registrado') || t.includes('Registrando') || t.includes('⏳')) {
-            const dadosAcoes = resumirAcoesSalvas(m.acoes)
-            if (dadosAcoes) {
-              content = `[JÁ SALVO: ${dadosAcoes}] — NÃO pedir esses dados de novo`
-              acoesSalvasNaSessao.push(dadosAcoes)
-            } else {
-              const resumo = t.replace(/[✅⏳📋]/g, '').trim().split('\n')[0].substring(0, 200)
-              content = `[JÁ SALVO: ${resumo}] — NÃO pedir esses dados de novo`
-            }
-          } else if (t.includes('📋') || t.includes('🏠 **Imóveis') || t.includes('🚗 **Veículos') || t.includes('💳 **Compromissos') || t.includes('Patrimônio encontrado') || t.includes('Lançamentos')) {
-            const resumo = t.replace(/[📋🏠🚗💳]/g, '').trim().split('\n').slice(0, 5).join(' | ').substring(0, 300)
-            content = `[LISTOU: ${resumo}] — dados já exibidos`
-          } else if (t.startsWith('❌') || t.includes('Ops!')) {
-            content = `[ERRO: ${t.substring(0, 120)}]`
-          } else {
-            content = t.substring(0, 800)
-          }
-          mensagensApi.push({ role: 'assistant', content })
-        } else {
-          // Mensagens do USUÁRIO: NUNCA truncar — são os dados de entrada!
-          mensagensApi.push({ role: 'user', content: m.texto })
-        }
+      // 2. Mensagens recentes completas (com compressão inteligente de IA)
+      for (const msg of historyBlock.mensagensRecentes) {
+        mensagensApi.push(msg)
       }
 
-      // ── Injetar resumo de estado da sessão (anti-confusão) ─────
-      if (acoesSalvasNaSessao.length > 0) {
-        const estadoResumo = `[ESTADO DA SESSÃO — ${acoesSalvasNaSessao.length} registro(s) já salvo(s) nesta conversa]:\n${acoesSalvasNaSessao.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}\n⚠️ NÃO peça dados desses itens novamente. Use EXATAMENTE esses valores se precisar recapitular.`
+      // 3. Injetar estado de ações salvas (anti-repetição reforçada)
+      if (historyBlock.acoesSalvas.length > 0) {
+        const estadoResumo = `[ESTADO DA SESSÃO — ${historyBlock.acoesSalvas.length} registro(s) já salvo(s) nesta conversa]:\n${historyBlock.acoesSalvas.map((r, i) => `  ${i + 1}. ✅ ${r}`).join('\n')}\n⚠️ NÃO peça dados desses itens novamente. Use EXATAMENTE esses valores se precisar recapitular.`
         mensagensApi.push({ role: 'user', content: `[SISTEMA] ${estadoResumo}` })
       }
 
-      // Adiciona a mensagem atual do usuário
+      // 4. Adiciona a mensagem atual do usuário
       const userContentParts: any[] = []
       userContentParts.push({ type: 'text', text: promptFinal })
       if (fileSnap?.isImage) {
@@ -695,7 +669,7 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
 
       const body: Record<string, any> = {
         messages: mensagensApi,
-        systemInstruction: buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro) + blocoCartoes,
+        systemInstruction: buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro, modulosAtivos) + blocoCartoes,
         // model, temperature e max_tokens são controlados pelo route.ts
       }
 
