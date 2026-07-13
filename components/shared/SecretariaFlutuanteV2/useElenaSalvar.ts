@@ -21,6 +21,201 @@ import {
   BANDEIRAS_MAP,
 } from './elena-constants'
 import { buscarDadosRelatorio } from '../ModalRelatorio'
+// ════════════════════════════════════════════════════════════════
+// 🔴 FIX DUPLICATA — normalização e similaridade de nomes
+//
+// BUG ORIGINAL: `.insert()` cego + comparação por nome EXATO.
+// Ditando por voz, "Nubank" às vezes virava "no Bank". A Elena não
+// reconhecia como o mesmo cartão e criava um NOVO. Resultado: o mesmo
+// cartão partido em vários registros, cada um com metade dos dados —
+// um com o vencimento, outro com o limite. Quando ela achava o registro
+// sem a data, reperguntava a data que o Sr. Max já tinha informado.
+// ════════════════════════════════════════════════════════════════
+
+/** Sufixos genéricos que não distinguem um cartão de outro */
+const SUFIXOS_GENERICOS = ['bank', 'banco', 'card', 'cartao', 'credito', 'pay']
+
+/** Correções conhecidas de transcrição por voz */
+const ALIASES_CONTA: Record<string, string> = {
+  'nobank': 'nubank',
+  'nuconta': 'nubank',
+  'newbank': 'nubank',
+  'interbank': 'inter',
+  'picpay': 'picpay',
+  'ctsix': 'c6',
+  'seisbank': 'c6',
+}
+
+/** lowercase, sem acento, sem pontuação, sem espaços */
+function normalizarNome(s: string): string {
+  const base = String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+  return ALIASES_CONTA[base] || base
+}
+
+/** Distância de Levenshtein */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0
+  if (!a.length) return b.length
+  if (!b.length) return a.length
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      )
+    }
+    prev = cur
+  }
+  return prev[b.length]
+}
+
+/**
+ * Dois nomes de conta se referem à MESMA conta?
+ *
+ * Casa:  "Nubank" ≈ "no Bank"   (Levenshtein 1 → 83% similar)
+ *        "C6"     ≈ "C6 Bank"   (prefixo + sufixo genérico "bank")
+ *
+ * NÃO casa: "Sofisa Master" vs "Sofisa Visa"  (cartões diferentes de verdade)
+ *           "Visa Infinity"  vs "Visa Nana"
+ */
+function mesmaConta(nomeA: string, nomeB: string): boolean {
+  const a = normalizarNome(nomeA)
+  const b = normalizarNome(nomeB)
+  if (!a || !b) return false
+  if (a === b) return true
+
+  // Regra 1 — um é o outro + sufixo genérico ("c6" vs "c6bank")
+  const [curto, longo] = a.length <= b.length ? [a, b] : [b, a]
+  if (longo.startsWith(curto) && curto.length >= 2) {
+    const resto = longo.slice(curto.length)
+    if (SUFIXOS_GENERICOS.includes(resto)) return true
+  }
+
+  // Regra 2 — erro de digitação/transcrição ("nubank" vs "nobank")
+  // Exige nomes de tamanho parecido, para não casar coisas distintas.
+  const maxLen = Math.max(a.length, b.length)
+  if (maxLen >= 4 && Math.abs(a.length - b.length) <= 2) {
+    const similaridade = 1 - levenshtein(a, b) / maxLen
+    if (similaridade >= 0.80) return true
+  }
+
+  return false
+}
+
+// ════════════════════════════════════════════════════════════════
+// upsertConta — procura ANTES de inserir. Nunca cria duplicata.
+//
+// 🔴 MULTI-TENANT MISTO — a âncora depende da categoria:
+//    • Conta PF → pertence ao USUÁRIO  (user_id)
+//    • Conta PJ → pertence à EMPRESA   (empresa_id) e tem user_id NULL
+//
+//    A versão anterior filtrava só por `user_id`. Isso NUNCA encontrava
+//    uma conta PJ (user_id nulo) — e criava duplicata toda vez.
+//
+// PF e PJ com o mesmo nome são contas LEGÍTIMAS e diferentes
+// ("Itaú" pessoal vs "Itaú" da empresa). A busca sempre filtra por
+// categoria, então elas nunca se confundem.
+//
+// @returns { id, nome, jaExistia }
+// ════════════════════════════════════════════════════════════════
+async function upsertConta(
+  supabase: any,
+  uid: string,
+  payload: Record<string, any>,
+): Promise<{ id: string; nome: string; jaExistia: boolean }> {
+  const nome = String(payload.nome || '').trim()
+  const tipo = payload.tipo
+  const categoria = payload.categoria === 'pj' ? 'pj' : 'pf'
+
+  // 0. `empresa_id` é NOT NULL na tabela `contas` (sem DEFAULT).
+  // Preenchemos SEMPRE, para não depender de trigger do banco.
+  if (payload.empresa_id == null) {
+    try {
+      const { data: perfil } = await supabase
+        .from('perfis').select('empresa_id').eq('id', uid).maybeSingle()
+      if (perfil?.empresa_id) payload.empresa_id = perfil.empresa_id
+    } catch { /* deixa o trigger do banco resolver, se existir */ }
+  }
+
+  // 1. Busca os candidatos NO ESCOPO CORRETO do tenant.
+  let query = supabase
+    .from('contas')
+    .select('id, nome, dia_vencimento, dia_fechamento, limite, bandeira, ativo')
+    .eq('tipo', tipo)
+    .eq('categoria', categoria)
+
+  if (categoria === 'pj') {
+    // PJ → escopo EMPRESA (user_id costuma ser NULL nessas contas)
+    if (!payload.empresa_id) {
+      throw new Error('Não foi possível identificar a empresa para cadastrar a conta PJ.')
+    }
+    query = query.eq('empresa_id', payload.empresa_id)
+  } else {
+    // PF → escopo USUÁRIO
+    query = query.eq('user_id', uid)
+  }
+
+  const { data: candidatos } = await query
+
+  // 2. Compara por similaridade (pega "Nubank" ≈ "no Bank", "itau" ≈ "Itaú")
+  const existente = (candidatos || []).find((c: any) => mesmaConta(c.nome, nome))
+
+  if (existente) {
+    // 3. Existe → atualiza APENAS os campos novos.
+    // Nunca sobrescreve um dado bom com null.
+    const patch: Record<string, any> = {}
+
+    if (payload.dia_vencimento != null && existente.dia_vencimento !== payload.dia_vencimento) {
+      patch.dia_vencimento = payload.dia_vencimento
+    }
+    if (payload.dia_fechamento != null && existente.dia_fechamento !== payload.dia_fechamento) {
+      patch.dia_fechamento = payload.dia_fechamento
+    }
+    if (payload.limite != null && existente.limite !== payload.limite) {
+      patch.limite = payload.limite
+    }
+    if (payload.bandeira && !existente.bandeira) {
+      patch.bandeira = payload.bandeira
+    }
+    if (existente.ativo === false) patch.ativo = true
+
+    if (Object.keys(patch).length > 0) {
+      const { error: upErr } = await supabase
+        .from('contas').update(patch).eq('id', existente.id)
+      if (upErr) throw new Error(upErr.message)
+    }
+
+    // Retorna o nome JÁ CADASTRADO (não o que a IA inventou),
+    // para o chat sempre falar do cartão pelo mesmo nome.
+    return { id: existente.id, nome: existente.nome, jaExistia: true }
+  }
+
+  // 4. Não existe → insere
+  const { data: nova, error } = await supabase
+    .from('contas').insert(payload).select('id, nome').single()
+
+  if (error) {
+    // Corrida com os índices únicos (migration 064): rebusca no escopo certo
+    if (/duplicate key|unique|23505/i.test(error.message || '')) {
+      let q2 = supabase.from('contas').select('id, nome')
+        .eq('tipo', tipo).eq('categoria', categoria).ilike('nome', nome)
+      q2 = categoria === 'pj'
+        ? q2.eq('empresa_id', payload.empresa_id)
+        : q2.eq('user_id', uid)
+      const { data: achada } = await q2.maybeSingle()
+      if (achada) return { id: achada.id, nome: achada.nome, jaExistia: true }
+    }
+    throw new Error(error.message)
+  }
+
+  return { id: nova.id, nome: nova.nome, jaExistia: false }
+}
 
 interface UseElenaSalvarProps {
   supabase: any  // SupabaseClient — aceita qualquer variante (typed ou untyped)
@@ -1322,11 +1517,16 @@ export function useElenaSalvar({
           if (empresaId) payloadConta.empresa_id = empresaId
         }
 
-        const { data: novaConta, error } = await (supabase.from('contas') as any)
-          .insert(payloadConta).select('id, nome').single()
-        if (error) throw new Error(error.message)
+        // 🔴 FIX: era `.insert()` cego → criava conta duplicada toda vez.
+        const { id: contaId, nome: contaNomeFinal, jaExistia } = await upsertConta(supabase, uid, payloadConta)
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirConfirmacaoSalvamento('cadastrar_conta', acao.dados, acao.dados.nome, novaConta?.id, 'contas')
+        exibirConfirmacaoSalvamento('cadastrar_conta', acao.dados, contaNomeFinal, contaId, 'contas')
+        if (jaExistia) {
+          setMensagens(prev => [...prev, {
+            id: `conta-dup-${Date.now()}`, role: 'ai' as const,
+            texto: `ℹ️ A conta **${contaNomeFinal}** já estava cadastrada — atualizei os dados em vez de criar outra.`,
+          }])
+        }
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       // ── CADASTRAR CARTÃO ─────────────────────────────────────
@@ -1351,7 +1551,7 @@ export function useElenaSalvar({
           ativo: true,
           user_id: uid,
         }
-        if (acao.dados.limite)          payloadCartao.limite_credito = Number(acao.dados.limite)
+        if (acao.dados.limite)          payloadCartao.limite = Number(acao.dados.limite)
         if (acao.dados.dia_fechamento)  payloadCartao.dia_fechamento = Number(acao.dados.dia_fechamento)
         if (acao.dados.dia_vencimento)  payloadCartao.dia_vencimento = Number(acao.dados.dia_vencimento)
         if (categoria === 'pj') {
@@ -1359,9 +1559,11 @@ export function useElenaSalvar({
           if (empresaId) payloadCartao.empresa_id = empresaId
         }
 
-        const { data: novoCartao, error } = await (supabase.from('contas') as any)
-          .insert(payloadCartao).select('id, nome').single()
-        if (error) throw new Error(error.message)
+        // 🔴 FIX: era `.insert()` cego → é ISTO que criou ~30 "Nubank"
+        // duplicados, vários com dia_vencimento NULL, fazendo a Elena
+        // reperguntar a data que o Sr. Max já tinha informado.
+        const { id: cartaoId, nome: cartaoNomeFinal, jaExistia } = await upsertConta(supabase, uid, payloadCartao)
+        const novoCartao = { id: cartaoId, nome: cartaoNomeFinal }
 
         // ── Auto-gera alertas e agenda se dia_vencimento foi informado ──
         const diaVenc = acao.dados.dia_vencimento ? Number(acao.dados.dia_vencimento) : null
@@ -1430,11 +1632,16 @@ export function useElenaSalvar({
         }
 
         setAcaoStatus(msgId, acaoIdx, 'saved')
-        exibirConfirmacaoSalvamento('cadastrar_cartao', acao.dados, acao.dados.nome, novoCartao?.id, 'contas')
-        if (agendaMsg) {
+        exibirConfirmacaoSalvamento('cadastrar_cartao', acao.dados, cartaoNomeFinal, cartaoId, 'contas')
+        if (jaExistia) {
+          setMensagens(prev => [...prev, {
+            id: `cartao-dup-${Date.now()}`, role: 'ai' as const,
+            texto: `ℹ️ O cartão **${cartaoNomeFinal}** já estava cadastrado — atualizei os dados em vez de criar outro.${agendaMsg}`,
+          }])
+        } else if (agendaMsg) {
           setMensagens(prev => [...prev, {
             id: `cartao-${Date.now()}`, role: 'ai' as const,
-            texto: `💳 Cartão **${acao.dados.nome}** cadastrado na aba ${categoria === 'pj' ? 'Financeiro > Cartões PJ' : 'PF > Cartões'}!${agendaMsg}`,
+            texto: `💳 Cartão **${cartaoNomeFinal}** cadastrado na aba ${categoria === 'pj' ? 'Financeiro > Cartões PJ' : 'PF > Cartões'}!${agendaMsg}`,
           }])
         }
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
@@ -1948,7 +2155,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const cat = acao.dados.categoria || 'todos'
         // IMPORTANTE: sempre filtra por user_id para evitar vazamento entre contas
-        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo, dia_vencimento, dia_fechamento, limite_credito').eq('user_id', uid).eq('ativo', true).order('categoria').order('nome')
+        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo, dia_vencimento, dia_fechamento, limite').eq('user_id', uid).eq('ativo', true).order('categoria').order('nome')
         if (cat === 'pf') query = query.eq('categoria', 'pf')
         else if (cat === 'pj') query = query.eq('categoria', 'pj')
         const { data: contas, error } = await query
@@ -1966,7 +2173,7 @@ export function useElenaSalvar({
               const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
               const band = c.bandeira ? ` [${c.bandeira}]` : ''
               const venc = c.dia_vencimento ? ` | 📅 dia ${c.dia_vencimento}` : ''
-              const lim = c.limite_credito ? ` | Limite: R$ ${Number(c.limite_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              const lim = c.limite ? ` | Limite: R$ ${Number(c.limite).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
               const isCartao = c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito'
               texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}${isCartao ? venc + lim : ''}\n`
             })
@@ -1978,7 +2185,7 @@ export function useElenaSalvar({
               const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
               const band = c.bandeira ? ` [${c.bandeira}]` : ''
               const venc = c.dia_vencimento ? ` | 📅 dia ${c.dia_vencimento}` : ''
-              const lim = c.limite_credito ? ` | Limite: R$ ${Number(c.limite_credito).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              const lim = c.limite ? ` | Limite: R$ ${Number(c.limite).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
               const isCartao = c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito'
               texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}${isCartao ? venc + lim : ''}\n`
             })
@@ -2341,7 +2548,7 @@ export function useElenaSalvar({
         ] = await Promise.all([
           // Cartões de crédito do usuário
           (supabase.from('contas') as any)
-            .select('id, nome, bandeira, dia_vencimento, dia_fechamento, limite_credito')
+            .select('id, nome, bandeira, dia_vencimento, dia_fechamento, limite')
             .eq('user_id', uid).eq('ativo', true)
             .in('tipo', ['cartao_credito', 'cartao_debito'])
             .order('nome'),

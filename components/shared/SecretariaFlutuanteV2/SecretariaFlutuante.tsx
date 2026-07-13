@@ -20,7 +20,7 @@ import { useElenaAlertas }  from './useElenaAlertas'
 import { buildSystemPrompt, extrairAcoes, formatarTexto, renderMarkdownHtml } from './elena-prompt'
 import { PALAVRAS_CONFIRMACAO, KEYWORDS_WEB, KEYWORDS_HISTORICO } from './elena-constants'
 import { comprimirHistorico } from './elena-history-compressor'
-import { detectarModulos, dadosNecessarios } from './elena-module-detector'
+import { detectarModulosContexto, dadosNecessarios } from './elena-module-detector'
 import type { ElenaModulo } from './elena-module-detector'
 import type { AcaoIA, AttachedFile, Msg } from './elena-types'
 
@@ -113,6 +113,12 @@ function SecretariaFlutuanteWidget() {
   const alertasDisparadosRef = useRef<Set<string>>(new Set())
   const ultimoRegistroRef    = useRef<{ tabela: string; id: string } | null>(null)
   const confirmRetryRef      = useRef(0) // P5: anti-loop de confirmação
+
+  // 🔴 FIX CONTEXTO: módulos ativos PERSISTEM entre turnos.
+  // Antes, cada mensagem redetectava o módulo do zero — e uma resposta
+  // curta ("sim", "Perfeito", "500") trocava o system prompt no meio do
+  // fluxo, fazendo a Elena perder as instruções do que estava fazendo.
+  const modulosAtivosRef = useRef<ElenaModulo[]>([])
 
   // Cache de dados do banco (evita re-buscar a cada mensagem)
   const dadosCacheRef = useRef<{
@@ -358,8 +364,10 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         }
 
         // Fallback: re-consulta IA se Elena só fez pergunta textual
+        // 🔴 FIX: NÃO apagar o texto real do Sr. Max. Antes, promptFinal era
+        // SOBRESCRITO e o "sim" dele sumia. Agora a instrução é ANEXADA.
         if (ultimaElena) {
-          promptFinal = `[INSTRUÇÃO PRIORITÁRIA DO SISTEMA]: O usuário está CONFIRMANDO. Gere o bloco JSON IMEDIATAMENTE.\n\nMensagem anterior da Elena: "${ultimaElena.texto.substring(0, 500)}"\n\nEXECUTE usando EXATAMENTE os dados (data, hora, valor) já informados — NÃO recalcule.`
+          promptFinal = `${userText}\n\n[INSTRUÇÃO PRIORITÁRIA DO SISTEMA]: O Sr. Max está CONFIRMANDO a proposta acima. Gere o bloco JSON IMEDIATAMENTE.\nEXECUTE usando EXATAMENTE os dados (data, hora, valor) já informados — NÃO recalcule, NÃO repergunte, NÃO mude de assunto.`
         }
       } else {
         // Mensagem normal (não confirmação) → reset do contador
@@ -479,6 +487,39 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         const saldoMesPj = totalReceitasPj - totalGastosPj
 
         const temContas = contasMax && contasMax.length > 0
+
+        // 🔴 FIX DUPLICATA (defesa em profundidade): mesmo que o banco ainda
+        // tenha duplicatas, o PROMPT nunca mostra a mesma conta 2x. Mescla as
+        // linhas repetidas, mantendo o valor NÃO-NULO de cada campo.
+        // Antes, a Elena via "Nubank | vencimento: não informado" e
+        // reperguntava a data que já estava salva em outra duplicata.
+        const contasUnicas: any[] = (() => {
+          if (!temContas) return []
+          const mapa = new Map<string, any>()
+          for (const c of contasMax as any[]) {
+            const chave = `${String(c.nome || '').trim().toLowerCase()}|${c.tipo}|${c.categoria}`
+            const atual = mapa.get(chave)
+            if (!atual) {
+              mapa.set(chave, { ...c })
+            } else {
+              // Mescla: um campo preenchido sempre vence um null
+              atual.dia_vencimento = atual.dia_vencimento ?? c.dia_vencimento
+              atual.dia_fechamento = atual.dia_fechamento ?? c.dia_fechamento
+              atual.limite         = atual.limite         ?? c.limite
+              atual.bandeira       = atual.bandeira       ?? c.bandeira
+              atual.saldo_atual    = atual.saldo_atual    ?? c.saldo_atual
+            }
+          }
+          return Array.from(mapa.values())
+        })()
+
+        if (process.env.NODE_ENV !== 'production' && temContas && contasUnicas.length < contasMax.length) {
+          console.warn(
+            `[Elena] ⚠️ ${contasMax.length - contasUnicas.length} conta(s)/cartão(ões) DUPLICADO(S) no banco. ` +
+            `Rode a migration 062_dedup_contas_cartoes.sql para limpar.`
+          )
+        }
+
         const temImoveis = imoveisMax && imoveisMax.length > 0
         const temVeiculos = veiculosMax && veiculosMax.filter((v: any) => v.financiado && v.parcelas_total).length > 0
         const temFinanceiro = totalGastos > 0 || totalReceitas > 0
@@ -495,10 +536,10 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           blocoCartoes += 'NÃO altere datas ou valores sem ordem explícita do Sr. Max.\n\n'
 
           if (temContas) {
-            const cartoesPf = contasMax.filter((c: any) => (c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito') && c.categoria !== 'pj')
-            const cartoesPj = contasMax.filter((c: any) => (c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito') && c.categoria === 'pj')
-            const contasPf  = contasMax.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito' && c.categoria !== 'pj')
-            const contasPj  = contasMax.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito' && c.categoria === 'pj')
+            const cartoesPf = contasUnicas.filter((c: any) => (c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito') && c.categoria !== 'pj')
+            const cartoesPj = contasUnicas.filter((c: any) => (c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito') && c.categoria === 'pj')
+            const contasPf  = contasUnicas.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito' && c.categoria !== 'pj')
+            const contasPj  = contasUnicas.filter((c: any) => c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito' && c.categoria === 'pj')
 
             const renderCartoes = (lista: any[], label: string) => {
               if (lista.length === 0) return
@@ -616,6 +657,14 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           }
 
           blocoCartoes += 'INSTRUÇÕES: NUNCA cadastre novamente algo que já aparece na lista acima.\n'
+          blocoCartoes += '🔴 NOME EXATO — REGRA CRÍTICA:\n'
+          blocoCartoes += '  Ao gerar QUALQUER JSON que cite uma conta ou cartão, copie o nome EXATAMENTE\n'
+          blocoCartoes += '  como está escrito na lista acima, entre aspas. NUNCA invente variações.\n'
+          blocoCartoes += '  O Sr. Max usa comando de voz — a transcrição erra nomes com frequência.\n'
+          blocoCartoes += '  Ex: se ele disser "no bank", "nu bank" ou "nubanco", e a lista tem "Nubank",\n'
+          blocoCartoes += '  use "Nubank". Se ele disser "c6 bank" e a lista tem "C6", use "C6".\n'
+          blocoCartoes += '  ⛔ Um nome parecido com um da lista É o mesmo cartão. NÃO cadastre outro.\n'
+          blocoCartoes += '  ⛔ Só use cadastrar_cartao/cadastrar_conta se o nome NÃO tiver NENHUM parecido na lista.\n'
           blocoCartoes += 'Se o Sr. Max perguntar "o que tenho hoje" ou "meus vencimentos", use os dados acima.\n'
           blocoCartoes += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
         }
@@ -625,34 +674,39 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           console.error('[Elena] Erro ao buscar dados do banco:', dbErr)
         }
 
-      // ── Detectar módulos ativos para prompt modular ──────────
-      const modulosAtivos: ElenaModulo[] = detectarModulos(userText || '')
-
-      // ── Montar array de mensagens nativo via COMPRESSOR ──────
-      // O compressor divide em: resumo do passado + mensagens recentes completas
+      // ── COMPRESSOR primeiro (precisamos do contexto para detectar) ──
       const historyBlock = comprimirHistorico(session.mensagens)
+
+      // ── Detectar módulos ativos — AGORA COM MEMÓRIA (sticky) ──────
+      // 🔴 FIX: respostas curtas ("sim", "Perfeito", "500", "amanhã 10h")
+      // NÃO redetectam módulo — elas HERDAM o módulo do turno anterior.
+      // Isso impede que o system prompt troque no meio de um fluxo.
+      const modulosAtivos: ElenaModulo[] = detectarModulosContexto(userText || '', {
+        modulosAnteriores:    modulosAtivosRef.current,
+        temAcoesPendentes:    historyBlock.acoesPendentes.length > 0,
+        aguardandoResposta:   !!historyBlock.perguntaAberta,
+        textosRecentesUsuario: [...session.mensagens]
+          .reverse()
+          .filter(m => m.role === 'user' && m.texto)
+          .slice(0, 3)
+          .map(m => m.texto),
+      })
+      modulosAtivosRef.current = modulosAtivos
+
+      // ── Montar array de mensagens ────────────────────────────────
+      // 🔴 FIX: resumo e estado da sessão vão para o SYSTEM PROMPT,
+      // NUNCA como role:'user'. Antes, a Elena via os dumps de sistema
+      // como se o Sr. Max tivesse falado aquilo — e havia mensagens
+      // 'user' consecutivas, o que quebra a alternância exigida pela API.
       const mensagensApi: { role: string; content: any }[] = []
 
-      // 1. Injetar resumo do passado (se houver) como mensagem de sistema
-      if (historyBlock.resumoPassado) {
-        mensagensApi.push({
-          role: 'user',
-          content: `[SISTEMA — CONTEXTO ANTERIOR]\n${historyBlock.resumoPassado}`,
-        })
-      }
-
-      // 2. Mensagens recentes completas (com compressão inteligente de IA)
+      // 1. Apenas o histórico conversacional real (já normalizado pelo
+      //    compressor: sem vazios, sem roles consecutivos, começa em 'user')
       for (const msg of historyBlock.mensagensRecentes) {
         mensagensApi.push(msg)
       }
 
-      // 3. Injetar estado de ações salvas (anti-repetição reforçada)
-      if (historyBlock.acoesSalvas.length > 0) {
-        const estadoResumo = `[ESTADO DA SESSÃO — ${historyBlock.acoesSalvas.length} registro(s) já salvo(s) nesta conversa]:\n${historyBlock.acoesSalvas.map((r, i) => `  ${i + 1}. ✅ ${r}`).join('\n')}\n⚠️ NÃO peça dados desses itens novamente. Use EXATAMENTE esses valores se precisar recapitular.`
-        mensagensApi.push({ role: 'user', content: `[SISTEMA] ${estadoResumo}` })
-      }
-
-      // 4. Adiciona a mensagem atual do usuário
+      // 2. Mensagem atual do usuário (a ÚLTIMA coisa que a IA lê)
       const userContentParts: any[] = []
       userContentParts.push({ type: 'text', text: promptFinal })
       if (fileSnap?.isImage) {
@@ -667,10 +721,25 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         content: fileSnap?.isImage ? userContentParts : promptFinal,
       })
 
+      // ── System prompt = regras + contexto da sessão + dados do banco ──
+      // historyBlock.blocoContexto traz: pergunta em aberto, ações pendentes,
+      // registros já salvos, valores/datas mencionados e o resumo do passado.
+      const systemInstruction =
+        buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro, modulosAtivos) +
+        historyBlock.blocoContexto +
+        blocoCartoes
+
       const body: Record<string, any> = {
         messages: mensagensApi,
-        systemInstruction: buildSystemPrompt(session.perfilRef.current, alertas.resumoFinanceiro, modulosAtivos) + blocoCartoes,
+        systemInstruction,
         // model, temperature e max_tokens são controlados pelo route.ts
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Elena] módulos:', modulosAtivos,
+                    '| msgs:', mensagensApi.length,
+                    '| pergunta aberta:', historyBlock.perguntaAberta ? 'SIM' : 'não',
+                    '| system chars:', systemInstruction.length)
       }
 
       sessionMsgCountRef.current += 1
