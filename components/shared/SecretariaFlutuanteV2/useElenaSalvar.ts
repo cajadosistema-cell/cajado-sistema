@@ -319,126 +319,181 @@ export function useElenaSalvar({
     }])
   }, [setMensagens])
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🔴 RESOLVERS DE CONTA — REESCRITOS
+  //
+  // BUGS CORRIGIDOS:
+  //  1. resolverContaPj filtrava por user_id. Contas PJ têm user_id = NULL
+  //     no banco → NUNCA eram encontradas → "Nenhuma conta PJ cadastrada".
+  //     Agora PJ busca por empresa_id (o tenant correto).
+  //  2. Match por bandeira pegava o PRIMEIRO cartão da bandeira. Com 4
+  //     cartões Visa, um gasto "no visa" ia para o cartão errado, em
+  //     silêncio. Agora, se houver ambiguidade, a Elena PERGUNTA.
+  //  3. Fallback silencioso em contas[0] — gasto ia para conta arbitrária.
+  //     Agora só usa a conta padrão se houver exatamente UMA.
+  //  4. autocriar fazia .insert() cego → duplicava conta. Agora usa upsertConta.
+  //  5. resolverContaPf autocriar não passava empresa_id (NOT NULL) → o
+  //     insert falhava e o catch {} engolia o erro.
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Carrega as contas do escopo correto do tenant */
+  const carregarContas = useCallback(async (
+    categoria: 'pf' | 'pj',
+    tipos?: string[],
+  ): Promise<any[]> => {
+    const uid = userIdRef.current
+    let q = (supabase.from('contas') as any)
+      .select('id, nome, bandeira, tipo, categoria')
+      .eq('categoria', categoria)
+      .eq('ativo', true)
+
+    if (categoria === 'pj') {
+      // PJ → escopo EMPRESA (user_id costuma ser NULL nessas contas)
+      const empresaId = await getEmpresaId(uid)
+      if (!empresaId) return []
+      q = q.eq('empresa_id', empresaId)
+    } else {
+      // PF → escopo USUÁRIO
+      q = q.eq('user_id', uid)
+    }
+
+    if (tipos?.length) q = q.in('tipo', tipos)
+    const { data } = await q.order('created_at', { ascending: true })
+    return data || []
+  }, [supabase, userIdRef])
+
+  /**
+   * Encontra a conta que o Sr. Max quis dizer.
+   * Se houver AMBIGUIDADE, lança erro pedindo para especificar —
+   * nunca escolhe uma conta por conta própria.
+   */
+  const acharConta = (contas: any[], busca: string): { id: string; nome: string } | null => {
+    if (!contas.length) return null
+    const b = busca.trim()
+    if (!b) return null
+
+    // 1. Match forte por nome (exato / variante de voz / acento)
+    const porNome = contas.filter((c: any) => mesmaConta(c.nome, b))
+    if (porNome.length === 1) return { id: porNome[0].id, nome: porNome[0].nome }
+    if (porNome.length > 1) {
+      throw new Error(
+        `Encontrei mais de uma conta parecida com "${b}": ${porNome.map((c: any) => c.nome).join(', ')}. ` +
+        `Qual delas, Sr. Max?`
+      )
+    }
+
+    // 2. Substring do nome (ex: "sofisa" → Sofisa Master / Sofisa Visa)
+    const bl = b.toLowerCase()
+    const porSub = contas.filter((c: any) => (c.nome || '').toLowerCase().includes(bl))
+    if (porSub.length === 1) return { id: porSub[0].id, nome: porSub[0].nome }
+    if (porSub.length > 1) {
+      throw new Error(
+        `"${b}" corresponde a ${porSub.length} contas: ${porSub.map((c: any) => c.nome).join(', ')}. ` +
+        `Qual delas, Sr. Max?`
+      )
+    }
+
+    // 3. Bandeira — só se for INEQUÍVOCO (1 cartão dessa bandeira)
+    const porBandeira = contas.filter((c: any) => (c.bandeira || '').toLowerCase() === bl)
+    if (porBandeira.length === 1) return { id: porBandeira[0].id, nome: porBandeira[0].nome }
+    if (porBandeira.length > 1) {
+      throw new Error(
+        `Você tem ${porBandeira.length} cartões ${b}: ${porBandeira.map((c: any) => c.nome).join(', ')}. ` +
+        `Em qual deles, Sr. Max?`
+      )
+    }
+
+    return null
+  }
+
   // ── resolverContaPj ───────────────────────────────────────────
   const resolverContaPj = useCallback(async (contaNome?: string, autocriar = true): Promise<{ id: string; nome: string }> => {
     const uid = userIdRef.current
-    const { data: contas } = await (supabase.from('contas') as any)
-      .select('id, nome, bandeira, tipo')
-      .eq('user_id', uid)
-      .eq('categoria', 'pj').eq('ativo', true)
-      .order('created_at', { ascending: true })
-
-    if (!contas || contas.length === 0) return { id: '', nome: '' }
+    const contas = await carregarContas('pj')
 
     if (contaNome?.trim()) {
-      const busca = contaNome.toLowerCase().trim()
-      const porBandeira = contas.find((c: any) => c.bandeira?.toLowerCase().includes(busca))
-      if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
-      const porNome = contas.find((c: any) => {
-        const nome = (c.nome || '').toLowerCase()
-        return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
-      })
-      if (porNome) return { id: porNome.id, nome: porNome.nome }
+      const achada = acharConta(contas, contaNome)   // pode lançar erro de ambiguidade
+      if (achada) return achada
 
       if (autocriar && contaNome.trim().length >= 2) {
-        try {
-          const nomeNovo = contaNome.trim()
-          const bandeira = Object.entries(BANDEIRAS_MAP).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
-          const tipo = bandeira ? 'cartao_credito' : 'corrente'
-          const empresaId = await getEmpresaId(uid)
-          const { data: nova, error } = await (supabase.from('contas') as any).insert({
-            user_id: uid,
-            nome: nomeNovo, tipo, categoria: 'pj', bandeira,
-            saldo_inicial: 0, saldo_atual: 0, ativo: true,
-            ...(empresaId ? { empresa_id: empresaId } : {}),
-          }).select('id, nome').single()
-          if (!error && nova) return { id: nova.id, nome: nova.nome }
-        } catch { /* silencioso */ }
+        const nomeNovo = contaNome.trim()
+        const bandeira = Object.entries(BANDEIRAS_MAP).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
+        const empresaId = await getEmpresaId(uid)
+        if (!empresaId) throw new Error('Não consegui identificar sua empresa para criar a conta PJ.')
+        const r = await upsertConta(supabase, uid, {
+          nome: nomeNovo,
+          tipo: bandeira ? 'cartao_credito' : 'corrente',
+          categoria: 'pj',
+          bandeira,
+          saldo_inicial: 0, saldo_atual: 0, ativo: true,
+          user_id: uid, empresa_id: empresaId,
+        })
+        return { id: r.id, nome: r.nome }
       }
+      return { id: '', nome: '' }
     }
 
-    if (!contaPjIdRef.current) contaPjIdRef.current = contas[0].id
-    return { id: contas[0].id, nome: contas[0].nome }
-  }, [supabase, userIdRef])
+    // Sem nome informado: só usa a padrão se houver UMA. Nunca escolhe sozinha.
+    if (contas.length === 1) {
+      contaPjIdRef.current = contas[0].id
+      return { id: contas[0].id, nome: contas[0].nome }
+    }
+    if (contas.length > 1) {
+      throw new Error(
+        `Você tem ${contas.length} contas PJ (${contas.map((c: any) => c.nome).join(', ')}). ` +
+        `Em qual eu lanço, Sr. Max?`
+      )
+    }
+    return { id: '', nome: '' }
+  }, [supabase, userIdRef, carregarContas])
 
   // ── resolverContaPf ───────────────────────────────────────────
   const resolverContaPf = useCallback(async (contaNome?: string, autocriar = true): Promise<{ id: string; nome: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '' }
     const uid = userIdRef.current
-    const { data: contas } = await (supabase.from('contas') as any)
-      .select('id, nome, bandeira, tipo')
-      .eq('user_id', uid)
-      .eq('categoria', 'pf').eq('ativo', true)
-      .order('created_at', { ascending: true })
+    const contas = await carregarContas('pf')
 
-    const busca = contaNome.toLowerCase().trim()
-    if (contas?.length) {
-      const porBandeira = contas.find((c: any) => c.bandeira?.toLowerCase().includes(busca))
-      if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
-      const porNome = contas.find((c: any) => {
-        const nome = (c.nome || '').toLowerCase()
-        return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
-      })
-      if (porNome) return { id: porNome.id, nome: porNome.nome }
-    }
+    const achada = acharConta(contas, contaNome)   // pode lançar erro de ambiguidade
+    if (achada) return achada
 
     if (autocriar && contaNome.trim().length >= 2) {
-      try {
-        const nomeNovo = contaNome.trim()
-        const bandeira = Object.entries(BANDEIRAS_MAP).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
-        const tipo = bandeira ? 'cartao_credito' : 'corrente'
-        const { data: nova, error } = await (supabase.from('contas') as any).insert({
-          user_id: uid, // ⚠️ obrigatório para isolação
-          nome: nomeNovo, tipo, categoria: 'pf', bandeira,
-          saldo_inicial: 0, saldo_atual: 0, ativo: true,
-        }).select('id, nome').single()
-        if (!error && nova) return { id: nova.id, nome: nova.nome }
-      } catch { /* silencioso */ }
+      const nomeNovo = contaNome.trim()
+      const bandeira = Object.entries(BANDEIRAS_MAP).find(([k]) => nomeNovo.toLowerCase().includes(k))?.[1] || null
+      // 🔴 empresa_id é NOT NULL — a versão antiga não passava, e o insert falhava
+      const empresaId = await getEmpresaId(uid)
+      const r = await upsertConta(supabase, uid, {
+        nome: nomeNovo,
+        tipo: bandeira ? 'cartao_credito' : 'corrente',
+        categoria: 'pf',
+        bandeira,
+        saldo_inicial: 0, saldo_atual: 0, ativo: true,
+        user_id: uid,
+        ...(empresaId ? { empresa_id: empresaId } : {}),
+      })
+      return { id: r.id, nome: r.nome }
     }
 
     return { id: '', nome: '' }
-  }, [supabase, userIdRef])
+  }, [supabase, userIdRef, carregarContas])
 
   // ── resolverCartaoPf ────────────────────────────────────────
   const resolverCartaoPf = useCallback(async (contaNome: string): Promise<{ id: string; nome: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '' }
-    const uid = userIdRef.current
-    const { data: contas } = await (supabase.from('contas') as any)
-      .select('id, nome, bandeira, tipo')
-      .eq('user_id', uid)
-      .eq('categoria', 'pf').eq('ativo', true)
-      .in('tipo', ['cartao_credito', 'cartao_debito'])
-      .order('created_at', { ascending: true })
-
-    const busca = contaNome.toLowerCase().trim()
-    if (contas?.length) {
-      const porBandeira = contas.find((c: any) => c.bandeira?.toLowerCase().includes(busca))
-      if (porBandeira) return { id: porBandeira.id, nome: porBandeira.nome }
-      const porNome = contas.find((c: any) => {
-        const nome = (c.nome || '').toLowerCase()
-        return nome.includes(busca) || busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
-      })
-      if (porNome) return { id: porNome.id, nome: porNome.nome }
-    }
-    return { id: '', nome: '' }
-  }, [supabase])
+    const contas = await carregarContas('pf', ['cartao_credito', 'cartao_debito'])
+    const achada = acharConta(contas, contaNome)   // pode lançar erro de ambiguidade
+    return achada || { id: '', nome: '' }
+  }, [carregarContas])
 
   // ── resolverContaQualquer ─────────────────────────────────────
   const resolverContaQualquer = useCallback(async (contaNome: string): Promise<{ id: string; nome: string; categoria: string }> => {
     if (!contaNome?.trim()) return { id: '', nome: '', categoria: '' }
-    const uid = userIdRef.current
-    const { data: contas } = await (supabase.from('contas') as any)
-      .select('id, nome, bandeira, categoria').eq('user_id', uid).eq('ativo', true)
-    if (!contas?.length) return { id: '', nome: '', categoria: '' }
-    const busca = contaNome.toLowerCase().trim()
-    const match = contas.find((c: any) => {
-      const nome = (c.nome || '').toLowerCase()
-      const bandeira = (c.bandeira || '').toLowerCase()
-      return nome.includes(busca) || bandeira.includes(busca) ||
-        busca.split(' ').some((p: string) => p.length > 2 && nome.includes(p))
-    })
-    return match ? { id: match.id, nome: match.nome, categoria: match.categoria } : { id: '', nome: '', categoria: '' }
-  }, [supabase])
+    const [pf, pj] = await Promise.all([carregarContas('pf'), carregarContas('pj')])
+    const todas = [...pf, ...pj]
+    const achada = acharConta(todas, contaNome)   // pode lançar erro de ambiguidade
+    if (!achada) return { id: '', nome: '', categoria: '' }
+    const cat = todas.find((c: any) => c.id === achada.id)?.categoria || ''
+    return { ...achada, categoria: cat }
+  }, [carregarContas])
 
   // ── salvarAcao ────────────────────────────────────────────────
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA) => {
@@ -2154,12 +2209,29 @@ export function useElenaSalvar({
       } else if (acao.tipo === 'buscar_contas') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const cat = acao.dados.categoria || 'todos'
-        // IMPORTANTE: sempre filtra por user_id para evitar vazamento entre contas
-        let query = (supabase.from('contas') as any).select('id, nome, tipo, categoria, bandeira, saldo_atual, ativo, dia_vencimento, dia_fechamento, limite').eq('user_id', uid).eq('ativo', true).order('categoria').order('nome')
-        if (cat === 'pf') query = query.eq('categoria', 'pf')
-        else if (cat === 'pj') query = query.eq('categoria', 'pj')
-        const { data: contas, error } = await query
-        if (error) throw new Error(error.message)
+        const COLS = 'id, nome, tipo, categoria, bandeira, saldo_atual, ativo, dia_vencimento, dia_fechamento, limite'
+
+        // 🔴 FIX: PF isola por user_id, PJ isola por empresa_id.
+        // A versão antiga filtrava TUDO por user_id — e como as contas PJ
+        // têm user_id = NULL no banco, elas NUNCA apareciam na listagem.
+        const empresaIdBusca = await getEmpresaId(uid)
+
+        const buscarPf = async () => {
+          if (cat === 'pj') return []
+          const { data } = await (supabase.from('contas') as any)
+            .select(COLS).eq('user_id', uid).eq('categoria', 'pf').eq('ativo', true).order('nome')
+          return data || []
+        }
+        const buscarPj = async () => {
+          if (cat === 'pf' || !empresaIdBusca) return []
+          const { data } = await (supabase.from('contas') as any)
+            .select(COLS).eq('empresa_id', empresaIdBusca).eq('categoria', 'pj').eq('ativo', true).order('nome')
+          return data || []
+        }
+
+        const [listaPf, listaPj] = await Promise.all([buscarPf(), buscarPj()])
+        const contas = [...listaPf, ...listaPj]
+
         if (!contas || contas.length === 0) {
           setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto: '🏦 Nenhuma conta cadastrada ainda, Sr. Max. Posso cadastrar uma para você agora!' }])
         } else {
@@ -2227,9 +2299,14 @@ export function useElenaSalvar({
         }
 
         if (tipo === 'pj' || tipo === 'todos') {
-          // ⚠️ Filtra por contas do user_id para isolamento RLS
-          const { data: contasPjIds } = await (supabase.from('contas') as any)
-            .select('id').eq('user_id', uid).eq('categoria', 'pj')
+          // 🔴 FIX: contas PJ pertencem à EMPRESA (user_id é NULL nelas).
+          // A versão antiga buscava por user_id → lista vazia → a Elena
+          // sempre respondia "Nenhum lançamento PJ encontrado".
+          const empresaIdLanc = await getEmpresaId(uid)
+          const { data: contasPjIds } = empresaIdLanc
+            ? await (supabase.from('contas') as any)
+                .select('id').eq('empresa_id', empresaIdLanc).eq('categoria', 'pj')
+            : { data: [] }
           const idsContas = (contasPjIds || []).map((c: any) => c.id)
           const { data: lancPj } = idsContas.length > 0
             ? await (supabase.from('lancamentos') as any)

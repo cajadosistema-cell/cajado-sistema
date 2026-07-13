@@ -410,17 +410,30 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       // e Elena confundindo/alterando datas e vencimentos de cartões.
         let blocoCartoes = ''
       try {
-        const { data: contasMax } = await (supabase.from('contas') as any)
-          .select('nome, tipo, dia_vencimento, dia_fechamento, limite, categoria, bandeira, saldo_atual')
-          .eq('user_id', uid).eq('ativo', true).order('nome', { ascending: true })
-
-        // Resolve empresa_id do usuário para filtrar patrimônio
+        // Resolve empresa_id ANTES (necessário para buscar as contas PJ)
         let empresaIdCtx: string | null = null
         try {
           const { data: perfilCtx } = await (supabase.from('perfis') as any)
             .select('empresa_id').eq('id', uid).maybeSingle()
           empresaIdCtx = perfilCtx?.empresa_id || null
         } catch { /* silencioso */ }
+
+        // 🔴 FIX: PF isola por user_id, PJ isola por empresa_id.
+        // A versão antiga buscava TUDO por user_id — e as contas PJ têm
+        // user_id = NULL no banco, então NUNCA entravam no prompt da Elena.
+        // Ela literalmente não sabia que as contas da empresa existiam.
+        const COLS_CONTA = 'nome, tipo, dia_vencimento, dia_fechamento, limite, categoria, bandeira, saldo_atual'
+        const [{ data: contasPfRaw }, { data: contasPjRaw }] = await Promise.all([
+          (supabase.from('contas') as any)
+            .select(COLS_CONTA).eq('user_id', uid).eq('categoria', 'pf').eq('ativo', true).order('nome'),
+          empresaIdCtx
+            ? (supabase.from('contas') as any)
+                .select(COLS_CONTA).eq('empresa_id', empresaIdCtx).eq('categoria', 'pj').eq('ativo', true).order('nome')
+            : Promise.resolve({ data: [] }),
+        ])
+        const contasMax = [...(contasPfRaw || []), ...(contasPjRaw || [])]
+
+        // (empresaIdCtx já foi resolvido acima, junto com as contas)
 
         // Imóveis parcelados (filtrado por empresa_id)
         let imoveisQuery = (supabase.from('imoveis') as any)
