@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Msg } from './elena-types'
+import { falar } from '@/lib/voz'
 
 const SAUDACAO_INICIAL: Msg = {
   id: '1',
@@ -327,6 +328,22 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
               }
 
               briefing += `_Como posso ajudá-lo hoje, Sr. Max?_ 💼`
+
+              // ── Resumo falado do briefing (só na 1ª abertura do dia) ──────────
+              // Já estamos dentro do if (ultimoBriefing !== hoje), então roda 1x/dia.
+              // Só fala se houver algo de novo — silêncio quando não há nada.
+              const nVenc = vencReais.length
+              const nEventos = eventosHojeList.length
+              if (nVenc > 0 || nEventos > 0) {
+                // Remove os emojis da saudação antes de falar (ex.: "☀️ Bom dia" → "Bom dia")
+                const saudacaoLimpa = saudacao.replace(/[^\p{L}\s]/gu, '').trim()
+                const partes: string[] = []
+                if (nVenc > 0)    partes.push(`${nVenc} ${nVenc === 1 ? 'vencimento' : 'vencimentos'} esta semana`)
+                if (nEventos > 0) partes.push(`${nEventos} ${nEventos === 1 ? 'compromisso' : 'compromissos'} hoje`)
+                const frase = `${saudacaoLimpa}, Sr. Max. Você tem ${partes.join(' e ')}.`
+                // pequeno delay para não competir com o carregamento da UI
+                setTimeout(() => falar(frase), 400)
+              }
 
               setMensagens(prev => {
                 // Evita duplicar se já existe o briefing hoje
