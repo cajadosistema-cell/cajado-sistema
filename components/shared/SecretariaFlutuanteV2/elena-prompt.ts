@@ -435,6 +435,14 @@ RELATÓRIO:
 \`\`\`
 PERÍODOS: mes_atual, ultimos_7_dias, ultimos_30_dias, ano_atual
 
+🛠️ RELATÓRIO DE DIAGNÓSTICO (o que o SISTEMA ainda não faz):
+\`\`\`json
+{"acao":"relatorio_diagnostico"}
+\`\`\`
+- GATILHOS: "o que falta no sistema", "relatório de erros", "o que você não consegue fazer",
+  "relatório de diagnóstico", "quais funcionalidades faltam", "o que dá erro"
+- Mostra o backlog: funcionalidades que o Sr. Max pediu e não existem + erros de gravação.
+
 📊 RESUMO MENSAL ESTRUTURADO (formato padrão do Sr. Max):
 \`\`\`json
 {"acao":"resumo_mensal","mes":"${t.anoAtual}-${t.mesAtual}"}
@@ -717,6 +725,9 @@ export function extrairAcoes(texto: string): AcaoIA[] {
         const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : 'Pessoal (PF)'
         const bandeira = d.bandeira ? ` (${d.bandeira})` : ''
         acoes.push({ tipo: 'cadastrar_cartao', dados: d, label: `💳 Cadastrar cartão: ${d.nome}${bandeira} — ${catLabel}`, status: 'pending' })
+
+      } else if (d.acao === 'relatorio_diagnostico') {
+        acoes.push({ tipo: 'relatorio_diagnostico', dados: d, label: '🛠️ Gerando relatório de diagnóstico', status: 'pending' })
 
       } else if (d.acao === 'buscar_contas') {
         const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : d.categoria === 'pf' ? 'Pessoal (PF)' : 'Todas'

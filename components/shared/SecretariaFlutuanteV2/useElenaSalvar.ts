@@ -32,6 +32,25 @@ import { buscarDadosRelatorio } from '../ModalRelatorio'
 // sem a data, reperguntava a data que o Sr. Max já tinha informado.
 // ════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════
+// ElenaPergunta — NÃO é um erro, é uma pergunta.
+//
+// Quando a Elena não consegue decidir sozinha (ex: 4 contas PJ, 4 cartões
+// Visa), ela precisa interromper o fluxo e PERGUNTAR. Antes isso subia como
+// `throw new Error(...)` e o handler mostrava "❌ Ops! Não consegui salvar",
+// o que assusta — parece falha, mas o sistema está funcionando certo.
+//
+// Com esta classe, o handler distingue os dois casos e mostra a pergunta
+// com um tom apropriado, mantendo a ação como PENDENTE (não como erro).
+// ════════════════════════════════════════════════════════════════
+class ElenaPergunta extends Error {
+  readonly ehPergunta = true
+  constructor(mensagem: string) {
+    super(mensagem)
+    this.name = 'ElenaPergunta'
+  }
+}
+
 /** Sufixos genéricos que não distinguem um cartão de outro */
 const SUFIXOS_GENERICOS = ['bank', 'banco', 'card', 'cartao', 'credito', 'pay']
 
@@ -267,6 +286,59 @@ export function useElenaSalvar({
     return null
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // 📋 DIAGNÓSTICO — transforma falha em backlog
+  //
+  // Toda vez que a Elena não consegue fazer algo, registramos:
+  //   • O QUE o Sr. Max pediu (texto original)
+  //   • QUAL ação a IA tentou gerar
+  //   • POR QUE falhou (erro do banco / handler inexistente)
+  //   • O JSON completo que a IA produziu
+  //
+  // Assim o desenvolvedor abre o relatório e vê exatamente o que
+  // implementar e por quê — em vez da mensagem sumir no chat.
+  // ═══════════════════════════════════════════════════════════════
+  const registrarDiagnostico = useCallback(async (
+    tipo: 'nao_implementado' | 'erro_salvar' | 'dado_invalido',
+    dados: {
+      acaoTipo?: string
+      mensagem?: string
+      payload?: any
+      pedidoUsuario?: string
+    },
+  ) => {
+    try {
+      const uid = userIdRef.current
+      if (!uid) return
+      const empresaId = await getEmpresaId(uid)
+
+      // Última coisa que o Sr. Max escreveu — é o contexto mais valioso
+      const ultimaDoUsuario = dados.pedidoUsuario
+        || [...(mensagensRef.current || [])].reverse().find(m => m.role === 'user')?.texto
+        || null
+
+      const { error } = await (supabase.from('elena_diagnostico') as any).insert({
+        user_id: uid,
+        empresa_id: empresaId,
+        tipo,
+        acao_tipo: dados.acaoTipo || null,
+        mensagem: (dados.mensagem || '').substring(0, 1000) || null,
+        dados: dados.payload ?? null,
+        pedido_usuario: ultimaDoUsuario ? String(ultimaDoUsuario).substring(0, 2000) : null,
+        rota: typeof window !== 'undefined' ? window.location.pathname : null,
+        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 300) : null,
+      })
+
+      if (error) {
+        // Se nem o diagnóstico grava, pelo menos deixa no console
+        console.error('[Elena] diagnóstico não registrado:', error.message,
+          '— rode a migration 065_elena_diagnostico.sql')
+      }
+    } catch (e: any) {
+      console.error('[Elena] erro ao registrar diagnóstico:', e?.message || e)
+    }
+  }, [supabase, userIdRef, mensagensRef])
+
   // ── Helpers internos ──────────────────────────────────────────
   const hoje = () => new Date().toISOString().split('T')[0]
 
@@ -376,7 +448,7 @@ export function useElenaSalvar({
     const porNome = contas.filter((c: any) => mesmaConta(c.nome, b))
     if (porNome.length === 1) return { id: porNome[0].id, nome: porNome[0].nome }
     if (porNome.length > 1) {
-      throw new Error(
+      throw new ElenaPergunta(
         `Encontrei mais de uma conta parecida com "${b}": ${porNome.map((c: any) => c.nome).join(', ')}. ` +
         `Qual delas, Sr. Max?`
       )
@@ -387,7 +459,7 @@ export function useElenaSalvar({
     const porSub = contas.filter((c: any) => (c.nome || '').toLowerCase().includes(bl))
     if (porSub.length === 1) return { id: porSub[0].id, nome: porSub[0].nome }
     if (porSub.length > 1) {
-      throw new Error(
+      throw new ElenaPergunta(
         `"${b}" corresponde a ${porSub.length} contas: ${porSub.map((c: any) => c.nome).join(', ')}. ` +
         `Qual delas, Sr. Max?`
       )
@@ -397,7 +469,7 @@ export function useElenaSalvar({
     const porBandeira = contas.filter((c: any) => (c.bandeira || '').toLowerCase() === bl)
     if (porBandeira.length === 1) return { id: porBandeira[0].id, nome: porBandeira[0].nome }
     if (porBandeira.length > 1) {
-      throw new Error(
+      throw new ElenaPergunta(
         `Você tem ${porBandeira.length} cartões ${b}: ${porBandeira.map((c: any) => c.nome).join(', ')}. ` +
         `Em qual deles, Sr. Max?`
       )
@@ -439,7 +511,7 @@ export function useElenaSalvar({
       return { id: contas[0].id, nome: contas[0].nome }
     }
     if (contas.length > 1) {
-      throw new Error(
+      throw new ElenaPergunta(
         `Você tem ${contas.length} contas PJ (${contas.map((c: any) => c.nome).join(', ')}). ` +
         `Em qual eu lanço, Sr. Max?`
       )
@@ -2927,32 +2999,147 @@ export function useElenaSalvar({
         setMensagens(prev => [...prev, { id: `resumo-${Date.now()}`, role: 'ai' as const, texto }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
-      // ── AÇÃO DESCONHECIDA → avisa o usuário (nunca finge que salvou) ──
+      // ── RELATÓRIO DE DIAGNÓSTICO ─────────────────────────────
+      // A Elena reporta o que ELA MESMA não conseguiu fazer.
+      // Pergunte: "o que está faltando no sistema?" / "relatório de erros"
+      } else if (acao.tipo === 'relatorio_diagnostico') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+
+        const { data: diag, error: diagErr } = await (supabase.from('elena_diagnostico') as any)
+          .select('tipo, acao_tipo, mensagem, pedido_usuario, created_at')
+          .eq('user_id', uid)
+          .eq('status', 'aberto')
+          .order('created_at', { ascending: false })
+          .limit(200)
+
+        if (diagErr) throw new Error(diagErr.message)
+
+        if (!diag || diag.length === 0) {
+          setMensagens(prev => [...prev, {
+            id: `diag-${Date.now()}`, role: 'ai' as const,
+            texto: '✅ **Nenhuma pendência registrada!**\n\nNão houve nenhuma funcionalidade faltando nem erro de gravação desde a última limpeza, Sr. Max.',
+          }])
+          setAcaoStatus(msgId, acaoIdx, 'saved')
+          return
+        }
+
+        // Agrupa por tipo + ação
+        const faltando = new Map<string, { qtd: number; exemplos: string[]; ultima: string }>()
+        const bugs     = new Map<string, { qtd: number; erro: string; ultima: string }>()
+
+        for (const d of diag as any[]) {
+          const chave = d.acao_tipo || 'desconhecida'
+          const quando = new Date(d.created_at).toLocaleDateString('pt-BR')
+
+          if (d.tipo === 'nao_implementado') {
+            const e = faltando.get(chave) || { qtd: 0, exemplos: [], ultima: quando }
+            e.qtd++
+            if (d.pedido_usuario && e.exemplos.length < 2) e.exemplos.push(d.pedido_usuario.substring(0, 80))
+            faltando.set(chave, e)
+          } else if (d.tipo === 'erro_salvar') {
+            const e = bugs.get(chave) || { qtd: 0, erro: d.mensagem || '', ultima: quando }
+            e.qtd++
+            bugs.set(chave, e)
+          }
+        }
+
+        let texto = `🛠️ **RELATÓRIO DE DIAGNÓSTICO DA ELENA**\n`
+        texto += `_${diag.length} ocorrência(s) em aberto_\n\n`
+
+        if (faltando.size > 0) {
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+          texto += `📋 **FUNCIONALIDADES QUE FALTAM** _(você pediu, o sistema não tem)_\n\n`
+          const ord = [...faltando.entries()].sort((a, b) => b[1].qtd - a[1].qtd)
+          ord.forEach(([acaoNome, e], i) => {
+            texto += `**${i + 1}. \`${acaoNome}\`** — pedido ${e.qtd}× _(última: ${e.ultima})_\n`
+            e.exemplos.forEach(ex => { texto += `   💬 _"${ex}"_\n` })
+            texto += '\n'
+          })
+        }
+
+        if (bugs.size > 0) {
+          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+          texto += `🐛 **ERROS DE GRAVAÇÃO** _(existe, mas falhou)_\n\n`
+          const ord = [...bugs.entries()].sort((a, b) => b[1].qtd - a[1].qtd)
+          ord.forEach(([acaoNome, e], i) => {
+            texto += `**${i + 1}. \`${acaoNome}\`** — ${e.qtd}× _(última: ${e.ultima})_\n`
+            texto += `   ⚠️ ${e.erro.substring(0, 160)}\n\n`
+          })
+        }
+
+        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        texto += `_Detalhes completos (JSON gerado, contexto, navegador) estão na tabela_ \`elena_diagnostico\`.\n`
+        texto += `_Consultas prontas para o dev estão no arquivo_ \`065_elena_diagnostico.sql\`.`
+
+        setMensagens(prev => [...prev, {
+          id: `diag-${Date.now()}`, role: 'ai' as const, texto,
+        }])
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // ── AÇÃO DESCONHECIDA → registra como PEDIDO DE FEATURE ──
       } else {
         const tipoAcao = acao.tipo || 'desconhecida'
-        console.warn(`[Elena] Ação desconhecida no handler: ${tipoAcao}`)
+        console.warn(`[Elena] 📋 Funcionalidade não implementada: ${tipoAcao}`, acao.dados)
+
+        // 📋 Vira backlog: fica registrado O QUE ele pediu e QUAL ação a IA
+        // tentou gerar. É o dado mais valioso que existe — mostra a demanda real.
+        await registrarDiagnostico('nao_implementado', {
+          acaoTipo: tipoAcao,
+          mensagem: `Handler não existe para a ação "${tipoAcao}"`,
+          payload: acao.dados,
+        })
+
         setAcaoStatus(msgId, acaoIdx, 'error', `Ação "${tipoAcao}" não disponível`)
         setMensagens(prev => [...prev, {
           id: `unk-${Date.now()}`, role: 'ai' as const,
-          texto: `⚠️ **Essa funcionalidade ainda não está disponível no sistema.** _(${tipoAcao})_\n\nMe diga o que precisa e eu sugiro o que posso fazer! 💬`,
+          texto:
+            `🛠️ **Isso ainda não existe no sistema.** _(${tipoAcao})_\n\n` +
+            `Já **registrei seu pedido** no relatório de desenvolvimento — ` +
+            `com o que você pediu e o que eu tentei fazer. O programador vai ver.\n\n` +
+            `Enquanto isso, me diga de outro jeito e eu vejo o que consigo! 💬`,
         }])
       }
 
     } catch (err: any) {
       const errMsg = err?.message || err?.details || err?.error_description || err?.hint || 'Erro ao salvar'
+
+      // 🔵 É uma PERGUNTA, não uma falha.
+      // A Elena precisa que o Sr. Max escolha (ex: 4 contas PJ, 4 cartões Visa).
+      // O sistema está funcionando corretamente — mostrar "❌ Não consegui salvar"
+      // aqui seria enganoso e assustador.
+      if (err instanceof ElenaPergunta || err?.ehPergunta === true) {
+        // A ação fica PENDENTE (aguardando resposta), não em erro.
+        setAcaoStatus(msgId, acaoIdx, 'pending')
+        setMensagens(prev => [...prev, {
+          id: `perg-${Date.now()}`,
+          role: 'ai' as const,
+          // Sem truncar: a pergunta precisa listar TODAS as opções
+          texto: `🤔 ${errMsg}`,
+        }])
+        return
+      }
+
+      // ❌ Erro de verdade → registra como BUG, com a mensagem exata do banco
       setAcaoStatus(msgId, acaoIdx, 'error', errMsg)
 
-      // ⚠️ Notifica o usuário no chat — action card pequeno pode passar despercebido
+      await registrarDiagnostico('erro_salvar', {
+        acaoTipo: acao?.tipo,
+        mensagem: errMsg,
+        payload: acao?.dados,
+      })
+
       const erroCurto = errMsg.length > 120 ? errMsg.substring(0, 120) + '...' : errMsg
       setMensagens(prev => [...prev, {
         id: `err-${Date.now()}`,
         role: 'ai' as const,
-        texto: `❌ **Ops! Não consegui salvar.** \n${erroCurto}\n\n_Se o problema persistir, verifique sua conexão e tente novamente._`,
+        texto:
+          `❌ **Ops! Não consegui salvar.**\n${erroCurto}\n\n` +
+          `_Já registrei o erro no relatório de diagnóstico — o programador consegue ver o que aconteceu._`,
       }])
     }
   }, [
     supabase, userIdRef, mensagensRef, colaboradores, ultimoRegistroRef,
-    resolverContaPf, resolverContaPj, resolverContaQualquer,
+    resolverContaPf, resolverContaPj, resolverContaQualquer, registrarDiagnostico,
     setAcaoStatus, exibirConfirmacaoSalvamento, setMensagens, setRelatorioData,
   ])
 
