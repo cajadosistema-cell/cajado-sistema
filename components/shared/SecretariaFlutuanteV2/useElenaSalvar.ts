@@ -2999,6 +2999,30 @@ export function useElenaSalvar({
         setMensagens(prev => [...prev, { id: `resumo-${Date.now()}`, role: 'ai' as const, texto }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
+      // ── REGISTRAR PEDIDO DE FEATURE ──────────────────────────
+      // Quando a própria Elena PERCEBE que o sistema não faz algo, ela
+      // registra aqui. Sem isso, ela explicava lindamente o que falta...
+      // e a informação morria no chat.
+      } else if (acao.tipo === 'registrar_pedido_feature') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+
+        const func = acao.dados.funcionalidade || acao.dados.acao_sugerida || 'não especificada'
+        await registrarDiagnostico('nao_implementado', {
+          acaoTipo: acao.dados.acao_sugerida || func,
+          mensagem: acao.dados.descricao || `Funcionalidade solicitada: ${func}`,
+          payload: acao.dados,
+        })
+
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        setMensagens(prev => [...prev, {
+          id: `feat-${Date.now()}`, role: 'ai' as const,
+          texto:
+            `📋 **Pedido registrado no backlog de desenvolvimento.**\n` +
+            `_${func}_\n\n` +
+            `Anotei o que você pediu e o contexto. Pergunte "o que falta no sistema?" ` +
+            `a qualquer momento para ver o relatório completo.`,
+        }])
+
       // ── RELATÓRIO DE DIAGNÓSTICO ─────────────────────────────
       // A Elena reporta o que ELA MESMA não conseguiu fazer.
       // Pergunte: "o que está faltando no sistema?" / "relatório de erros"

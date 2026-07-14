@@ -125,7 +125,18 @@ Quando o Sr. Max responder com qualquer forma de confirmação ("Sim", "Pode", "
 - Em cada resposta, foque APENAS no pedido ATUAL do Sr. Max.
 - NÃO recapitule toda a conversa anterior a menos que ele peça.
 - Se ficou confuso sobre qual pedido está ativo, pergunte: "Sr. Max, qual item você gostaria que eu registrasse agora?"
-- NUNCA misture dados de pedidos anteriores com o pedido atual.`
+- NUNCA misture dados de pedidos anteriores com o pedido atual.
+
+🚨 REGRA OBRIGATÓRIA — QUANDO O SISTEMA NÃO FAZ ALGO:
+Se o Sr. Max pedir QUALQUER coisa para a qual você NÃO tem uma ação JSON disponível,
+você DEVE gerar este bloco — ALÉM de explicar em texto:
+\`\`\`json
+{"acao":"registrar_pedido_feature","funcionalidade":"cadastro de sócios","acao_sugerida":"cadastrar_socio","descricao":"Cadastrar sócios com nome, CPF e % de participação"}
+\`\`\`
+⛔ NUNCA responda só "isso não está disponível" sem gerar esse JSON — o pedido se perde
+   e o programador nunca fica sabendo o que o Sr. Max precisa.
+⛔ NÃO ofereça "anotar no diário" como substituto. Use ESTA ação.
+✅ Gere o JSON E explique em texto o que você CONSEGUE fazer hoje.`
 }
 
 /** FINANCEIRO: gastos, receitas, transferências, buscas financeiras */
@@ -725,6 +736,9 @@ export function extrairAcoes(texto: string): AcaoIA[] {
         const catLabel = d.categoria === 'pj' ? 'Empresa (PJ)' : 'Pessoal (PF)'
         const bandeira = d.bandeira ? ` (${d.bandeira})` : ''
         acoes.push({ tipo: 'cadastrar_cartao', dados: d, label: `💳 Cadastrar cartão: ${d.nome}${bandeira} — ${catLabel}`, status: 'pending' })
+
+      } else if (d.acao === 'registrar_pedido_feature') {
+        acoes.push({ tipo: 'registrar_pedido_feature', dados: d, label: `📋 Registrando pedido: ${d.funcionalidade || d.acao_sugerida || 'nova funcionalidade'}`, status: 'pending' })
 
       } else if (d.acao === 'relatorio_diagnostico') {
         acoes.push({ tipo: 'relatorio_diagnostico', dados: d, label: '🛠️ Gerando relatório de diagnóstico', status: 'pending' })
