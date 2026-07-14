@@ -102,7 +102,10 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
           .select('id, role, texto, acoes, created_at, sessao_id')
           .eq('user_id', uid)
           .eq('sessao_id', sid)
+          // 🔴 FIX: desempate por 'id'. Sem ele, duas mensagens gravadas no
+          // mesmo instante (user + ai) podiam voltar em ordem invertida.
           .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
           .limit(30)
 
         if (hist && hist.length > 0) {
@@ -348,24 +351,35 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Salvar histórico no banco ─────────────────────────────────
+  // 🔴 FIX: o Supabase NÃO lança exceção em erro de query — ele retorna
+  // { error }. O try/catch antigo NUNCA disparava, então uma falha de
+  // gravação (RLS, constraint) era descartada em silêncio: o histórico
+  // simplesmente não era salvo e ninguém ficava sabendo.
   const salvarHistorico = async (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sid?: string) => {
     if (!uid || !texto || texto === '...') return
     try {
-      await (supabase.from('elena_conversas') as any).insert({
+      const { error } = await (supabase.from('elena_conversas') as any).insert({
         user_id: uid,
         sessao_id: sid || sessaoIdRef.current,
         role,
         texto: texto.substring(0, 4000),
         acoes: acoes ?? null,
       })
-    } catch { /* silencioso */ }
+      if (error) {
+        console.error('[Elena] ❌ FALHA ao salvar histórico:', error.message,
+          '— a conversa NÃO será recuperada ao recarregar a página.')
+      }
+    } catch (e: any) {
+      console.error('[Elena] ❌ Exceção ao salvar histórico:', e?.message || e)
+    }
   }
 
   // ── Mic autorizado ────────────────────────────────────────────
   const salvarMicAutorizado = async (uid: string) => {
     try {
       localStorage.setItem('elena_mic_ok', '1')
-      await (supabase.from('perfis') as any).update({ mic_autorizado: true }).eq('id', uid)
+      const { error: micErr } = await (supabase.from('perfis') as any).update({ mic_autorizado: true }).eq('id', uid)
+      if (micErr) console.warn('[Elena] não consegui salvar mic_autorizado:', micErr.message)
     } catch { /* silencioso */ }
   }
 

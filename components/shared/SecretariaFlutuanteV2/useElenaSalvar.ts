@@ -1630,20 +1630,41 @@ export function useElenaSalvar({
           let eventosCartao = 0
 
           // Cria compromisso fixo recorrente para o cartão
+          // 🔴 FIX: os eventos de agenda já tinham dedup (chave AUTO_CARTAO_*),
+          // mas o compromisso fixo NÃO — recadastrar o mesmo cartão criava um
+          // compromisso novo toda vez. Agora checamos antes.
           try {
-            await (supabase.from('compromissos_fixos') as any).insert({
-              user_id: uid,
-              descricao: nomeCartao,
-              valor: 0,
-              dia_vencimento: diaVenc,
-              categoria: 'cartao',
-              tipo_detalhe: 'cartao',
-              recorrente: true,
-              ativo: true,
-              conta_id: novoCartao?.id || null,
-              criado_pela_elena: true,
-            })
-          } catch { /* graceful — não bloqueia o fluxo */ }
+            const { data: compJaExiste } = await (supabase.from('compromissos_fixos') as any)
+              .select('id')
+              .eq('user_id', uid)
+              .eq('conta_id', novoCartao?.id || '')
+              .eq('categoria', 'cartao')
+              .maybeSingle()
+
+            if (compJaExiste) {
+              // Já existe: só atualiza o dia de vencimento, se mudou
+              const { error: cErr } = await (supabase.from('compromissos_fixos') as any)
+                .update({ dia_vencimento: diaVenc, ativo: true })
+                .eq('id', compJaExiste.id)
+              if (cErr) console.warn('[Elena] compromisso do cartão não atualizou:', cErr.message)
+            } else {
+              const { error: cErr } = await (supabase.from('compromissos_fixos') as any).insert({
+                user_id: uid,
+                descricao: nomeCartao,
+                valor: 0,
+                dia_vencimento: diaVenc,
+                categoria: 'cartao',
+                tipo_detalhe: 'cartao',
+                recorrente: true,
+                ativo: true,
+                conta_id: novoCartao?.id || null,
+                criado_pela_elena: true,
+              })
+              if (cErr) console.warn('[Elena] compromisso do cartão não foi criado:', cErr.message)
+            }
+          } catch (e: any) {
+            console.warn('[Elena] erro no compromisso do cartão:', e?.message || e)
+          }
 
           // Cria eventos diretamente na agenda_eventos (não depende da migration)
           for (let mOffset = 0; mOffset <= 1; mOffset++) {
@@ -2463,31 +2484,49 @@ export function useElenaSalvar({
         const itens = Array.isArray(acao.dados.itens) ? acao.dados.itens : []
         if (itens.length === 0) throw new Error('Nenhum item encontrado no extrato.')
         let sucesso = 0
+        const falhas: string[] = []
         for (const item of itens) {
           try {
             const isReceita = ['receita', 'credito', 'crédito', 'entrada'].includes(String(item.tipo || '').toLowerCase())
             const dataItem = validarData(item.data)
             const valor = Math.abs(Number(item.valor) || 0)
             if (valor === 0) continue
-            if (isReceita) {
-              await (supabase.from('receitas_pessoais') as any).insert({
-                user_id: uid, descricao: item.descricao || 'Extrato', valor,
-                categoria: 'outros', data: dataItem, notas: 'Importado via extrato — Elena',
-              })
+
+            // 🔴 FIX: o Supabase NÃO lança exceção em erro de query — retorna
+            // { error }. O código antigo fazia `sucesso++` logo após o insert
+            // e o catch nunca disparava. Resultado: a Elena reportava
+            // "12 de 12 importados com sucesso" mesmo quando NENHUM salvou.
+            const { error: impErr } = isReceita
+              ? await (supabase.from('receitas_pessoais') as any).insert({
+                  user_id: uid, descricao: item.descricao || 'Extrato', valor,
+                  categoria: 'outros', data: dataItem, notas: 'Importado via extrato — Elena',
+                })
+              : await (supabase.from('gastos_pessoais') as any).insert({
+                  user_id: uid, descricao: item.descricao || 'Extrato', valor,
+                  categoria: item.categoria || 'outros', forma_pagamento: 'transferencia',
+                  data: dataItem, notas: 'Importado via extrato — Elena',
+                })
+
+            if (impErr) {
+              falhas.push(`${item.descricao || 'item'} (R$ ${valor}): ${impErr.message}`)
+              console.error('[Elena] extrato — item não importado:', impErr.message)
             } else {
-              await (supabase.from('gastos_pessoais') as any).insert({
-                user_id: uid, descricao: item.descricao || 'Extrato', valor,
-                categoria: item.categoria || 'outros', forma_pagamento: 'transferencia',
-                data: dataItem, notas: 'Importado via extrato — Elena',
-              })
+              sucesso++
             }
-            sucesso++
-          } catch { /* pula item com erro */ }
+          } catch (e: any) {
+            falhas.push(`${item.descricao || 'item'}: ${e?.message || 'erro'}`)
+          }
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
+        let textoExtrato = `🏦 **Extrato importado!** ${sucesso} de ${itens.length} lançamento(s) registrado(s).`
+        if (falhas.length > 0) {
+          textoExtrato += `\n\n⚠️ **${falhas.length} item(ns) NÃO foram salvos:**\n` +
+            falhas.slice(0, 5).map(f => `  • ${f}`).join('\n') +
+            (falhas.length > 5 ? `\n  • …e mais ${falhas.length - 5}` : '')
+        }
         setMensagens(prev => [...prev, {
           id: `extrato-${Date.now()}`, role: 'ai' as const,
-          texto: `🏦 **Extrato importado!** ${sucesso} de ${itens.length} lançamento(s) registrado(s) com sucesso.`,
+          texto: textoExtrato,
         }])
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 

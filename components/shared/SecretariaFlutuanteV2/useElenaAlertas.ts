@@ -136,10 +136,11 @@ export function useElenaAlertas(supabase: any, userId: string, setMensagens: Rea
           texto: `${emoji} **Atenção:** ${v.titulo} — vence ${urgencia}!\nSr. Max, gostaria de anotar se esse pagamento já foi feito?`,
         }])
       }
-      await supabase.from('elena_perfil').upsert(
+      const { error: perfErr } = await supabase.from('elena_perfil').upsert(
         { user_id: uid, ultima_vez_vencimentos: hoje, ultima_atualizacao: new Date().toISOString() },
         { onConflict: 'user_id' }
       )
+      if (perfErr) console.warn('[Elena] elena_perfil não salvou:', perfErr.message)
       try { localStorage.setItem(`elena_venc_${hoje}`, '1') } catch {}
     } catch {}
   }, [supabase, tocarAlertaSonoro, setMensagens])
@@ -203,10 +204,11 @@ export function useElenaAlertas(supabase: any, userId: string, setMensagens: Rea
 
       setMensagens(prev => [...prev, { id: `briefing-${Date.now()}`, role: 'ai', texto: linhas.join('\n') }])
 
-      await supabase.from('elena_perfil').upsert(
+      const { error: perfErr } = await supabase.from('elena_perfil').upsert(
         { user_id: uid, ultima_vez_briefing: hoje, ultima_atualizacao: new Date().toISOString() },
         { onConflict: 'user_id' }
       )
+      if (perfErr) console.warn('[Elena] elena_perfil não salvou:', perfErr.message)
       try { localStorage.setItem(`elena_briefing_${hoje}`, '1') } catch {}
     } catch {}
   }, [supabase, setMensagens])

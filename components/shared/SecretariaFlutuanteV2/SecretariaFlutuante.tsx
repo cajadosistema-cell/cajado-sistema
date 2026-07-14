@@ -800,8 +800,15 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       ))
 
       if (uid) {
-        session.salvarHistorico(uid, 'user', userText, undefined, session.sessaoIdRef.current)
-        session.salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined, session.sessaoIdRef.current)
+        // 🔴 FIX: gravação SEQUENCIAL (await), não em paralelo.
+        // Antes os dois inserts disparavam juntos e o created_at do banco
+        // decidia a ordem por sorte — a resposta da Elena podia ser gravada
+        // ANTES da pergunta do Sr. Max. Ao recarregar a página, o histórico
+        // vinha invertido e a conversa "embolava".
+        ;(async () => {
+          await session.salvarHistorico(uid, 'user', userText, undefined, session.sessaoIdRef.current)
+          await session.salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined, session.sessaoIdRef.current)
+        })()
       }
 
       if (acoesComStatus.length > 0 && uid) {
