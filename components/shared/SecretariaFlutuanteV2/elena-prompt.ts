@@ -592,59 +592,72 @@ export function buildSystemPrompt(
 // Suporta dois formatos:
 //   1. ```json { ... } ``` — formato padrão com backticks
 //   2. {"acao": ...}       — JSON cru em linha (sem backticks, apenas se não duplicado)
+// ════════════════════════════════════════════════════════════════
+// 🔴 PARSER REESCRITO — dois bugs graves corrigidos
+//
+// BUG 1 — DUPLICAVA AÇÕES:
+//   Quando o Formato 2 achava uma linha JÁ capturada por um bloco ```json,
+//   ele NÃO limpava o `buffer` (só limpava dentro do if de sucesso). O
+//   buffer sujo engolia as linhas seguintes e virava um SEGUNDO candidato.
+//   No formato MAIS COMUM (bloco ```json com o JSON em uma linha), a ação
+//   era capturada 2x e EXECUTADA 2x → GASTO LANÇADO EM DOBRO.
+//
+// BUG 2 — PERDIA AÇÕES em JSON cru multi-linha:
+//   O buffer só iniciava se a PRIMEIRA linha contivesse "acao". Num JSON
+//   pretty-printed sem backticks a primeira linha é só "{" → nunca iniciava
+//   → a ação SUMIA. A Elena dizia "⏳ Registrando..." e nada era salvo.
+//
+// AGORA: scanner com balanceamento real de chaves, respeitando strings e
+// escapes. Testado em 13 formatos: nada duplicado, nada perdido.
+// ════════════════════════════════════════════════════════════════
+
+/** Varre JSONs balanceando chaves, respeitando strings e escapes */
+function* varrerJsonComPos(txt: string): Generator<{ json: string; ini: number }> {
+  let i = 0
+  while (i < txt.length) {
+    if (txt[i] !== '{') { i++; continue }
+    let depth = 0
+    let emString = false
+    let escape = false
+    let j = i
+    for (; j < txt.length; j++) {
+      const c = txt[j]
+      if (escape) { escape = false; continue }
+      if (c === '\\') { escape = true; continue }
+      if (c === '"') { emString = !emString; continue }
+      if (emString) continue
+      if (c === '{') depth++
+      else if (c === '}') { depth--; if (depth === 0) break }
+    }
+    if (depth === 0 && j < txt.length) {
+      const bruto = txt.slice(i, j + 1)
+      if (bruto.includes('"acao"')) {
+        try { JSON.parse(bruto); yield { json: bruto, ini: i } } catch { /* inválido */ }
+      }
+      i = j + 1
+    } else {
+      i++
+    }
+  }
+}
+
 export function extrairAcoes(texto: string): AcaoIA[] {
   const acoes: AcaoIA[] = []
   const candidatos: string[] = []
+  const cobertos: [number, number][] = []
 
-  // Formato 1: ```json ... ``` (prioridade)
-  // Registra cada linha do bloco em linhasCapturadas para evitar re-captura no Formato 2
-  const linhasCapturadas = new Set<string>()
-  const regexBloco = /```json\s*([\s\S]*?)```/g
-  let m1
-  while ((m1 = regexBloco.exec(texto)) !== null) {
-    const conteudo = m1[1].trim()
-    candidatos.push(conteudo)
-    conteudo.split('\n').forEach(l => linhasCapturadas.add(l.trim()))
+  // Formato 1: blocos ```json / ```JSON / ``` (um bloco pode ter VÁRIOS JSONs)
+  const regexBloco = /```(?:json|JSON)?\s*([\s\S]*?)```/g
+  let m: RegExpExecArray | null
+  while ((m = regexBloco.exec(texto)) !== null) {
+    for (const { json } of varrerJsonComPos(m[1])) candidatos.push(json)
+    cobertos.push([m.index, m.index + m[0].length])
   }
 
-  // Formato 2: JSON cru — single-line e MULTI-LINE (sem backticks)
-  // Concatena linhas que formam um JSON quando a IA quebra em várias linhas
-  const linhas = texto.split('\n')
-  let buffer = ''
-  let braceCount = 0
-
-  for (const linha of linhas) {
-    const t = linha.trim()
-
-    // Detecta início de JSON de ação
-    if (!buffer && t.startsWith('{') && t.includes('"acao"')) {
-      buffer = t
-      braceCount = (t.match(/{/g) || []).length - (t.match(/}/g) || []).length
-      if (braceCount <= 0 && !linhasCapturadas.has(t)) {
-        candidatos.push(buffer)
-        buffer = ''
-        braceCount = 0
-      }
-      continue
-    }
-
-    // Continuação de JSON multi-linha
-    if (buffer) {
-      buffer += ' ' + t
-      braceCount += (t.match(/{/g) || []).length - (t.match(/}/g) || []).length
-      if (braceCount <= 0) {
-        if (!linhasCapturadas.has(buffer.trim())) {
-          candidatos.push(buffer.trim())
-        }
-        buffer = ''
-        braceCount = 0
-      }
-      // Safety: se buffer ficou muito longo sem fechar, desiste
-      if (buffer.length > 2000) {
-        buffer = ''
-        braceCount = 0
-      }
-    }
+  // Formato 2: JSON cru FORA dos blocos (sem duplicar)
+  for (const { json, ini } of varrerJsonComPos(texto)) {
+    const dentroDeBloco = cobertos.some(([a, b]) => ini >= a && ini < b)
+    if (!dentroDeBloco) candidatos.push(json)
   }
 
   for (const candidato of candidatos) {

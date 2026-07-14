@@ -95,25 +95,54 @@ export function useElenaOffline({
       texto: `Ã°Å¸â€œÂ¶ **ConexÃƒÂ£o restabelecida!** Encontrei ${pendentes.length} registro(s) salvo(s) offline. Sincronizando agora...`,
     })
 
+    // 🔴 FIX CRÍTICO — PERDA DE DADOS
+    // A versão antiga chamava executarAcoesAuto() dentro de um try/catch,
+    // mas essa função ENGOLIA os erros e nunca lançava. Resultado:
+    //   • a gravação falhava
+    //   • marcarProcessado() rodava do mesmo jeito → registro REMOVIDO da fila
+    //   • a Elena anunciava "✅ sincronizado com sucesso!"
+    // O lançamento que o Sr. Max fez sem sinal era PERDIDO PARA SEMPRE.
+    //
+    // Agora executarAcoesAuto retorna { salvas, falhas }. Só removemos da
+    // fila o que REALMENTE foi salvo. O que falhou FICA para a próxima tentativa.
     let sucesso = 0
+    let falhou = 0
+    const motivos: string[] = []
+
     for (const reg of pendentes) {
       try {
         const msgId = 'offline-sync-' + reg.id
-        await executarAcoesAuto(msgId, [{ tipo: reg.tipo, dados: reg.acao, label: '', status: 'pending' }], userId)
-        await marcarProcessado(reg.id!)
-        sucesso++
-      } catch {
-        // MantÃƒÂ©m na fila ââ‚¬â€ tentarÃƒÂ¡ novamente na prÃƒÂ³xima conexÃƒÂ£o
+        const r = await executarAcoesAuto(
+          msgId,
+          [{ tipo: reg.tipo, dados: reg.acao, label: '', status: 'pending' }],
+          userId,
+        )
+
+        if (r.falhas === 0 && r.salvas > 0) {
+          await marcarProcessado(reg.id!)   // ✅ só remove da fila se GRAVOU
+          sucesso++
+        } else {
+          falhou++
+          if (r.erros[0]) motivos.push(r.erros[0])
+          console.error('[Elena][offline] registro NÃO sincronizado, mantido na fila:', reg.id, r.erros)
+        }
+      } catch (e: any) {
+        falhou++
+        motivos.push(e?.message || String(e))
       }
     }
 
-    if (sucesso > 0) {
-      await limparProcessados()
-      adicionarMensagem({
-        id: 'sync-ok-' + Date.now(),
-        role: 'ai' as const,
-        texto: `âÅ“â€¦ ${sucesso} registro(s) sincronizado(s) com sucesso!`,
-      })
+    if (sucesso > 0) await limparProcessados()
+
+    let texto = ''
+    if (sucesso > 0) texto += `✅ ${sucesso} registro(s) sincronizado(s) com sucesso!`
+    if (falhou > 0) {
+      if (texto) texto += '\n\n'
+      texto += `⚠️ **${falhou} registro(s) NÃO foram salvos** e continuam na fila — vou tentar de novo.\n`
+      if (motivos[0]) texto += `_Motivo: ${motivos[0].substring(0, 120)}_`
+    }
+    if (texto) {
+      adicionarMensagem({ id: 'sync-res-' + Date.now(), role: 'ai' as const, texto })
     }
   }, [userId, executarAcoesAuto, adicionarMensagem])
 

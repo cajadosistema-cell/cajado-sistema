@@ -51,6 +51,19 @@ class ElenaPergunta extends Error {
   }
 }
 
+/**
+ * 🔴 A IA pode mandar dia 45, 0, "quinze" ou NaN.
+ * Sem validação isso vira data inválida no banco — e o alerta de
+ * vencimento NUNCA dispara, em silêncio.
+ */
+function clampDia(valor: any, campo: string): number {
+  const n = Number(valor)
+  if (!Number.isFinite(n) || n < 1 || n > 31) {
+    throw new Error(`Dia de ${campo} inválido: "${valor}". Precisa ser um número entre 1 e 31.`)
+  }
+  return Math.round(n)
+}
+
 /** Sufixos genéricos que não distinguem um cartão de outro */
 const SUFIXOS_GENERICOS = ['bank', 'banco', 'card', 'cartao', 'credito', 'pay']
 
@@ -1367,7 +1380,13 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const tiposValidos = ['boleto','cartao','agua','energia','internet','telefone','aluguel','condominio','plano_saude','financiamento','outro']
         const tipo = tiposValidos.includes(acao.dados.tipo) ? acao.dados.tipo : 'boleto'
-        const dia = Number(acao.dados.dia_vencimento)
+        // 🔴 FIX: a IA pode mandar dia 45, 0, ou NaN. Sem clamp, vira data
+        // inválida no banco e o alerta nunca dispara.
+        const diaBruto = Number(acao.dados.dia_vencimento)
+        if (!Number.isFinite(diaBruto) || diaBruto < 1 || diaBruto > 31) {
+          throw new Error(`Dia de vencimento inválido: "${acao.dados.dia_vencimento}". Precisa ser entre 1 e 31.`)
+        }
+        const dia = Math.round(diaBruto)
         if (!dia || dia < 1 || dia > 31) throw new Error('Dia de vencimento inválido (1–31).')
         if (!acao.dados.descricao) throw new Error('Descrição da conta é obrigatória.')
 
@@ -1389,6 +1408,31 @@ export function useElenaSalvar({
         }
 
         // 1. Salva na tabela compromissos_fixos (tabela unificada)
+        // 🔴 FIX: era `.insert()` CEGO — mesmo padrão do bug que criou 30
+        // cartões. Dizer "aluguel dia 10" duas vezes criava DOIS compromissos,
+        // e o Sr. Max recebia alerta em dobro todo mês.
+        const { data: recJaExiste } = await (supabase.from('compromissos_fixos') as any)
+          .select('id, valor, dia_vencimento')
+          .eq('user_id', uid)
+          .eq('ativo', true)
+          .ilike('descricao', acao.dados.descricao)
+          .maybeSingle()
+
+        if (recJaExiste) {
+          const { error: upRecErr } = await (supabase.from('compromissos_fixos') as any)
+            .update({ valor: valorNum || recJaExiste.valor, dia_vencimento: dia })
+            .eq('id', recJaExiste.id)
+          if (upRecErr) throw new Error(upRecErr.message)
+
+          setAcaoStatus(msgId, acaoIdx, 'saved')
+          setMensagens(prev => [...prev, {
+            id: `rec-dup-${Date.now()}`, role: 'ai' as const,
+            texto: `ℹ️ **${acao.dados.descricao}** já estava cadastrado como recorrente — atualizei o valor e o dia (${dia}) em vez de criar outro.`,
+          }])
+          window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+          return
+        }
+
         const { data: novoRec, error: errRec } = await (supabase.from('compromissos_fixos') as any).insert({
           user_id:          uid,
           descricao:        acao.dados.descricao,
@@ -1679,8 +1723,8 @@ export function useElenaSalvar({
           user_id: uid,
         }
         if (acao.dados.limite)          payloadCartao.limite = Number(acao.dados.limite)
-        if (acao.dados.dia_fechamento)  payloadCartao.dia_fechamento = Number(acao.dados.dia_fechamento)
-        if (acao.dados.dia_vencimento)  payloadCartao.dia_vencimento = Number(acao.dados.dia_vencimento)
+        if (acao.dados.dia_fechamento) payloadCartao.dia_fechamento = clampDia(acao.dados.dia_fechamento, 'fechamento')
+        if (acao.dados.dia_vencimento) payloadCartao.dia_vencimento = clampDia(acao.dados.dia_vencimento, 'vencimento')
         if (categoria === 'pj') {
           const empresaId = await getEmpresaId(uid)
           if (empresaId) payloadCartao.empresa_id = empresaId
@@ -1693,7 +1737,7 @@ export function useElenaSalvar({
         const novoCartao = { id: cartaoId, nome: cartaoNomeFinal }
 
         // ── Auto-gera alertas e agenda se dia_vencimento foi informado ──
-        const diaVenc = acao.dados.dia_vencimento ? Number(acao.dados.dia_vencimento) : null
+        const diaVenc = acao.dados.dia_vencimento ? clampDia(acao.dados.dia_vencimento, 'vencimento') : null
         let agendaMsg = ''
         if (diaVenc && diaVenc >= 1 && diaVenc <= 31) {
           const nomeCartao = acao.dados.nome || 'Cartão'
@@ -2675,14 +2719,31 @@ export function useElenaSalvar({
           const { data: todosG } = await (supabase.from('gastos_pessoais') as any)
             .select('id, descricao, valor, data, created_at').eq('user_id', uid)
             .order('created_at', { ascending: true })
-          const visG = new Map<string, string>(); const idsG: string[] = []
+          // 🔴 FIX: a chave era só (descricao + data + valor). Isso apagava
+          // GASTOS LEGÍTIMOS: dois Ubers de R$ 15 no mesmo dia viravam
+          // "duplicata" e um era DESTRUÍDO.
+          // Agora só considera duplicata se foram criados com menos de 2
+          // minutos de diferença — o padrão de double-click / retry, não de
+          // duas compras iguais de verdade.
+          const JANELA_MS = 2 * 60 * 1000
+          const visG = new Map<string, any>(); const idsG: string[] = []
           ;(todosG || []).forEach((g: any) => {
             const ch = `${(g.descricao||'').toLowerCase().trim()}_${g.data}_${g.valor}`
-            if (visG.has(ch)) { idsG.push(g.id) } else { visG.set(ch, g.id) }
+            const anterior = visG.get(ch)
+            if (anterior) {
+              const dt = Math.abs(new Date(g.created_at).getTime() - new Date(anterior.created_at).getTime())
+              if (dt < JANELA_MS) {
+                idsG.push(g.id)          // gravado 2x em segundos → duplicata real
+              } else {
+                visG.set(ch, g)          // gasto legítimo repetido → PRESERVA
+              }
+            } else {
+              visG.set(ch, g)
+            }
           })
           if (idsG.length > 0) {
             for (let i = 0; i < idsG.length; i += 50)
-              await (supabase.from('gastos_pessoais') as any).delete().in('id', idsG.slice(i, i+50))
+              await (supabase.from('gastos_pessoais') as any).delete().eq('user_id', uid).in('id', idsG.slice(i, i+50))
             totalRemovidos += idsG.length
             window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
           }
@@ -3169,17 +3230,34 @@ export function useElenaSalvar({
 
   // ── executarAcoesAuto ─────────────────────────────────────────
   // Executa todas as ações de uma mensagem em sequência.
-  const executarAcoesAuto = useCallback(async (msgId: string, acoes: AcaoIA[], uid: string) => {
+  // 🔴 FIX: esta função ENGOLIA todos os erros e não retornava nada.
+  // Quem chamava (a fila offline) achava que tinha dado tudo certo,
+  // marcava o registro como processado e o REMOVIA da fila — mesmo
+  // quando nada tinha sido salvo. Lançamentos feitos offline eram
+  // PERDIDOS PARA SEMPRE, com a Elena anunciando "sincronizado!".
+  //
+  // Agora retorna { salvas, falhas } para o chamador decidir.
+  const executarAcoesAuto = useCallback(async (
+    msgId: string, acoes: AcaoIA[], uid: string,
+  ): Promise<{ salvas: number; falhas: number; erros: string[] }> => {
+    let salvas = 0
+    let falhas = 0
+    const erros: string[] = []
+
     for (let i = 0; i < acoes.length; i++) {
       if (acoes[i].status === 'pending') {
         try {
           await salvarAcao(msgId, i, acoes[i])
+          salvas++
         } catch (err: any) {
-          // Erro em ação #i NÃO impede ação #(i+1) de rodar
-          console.error(`[Elena] Erro na ação ${i}:`, err?.message)
+          // Erro na ação #i NÃO impede a #(i+1) de rodar — mas é CONTADO.
+          falhas++
+          erros.push(err?.message || String(err))
+          console.error(`[Elena] Erro na ação ${i} (${acoes[i]?.tipo}):`, err?.message)
         }
       }
     }
+    return { salvas, falhas, erros }
   }, [salvarAcao])
 
   return {
