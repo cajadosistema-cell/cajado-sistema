@@ -60,6 +60,33 @@ function tocarChime(tipo: 'aviso' | 'urgente' = 'aviso') {
   }
 }
 
+// ── Loops de despertador: toca o chime, espera, repete, até parar ───────
+// Mapa toastId → interval. Enquanto o loop existe, o som se repete.
+const alarmeLoops = new Map<string, ReturnType<typeof setInterval>>()
+
+const REPETIR_A_CADA_MS = 5000   // toca a cada 5s (o chime dura ~1,5s)
+const PARAR_SOZINHO_MS  = 180000 // rede de segurança: para sozinho após 3 min
+
+function iniciarLoopAlarme(toastId: string, tipo: 'aviso' | 'urgente') {
+  // Já existe um loop pra este alarme? Não empilha.
+  if (alarmeLoops.has(toastId)) return
+
+  tocarChime(tipo) // toca imediatamente
+  const interval = setInterval(() => tocarChime(tipo), REPETIR_A_CADA_MS)
+  alarmeLoops.set(toastId, interval)
+
+  // Rede de segurança: se ninguém parar, silencia após alguns minutos
+  setTimeout(() => pararLoopAlarme(toastId), PARAR_SOZINHO_MS)
+}
+
+function pararLoopAlarme(toastId: string) {
+  const interval = alarmeLoops.get(toastId)
+  if (interval) {
+    clearInterval(interval)
+    alarmeLoops.delete(toastId)
+  }
+}
+
 // ── Cache global de vozes (carrega uma vez e reutiliza) ─────────────────
 let vozCache: SpeechSynthesisVoice[] = []
 let vozCacheCarregado = false
@@ -281,6 +308,9 @@ export function AlarmManager({ userId }: { userId: string }) {
 
   const dispensar = useCallback((key: string) => {
     salvarFired(key)
+    // key vem como "<toastId>_dismissed" — extrai o toastId e cala o alarme
+    const toastId = key.replace(/_dismissed$/, '')
+    pararLoopAlarme(toastId)
     setToasts(prev => prev.filter(t => t.id + '_dismissed' !== key && t.id !== key))
   }, [])
 
@@ -331,9 +361,10 @@ export function AlarmManager({ userId }: { userId: string }) {
       if (firedRef.current.has(chave)) continue
       salvarFired(chave)
 
-      // ── Som ─────────────────────────────────────────────────────────────
+      // ── Som — LOOP de despertador (toca, espera, repete até o Max parar) ─
       const urgente = janela === '0min'
-      tocarChime(urgente ? 'urgente' : 'aviso')
+      const toastIdSom = `${evento.id}_${janela}`
+      iniciarLoopAlarme(toastIdSom, urgente ? 'urgente' : 'aviso')
 
       // ── Voz (delay pra terminar o chime) ────────────────────────────────
       const textoVoz = janela === '3min'
@@ -364,10 +395,15 @@ export function AlarmManager({ userId }: { userId: string }) {
         }]
       })
 
-      // Auto-remove toast após 45 segundos
-      setTimeout(() => {
-        setToasts(prev => prev.filter(t => t.id !== toastId))
-      }, 45000)
+      // Mantém o toast visível enquanto o alarme estiver tocando, para o Max
+      // sempre ter o botão "×" à mão. Quando o som para (clique ou limite de
+      // segurança), o toast some junto.
+      const guardaToast = setInterval(() => {
+        if (!alarmeLoops.has(toastId)) {
+          setToasts(prev => prev.filter(t => t.id !== toastId))
+          clearInterval(guardaToast)
+        }
+      }, 3000)
     }
   }, [userId, supabase])
 
@@ -380,7 +416,12 @@ export function AlarmManager({ userId }: { userId: string }) {
       verificarAlarmes()
       chamarEdgeFunction()
     }, 30_000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      // silencia qualquer alarme em loop ao desmontar (troca de página etc.)
+      alarmeLoops.forEach((iv) => clearInterval(iv))
+      alarmeLoops.clear()
+    }
   }, [userId, verificarAlarmes, chamarEdgeFunction])
 
   // Solicita permissão de notificação se ainda não concedida
