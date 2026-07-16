@@ -127,7 +127,7 @@ function fmt(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', 
 function mesAtualYM() { return new Date().toISOString().substring(0, 7) }
 
 // ── Painel duplo Prévia + Fatura Real (PJ) ──────────────────────
-function FaturaPainelPJ({ cartaoId, mesRef, gastoSistema }: { cartaoId: string; mesRef: string; gastoSistema: number }) {
+function FaturaPainelPJ({ cartaoId, mesRef, gastoSistema, contasBancarias = [] }: { cartaoId: string; mesRef: string; gastoSistema: number; contasBancarias?: any[] }) {
   const supabase = createClient()
   const [faturaObj, setFaturaObj] = useState<any>(null)
   const [editPrev, setEditPrev] = useState(false)
@@ -135,6 +135,10 @@ function FaturaPainelPJ({ cartaoId, mesRef, gastoSistema }: { cartaoId: string; 
   const [valPrev, setValPrev] = useState('')
   const [valReal, setValReal] = useState('')
   const [loading, setLoading] = useState(false)
+  const [editPag, setEditPag] = useState(false)
+  const [dataPag, setDataPag] = useState(new Date().toISOString().split('T')[0])
+  const [contaPagId, setContaPagId] = useState('')
+  const [notasPag, setNotasPag] = useState('')
 
   const carregar = useCallback(async () => {
     const { data } = await (supabase.from('faturas_cartoes') as any)
@@ -142,6 +146,10 @@ function FaturaPainelPJ({ cartaoId, mesRef, gastoSistema }: { cartaoId: string; 
     setFaturaObj(data)
     setValPrev(data?.valor_previsto != null ? String(data.valor_previsto) : '')
     setValReal(data?.valor_fechado  != null ? String(data.valor_fechado)  : '')
+    setDataPag(data?.data_pagamento?.split('T')[0] || new Date().toISOString().split('T')[0])
+    setContaPagId(data?.conta_pagamento_id || '')
+    setNotasPag(data?.notas || '')
+    setEditPag(false)
   }, [cartaoId, mesRef, supabase])
 
   useEffect(() => { if (cartaoId && mesRef) carregar() }, [carregar])
@@ -235,6 +243,107 @@ function FaturaPainelPJ({ cartaoId, mesRef, gastoSistema }: { cartaoId: string; 
             : `✅ ${fmt(Math.abs(diff!))} a menos que a fatura`}
         </div>
       )}
+
+      {/* Pagamento da Fatura */}
+      {(() => {
+        const statusPag = faturaObj?.status || 'pendente'
+        const STATUS_BADGE: Record<string, { label: string; icon: string; cor: string; bg: string }> = {
+          pendente: { label: 'Pendente', icon: '🟡', cor: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20' },
+          pago:     { label: 'Pago',     icon: '🟢', cor: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+          parcial:  { label: 'Parcial',  icon: '🟠', cor: 'text-orange-400',  bg: 'bg-orange-500/10 border-orange-500/20' },
+        }
+        const badge = STATUS_BADGE[statusPag] || STATUS_BADGE.pendente
+
+        const salvarPagamento = async (novoStatus: 'pago' | 'pendente') => {
+          setLoading(true)
+          await (supabase.from('faturas_cartoes') as any).upsert({
+            conta_id: cartaoId,
+            mes_referencia: mesRef,
+            status: novoStatus,
+            data_pagamento: novoStatus === 'pago' ? dataPag : null,
+            conta_pagamento_id: novoStatus === 'pago' && contaPagId ? contaPagId : null,
+            notas: notasPag || null,
+          }, { onConflict: 'conta_id,mes_referencia' })
+          setLoading(false)
+          setEditPag(false)
+          carregar()
+        }
+
+        return (
+          <div className={`rounded-xl px-3 py-2.5 border ${badge.bg} transition-all`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-fg-tertiary">💰 Pagamento da Fatura</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${badge.bg} ${badge.cor}`}>
+                    {badge.icon} {badge.label}
+                  </span>
+                  {statusPag === 'pago' && faturaObj?.data_pagamento && (
+                    <span className="text-[10px] text-fg-tertiary">
+                      em {new Date(faturaObj.data_pagamento).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
+                  {statusPag === 'pago' && faturaObj?.conta_pagamento_id && contasBancarias.length > 0 && (
+                    <span className="text-[10px] text-fg-tertiary">
+                      · {contasBancarias.find(c => c.id === faturaObj.conta_pagamento_id)?.nome || 'conta'}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {!editPag && (
+                statusPag === 'pago' ? (
+                  <button onClick={() => salvarPagamento('pendente')}
+                    className="shrink-0 text-[10px] text-red-400 hover:text-red-300 border border-red-500/20 rounded px-2 py-1 transition-colors">
+                    ↩ Desfazer
+                  </button>
+                ) : (
+                  <button onClick={() => setEditPag(true)}
+                    className="shrink-0 text-[10px] text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 rounded px-2 py-1 transition-colors">
+                    💳 Pagar Fatura
+                  </button>
+                )
+              )}
+            </div>
+
+            {editPag && (
+              <div className="mt-2.5 space-y-2.5 pt-2.5 border-t border-white/5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] text-fg-tertiary uppercase">Data Pagamento</label>
+                    <input type="date" className="input text-xs w-full py-1 h-7 mt-0.5"
+                      value={dataPag} onChange={e => setDataPag(e.target.value)} />
+                  </div>
+                  {contasBancarias.length > 0 && (
+                    <div>
+                      <label className="text-[9px] text-fg-tertiary uppercase">Conta de Origem</label>
+                      <select className="input text-xs w-full py-1 h-7 mt-0.5"
+                        value={contaPagId} onChange={e => setContaPagId(e.target.value)}>
+                        <option value="">— selecione —</option>
+                        {contasBancarias.map(c => (
+                          <option key={c.id} value={c.id}>{c.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[9px] text-fg-tertiary uppercase">Observações</label>
+                  <input className="input text-xs w-full py-1 h-7 mt-0.5" placeholder="Ex: pago via Pix"
+                    value={notasPag} onChange={e => setNotasPag(e.target.value)} />
+                </div>
+                <div className="flex gap-1.5 justify-end">
+                  <button onClick={() => setEditPag(false)}
+                    className="px-2.5 h-7 rounded bg-white/5 text-fg-disabled text-xs">✕ Cancelar</button>
+                  <button onClick={() => salvarPagamento('pago')} disabled={loading}
+                    className="px-3 h-7 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/30 transition-colors">
+                    {loading ? '...' : '✅ Confirmar Pagamento'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -415,6 +524,7 @@ export function TabCartoes({
             cartaoId={cartaoSelecionado}
             mesRef={mesSel}
             gastoSistema={totalGasto}
+            contasBancarias={contas.filter(c => c.tipo !== 'cartao_credito' && c.ativo !== false)}
           />
         ) : (
           <div className="bg-surface border border-white/5 rounded-xl p-5 md:col-span-1 shadow-2xl relative overflow-hidden flex flex-col justify-center min-h-[220px]">

@@ -27,19 +27,26 @@ const BANDEIRAS = [
 
 // ── Painel duplo: Prévia + Fatura Real ────────────────────────
 function FaturaDupla({
-  conta, mesSel, faturaObj, gastoSistema, onSaved,
-}: { conta: any; mesSel: string; faturaObj: any; gastoSistema: number; onSaved: () => void }) {
+  conta, mesSel, faturaObj, gastoSistema, onSaved, contasBancarias = [],
+}: { conta: any; mesSel: string; faturaObj: any; gastoSistema: number; onSaved: () => void; contasBancarias?: any[] }) {
   const supabase = createClient()
   const [editPrev, setEditPrev] = useState(false)
   const [editReal, setEditReal] = useState(false)
   const [valPrev, setValPrev] = useState(faturaObj?.valor_previsto != null ? String(faturaObj.valor_previsto) : '')
   const [valReal, setValReal] = useState(faturaObj?.valor_fechado  != null ? String(faturaObj.valor_fechado)  : '')
   const [loading, setLoading] = useState(false)
+  const [editPag, setEditPag] = useState(false)
+  const [dataPag, setDataPag] = useState(faturaObj?.data_pagamento?.split('T')[0] || new Date().toISOString().split('T')[0])
+  const [contaPagId, setContaPagId] = useState(faturaObj?.conta_pagamento_id || '')
+  const [notasPag, setNotasPag] = useState(faturaObj?.notas || '')
 
   useEffect(() => {
     setValPrev(faturaObj?.valor_previsto != null ? String(faturaObj.valor_previsto) : '')
     setValReal(faturaObj?.valor_fechado  != null ? String(faturaObj.valor_fechado)  : '')
-    setEditPrev(false); setEditReal(false)
+    setDataPag(faturaObj?.data_pagamento?.split('T')[0] || new Date().toISOString().split('T')[0])
+    setContaPagId(faturaObj?.conta_pagamento_id || '')
+    setNotasPag(faturaObj?.notas || '')
+    setEditPrev(false); setEditReal(false); setEditPag(false)
   }, [mesSel, faturaObj])
 
   const salvar = async (campo: 'valor_previsto' | 'valor_fechado', raw: string) => {
@@ -58,6 +65,29 @@ function FaturaDupla({
   const prev  = faturaObj?.valor_previsto != null ? Number(faturaObj.valor_previsto) : null
   const real  = faturaObj?.valor_fechado  != null ? Number(faturaObj.valor_fechado)  : null
   const diff  = real != null ? gastoSistema - real : null
+  const statusPag = faturaObj?.status || 'pendente'
+
+  const salvarPagamento = async (novoStatus: 'pago' | 'pendente') => {
+    setLoading(true)
+    await (supabase.from('faturas_cartoes') as any).upsert({
+      conta_id: conta.id,
+      mes_referencia: mesSel,
+      status: novoStatus,
+      data_pagamento: novoStatus === 'pago' ? dataPag : null,
+      conta_pagamento_id: novoStatus === 'pago' && contaPagId ? contaPagId : null,
+      notas: notasPag || null,
+    }, { onConflict: 'conta_id,mes_referencia' })
+    setLoading(false)
+    setEditPag(false)
+    onSaved()
+  }
+
+  const STATUS_BADGE: Record<string, { label: string; icon: string; cor: string; bg: string }> = {
+    pendente: { label: 'Pendente',  icon: '🟡', cor: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20' },
+    pago:     { label: 'Pago',      icon: '🟢', cor: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+    parcial:  { label: 'Parcial',   icon: '🟠', cor: 'text-orange-400',  bg: 'bg-orange-500/10 border-orange-500/20' },
+  }
+  const badge = STATUS_BADGE[statusPag] || STATUS_BADGE.pendente
 
   return (
     <div className="space-y-2" onClick={e => e.stopPropagation()}>
@@ -123,6 +153,80 @@ function FaturaDupla({
               : `✅ ${formatCurrency(Math.abs(diff!))} a menos — ok`}
         </div>
       )}
+
+      {/* Pagamento da Fatura */}
+      <div className={`rounded-xl px-3 py-2.5 border ${badge.bg} transition-all`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-fg-tertiary">💰 Pagamento da Fatura</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${badge.bg} ${badge.cor}`}>
+                {badge.icon} {badge.label}
+              </span>
+              {statusPag === 'pago' && faturaObj?.data_pagamento && (
+                <span className="text-[10px] text-fg-tertiary">
+                  em {new Date(faturaObj.data_pagamento).toLocaleDateString('pt-BR')}
+                </span>
+              )}
+              {statusPag === 'pago' && faturaObj?.conta_pagamento_id && contasBancarias.length > 0 && (
+                <span className="text-[10px] text-fg-tertiary">
+                  · {contasBancarias.find(c => c.id === faturaObj.conta_pagamento_id)?.nome || 'conta'}
+                </span>
+              )}
+            </div>
+          </div>
+          {!editPag && (
+            statusPag === 'pago' ? (
+              <button onClick={() => salvarPagamento('pendente')}
+                className="shrink-0 text-[10px] text-red-400 hover:text-red-300 border border-red-500/20 rounded px-2 py-0.5 transition-colors">
+                ↩ Desfazer
+              </button>
+            ) : (
+              <button onClick={() => setEditPag(true)}
+                className="shrink-0 text-[10px] text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 rounded px-2 py-0.5 transition-colors">
+                💳 Pagar Fatura
+              </button>
+            )
+          )}
+        </div>
+
+        {editPag && (
+          <div className="mt-2 space-y-2 pt-2 border-t border-white/5">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[9px] text-fg-tertiary uppercase">Data Pagamento</label>
+                <input type="date" className="input text-xs w-full py-0.5 h-7 mt-0.5"
+                  value={dataPag} onChange={e => setDataPag(e.target.value)} />
+              </div>
+              {contasBancarias.length > 0 && (
+                <div>
+                  <label className="text-[9px] text-fg-tertiary uppercase">Conta de Origem</label>
+                  <select className="input text-xs w-full py-0.5 h-7 mt-0.5"
+                    value={contaPagId} onChange={e => setContaPagId(e.target.value)}>
+                    <option value="">— selecione —</option>
+                    {contasBancarias.map(c => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="text-[9px] text-fg-tertiary uppercase">Observações</label>
+              <input className="input text-xs w-full py-0.5 h-7 mt-0.5" placeholder="Ex: pago via Pix"
+                value={notasPag} onChange={e => setNotasPag(e.target.value)} />
+            </div>
+            <div className="flex gap-1.5 justify-end">
+              <button onClick={() => setEditPag(false)}
+                className="px-2 h-6 rounded bg-white/5 text-fg-disabled text-[10px]">✕ Cancelar</button>
+              <button onClick={() => salvarPagamento('pago')} disabled={loading}
+                className="px-3 h-6 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/30 transition-colors">
+                {loading ? '...' : '✅ Confirmar Pagamento'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -638,6 +742,11 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
     if (data) setFaturas(data)
   }, [supabase, contas])
 
+  // Contas bancárias (não-cartão) para seletor de pagamento de fatura
+  const contasBancarias = contas.filter(c =>
+    c.tipo !== 'cartao_credito' && c.tipo !== 'cartao_debito' && c.ativo !== false
+  )
+
   useEffect(() => { fetchFaturas() }, [fetchFaturas])
 
   if (cartoes.length === 0 && subAba === 'lancamentos') {
@@ -1045,6 +1154,7 @@ export function TabCartoesSeparado({ contas, lancamentos, categorias, onImportar
                       faturaObj={faturaObj}
                       gastoSistema={gastoMes}
                       onSaved={fetchFaturas}
+                      contasBancarias={contasBancarias}
                     />
                     <GastoBar gasto={gastoMes} limite={c.limite_gasto_mensal ?? null} />
 
