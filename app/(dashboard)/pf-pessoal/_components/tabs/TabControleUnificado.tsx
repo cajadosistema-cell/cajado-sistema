@@ -242,15 +242,24 @@ function CompromissoCard({
   compromisso,
   pagamento,
   mesSel,
-  onToggleStatus,
+  onPagar,
+  onDesfazer,
   onEdit,
+  contasBancarias,
 }: {
   compromisso: CompromissoFixo
   pagamento: HistoricoPagamentoMensal | null
   mesSel: string
-  onToggleStatus: (compromissoId: string, novoStatus: StatusPagamento) => void
+  onPagar: (compromissoId: string, dataPag: string, contaPagId: string, notas: string) => void
+  onDesfazer: (compromissoId: string) => void
   onEdit: (c: CompromissoFixo) => void
+  contasBancarias: any[]
 }) {
+  const [showForm, setShowForm] = useState(false)
+  const [dataPag, setDataPag] = useState(new Date().toISOString().split('T')[0])
+  const [contaPagId, setContaPagId] = useState('')
+  const [notasPag, setNotasPag] = useState('')
+
   const cat = CATEGORIA_COMPROMISSO[compromisso.categoria] ?? CATEGORIA_COMPROMISSO.outro
   const status: StatusPagamento = pagamento?.status as StatusPagamento ?? 'pendente'
   const statusCfg = STATUS_CONFIG[status]
@@ -258,60 +267,118 @@ function CompromissoCard({
   const isVencido = compromisso.dia_vencimento != null && compromisso.dia_vencimento < hoje && status === 'pendente'
   const isUrgente = compromisso.dia_vencimento != null && (compromisso.dia_vencimento - hoje) <= 3 && (compromisso.dia_vencimento - hoje) >= 0 && status === 'pendente'
 
-  const novoStatus: StatusPagamento = status === 'pago' ? 'pendente' : 'pago'
-
   return (
     <div className={cn(
-      'flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all group cursor-pointer',
+      'rounded-xl border transition-all',
       status === 'pago'
-        ? 'bg-emerald-500/5 border-emerald-500/15 opacity-60'
+        ? 'bg-emerald-500/5 border-emerald-500/15 opacity-70'
         : isVencido
         ? 'bg-red-500/8 border-red-500/25'
         : isUrgente
         ? 'bg-amber-500/8 border-amber-500/25'
         : 'bg-white/3 border-white/5 hover:border-white/10'
-    )} onClick={() => onToggleStatus(compromisso.id, novoStatus)}>
-      {/* Status icon */}
-      <span className="shrink-0 text-sm" title={statusCfg.label}>
-        {status === 'pago' ? '✅' : isVencido ? '🚨' : isUrgente ? '⚠️' : '⏳'}
-      </span>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className={cn('text-xs font-semibold truncate',
-          status === 'pago' ? 'line-through text-fg-tertiary' : 'text-fg'
-        )}>
-          {compromisso.descricao}
-        </p>
-        <p className="text-[10px] text-fg-disabled">
-          {compromisso.dia_vencimento ? `Vence dia ${compromisso.dia_vencimento}` : 'Sem dia fixo'}
-          {isVencido && <span className="text-red-400 ml-1">· Vencida!</span>}
-          {isUrgente && !isVencido && (
-            <span className="text-amber-400 ml-1">· Vence em {compromisso.dia_vencimento! - hoje} dia(s)</span>
-          )}
-          {compromisso.recorrente && <span className="text-violet-400 ml-1">· 🔄 Recorrente</span>}
-        </p>
-      </div>
-
-      {/* Valor */}
-      <div className="text-right shrink-0">
-        <p className={cn('text-xs font-bold tabular-nums',
-          status === 'pago' ? 'text-emerald-400 line-through' : 'text-fg'
-        )}>
-          {formatCurrency(compromisso.valor)}
-        </p>
-        <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border inline-block mt-0.5', statusCfg.bg)}>
-          {statusCfg.label}
+    )}>
+      <div className="flex items-center gap-3 px-3 py-2.5 group">
+        {/* Status icon */}
+        <span className="shrink-0 text-sm" title={statusCfg.label}>
+          {status === 'pago' ? '✅' : isVencido ? '🚨' : isUrgente ? '⚠️' : '⏳'}
         </span>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <p className={cn('text-xs font-semibold truncate',
+            status === 'pago' ? 'line-through text-fg-tertiary' : 'text-fg'
+          )}>
+            {compromisso.descricao}
+          </p>
+          <p className="text-[10px] text-fg-disabled">
+            {compromisso.dia_vencimento ? `Vence dia ${compromisso.dia_vencimento}` : 'Sem dia fixo'}
+            {isVencido && <span className="text-red-400 ml-1">· Vencida!</span>}
+            {isUrgente && !isVencido && (
+              <span className="text-amber-400 ml-1">· Vence em {compromisso.dia_vencimento! - hoje} dia(s)</span>
+            )}
+            {compromisso.recorrente && <span className="text-violet-400 ml-1">· 🔄 Recorrente</span>}
+            {status === 'pago' && pagamento?.data_pagamento && (
+              <span className="text-emerald-400/70 ml-1">· Pago {new Date(pagamento.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+            )}
+          </p>
+        </div>
+
+        {/* Valor */}
+        <div className="text-right shrink-0">
+          <p className={cn('text-xs font-bold tabular-nums',
+            status === 'pago' ? 'text-emerald-400 line-through' : 'text-fg'
+          )}>
+            {formatCurrency(compromisso.valor)}
+          </p>
+          <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border inline-block mt-0.5', statusCfg.bg)}>
+            {statusCfg.label}
+          </span>
+        </div>
+
+        {/* Ações */}
+        <div className="flex items-center gap-1 shrink-0">
+          {status === 'pago' ? (
+            <button
+              onClick={() => onDesfazer(compromisso.id)}
+              className="text-[10px] text-red-400 hover:text-red-300 border border-red-500/20 rounded px-2 py-1 transition-colors"
+              title="Desfazer pagamento">
+              ↩
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="text-[10px] text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 rounded px-2 py-1 transition-colors"
+              title="Pagar">
+              💳 Pagar
+            </button>
+          )}
+          <button
+            onClick={e => { e.stopPropagation(); onEdit(compromisso) }}
+            className="shrink-0 w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-fg-tertiary flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Editar">
+            ✏️
+          </button>
+        </div>
       </div>
 
-      {/* Botão editar */}
-      <button
-        onClick={e => { e.stopPropagation(); onEdit(compromisso) }}
-        className="shrink-0 w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-fg-tertiary flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-        title="Editar">
-        ✏️
-      </button>
+      {/* Form de pagamento inline */}
+      {showForm && status !== 'pago' && (
+        <div className="px-3 pb-3 pt-1 border-t border-white/5 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-fg-tertiary uppercase">Data Pagamento</label>
+              <input type="date" className="input text-xs w-full py-0.5 h-7 mt-0.5"
+                value={dataPag} onChange={e => setDataPag(e.target.value)} />
+            </div>
+            {contasBancarias.length > 0 && (
+              <div>
+                <label className="text-[9px] text-fg-tertiary uppercase">Debitar da Conta</label>
+                <select className="input text-xs w-full py-0.5 h-7 mt-0.5"
+                  value={contaPagId} onChange={e => setContaPagId(e.target.value)}>
+                  <option value="">— selecione —</option>
+                  {contasBancarias.map(c => (
+                    <option key={c.id} value={c.id}>{c.nome} ({formatCurrency(c.saldo_atual ?? 0)})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="text-[9px] text-fg-tertiary uppercase">Observações</label>
+            <input className="input text-xs w-full py-0.5 h-7 mt-0.5" placeholder="Ex: débito automático"
+              value={notasPag} onChange={e => setNotasPag(e.target.value)} />
+          </div>
+          <div className="flex gap-1.5 justify-end">
+            <button onClick={() => setShowForm(false)}
+              className="px-2 h-6 rounded bg-white/5 text-fg-disabled text-[10px]">✕ Cancelar</button>
+            <button onClick={() => { onPagar(compromisso.id, dataPag, contaPagId, notasPag); setShowForm(false) }}
+              className="px-3 h-6 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/30 transition-colors">
+              ✅ Confirmar Pagamento
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -323,6 +390,7 @@ export function TabControleUnificado({ userId }: { userId: string }) {
   const supabase = createClient()
   const [compromissos, setCompromissos] = useState<CompromissoFixo[]>([])
   const [pagamentos, setPagamentos] = useState<HistoricoPagamentoMensal[]>([])
+  const [contasBancarias, setContasBancarias] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [mesSel, setMesSel] = useState(mesAtualStr())
   const [modalNovo, setModalNovo] = useState(false)
@@ -330,11 +398,11 @@ export function TabControleUnificado({ userId }: { userId: string }) {
   const [modalEditar, setModalEditar] = useState<CompromissoFixo | null>(null)
   const [filtroCategoria, setFiltroCategoria] = useState<CategoriaCompromisso | 'todos'>('todos')
 
-  // ── Carregar dados ────────────────────────────────────────────
+  // ── Carregar dados ────────────────────────────────────────────────────
   const carregar = useCallback(async () => {
     if (!userId) return
     setLoading(true)
-    const [{ data: comp }, { data: pag }] = await Promise.all([
+    const [{ data: comp }, { data: pag }, { data: contas }] = await Promise.all([
       (supabase.from('compromissos_fixos') as any)
         .select('*')
         .eq('user_id', userId)
@@ -344,33 +412,98 @@ export function TabControleUnificado({ userId }: { userId: string }) {
         .select('*')
         .eq('user_id', userId)
         .eq('mes_referencia', mesSel),
+      (supabase.from('contas') as any)
+        .select('id, nome, tipo, saldo_atual, ativo')
+        .eq('user_id', userId)
+        .eq('ativo', true)
+        .in('tipo', ['corrente', 'poupanca', 'digital', 'investimento']),
     ])
     setCompromissos(comp || [])
     setPagamentos(pag || [])
+    setContasBancarias(contas || [])
     setLoading(false)
   }, [userId, mesSel, supabase])
 
   useEffect(() => { carregar() }, [carregar])
 
-  // ── Toggle status pagamento ───────────────────────────────────
-  const toggleStatus = async (compromissoId: string, novoStatus: StatusPagamento) => {
+  // ── Pagar compromisso (com débito na conta) ─────────────────────
+  const pagarCompromisso = async (compromissoId: string, dataPag: string, contaPagId: string, notas: string) => {
+    const comp = compromissos.find(c => c.id === compromissoId)
+    if (!comp) return
     const existing = pagamentos.find(p => p.compromisso_id === compromissoId)
+
+    const payload: any = {
+      status: 'pago',
+      data_pagamento: dataPag || new Date().toISOString().split('T')[0],
+      valor_pago: comp.valor,
+      notas: notas || null,
+    }
+
     if (existing) {
-      await (supabase.from('historico_pagamentos_mensal') as any).update({
-        status: novoStatus,
-        data_pagamento: novoStatus === 'pago' ? new Date().toISOString().split('T')[0] : null,
-        valor_pago: novoStatus === 'pago' ? compromissos.find(c => c.id === compromissoId)?.valor ?? 0 : null,
-      }).eq('id', existing.id)
+      await (supabase.from('historico_pagamentos_mensal') as any).update(payload).eq('id', existing.id)
     } else {
       await (supabase.from('historico_pagamentos_mensal') as any).insert({
         user_id: userId,
         compromisso_id: compromissoId,
         mes_referencia: mesSel,
-        status: novoStatus,
-        data_pagamento: novoStatus === 'pago' ? new Date().toISOString().split('T')[0] : null,
-        valor_pago: novoStatus === 'pago' ? compromissos.find(c => c.id === compromissoId)?.valor ?? 0 : null,
+        ...payload,
       })
     }
+
+    // Tenta salvar conta_pagamento_id separadamente (migration 070 pode não existir)
+    if (contaPagId) {
+      const pagId = existing?.id || (await (supabase.from('historico_pagamentos_mensal') as any)
+        .select('id').eq('compromisso_id', compromissoId).eq('mes_referencia', mesSel).single())?.data?.id
+      if (pagId) {
+        await (supabase.from('historico_pagamentos_mensal') as any)
+          .update({ conta_pagamento_id: contaPagId })
+          .eq('id', pagId)
+          .then(({ error: e }: any) => { if (e) console.warn('conta_pagamento_id não salva:', e.message) })
+      }
+
+      // Debitar saldo da conta
+      const conta = contasBancarias.find(c => c.id === contaPagId)
+      if (conta) {
+        const novoSaldo = (conta.saldo_atual ?? 0) - comp.valor
+        await (supabase.from('contas') as any)
+          .update({ saldo_atual: novoSaldo })
+          .eq('id', contaPagId)
+      }
+    }
+
+    carregar()
+  }
+
+  // ── Desfazer pagamento (creditar de volta) ─────────────────────
+  const desfazerPagamento = async (compromissoId: string) => {
+    const existing = pagamentos.find(p => p.compromisso_id === compromissoId)
+    if (!existing) return
+    const comp = compromissos.find(c => c.id === compromissoId)
+
+    // Se tinha conta de pagamento, creditar de volta
+    if ((existing as any).conta_pagamento_id && comp) {
+      const conta = contasBancarias.find(c => c.id === (existing as any).conta_pagamento_id)
+      if (conta) {
+        const novoSaldo = (conta.saldo_atual ?? 0) + comp.valor
+        await (supabase.from('contas') as any)
+          .update({ saldo_atual: novoSaldo })
+          .eq('id', (existing as any).conta_pagamento_id)
+      }
+    }
+
+    await (supabase.from('historico_pagamentos_mensal') as any).update({
+      status: 'pendente',
+      data_pagamento: null,
+      valor_pago: null,
+      notas: null,
+    }).eq('id', existing.id)
+
+    // Limpar conta_pagamento_id
+    await (supabase.from('historico_pagamentos_mensal') as any)
+      .update({ conta_pagamento_id: null })
+      .eq('id', existing.id)
+      .then(() => {}) // ignora se coluna não existe
+
     carregar()
   }
 
@@ -576,8 +709,10 @@ export function TabControleUnificado({ userId }: { userId: string }) {
                         compromisso={c}
                         pagamento={pagamentos.find(p => p.compromisso_id === c.id) ?? null}
                         mesSel={mesSel}
-                        onToggleStatus={toggleStatus}
+                        onPagar={pagarCompromisso}
+                        onDesfazer={desfazerPagamento}
                         onEdit={setModalEditar}
+                        contasBancarias={contasBancarias}
                       />
                     ))}
                 </div>
