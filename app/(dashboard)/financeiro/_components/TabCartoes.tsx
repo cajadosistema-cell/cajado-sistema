@@ -256,14 +256,29 @@ function FaturaPainelPJ({ cartaoId, mesRef, gastoSistema, contasBancarias = [] }
 
         const salvarPagamento = async (novoStatus: 'pago' | 'pendente') => {
           setLoading(true)
-          await (supabase.from('faturas_cartoes') as any).upsert({
+          const { error } = await (supabase.from('faturas_cartoes') as any).upsert({
             conta_id: cartaoId,
             mes_referencia: mesRef,
             status: novoStatus,
             data_pagamento: novoStatus === 'pago' ? dataPag : null,
-            conta_pagamento_id: novoStatus === 'pago' && contaPagId ? contaPagId : null,
             notas: notasPag || null,
           }, { onConflict: 'conta_id,mes_referencia' })
+
+          if (error) {
+            console.error('Erro ao salvar pagamento:', error)
+            alert('Erro ao salvar pagamento: ' + error.message)
+            setLoading(false)
+            return
+          }
+
+          if (contaPagId && novoStatus === 'pago') {
+            await (supabase.from('faturas_cartoes') as any)
+              .update({ conta_pagamento_id: contaPagId })
+              .eq('conta_id', cartaoId)
+              .eq('mes_referencia', mesRef)
+              .then(({ error: e2 }: any) => { if (e2) console.warn('conta_pagamento_id não salva:', e2.message) })
+          }
+
           setLoading(false)
           setEditPag(false)
           carregar()

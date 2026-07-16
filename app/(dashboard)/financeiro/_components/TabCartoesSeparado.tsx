@@ -69,14 +69,31 @@ function FaturaDupla({
 
   const salvarPagamento = async (novoStatus: 'pago' | 'pendente') => {
     setLoading(true)
-    await (supabase.from('faturas_cartoes') as any).upsert({
+    // Upsert principal — apenas campos que existem desde migration 054
+    const { error } = await (supabase.from('faturas_cartoes') as any).upsert({
       conta_id: conta.id,
       mes_referencia: mesSel,
       status: novoStatus,
       data_pagamento: novoStatus === 'pago' ? dataPag : null,
-      conta_pagamento_id: novoStatus === 'pago' && contaPagId ? contaPagId : null,
       notas: notasPag || null,
     }, { onConflict: 'conta_id,mes_referencia' })
+
+    if (error) {
+      console.error('Erro ao salvar pagamento:', error)
+      alert('Erro ao salvar pagamento: ' + error.message)
+      setLoading(false)
+      return
+    }
+
+    // Tenta salvar conta_pagamento_id separadamente (migration 069 pode não existir ainda)
+    if (contaPagId && novoStatus === 'pago') {
+      await (supabase.from('faturas_cartoes') as any)
+        .update({ conta_pagamento_id: contaPagId })
+        .eq('conta_id', conta.id)
+        .eq('mes_referencia', mesSel)
+        .then(({ error: e2 }: any) => { if (e2) console.warn('conta_pagamento_id não salva (coluna pode não existir):', e2.message) })
+    }
+
     setLoading(false)
     setEditPag(false)
     onSaved()
