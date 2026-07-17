@@ -345,7 +345,9 @@ function SecretariaFlutuanteWidget() {
             session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))
             setLoading(false)
             try {
-              await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid)
+              // Usuário confirmou explicitamente ("sim", "pode" etc.) →
+              // aqui as ações destrutivas TÊM permissão para rodar.
+              await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid, { incluirDestrutivas: true })
             } finally {
               isSendingRef.current = false
             }

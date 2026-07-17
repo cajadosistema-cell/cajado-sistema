@@ -866,11 +866,22 @@ export function formatarTexto(texto: string): string {
 // ── renderMarkdownHtml ────────────────────────────────────────
 // Converte markdown simples para HTML seguro (bold, italic, listas, breaks).
 export function renderMarkdownHtml(texto: string): string {
-  return texto
+  // 🔒 FIX XSS: o texto vem da IA, de extratos importados e de descrições do
+  // banco — e era injetado CRU via dangerouslySetInnerHTML. Um `<img onerror=…>`
+  // em qualquer um desses caminhos executava script no navegador do Sr. Max.
+  // Agora TODO o HTML é escapado ANTES das substituições de markdown; só as
+  // tags que NÓS geramos abaixo chegam vivas ao DOM.
+  const seguro = texto
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+  return seguro
     // Remove blocos ```json ... ```
     .replace(/```json[\s\S]*?```/g, '')
-    // Remove JSON de ação cruo em linha
-    .replace(/^\s*\{[^\n]*"acao"[^\n]*\}\s*$/gm, '')
+    // Remove JSON de ação cru em linha (aspas já viraram &quot; após o escape)
+    .replace(/^\s*\{[^\n]*(?:"|&quot;)acao(?:"|&quot;)[^\n]*\}\s*$/gm, '')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/^#{1,3} (.+)$/gm, '<strong class="block text-amber-400">$1</strong>')

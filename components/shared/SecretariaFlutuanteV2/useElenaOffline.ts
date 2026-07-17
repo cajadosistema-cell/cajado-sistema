@@ -1,8 +1,8 @@
-﻿'use client'
-// ââ€â‚¬ââ€â‚¬ useElenaOffline.ts ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
-// ResponsÃƒÂ¡vel por: detecÃƒÂ§ÃƒÂ£o online/offline, fila IndexedDB, sync ao reconectar,
-// formulÃƒÂ¡rio de emergÃƒÂªncia offline.
-// Completamente isolado ââ‚¬â€ nÃƒÂ£o sabe nada de IA ou voz.
+'use client'
+// ── useElenaOffline.ts ────────────────────────────────────────
+// Responsável por: detecção online/offline, fila IndexedDB, sync ao reconectar,
+// formulário de emergência offline.
+// Completamente isolado — não sabe nada de IA ou voz.
 
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -24,8 +24,8 @@ interface OfflineFormState {
 
 interface UseElenaOfflineProps {
   userId: string
-  // Callback para executar aÃƒÂ§ÃƒÂµes (vem do useSalvar para aproveitar a mesma lÃƒÂ³gica)
-  executarAcoesAuto: (msgId: string, acoes: any[], uid: string) => Promise<void>
+  // Callback para executar ações (vem do useSalvar para aproveitar a mesma lógica)
+  executarAcoesAuto: (msgId: string, acoes: any[], uid: string, opts?: { incluirDestrutivas?: boolean }) => Promise<{ salvas: number; falhas: number; erros: string[] }>
   // Callback para adicionar mensagem no chat
   adicionarMensagem: (msg: any) => void
 }
@@ -57,7 +57,7 @@ export function useElenaOffline({
     hora: '12:00',
   })
 
-  // ââ€â‚¬ââ€â‚¬ DetecÃƒÂ§ÃƒÂ£o online/offline ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
+  // ── Detecção online/offline ───────────────────────────────────
   useEffect(() => {
     const goOnline  = () => setIsOnline(true)
     const goOffline = () => setIsOnline(false)
@@ -78,12 +78,12 @@ export function useElenaOffline({
     }
   }, [])
 
-  // ââ€â‚¬ââ€â‚¬ Carrega fila offline ao montar e ao reconectar ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
+  // ── Carrega fila offline ao montar e ao reconectar ────────────
   useEffect(() => {
     if (userId) getPendentes(userId).then(setOfflineQueue)
   }, [userId, isOnline])
 
-  // ââ€â‚¬ââ€â‚¬ Processa fila ao reconectar ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
+  // ── Processa fila ao reconectar ───────────────────────────────
   const processarFilaOffline = useCallback(async () => {
     if (!userId || !navigator.onLine) return
     const pendentes = await getPendentes(userId)
@@ -92,7 +92,7 @@ export function useElenaOffline({
     adicionarMensagem({
       id: 'sync-' + Date.now(),
       role: 'ai' as const,
-      texto: `Ã°Å¸â€œÂ¶ **ConexÃƒÂ£o restabelecida!** Encontrei ${pendentes.length} registro(s) salvo(s) offline. Sincronizando agora...`,
+      texto: `📶 **Conexão restabelecida!** Encontrei ${pendentes.length} registro(s) salvo(s) offline. Sincronizando agora...`,
     })
 
     // 🔴 FIX CRÍTICO — PERDA DE DADOS
@@ -153,7 +153,7 @@ export function useElenaOffline({
     }
   }, [isOnline, userId, processarFilaOffline])
 
-  // ââ€â‚¬ââ€â‚¬ Salvar registro no formulÃƒÂ¡rio offline ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬ââ€â‚¬
+  // ── Salvar registro no formulário offline ─────────────────────
   const salvarOffline = useCallback(async () => {
     if (!userId) return
     const { tipo, valor, descricao, categoria, data, hora } = offlineForm

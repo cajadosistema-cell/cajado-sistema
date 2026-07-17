@@ -260,12 +260,26 @@ interface UseElenaSalvarProps {
   setRelatorioData: (data: any) => void
 }
 
+// 🔒 Ações que apagam, editam ou movem dinheiro — nunca executam sem
+// confirmação explícita do usuário (ver gate em executarAcoesAuto).
+const ACOES_DESTRUTIVAS = [
+  'deletar_evento', 'deletar_lancamento', 'deletar_duplicados',
+  'editar_lancamento', 'transferencia',
+]
+const ROTULO_ACAO_DESTRUTIVA: Record<string, string> = {
+  deletar_evento:     '🗑️ deletar evento',
+  deletar_lancamento: '🗑️ deletar lançamento',
+  deletar_duplicados: '🧹 limpar duplicados',
+  editar_lancamento:  '✏️ editar lançamento',
+  transferencia:      '↔️ transferência entre contas',
+}
+
 interface UseElenaSalvarReturn {
   resolverContaPj: (contaNome?: string, autocriar?: boolean) => Promise<{ id: string; nome: string }>
   resolverContaPf: (contaNome?: string, autocriar?: boolean) => Promise<{ id: string; nome: string }>
   resolverContaQualquer: (contaNome: string) => Promise<{ id: string; nome: string; categoria: string }>
   salvarAcao: (msgId: string, acaoIdx: number, acao: AcaoIA) => Promise<void>
-  executarAcoesAuto: (msgId: string, acoes: AcaoIA[], uid: string) => Promise<void>
+  executarAcoesAuto: (msgId: string, acoes: AcaoIA[], uid: string, opts?: { incluirDestrutivas?: boolean }) => Promise<{ salvas: number; falhas: number; erros: string[] }>
   setAcaoStatus: (msgId: string, idx: number, status: AcaoIA['status'], errorMsg?: string) => void
 }
 
@@ -289,13 +303,22 @@ export function useElenaSalvar({
   const getEmpresaId = async (uid: string): Promise<string | null> => {
     if (empresaIdRef.current) return empresaIdRef.current
     try {
-      const { data } = await (supabase.from('perfis') as any)
+      const { data, error } = await (supabase.from('perfis') as any)
         .select('empresa_id').eq('id', uid).maybeSingle()
+      if (error) throw error
       if (data?.empresa_id) {
         empresaIdRef.current = data.empresa_id
         return data.empresa_id
       }
-    } catch { /* silencioso */ }
+      // 🔴 FIX: antes retornava null em silêncio e os inserts seguiam SEM
+      // empresa_id — o registro nascia "órfão de tenant" e sumia de todas as
+      // queries filtradas por empresa. Foi exatamente isso que deixou os
+      // imóveis do Sr. Max invisíveis. Agora o problema grita no console e
+      // vira diagnóstico para o programador.
+      console.warn(`[Elena] ⚠️ perfil ${uid} não tem empresa_id — registros criados agora podem ficar invisíveis nas telas filtradas por empresa!`)
+    } catch (e: any) {
+      console.warn('[Elena] ⚠️ getEmpresaId falhou:', e?.message || e)
+    }
     return null
   }
 
@@ -2585,7 +2608,13 @@ export function useElenaSalvar({
           updates.descricao = acao.dados.nova_descricao
         }
         if (Object.keys(updates).length === 0) throw new Error('Nenhuma alteração informada.')
-        const { error } = await (supabase.from(tabela) as any).update(updates).eq('id', id)
+        // 🔒 FIX: o update era só por `id` — a única barreira contra editar
+        // registro de outro usuário era o RLS. Cinto e suspensório: para as
+        // tabelas pessoais, exigimos também o dono na própria query.
+        const TABELAS_COM_USER_ID = ['gastos_pessoais', 'receitas_pessoais', 'diario_entradas']
+        let updQuery = (supabase.from(tabela) as any).update(updates).eq('id', id)
+        if (TABELAS_COM_USER_ID.includes(tabela)) updQuery = updQuery.eq('user_id', uid)
+        const { error } = await updQuery
         if (error) throw new Error(error.message)
         setAcaoStatus(msgId, acaoIdx, 'saved')
         setMensagens(prev => [...prev, {
@@ -3220,13 +3249,28 @@ export function useElenaSalvar({
   // Agora retorna { salvas, falhas } para o chamador decidir.
   const executarAcoesAuto = useCallback(async (
     msgId: string, acoes: AcaoIA[], uid: string,
+    opts?: { incluirDestrutivas?: boolean },
   ): Promise<{ salvas: number; falhas: number; erros: string[] }> => {
     let salvas = 0
     let falhas = 0
+    let aguardandoConfirmacao = 0
     const erros: string[] = []
+    const tiposAguardando: string[] = []
 
     for (let i = 0; i < acoes.length; i++) {
       if (acoes[i].status === 'pending') {
+        // 🔒 GATE DE CONFIRMAÇÃO: ações que apagam, editam ou movem dinheiro
+        // NUNCA rodam automaticamente. Uma alucinação da IA emitindo
+        // `deletar_lancamento` apagava dados reais em silêncio. Agora essas
+        // ações ficam 'pending' até o Sr. Max confirmar ("sim", "pode" etc.) —
+        // o atalho de confirmação reexecuta com incluirDestrutivas: true.
+        // Criações (gasto, agenda, alerta) continuam automáticas por decisão
+        // de produto (fluxo sem fricção).
+        if (!opts?.incluirDestrutivas && ACOES_DESTRUTIVAS.includes(acoes[i].tipo)) {
+          aguardandoConfirmacao++
+          tiposAguardando.push(ROTULO_ACAO_DESTRUTIVA[acoes[i].tipo] || acoes[i].tipo)
+          continue
+        }
         try {
           await salvarAcao(msgId, i, acoes[i])
           salvas++
@@ -3237,6 +3281,13 @@ export function useElenaSalvar({
           console.error(`[Elena] Erro na ação ${i} (${acoes[i]?.tipo}):`, err?.message)
         }
       }
+    }
+
+    if (aguardandoConfirmacao > 0) {
+      setMensagens(prev => [...prev, {
+        id: `confirm-req-${Date.now()}`, role: 'ai' as const,
+        texto: `⚠️ **Confirmação necessária:** ${tiposAguardando.join(', ')}. Essa ação altera ou remove dados — responda **"sim"** para eu executar, ou ignore para cancelar.`,
+      }])
     }
     return { salvas, falhas, erros }
   }, [salvarAcao])

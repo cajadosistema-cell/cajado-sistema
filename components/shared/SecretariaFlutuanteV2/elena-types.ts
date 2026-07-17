@@ -76,6 +76,8 @@ export type AcaoTipo =
   | 'concluir_evento'
   | 'reagendar_evento'
   | 'resumo_mensal'
+  | 'registrar_pedido_feature'
+  | 'relatorio_diagnostico'
 
 export interface AcaoIA {
   tipo: AcaoTipo
