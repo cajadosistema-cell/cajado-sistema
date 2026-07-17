@@ -92,6 +92,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Erro ao salvar perfil: ${dbError.message}` }, { status: 500 })
     }
 
+    // 3. Criar/atualizar registro em 'perfis' vinculando à mesma empresa do admin
+    //    Sem isso, funcionalidades como inbox, backup, financeiro não funcionam para o funcionário
+    const { error: errPerfil } = await getAdmin()
+      .from('perfis')
+      .upsert({
+        id: userId,
+        nome,
+        email,
+        cargo: cargo || '',
+        empresa_id: sessao.empresa_id,
+        role: 'funcionario',
+        ativo: true,
+      }, { onConflict: 'id' })
+
+    if (errPerfil) {
+      console.warn('[criar-funcionario] Erro ao criar perfil (não crítico):', errPerfil.message)
+    }
+
     return NextResponse.json({ success: true, userId }, { status: 201 })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Erro interno' }, { status: 500 })
