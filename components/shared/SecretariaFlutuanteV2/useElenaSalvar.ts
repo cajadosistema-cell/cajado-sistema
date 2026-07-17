@@ -2835,7 +2835,7 @@ export function useElenaSalvar({
             .select('id, nome, bandeira, dia_vencimento, dia_fechamento, limite')
             .eq('user_id', uid).eq('ativo', true)
             .in('tipo', ['cartao_credito', 'cartao_debito'])
-            .order('nome'),
+            .order('dia_vencimento', { ascending: true, nullsFirst: false }),
           // Faturas do mês
           (supabase.from('faturas_cartoes') as any)
             .select('conta_id, valor_fechado, status, data_pagamento')
@@ -2877,11 +2877,12 @@ export function useElenaSalvar({
         // Mapa de pagamentos para cruzar com compromissos
         const pagosMapResumo = new Map<string, any>((pagamentosResumo || []).map((p: any) => [p.compromisso_id, p]))
 
-        // ── CABEÇALHO ──────────────────────────────────────────────
-        let texto = `📊 **RESUMO ${nomeMes.toUpperCase()}** — Cartões, Boletos & Investimentos\n`
-        texto += `_Gerado em ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}_\n\n`
+        // ── CABEÇALHO (formato Sr. Max) ────────────────────────────
+        const mesAnoMax = `${new Date(anoRef, mesNumRef - 1).toLocaleDateString('pt-BR', { month: 'long' }).toUpperCase()}/${anoRef}`
+        let texto = `📊 **RESUMO ${mesAnoMax} — CARTÕES, BOLETOS & INVESTIMENTOS**\n`
+        texto += `---\n`
 
-        // ── SEÇÃO 1: CARTÕES ──────────────────────────────────────
+        // ── SEÇÃO 1: CARTÕES DE CRÉDITO ────────────────────────────
         texto += `💳 **CARTÕES DE CRÉDITO**\n`
         const cartoesLista = cartoes || []
         let totalCartoes = 0, totalPagoCartoes = 0, qtdPagosCartoes = 0
@@ -2890,7 +2891,7 @@ export function useElenaSalvar({
           texto += `_Nenhum cartão cadastrado._\n\n`
         } else {
           texto += `| Cartão | Venc. | Valor | Status |\n`
-          texto += `|---|---|---|---|\n`
+          texto += `|--------|-------|------:|--------|\n`
           for (const cartao of cartoesLista) {
             const fatura = (faturas || []).find((f: any) => f.conta_id === cartao.id)
             const valor = fatura ? Number(fatura.valor_fechado) : 0
@@ -2899,20 +2900,19 @@ export function useElenaSalvar({
               : statusRaw === 'parcial' ? '🟡 Parcial'
               : statusRaw === 'pendente' ? '🔴 Pendente'
               : '⚪ Sem fatura'
-            const bandeira = cartao.bandeira ? ` (${cartao.bandeira})` : ''
             const venc = cartao.dia_vencimento ? `${String(cartao.dia_vencimento).padStart(2, '0')}/${String(mesNumRef).padStart(2, '0')}` : '—'
-            texto += `| ${cartao.nome}${bandeira} | ${venc} | ${valor > 0 ? fmt(valor) : '—'} | ${statusLabel} |\n`
+            texto += `| ${cartao.nome} | ${venc} | ${valor > 0 ? fmt(valor) : '—'} | ${statusLabel} |\n`
             totalCartoes += valor
             if (statusRaw === 'pago') { totalPagoCartoes += valor; qtdPagosCartoes++ }
           }
-          texto += `\n💳 **TOTAL CARTÕES: ${fmt(totalCartoes)}**\n`
-          texto += `💰 PAGO: ${fmt(totalPagoCartoes)} | RESTA: ${fmt(totalCartoes - totalPagoCartoes)}\n`
-          texto += `📊 STATUS: ${qtdPagosCartoes}/${cartoesLista.length} pagos\n\n`
+          texto += `💳 **TOTAL CARTÕES: ${fmt(totalCartoes)}**\n`
+          texto += `💰 VALOR PAGO: ${fmt(totalPagoCartoes)} | RESTA: ${fmt(totalCartoes - totalPagoCartoes)}\n`
+          texto += `📊 STATUS: ${qtdPagosCartoes}/${cartoesLista.length} pagos ✅\n`
         }
+        texto += `---\n`
 
-        // ── SEÇÃO 2: BOLETOS / COMPROMISSOS (imóveis + veículos + recorrentes) ──
-        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-        texto += `🏠 **BOLETOS / COMPROMISSOS**\n`
+        // ── SEÇÃO 2: BOLETOS IMÓVEIS ───────────────────────────────
+        texto += `🏠 **BOLETOS IMÓVEIS**\n`
 
         type LinhaBoleto = { desc: string; dia: string | number; valor: number; parcela: string; status: string; pago: boolean }
         const linhasBoletos: LinhaBoleto[] = []
@@ -2922,11 +2922,11 @@ export function useElenaSalvar({
           if (restantes <= 0) return
           linhasBoletos.push({
             desc: im.construtora ? `${im.titulo} (${im.construtora})` : im.titulo,
-            dia: '—',
+            dia: im.dia_vencimento || '—',
             valor: Number(im.valor_parcela) || 0,
-            parcela: `${im.parcelas_pagas}/${im.parcelas_total}`,
-            status: '⚪ Sem controle',
-            pago: false,
+            parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
+            status: im.status === 'pago' ? '✅ Pago' : '🔴 Pendente',
+            pago: im.status === 'pago',
           })
         })
         ;(veiculosData || []).forEach((ve: any) => {
@@ -2937,7 +2937,7 @@ export function useElenaSalvar({
             dia: ve.vencimento_dia || '—',
             valor: Number(ve.valor_parcela) || 0,
             parcela: `${ve.parcelas_pagas}/${ve.parcelas_total}`,
-            status: '⚪ Sem controle',
+            status: '🔴 Pendente',
             pago: false,
           })
         })
@@ -2957,31 +2957,54 @@ export function useElenaSalvar({
         let totalBoletos = 0, totalPagoBoletos = 0, qtdPagosBoletos = 0
 
         if (linhasBoletos.length === 0) {
-          texto += `_Nenhum boleto/compromisso cadastrado._\n\n`
+          texto += `_Nenhum boleto/compromisso cadastrado._\n`
         } else {
           texto += `| Dia | Compromisso | Valor | Parcela | Status |\n`
-          texto += `|---|---|---|---|---|\n`
+          texto += `|-----|-------------|------:|---------|--------|\n`
           linhasBoletos.forEach(l => {
             texto += `| ${l.dia} | ${l.desc} | ${l.valor > 0 ? fmt(l.valor) : '—'} | ${l.parcela} | ${l.status} |\n`
             totalBoletos += l.valor
             if (l.pago) { totalPagoBoletos += l.valor; qtdPagosBoletos++ }
           })
-          texto += `\n🏠 **TOTAL BOLETOS: ${fmt(totalBoletos)}**\n`
-          texto += `💰 PAGO: ${fmt(totalPagoBoletos)} | RESTA: ${fmt(totalBoletos - totalPagoBoletos)}\n`
-          texto += `📊 STATUS: ${qtdPagosBoletos}/${linhasBoletos.length} pagos\n\n`
+          texto += `🏠 **TOTAL BOLETOS: ${fmt(totalBoletos)}**\n`
+          texto += `💰 VALOR PAGO: ${fmt(totalPagoBoletos)} | RESTA: ${fmt(totalBoletos - totalPagoBoletos)}\n`
+          texto += `📊 STATUS: ${qtdPagosBoletos}/${linhasBoletos.length} pagos ✅\n`
         }
+        texto += `---\n`
 
-        // ── SEÇÃO 2.5: INVESTIMENTOS / CARTEIRA (ativos de mercado) ──
-        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-        texto += `📈 **INVESTIMENTOS / CARTEIRA**\n`
+        // ── SEÇÃO 3: INVESTIMENTOS (contratos parcelados) ──────────
+        const contratosInv = contratosInvData || []
+        let totalContratos = 0, totalPagoContratos = 0, qtdPagosContratos = 0
         const ativosLista = ativosData || []
         let totalInvestido = 0, totalMercadoInv = 0
 
-        if (ativosLista.length === 0) {
-          texto += `_Nenhum investimento de carteira cadastrado._\n\n`
-        } else {
+        if (contratosInv.length > 0) {
+          const instituicaoTitulo = contratosInv[0]?.instituicao ? contratosInv[0].instituicao.toUpperCase() : ''
+          texto += `📈 **INVESTIMENTOS${instituicaoTitulo ? ' ' + instituicaoTitulo : ''}**\n`
+          texto += `| Contrato | Parcelas | Valor Mensal | Próximo Venc. | Status |\n`
+          texto += `|----------|----------|-------------:|---------------|--------|\n`
+          contratosInv.forEach((c: any) => {
+            const valor = Number(c.valor_mensal) || 0
+            const parcelaStr = `${c.parcela_atual}/${c.parcela_total}`
+            const venc = new Date(c.proximo_vencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            const statusLabel = c.status === 'pago' ? '✅ Pago'
+              : (c.parcela_atual === 0 && new Date(c.proximo_vencimento) > agora) ? '🟢 Futuro'
+              : '🔴 Pendente'
+            const variavel = c.valor_variavel ? '*' : ''
+            texto += `| ${c.nome_contrato} | ${parcelaStr} | ${fmt(valor)}${variavel} | ${venc} | ${statusLabel} |\n`
+            totalContratos += valor
+            if (c.status === 'pago') { totalPagoContratos += valor; qtdPagosContratos++ }
+          })
+          texto += `📈 **TOTAL INVESTIMENTOS ${mesAnoMax.split('/')[0]}: ${fmt(totalContratos)}**\n`
+          texto += `💰 VALOR PAGO: ${fmt(totalPagoContratos)} | RESTA: ${fmt(totalContratos - totalPagoContratos)}\n`
+          texto += `📊 STATUS: ${qtdPagosContratos}/${contratosInv.length} pagos ✅\n`
+          texto += `_*Parcela variável_\n`
+          texto += `---\n`
+        } else if (ativosLista.length > 0) {
+          // Sem contratos, mas há carteira de mercado — mostra ela
+          texto += `📈 **INVESTIMENTOS / CARTEIRA**\n`
           texto += `| Ativo | Investido | Atual | Resultado |\n`
-          texto += `|---|---|---|---|\n`
+          texto += `|-------|----------:|------:|-----------|\n`
           ativosLista.forEach((a: any) => {
             const vi = Number(a.valor_investido) || 0
             const va = Number(a.valor_atual) || vi
@@ -2991,50 +3014,26 @@ export function useElenaSalvar({
             totalMercadoInv += va
             texto += `| ${a.ticker || a.nome} | ${fmt(vi)} | ${fmt(va)} | ${res >= 0 ? '🟢 +' : '🔴 '}${pct.toFixed(1)}% |\n`
           })
-          texto += `\n📈 **TOTAL INVESTIDO: ${fmt(totalInvestido)}** | ATUAL: **${fmt(totalMercadoInv)}**\n\n`
+          texto += `📈 **TOTAL INVESTIDO: ${fmt(totalInvestido)}** | ATUAL: **${fmt(totalMercadoInv)}**\n`
+          texto += `---\n`
         }
 
-        // ── Contratos de investimento parcelados (ex: Bradesco) ──
-        const contratosInv = contratosInvData || []
-        let totalContratos = 0, totalPagoContratos = 0, qtdPagosContratos = 0
-
-        if (contratosInv.length > 0) {
-          texto += `📑 **CONTRATOS DE INVESTIMENTO**\n`
-          texto += `| Contrato | Parcela | Valor Mensal | Próx. Venc. | Status |\n`
-          texto += `|---|---|---|---|---|\n`
-          contratosInv.forEach((c: any) => {
-            const valor = Number(c.valor_mensal) || 0
-            const parcelaStr = `${c.parcela_atual}/${c.parcela_total}`
-            const venc = new Date(c.proximo_vencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-            const statusLabel = c.status === 'pago' ? '✅ Pago'
-              : (c.parcela_atual === 0 && new Date(c.proximo_vencimento) > agora) ? '🟢 Futuro'
-              : '🔴 Pendente'
-            const variavel = c.valor_variavel ? '*' : ''
-            texto += `| ${c.nome_contrato} (${c.instituicao}) | ${parcelaStr} | ${fmt(valor)}${variavel} | ${venc} | ${statusLabel} |\n`
-            totalContratos += valor
-            if (c.status === 'pago') { totalPagoContratos += valor; qtdPagosContratos++ }
-          })
-          texto += `\n📑 **TOTAL CONTRATOS: ${fmt(totalContratos)}**\n`
-          texto += `💰 PAGO: ${fmt(totalPagoContratos)} | RESTA: ${fmt(totalContratos - totalPagoContratos)}\n`
-          texto += `📊 STATUS: ${qtdPagosContratos}/${contratosInv.length} pagos\n`
-          texto += `_* parcela variável_\n\n`
-        }
-
-        // ── CONSOLIDADO GERAL ──────────────────────────────────────
-        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        // ── CONSOLIDADO GERAL (formato Sr. Max) ────────────────────
         texto += `💰 **CONSOLIDADO GERAL**\n`
         const totalGeral = totalCartoes + totalBoletos + totalContratos
         const totalPagoGeral = totalPagoCartoes + totalPagoBoletos + totalPagoContratos
         const qtdItensGeral = cartoesLista.length + linhasBoletos.length + contratosInv.length
         const qtdPagosGeral = qtdPagosCartoes + qtdPagosBoletos + qtdPagosContratos
-        texto += `• CARTÕES + BOLETOS + CONTRATOS: **${fmt(totalGeral)}**\n`
-        texto += `• PAGO: ${fmt(totalPagoGeral)} | PENDENTE: ${fmt(totalGeral - totalPagoGeral)}\n`
-        texto += `• STATUS GERAL: ${qtdPagosGeral}/${qtdItensGeral} pagos\n\n`
+        const qtdPendencias = qtdItensGeral - qtdPagosGeral
+        texto += `• CARTÕES + BOLETOS + INVESTIMENTOS: **${fmt(totalGeral)}**\n`
+        texto += `• TOTAL PAGO: ${fmt(totalPagoGeral)} | TOTAL PENDENTE: ${fmt(totalGeral - totalPagoGeral)}\n`
+        texto += `• STATUS GERAL: ${qtdPagosGeral}/${qtdItensGeral} pagos ✅\n`
+        texto += `• PENDÊNCIAS: ${qtdPendencias} ${qtdPendencias === 1 ? 'item' : 'itens'} 🔴\n`
+        texto += `\n🎯 Resumo gerado com dados reais do sistema.\n`
 
         // ── SEÇÃO 3: RESUMO FINANCEIRO (receitas/gastos do mês) ────
-        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-        texto += `💰 **RESUMO FINANCEIRO**\n`
-        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+        texto += `---\n`
+        texto += `💰 **MOVIMENTAÇÃO DO MÊS**\n`
 
         const totalGastos = (gastosMes || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
         const totalReceitas = (receitasMes || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
@@ -3065,7 +3064,7 @@ export function useElenaSalvar({
           texto += '\n'
         }
 
-        texto += `\n_Dados extraídos direto do sistema — cartões, boletos e investimentos reais, sem estimativas._ 🎯`
+        texto += `\n🎯 Atualizado! Dados reais do sistema — sem estimativas.`
 
         setMensagens(prev => [...prev, { id: `resumo-${Date.now()}`, role: 'ai' as const, texto }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
