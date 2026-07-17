@@ -488,7 +488,7 @@ function GastoProgressBar({ gasto, limite }: { gasto: number; limite: number | n
 
 // ── Modal Detalhe do Cartão ────────────────────────────────────────────────────────
 function ModalDetalheCartao({
-  conta, gastos, receitas, faturas, onClose, onLancar, onEditar, onExcluir, onFaturaUpdate
+  conta, gastos, receitas, faturas, onClose, onLancar, onEditar, onExcluir, onFaturaUpdate, onImportar, onExportar
 }: {
   conta: any
   gastos: any[]
@@ -499,6 +499,8 @@ function ModalDetalheCartao({
   onEditar: () => void
   onExcluir: () => void
   onFaturaUpdate: () => void
+  onImportar: () => void
+  onExportar: () => void
 }) {
   const supabase = createClient()
   const band = getBand(conta.bandeira)
@@ -688,16 +690,26 @@ function ModalDetalheCartao({
         </div>
 
         {/* Ações */}
-        <div className="flex gap-2 p-4 border-t border-white/8 shrink-0">
-          <button onClick={onLancar} className="flex-1 btn-primary text-sm py-2">
-            + Lançar
-          </button>
-          <button onClick={onEditar} className="px-4 py-2 rounded-xl text-sm font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors">
-            ✏️ Editar
-          </button>
-          <button onClick={onExcluir} className="px-4 py-2 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors">
-            🗑️
-          </button>
+        <div className="flex flex-col gap-2 p-4 border-t border-white/8 shrink-0">
+          <div className="flex gap-2">
+            <button onClick={onLancar} className="flex-1 btn-primary text-sm py-2">
+              + Lançar
+            </button>
+            <button onClick={onEditar} className="px-4 py-2 rounded-xl text-sm font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors">
+              ✏️ Editar
+            </button>
+            <button onClick={onExcluir} className="px-4 py-2 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors">
+              🗑️
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onImportar} className="flex-1 px-4 py-2 rounded-xl text-sm font-medium text-emerald-400 hover:bg-emerald-500/10 border border-emerald-500/20 transition-colors flex items-center justify-center gap-1.5">
+              📂 Importar Fatura
+            </button>
+            <button onClick={onExportar} className="flex-1 px-4 py-2 rounded-xl text-sm font-medium text-amber-400 hover:bg-amber-500/10 border border-amber-500/20 transition-colors flex items-center justify-center gap-1.5">
+              📥 Exportar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1577,6 +1589,17 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
             setModalDetalhe(null)
           }}
           onFaturaUpdate={carregarContas}
+          onImportar={() => {
+            setModalDetalhe(null)
+            setModalImport(true)
+          }}
+          onExportar={() => {
+            const lancCartao = [
+              ...gastos.filter(g => g.conta_id === modalDetalhe.id),
+              ...receitas.filter(r => r.conta_id === modalDetalhe.id),
+            ]
+            exportarLancamentos(lancCartao, `extrato_${modalDetalhe.nome_cartao || modalDetalhe.nome}`)
+          }}
         />
       )}
       {modalFatura && (
