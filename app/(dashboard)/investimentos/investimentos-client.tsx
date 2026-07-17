@@ -46,13 +46,13 @@ const TIPO_FISICO = new Set(['imovel','veiculo','terreno'])
 const RISCO_LABELS = ['', 'Muito Baixo', 'Baixo', 'Médio', 'Alto', 'Muito Alto']
 const RISCO_COLORS = ['', 'text-emerald-400', 'text-green-400', 'text-amber-400', 'text-orange-400', 'text-red-400']
 
-
 function ModalAtivo({
-  onClose, onSave, editando,
+  onClose, onSave, editando, userId
 }: {
   onClose: () => void
   onSave: () => void
   editando?: Ativo
+  userId: string
 }) {
   const { insert, update, loading } = useSupabaseMutation('ativos')
   const [form, setForm] = useState({
@@ -62,7 +62,6 @@ function ModalAtivo({
     quantidade:  editando?.quantidade  != null ? String(editando.quantidade) : '',
     preco_medio: editando?.preco_medio != null ? String(editando.preco_medio) : '',
     preco_atual: editando?.preco_atual != null ? String(editando.preco_atual) : '',
-    // Para ativos físicos, reutilizamos preco_medio como valor investido
     liquidez:        (editando?.liquidez        ?? 'diaria') as Ativo['liquidez'],
     data_vencimento:  editando?.data_vencimento  ?? '',
     risco_nivel:      editando?.risco_nivel      != null ? String(editando.risco_nivel) : '3',
@@ -80,11 +79,11 @@ function ModalAtivo({
       ticker: form.ticker || null, nome: form.nome, tipo: form.tipo,
       quantidade: qtd, preco_medio: pm, preco_atual: pa,
       valor_investido: isFisico ? pm : qtd * pm,
-      valor_atual: pa ? (isFisico ? pa : qtd * pa) : null,
-      liquidez: form.liquidez,
-      data_vencimento: form.data_vencimento || null,
+      valor_atual: isFisico ? pa : (pa ? qtd * pa : null),
+      liquidez: form.liquidez, data_vencimento: form.data_vencimento || null,
       risco_nivel: parseInt(form.risco_nivel),
       corretora: form.corretora || null,
+      user_id: userId,
     }
     if (editando) {
       await update(editando.id, payload)
@@ -586,6 +585,7 @@ export default function InvestimentosClient() {
           onClose={() => { setModal(false); setEditando(null) }}
           onSave={refetch}
           editando={editando ?? undefined}
+          userId={userId}
         />
       )}
       {modalImport && <ModalImportarAtivos onClose={() => setModalImport(false)} onImported={refetch} />}

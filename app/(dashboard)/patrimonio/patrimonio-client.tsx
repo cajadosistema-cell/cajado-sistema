@@ -232,11 +232,12 @@ function ModalImportarPatrimonio({
 }
 
 function ModalProjeto({
-  onClose, onSave, editando,
+  onClose, onSave, editando, userId
 }: {
   onClose: () => void
   onSave: () => void
   editando?: ProjetoPatrimonio
+  userId: string
 }) {
   const { insert: insertProj, update: updateProj, loading: loadingProj } = useSupabaseMutation('projetos_patrimonio')
   const { update: updateImovel, loading: loadingImovel } = useSupabaseMutation('imoveis')
@@ -284,6 +285,7 @@ function ModalProjeto({
           status: form.status,
           parcelas_total: pt,
           parcelas_pagas: pp,
+          user_id: userId,
         }
         await updateProj(editando.id, payload)
       }
@@ -298,6 +300,7 @@ function ModalProjeto({
         status: form.status,
         parcelas_total: pt,
         parcelas_pagas: pp,
+        user_id: userId,
       }
       await insertProj({ ...payload, status: 'ativo' })
     }
@@ -878,6 +881,7 @@ export default function PatrimonioClient() {
           onClose={() => { setModal(false); setEditandoProjeto(null) }}
           onSave={() => { refetch(); refetchImoveis() }}
           editando={editandoProjeto ?? undefined}
+          userId={userId}
         />
       )}
       {modalImport && (
