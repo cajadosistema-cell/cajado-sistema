@@ -2799,7 +2799,7 @@ export function useElenaSalvar({
 
         // Build queries with empresa_id fallback
         let qImoveisR = (supabase.from('imoveis') as any)
-          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
+          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora')
           .not('valor_parcela', 'is', null)
         if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
 
@@ -2872,10 +2872,21 @@ export function useElenaSalvar({
             .eq('mes_referencia', mesRef),
           // Contratos de investimento parcelados (ex: Bradesco)
           qContratosInvR,
+          // Pagamentos de imóveis do mês (status real por imóvel/mês)
+          (empresaId
+            ? (supabase.from('pagamentos_imoveis') as any)
+                .select('imovel_id, status, valor_pago, data_pagamento')
+                .eq('empresa_id', empresaId)
+                .eq('mes_referencia', mesRef)
+            : (supabase.from('pagamentos_imoveis') as any)
+                .select('imovel_id, status, valor_pago, data_pagamento')
+                .eq('mes_referencia', mesRef)),
         ])
 
         // Mapa de pagamentos para cruzar com compromissos
         const pagosMapResumo = new Map<string, any>((pagamentosResumo || []).map((p: any) => [p.compromisso_id, p]))
+        // Mapa de pagamentos de imóveis (imovel_id → status daquele mês)
+        const pagosImoveisMap = new Map<string, any>((pagamentosImoveisData || []).map((p: any) => [p.imovel_id, p]))
 
         // ── CABEÇALHO (formato Sr. Max) ────────────────────────────
         const mesAnoMax = `${new Date(anoRef, mesNumRef - 1).toLocaleDateString('pt-BR', { month: 'long' }).toUpperCase()}/${anoRef}`
@@ -2905,7 +2916,7 @@ export function useElenaSalvar({
             totalCartoes += valor
             if (statusRaw === 'pago') { totalPagoCartoes += valor; qtdPagosCartoes++ }
           }
-          texto += `💳 **TOTAL CARTÕES: ${fmt(totalCartoes)}**\n`
+          texto += `\n💳 **TOTAL CARTÕES: ${fmt(totalCartoes)}**\n`
           texto += `💰 VALOR PAGO: ${fmt(totalPagoCartoes)} | RESTA: ${fmt(totalCartoes - totalPagoCartoes)}\n`
           texto += `📊 STATUS: ${qtdPagosCartoes}/${cartoesLista.length} pagos ✅\n`
         }
@@ -2920,13 +2931,15 @@ export function useElenaSalvar({
         ;(imoveisData || []).forEach((im: any) => {
           const restantes = (im.parcelas_total || 0) - (im.parcelas_pagas || 0)
           if (restantes <= 0) return
+          const pag = pagosImoveisMap.get(im.id)
+          const statusPg = pag?.status || 'pendente'
           linhasBoletos.push({
             desc: im.construtora ? `${im.titulo} (${im.construtora})` : im.titulo,
             dia: im.dia_vencimento || '—',
             valor: Number(im.valor_parcela) || 0,
             parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
-            status: im.status === 'pago' ? '✅ Pago' : '🔴 Pendente',
-            pago: im.status === 'pago',
+            status: statusPg === 'pago' ? '✅ Pago' : statusPg === 'parcial' ? '🟡 Parcial' : '🔴 Pendente',
+            pago: statusPg === 'pago',
           })
         })
         ;(veiculosData || []).forEach((ve: any) => {
