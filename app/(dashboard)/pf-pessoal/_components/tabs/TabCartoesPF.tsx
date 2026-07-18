@@ -564,8 +564,8 @@ function ModalDetalheCartao({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 pb-24 sm:p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-[#0a0d16] border border-white/10 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[80dvh] sm:max-h-[92vh]">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-0 pt-12 pb-20 sm:p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-[#0a0d16] border border-white/10 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-full sm:max-h-[92vh]">
 
         {/* Cabeçalho visual do cartão */}
         <div className="h-32 flex flex-col justify-between p-5 relative overflow-hidden shrink-0"
