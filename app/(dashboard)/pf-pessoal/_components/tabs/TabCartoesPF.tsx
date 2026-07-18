@@ -564,8 +564,8 @@ function ModalDetalheCartao({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-[#0a0d16] border border-white/10 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh] sm:max-h-[92vh]">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 pb-24 sm:p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-[#0a0d16] border border-white/10 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[80dvh] sm:max-h-[92vh]">
 
         {/* Cabeçalho visual do cartão */}
         <div className="h-32 flex flex-col justify-between p-5 relative overflow-hidden shrink-0"
@@ -695,7 +695,7 @@ function ModalDetalheCartao({
         </div>{/* fim do scroll */}
 
         {/* Ações (fixo no fundo) */}
-        <div className="flex flex-col gap-2 p-4 pb-8 sm:pb-4 border-t border-white/8 shrink-0 bg-[#0a0d16]">
+        <div className="flex flex-col gap-2 p-4 pb-6 sm:pb-4 border-t border-white/8 shrink-0 bg-[#0a0d16]">
           <div className="flex gap-2">
             <button onClick={onLancar} className="flex-1 btn-primary text-sm py-2">
               + Lançar
