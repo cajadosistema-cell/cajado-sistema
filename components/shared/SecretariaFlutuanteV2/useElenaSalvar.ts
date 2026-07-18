@@ -2829,6 +2829,7 @@ export function useElenaSalvar({
           { data: ativosData },
           { data: pagamentosResumo },
           { data: contratosInvData },
+          { data: pagamentosImoveisData },
         ] = await Promise.all([
           // Cartões de crédito do usuário
           (supabase.from('contas') as any)
