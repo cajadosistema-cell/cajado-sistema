@@ -863,8 +863,75 @@ export function formatarTexto(texto: string): string {
     .trim()
 }
 
+// ── parseMarkdownTables ────────────────────────────────────────
+// Detecta blocos de tabela markdown (| cabeçalho |, |---|---|, | dados |)
+// e converte em <table> HTML de verdade — com espaçamento e sem quebra de
+// linha no meio da célula. Antes disso, cada linha com "|" virava texto cru
+// que quebrava feio no widget estreito da Elena (feedback do Sr. Max:
+// "os valores ficaram embolados... do cartão fica muito abaixo").
+function parseMarkdownTables(texto: string): string {
+  const linhas = texto.split('\n')
+  const saida: string[] = []
+  let i = 0
+
+  const isSeparatorRow = (linha: string) =>
+    /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(linha.trim())
+
+  const splitCells = (linha: string) =>
+    linha
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((c) => c.trim())
+
+  while (i < linhas.length) {
+    const atual = linhas[i]
+    const proxima = linhas[i + 1]
+    const pareceCabecalho = atual.includes('|') && proxima !== undefined && isSeparatorRow(proxima)
+
+    if (pareceCabecalho) {
+      const header = splitCells(atual)
+      let j = i + 2
+      const linhasDados: string[][] = []
+      while (j < linhas.length && linhas[j].includes('|') && linhas[j].trim() !== '') {
+        linhasDados.push(splitCells(linhas[j]))
+        j++
+      }
+
+      const th = header
+        .map(
+          (c) =>
+            `<th style="padding:6px 12px;text-align:left;border-bottom:1px solid rgba(245,166,35,0.4);color:#f5a623;white-space:nowrap">${c}</th>`
+        )
+        .join('')
+      const linhasHtml = linhasDados
+        .map(
+          (cols) =>
+            `<tr>${cols
+              .map(
+                (c, idx) =>
+                  `<td style="padding:5px 12px;${idx === 0 ? '' : 'border-left:1px solid rgba(255,255,255,0.08);'}white-space:nowrap">${c}</td>`
+              )
+              .join('')}</tr>`
+        )
+        .join('')
+
+      saida.push(
+        `<div style="overflow-x:auto;margin:6px 0"><table style="border-collapse:collapse;font-size:0.85em;width:100%"><thead><tr>${th}</tr></thead><tbody>${linhasHtml}</tbody></table></div>`
+      )
+      i = j
+    } else {
+      saida.push(atual)
+      i++
+    }
+  }
+
+  return saida.join('\n')
+}
+
 // ── renderMarkdownHtml ────────────────────────────────────────
-// Converte markdown simples para HTML seguro (bold, italic, listas, breaks).
+// Converte markdown simples para HTML seguro (bold, italic, tabelas, listas, breaks).
 export function renderMarkdownHtml(texto: string): string {
   // 🔒 FIX XSS: o texto vem da IA, de extratos importados e de descrições do
   // banco — e era injetado CRU via dangerouslySetInnerHTML. Um `<img onerror=…>`
@@ -877,13 +944,20 @@ export function renderMarkdownHtml(texto: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
-  return seguro
+
+  const comFormatacaoInline = seguro
     // Remove blocos ```json ... ```
     .replace(/```json[\s\S]*?```/g, '')
     // Remove JSON de ação cru em linha (aspas já viraram &quot; após o escape)
     .replace(/^\s*\{[^\n]*(?:"|&quot;)acao(?:"|&quot;)[^\n]*\}\s*$/gm, '')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
+
+  // Converte tabelas ANTES do \n->br final, senão cada linha de tabela vira
+  // texto cru com <br/> — o próprio bug que estamos corrigindo.
+  const comTabelas = parseMarkdownTables(comFormatacaoInline)
+
+  return comTabelas
     .replace(/^#{1,3} (.+)$/gm, '<strong class="block text-amber-400">$1</strong>')
     .replace(/^[-•] (.+)$/gm, '<span style="display:flex;gap:4px"><span style="color:#f5a623">•</span><span>$1</span></span>')
     .replace(/\n/g, '<br/>')
