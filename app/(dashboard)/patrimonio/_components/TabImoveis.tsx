@@ -30,6 +30,7 @@ type Imovel = {
   dia_vencimento: number | null
   categoria_financeira: string | null
   taxa_juros_anual: number | null
+  is_investimento?: boolean
 }
 
 const STATUS_CONFIG = {
@@ -46,7 +47,7 @@ const FORM_INICIAL = {
   valor_total_contrato: '', valor_parcela: '', parcelas_total: '',
   parcelas_pagas: '0', indexador: '', data_aquisicao: '',
   dia_vencimento: '', categoria_financeira: 'Financiamento Imobiliário',
-  taxa_juros_anual: '',
+  taxa_juros_anual: '', is_investimento: false,
 }
 
 // ── Modal Análise de Quitação ────────────────────────────────
@@ -690,6 +691,7 @@ export function TabImoveis() {
       dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
       categoria_financeira: form.categoria_financeira || null,
       taxa_juros_anual: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
+      is_investimento: form.is_investimento,
     }
     
     if (editId) {
@@ -889,6 +891,18 @@ export function TabImoveis() {
                 <option value="vendido">Vendido</option>
               </select>
             </div>
+          </div>
+          <div className="flex items-center gap-2 mt-4 p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+            <input 
+              type="checkbox" 
+              id="is_investimento"
+              checked={form.is_investimento} 
+              onChange={e => setForm(f => ({ ...f, is_investimento: e.target.checked }))} 
+              className="w-4 h-4 rounded bg-black/20 border-white/20 accent-blue-500" 
+            />
+            <label htmlFor="is_investimento" className="text-sm text-blue-100 cursor-pointer select-none">
+              Este imóvel também é um investimento (exibir na aba Investimentos)
+            </label>
           </div>
           <div className="flex justify-end pt-2">
             <button type="submit" className="btn-primary text-xs">

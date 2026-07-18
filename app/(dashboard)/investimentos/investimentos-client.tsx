@@ -24,6 +24,7 @@ type Ativo = {
   data_vencimento: string | null
   risco_nivel: number
   corretora: string | null
+  is_imovel_patrimonio?: boolean
 }
 
 const TIPO_COLORS: Record<string, string> = {
@@ -337,7 +338,34 @@ export default function InvestimentosClient() {
     enabled: !!empresaId,
   })
 
-  const ativos = ativosDB
+  const { data: imoveisDB, refetch: refetchImoveis } = useSupabaseQuery<any>('imoveis', {
+    filters: { empresa_id: empresaId || undefined, is_investimento: true },
+    enabled: !!empresaId,
+  } as any)
+
+  const handleRefetch = () => {
+    refetch()
+    refetchImoveis()
+  }
+
+  const imoveisComoAtivos: Ativo[] = imoveisDB.map((im: any) => ({
+    id: im.id,
+    ticker: null,
+    nome: im.titulo + (im.unidade ? ` (${im.unidade})` : ''),
+    tipo: 'imovel',
+    quantidade: 1,
+    preco_medio: im.valor_compra || im.valor_total_contrato || 0,
+    preco_atual: im.valor_mercado || null,
+    valor_investido: im.valor_compra || im.valor_total_contrato || 0,
+    valor_atual: im.valor_mercado || null,
+    liquidez: 'no_vencimento',
+    data_vencimento: im.data_aquisicao || null,
+    risco_nivel: 3,
+    corretora: im.construtora || 'Físico',
+    is_imovel_patrimonio: true
+  }))
+
+  const ativos = [...ativosDB, ...imoveisComoAtivos]
 
   // Métricas
   const totalInvestido = ativos.reduce((a, v) => a + v.valor_investido, 0)
@@ -552,25 +580,25 @@ export default function InvestimentosClient() {
                         {'▮'.repeat(a.risco_nivel)}{'▯'.repeat(5 - a.risco_nivel)}
                       </span>
                     </td>
-                    <td className="table-cell hidden lg:table-cell">
-                      <div>
-                        <span className="text-xs text-fg-tertiary capitalize">{a.liquidez.replace('_', ' ')}</span>
-                        {vencendo && a.data_vencimento && (
-                          <p className="text-[10px] text-amber-400">⚠ {formatDate(a.data_vencimento)}</p>
-                        )}
-                      </div>
-                    </td>
                     <td className="table-cell">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => { setEditando(a); setModal(true) }}
-                          className="p-1.5 rounded-lg hover:bg-blue-500/10 text-fg-disabled hover:text-blue-400 transition-colors">
-                          <Pencil size={13} />
-                        </button>
-                        <button onClick={() => handleDelete(a)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-fg-disabled hover:text-red-400 transition-colors">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                      {a.liquidez === 'diaria' ? 'Diária' : a.liquidez === 'semanal' ? 'Semanal' : a.liquidez === 'mensal' ? 'Mensal' : 'Venc.'}
+                      {a.data_vencimento && <div className="text-fg-disabled text-[10px] mt-0.5">{formatDate(a.data_vencimento)}</div>}
+                    </td>
+                    <td className="table-cell w-20">
+                      {!a.is_imovel_patrimonio ? (
+                        <div className="flex gap-2">
+                          <button onClick={() => { setEditando(a); setModal(true) }} className="btn-icon text-fg-tertiary hover:text-blue-400">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(a)} className="btn-icon text-fg-tertiary hover:text-red-400">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full whitespace-nowrap">
+                          Patrimônio
+                        </span>
+                      )}
                     </td>
                   </tr>
                 )
