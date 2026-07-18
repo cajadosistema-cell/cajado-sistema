@@ -50,6 +50,7 @@ interface TransacaoImportada {
   _id: string; descricao: string; valor: number
   tipo: 'despesa' | 'receita'; data: string
   categoria: string; selecionado: boolean; aiCategoria: string
+  duplicata?: boolean; matchDescricao?: string
 }
 
 interface Conta { id: string; nome: string; tipo: string }
@@ -62,17 +63,34 @@ const CAT_PJ_RECEITA  = ['servicos','produtos','recorrente','avulso','outros']
 
 function fmt(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
 
+// ── Similaridade de texto (Dice coefficient) ────────────────────
+function bigrams(s: string): Set<string> {
+  const n = new Set<string>()
+  const lower = s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  for (let i = 0; i < lower.length - 1; i++) n.add(lower.slice(i, i + 2))
+  return n
+}
+function similaridade(a: string, b: string): number {
+  const ba = bigrams(a), bb = bigrams(b)
+  if (ba.size === 0 || bb.size === 0) return 0
+  let inter = 0
+  ba.forEach(bg => { if (bb.has(bg)) inter++ })
+  return (2 * inter) / (ba.size + bb.size)
+}
+
 // ── Props ───────────────────────────────────────────────────────
 interface Props {
   userId: string
   modo: 'pf' | 'pj'          // PF → gastos_pessoais/receitas_pessoais | PJ → lancamentos
   contasPJ?: Conta[]          // lista de contas bancárias (apenas modo PJ)
+  cartaoId?: string           // ID do cartão PF (quando importação vinculada a um cartão)
+  cartaoNome?: string         // Nome do cartão (para exibir no header)
   onClose: () => void
   onSave: () => void
 }
 
 // ── Componente ──────────────────────────────────────────────────
-export function ModalImportarExtratoIA({ userId, modo, contasPJ = [], onClose, onSave }: Props) {
+export function ModalImportarExtratoIA({ userId, modo, contasPJ = [], cartaoId, cartaoNome, onClose, onSave }: Props) {
   const supabase = createClient()
   const [step, setStep] = useState<'upload' | 'review'>('upload')
   const [transacoes, setTransacoes] = useState<TransacaoImportada[]>([])
@@ -125,32 +143,49 @@ export function ModalImportarExtratoIA({ userId, modo, contasPJ = [], onClose, o
     await analisarComIA(parsed)
   }, [modo])
 
-  // ── Verifica Duplicatas ────────────────────────────────────────
+  // ── Verifica Duplicatas (valor + data + descrição similar) ─────
   const verificarDuplicatas = async (txs: TransacaoImportada[]) => {
     if (txs.length === 0) return txs
     const datas = txs.map(t => t.data).sort()
     const min = datas[0]
     const max = datas[datas.length - 1]
 
-    let dbTxs: any[] = []
+    let dbTxs: { v: number; d: string; desc: string }[] = []
     if (modo === 'pj') {
       if (!contaId) return txs
-      const { data } = await supabase.from('lancamentos').select('valor, data_competencia')
+      const { data } = await supabase.from('lancamentos').select('valor, data_competencia, descricao')
         .eq('conta_id', contaId).gte('data_competencia', min).lte('data_competencia', max)
-      if (data) dbTxs = data.map(d => ({ v: Number(d.valor), d: d.data_competencia }))
+      if (data) dbTxs = data.map(d => ({ v: Number(d.valor), d: d.data_competencia, desc: d.descricao || '' }))
     } else {
-      const [g, r] = await Promise.all([
-        supabase.from('gastos_pessoais').select('valor, data').eq('user_id', userId).gte('data', min).lte('data', max),
-        supabase.from('receitas_pessoais').select('valor, data').eq('user_id', userId).gte('data', min).lte('data', max)
-      ])
-      const gD = (g.data || []).map(d => ({ v: Number(d.valor), d: d.data }))
-      const rD = (r.data || []).map(d => ({ v: Number(d.valor), d: d.data }))
+      // Se veio de um cartão específico, filtra também pelo conta_id
+      const qGastos = (supabase.from('gastos_pessoais') as any)
+        .select('valor, data, descricao, conta_id')
+        .eq('user_id', userId).gte('data', min).lte('data', max)
+      const qReceitas = (supabase.from('receitas_pessoais') as any)
+        .select('valor, data, descricao, conta_id')
+        .eq('user_id', userId).gte('data', min).lte('data', max)
+
+      const [g, r] = await Promise.all([qGastos, qReceitas])
+      const gD = (g.data || []).map((d: any) => ({ v: Number(d.valor), d: d.data, desc: d.descricao || '' }))
+      const rD = (r.data || []).map((d: any) => ({ v: Number(d.valor), d: d.data, desc: d.descricao || '' }))
       dbTxs = [...gD, ...rD]
     }
 
     return txs.map(t => {
-      const isDup = dbTxs.some(db => Math.abs(db.v - t.valor) < 0.01 && db.d === t.data)
-      return { ...t, duplicata: isDup, selecionado: !isDup }
+      // Match: mesmo valor (±R$0,50) + mesma data + descrição similar (>60%)
+      const match = dbTxs.find(db => {
+        const valorProximo = Math.abs(db.v - t.valor) < 0.50
+        const mesmaData = db.d === t.data
+        const descSimilar = similaridade(db.desc, t.descricao) > 0.6
+        // Match exato por valor+data OU valor+data+descrição similar
+        return mesmaData && (Math.abs(db.v - t.valor) < 0.01 || (valorProximo && descSimilar))
+      })
+      return {
+        ...t,
+        duplicata: !!match,
+        matchDescricao: match?.desc || '',
+        selecionado: !match
+      }
     })
   }
 
@@ -298,12 +333,14 @@ REGRAS:
         })
       } else {
         // ── PF → tabelas gastos_pessoais / receitas_pessoais ──────
+        const formaPgto = cartaoId ? 'cartao_credito' : 'transferencia'
         if (tx.tipo === 'despesa') {
           const validos = CAT_PF_DESPESA
           await (supabase.from('gastos_pessoais') as any).insert({
             user_id: userId, descricao: tx.descricao, valor: tx.valor,
             categoria: validos.includes(tx.categoria) ? tx.categoria : 'outros',
-            data: tx.data, forma_pagamento: 'transferencia',
+            data: tx.data, forma_pagamento: formaPgto,
+            ...(cartaoId ? { conta_id: cartaoId } : {}),
           })
         } else {
           const validos = CAT_PF_RECEITA
@@ -311,6 +348,7 @@ REGRAS:
             user_id: userId, descricao: tx.descricao, valor: tx.valor,
             categoria: validos.includes(tx.categoria) ? tx.categoria : 'outros',
             data: tx.data,
+            ...(cartaoId ? { conta_id: cartaoId } : {}),
           })
         }
       }
@@ -337,11 +375,11 @@ REGRAS:
             <span className="text-xl">🤖</span>
             <div>
               <h2 className="text-sm font-bold text-white">
-                Importar Extrato com IA · {modo === 'pj' ? '🏢 PJ' : '👤 PF'}
+                {cartaoNome ? `📂 Importar Fatura — ${cartaoNome}` : `Importar Extrato com IA · ${modo === 'pj' ? '🏢 PJ' : '👤 PF'}`}
               </h2>
               <p className="text-[10px] text-fg-disabled">
                 {step === 'upload'
-                  ? 'Faça upload do extrato OFX, CSV ou PDF'
+                  ? cartaoNome ? 'Envie o PDF da fatura ou extrato OFX/CSV deste cartão' : 'Faça upload do extrato OFX, CSV ou PDF'
                   : analisando
                   ? 'Analisando com inteligência artificial...'
                   : `${transacoes.length} transações encontradas`}
@@ -462,7 +500,7 @@ REGRAS:
                   <span className="text-[10px] text-fg-disabled shrink-0 w-12">{tx.data.slice(5)}</span>
                   <div className="flex-1 flex flex-col min-w-0">
                     <span className="text-xs text-fg truncate">{tx.descricao}</span>
-                    {tx.duplicata && <span className="text-[9px] text-orange-400 font-bold uppercase tracking-wider">⚠️ Provável Duplicata</span>}
+                    {tx.duplicata && <span className="text-[9px] text-orange-400 font-bold uppercase tracking-wider">⚠️ Duplicata{tx.matchDescricao ? ` · "${tx.matchDescricao.slice(0, 30)}"` : ''}</span>}
                   </div>
 
                   {/* Tipo */}

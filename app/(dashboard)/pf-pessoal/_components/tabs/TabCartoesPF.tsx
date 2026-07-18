@@ -1076,6 +1076,7 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
   const [modalLanc, setModalLanc] = useState(false)
   const [modalCriar, setModalCriar] = useState(false)
   const [modalImport, setModalImport] = useState(false)
+  const [importCartao, setImportCartao] = useState<{ id: string; nome: string } | null>(null)
   const [modalLimite, setModalLimite] = useState<any>(null)
   const [modalEditar, setModalEditar] = useState<any>(null)
   const [modalDetalhe, setModalDetalhe] = useState<any>(null)
@@ -1550,8 +1551,10 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
         <ModalImportarExtratoIA
           userId={userId}
           modo="pf"
-          onClose={() => setModalImport(false)}
-          onSave={() => { setModalImport(false); onUpdate() }}
+          cartaoId={importCartao?.id}
+          cartaoNome={importCartao?.nome}
+          onClose={() => { setModalImport(false); setImportCartao(null) }}
+          onSave={() => { setModalImport(false); setImportCartao(null); onUpdate() }}
         />
       )}
       {modalEditar && (
@@ -1590,7 +1593,9 @@ export function TabCartoesPF({ userId, gastos, receitas, onUpdate }: {
           }}
           onFaturaUpdate={carregarContas}
           onImportar={() => {
+            const cartaoInfo = { id: modalDetalhe.id, nome: modalDetalhe.nome_cartao || modalDetalhe.nome }
             setModalDetalhe(null)
+            setImportCartao(cartaoInfo)
             setModalImport(true)
           }}
           onExportar={() => {
