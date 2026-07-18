@@ -593,8 +593,11 @@ function ModalDetalheCartao({
           )}
         </div>
 
+        {/* Conteúdo scrollável (mobile-friendly) */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+
         {/* KPIs rápidos */}
-        <div className="grid grid-cols-3 gap-0 border-b border-white/8 shrink-0">
+        <div className="grid grid-cols-3 gap-0 border-b border-white/8">
           {[
             { label: 'Fatura do Sistema', v: fmt(fatura), cor: fatura > 0 ? 'text-red-400' : 'text-fg' },
             { label: 'Estornos', v: fmt(totalEstornos), cor: 'text-emerald-400' },
@@ -608,7 +611,7 @@ function ModalDetalheCartao({
         </div>
 
         {/* Fatura Fechada (Manual) */}
-        <div className="px-4 py-3 border-b border-white/8 shrink-0 flex items-center justify-between bg-white/5">
+        <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between bg-white/5">
           <div>
             <p className="text-[10px] font-bold text-fg-tertiary uppercase tracking-widest">Fatura Real / Fechada</p>
             {editFaturaManual ? (
@@ -638,8 +641,8 @@ function ModalDetalheCartao({
         </div>
 
         {/* Info de vencimento e seletor de mês */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
-          <div className="flex items-center gap-3 text-[11px] text-fg-tertiary">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+          <div className="flex items-center gap-3 text-[11px] text-fg-tertiary flex-wrap">
             {conta.dia_fechamento && <span>🗕️ Fecha dia <strong className="text-fg">{conta.dia_fechamento}</strong></span>}
             {conta.dia_vencimento && <span>⏰ Vence dia <strong className="text-fg">{conta.dia_vencimento}</strong></span>}
             {limiteMensal && (
@@ -654,7 +657,7 @@ function ModalDetalheCartao({
         </div>
 
         {/* Lista de lançamentos */}
-        <div className="overflow-y-auto flex-1 p-4 space-y-1.5">
+        <div className="p-4 space-y-1.5">
           {lancMes.length === 0 ? (
             <div className="py-10 text-center">
               <p className="text-3xl mb-2">💳</p>
@@ -689,7 +692,9 @@ function ModalDetalheCartao({
           />
         </div>
 
-        {/* Ações */}
+        </div>{/* fim do scroll */}
+
+        {/* Ações (fixo no fundo) */}
         <div className="flex flex-col gap-2 p-4 border-t border-white/8 shrink-0">
           <div className="flex gap-2">
             <button onClick={onLancar} className="flex-1 btn-primary text-sm py-2">
