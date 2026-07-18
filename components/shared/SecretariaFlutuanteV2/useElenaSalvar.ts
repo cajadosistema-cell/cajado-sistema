@@ -2798,9 +2798,12 @@ export function useElenaSalvar({
         const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
         // Build queries with empresa_id fallback
+        // 🔧 FIX (18/07/2026): antes filtrava .not('valor_parcela','is',null), o que
+        // fazia qualquer imóvel sem valor cadastrado (ex: valor NULL) desaparecer
+        // do resumo por completo, sem aviso — mesma causa raiz do "Sítio São Roque"
+        // nunca aparecer pro Sr. Max. Agora o imóvel entra e mostra "valor a definir".
         let qImoveisR = (supabase.from('imoveis') as any)
           .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora')
-          .not('valor_parcela', 'is', null)
         if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
 
         let qVeiculosR = (supabase.from('veiculos') as any)
@@ -2926,7 +2929,7 @@ export function useElenaSalvar({
         // ── SEÇÃO 2: BOLETOS IMÓVEIS ───────────────────────────────
         texto += `🏠 **BOLETOS IMÓVEIS**\n`
 
-        type LinhaBoleto = { desc: string; dia: string | number; valor: number; parcela: string; status: string; pago: boolean }
+        type LinhaBoleto = { desc: string; dia: string | number; valor: number; valorLabel?: string; somaNoTotal?: boolean; parcela: string; status: string; pago: boolean }
         const linhasBoletos: LinhaBoleto[] = []
 
         ;(imoveisData || []).forEach((im: any) => {
@@ -2934,10 +2937,13 @@ export function useElenaSalvar({
           if (restantes <= 0) return
           const pag = pagosImoveisMap.get(im.id)
           const statusPg = pag?.status || 'pendente'
+          const temValor = im.valor_parcela != null
           linhasBoletos.push({
             desc: im.construtora ? `${im.titulo} (${im.construtora})` : im.titulo,
             dia: im.dia_vencimento || '—',
-            valor: Number(im.valor_parcela) || 0,
+            valor: temValor ? Number(im.valor_parcela) : 0,
+            valorLabel: temValor ? fmt(Number(im.valor_parcela)) : '⚠️ valor a definir',
+            somaNoTotal: temValor,
             parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
             status: statusPg === 'pago' ? '✅ Pago' : statusPg === 'parcial' ? '🟡 Parcial' : '🔴 Pendente',
             pago: statusPg === 'pago',
@@ -2976,8 +2982,10 @@ export function useElenaSalvar({
           texto += `| Dia | Compromisso | Valor | Parcela | Status |\n`
           texto += `|-----|-------------|------:|---------|--------|\n`
           linhasBoletos.forEach(l => {
-            texto += `| ${l.dia} | ${l.desc} | ${l.valor > 0 ? fmt(l.valor) : '—'} | ${l.parcela} | ${l.status} |\n`
-            totalBoletos += l.valor
+            const valorExibido = 'valorLabel' in l ? (l as any).valorLabel : (l.valor > 0 ? fmt(l.valor) : '—')
+            texto += `| ${l.dia} | ${l.desc} | ${valorExibido} | ${l.parcela} | ${l.status} |\n`
+            const contaNoTotal = 'somaNoTotal' in l ? (l as any).somaNoTotal : true
+            if (contaNoTotal) totalBoletos += l.valor
             if (l.pago) { totalPagoBoletos += l.valor; qtdPagosBoletos++ }
           })
           texto += `🏠 **TOTAL BOLETOS: ${fmt(totalBoletos)}**\n`
