@@ -1,10 +1,20 @@
 const { supabase } = require("../config/database");
-const { botPausado, conversas, ADMIN_DEFAULT } = require("../config/memory");
+const { botPausado, conversas, ADMIN_DEFAULT, chaveConversa } = require("../config/memory");
 
 /**
  * Registra uma mensagem na conversa em memória e persiste no Supabase.
  * Serve como ponto central de escrita — NUNCA faça upsert diretamente
  * fora desta função para evitar dados inconsistentes.
+ *
+ * IMPORTANTE (isolamento multi-tenant): a chave usada no Map `conversas`
+ * é composta por empresa_id + numero (via chaveConversa). Isso evita que
+ * o mesmo número de telefone, ao falar com empresas diferentes cadastradas
+ * na plataforma, tenha suas mensagens misturadas num único registro.
+ * Por isso, sempre que possível, passe o `empresa_id` correto — quando
+ * omitido, o registro cai no "balde" empresa_id padrão, então rotas que
+ * manipulam uma conversa já existente devem sempre repassar o mesmo
+ * empresa_id usado na criação (normalmente vindo de req.user.empresa_id
+ * ou do canal/instância que originou a mensagem).
  *
  * @param {string} numero - Número do WhatsApp (sem @s.whatsapp.net)
  * @param {object|null} mensagem - Objeto da mensagem ou null (para forçar upsert sem nova msg)
@@ -14,28 +24,33 @@ const { botPausado, conversas, ADMIN_DEFAULT } = require("../config/memory");
  * @param {string|null} instanceName - Nome da instância Evolution
  */
 async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, instanceName) {
-  if (!conversas.has(numero)) {
-    conversas.set(numero, {
+  const empresaIdResolvido = empresa_id || ADMIN_DEFAULT.empresa_id || "empresa-padrao";
+  const key = chaveConversa(empresaIdResolvido, numero);
+
+  if (!conversas.has(key)) {
+    conversas.set(key, {
       numero,
       nome: nome || numero,
       mensagens: [],
       etiqueta: "novo",
-      botOn: !botPausado.has(numero),
+      botOn: !botPausado.has(key),
       unread: 0,
       setor: setor || null,
-      empresa_id: empresa_id || ADMIN_DEFAULT.empresa_id || "empresa-padrao",
+      empresa_id: empresaIdResolvido,
       instanceName: instanceName || null
     });
   }
 
-  const conv = conversas.get(numero);
+  const conv = conversas.get(key);
   if (nome && conv.nome === conv.numero) conv.nome = nome;
   if (setor) conv.setor = setor.toLowerCase().trim();
-  if (empresa_id) conv.empresa_id = empresa_id;
   if (instanceName) conv.instanceName = instanceName;
+  // NOTA: não sobrescrevemos mais conv.empresa_id aqui — a empresa de uma
+  // conversa é definida na criação e fixada pela própria chave composta.
+  // Garante que botOn reflete o estado atual do botPausado
+  conv.botOn = !botPausado.has(key);
 
   if (mensagem) {
-    if (!conv.mensagens) conv.mensagens = [];
     conv.mensagens.push(mensagem);
     // Limita histórico a 300 mensagens para evitar blob gigante
     if (conv.mensagens.length > 300) conv.mensagens = conv.mensagens.slice(-300);
@@ -43,42 +58,18 @@ async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, in
     conv.ultimoHorario = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   }
 
-  // PERSISTÊNCIA NO SUPABASE — resolve empresa_id real antes de salvar
-  let empresaIdFinal = conv.empresa_id === "empresa-padrao" ? ADMIN_DEFAULT.empresa_id : conv.empresa_id;
-
-  // Resolução lazy: se ainda é placeholder, busca pelo ADMIN_DEFAULT (sem sobrescrever)
-  if (supabase && (!empresaIdFinal || empresaIdFinal === "empresa-padrao" || empresaIdFinal === "vazia")) {
-    try {
-      // Usa ADMIN_DEFAULT se já foi carregado corretamente no boot
-      if (ADMIN_DEFAULT.empresa_id && ADMIN_DEFAULT.empresa_id !== "empresa-padrao" && ADMIN_DEFAULT.empresa_id !== "vazia") {
-        empresaIdFinal = ADMIN_DEFAULT.empresa_id;
-        conv.empresa_id = empresaIdFinal;
-      } else {
-        // Fallback extremo: pega primeira empresa ordenada por criação (mais antiga = admin)
-        const { data: emp } = await supabase.from("empresas").select("id").order("created_at", { ascending: true }).limit(1).single();
-        if (emp?.id) {
-          empresaIdFinal = emp.id;
-          conv.empresa_id = emp.id;
-          console.log(`[Conv] Empresa resolvida lazy (fallback): ${emp.id}`);
-        }
-      }
-    } catch {}
-  }
-
+  // PERSISTÊNCIA NO SUPABASE — só salva quando temos UUID real de empresa
+  const empresaIdFinal = conv.empresa_id === "empresa-padrao" ? ADMIN_DEFAULT.empresa_id : conv.empresa_id;
   const isRealUuid = empresaIdFinal && empresaIdFinal !== "empresa-padrao" && empresaIdFinal !== "vazia";
   if (supabase && isRealUuid) {
-    const { error } = await supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: empresaIdFinal, dados: conv });
-    if (error) {
-      if (error.code === "42P01") {
-        // Tabela não existe ainda — ignora
-      } else if (error.code === "42501" || error.message?.includes("policy") || error.message?.includes("RLS")) {
-        console.error(`[DB] ❌ ERRO RLS ao salvar conversa ${numero}: ${error.message} — verifique SUPABASE_SERVICE_ROLE_KEY no Railway`);
-      } else {
-        console.error(`[DB] ❌ Erro salvando conversa ${numero}: [${error.code}] ${error.message}`);
-      }
-    } else {
-      // Apenas loga em debug (remover em produção se muito verboso)
-      // console.log(`[DB] ✅ Conversa ${numero} salva (${conv.mensagens?.length || 0} msgs)`);
+    const dadosParaSalvar = {
+      numero,
+      empresa_id: empresaIdFinal,
+      dados: conv,
+    };
+    const { error } = await supabase.from("whatsapp_conversas").upsert(dadosParaSalvar);
+    if (error && error.code !== "42P01" && !error.message?.includes("atualizado")) {
+      console.error("[DB] Erro salvando conversa:", error.message);
     }
   }
 
@@ -87,23 +78,52 @@ async function registrarNaConversa(numero, mensagem, nome, setor, empresa_id, in
 
 /**
  * Carrega todas as conversas do Supabase para memória no boot.
- * Em multi-tenant com mesmo número em duas empresas, a última linha carregada vence na chave simples.
- * O controle correto de tenant é feito pelo filtro de empresa_id no endpoint de detalhe.
  */
+/**
+ * Busca nativa com timeout — MESMO padrão usado em boot.js pra todas as
+ * outras tabelas (usuarios, configuracoes, canais, times). O cliente
+ * supabase-js pode travar durante o boot; essa função nunca trava mais
+ * que o timeout, então o boot sempre segue em frente mesmo se o Supabase
+ * demorar ou falhar.
+ */
+async function sbFetchConversas(params = "") {
+  const SB_URL = process.env.SUPABASE_URL;
+  const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!SB_URL || !SB_KEY) return [];
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/whatsapp_conversas?${params}`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+      signal: ctrl.signal,
+    });
+    const json = await r.json();
+    return Array.isArray(json) ? json : [];
+  } catch (e) {
+    console.warn(`[Conversas] sbFetch falhou:`, e.message);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function loadConversasDb() {
   if (!supabase) return;
-  const { data, error } = await supabase.from("whatsapp_conversas").select("*");
-  if (!error && data) {
+  const data = await sbFetchConversas("select=*");
+  if (data.length > 0) {
     data.forEach(row => {
       if (row.dados) {
         row.dados.empresa_id = row.empresa_id;
-        conversas.set(row.numero, row.dados);
+        const key = chaveConversa(row.empresa_id, row.numero);
+        conversas.set(key, row.dados);
         if (row.dados.botOn === false) {
-          botPausado.set(row.numero, true);
+          botPausado.set(key, true);
         }
       }
     });
     console.log(`📦 Carregamos ${data.length} conversas restabelecidas do Supabase!`);
+  } else {
+    console.log(`📦 Nenhuma conversa restabelecida do Supabase (tabela vazia ou busca falhou — veja aviso acima, se houver).`);
   }
 }
 
@@ -114,13 +134,13 @@ async function loadConversasDb() {
 async function syncConversasDb() {
   if (!supabase) return;
   let saved = 0;
-  for (const [numero, conv] of conversas.entries()) {
+  for (const conv of conversas.values()) {
     const eid = conv.empresa_id === "empresa-padrao" ? ADMIN_DEFAULT.empresa_id : conv.empresa_id;
     const isReal = eid && eid !== "empresa-padrao" && eid !== "vazia";
     if (!isReal) continue;
     conv.empresa_id = eid;
-    if (conv.mensagens && conv.mensagens.length > 300) conv.mensagens = conv.mensagens.slice(-300);
-    const { error } = await supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: eid, dados: conv });
+    if (conv.mensagens.length > 300) conv.mensagens = conv.mensagens.slice(-300);
+    const { error } = await supabase.from("whatsapp_conversas").upsert({ numero: conv.numero, empresa_id: eid, dados: conv });
     if (!error) saved++;
   }
   if (saved > 0) console.log(`[Sync] ${saved} conversa(s) sincronizadas com Supabase`);

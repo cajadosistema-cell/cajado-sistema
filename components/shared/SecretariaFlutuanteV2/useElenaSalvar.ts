@@ -915,7 +915,6 @@ export function useElenaSalvar({
         // Build queries with empresa_id fallback
         let qImoveis = (supabase.from('imoveis') as any)
           .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
-          .not('valor_parcela', 'is', null)
         if (empresaId) qImoveis = qImoveis.eq('empresa_id', empresaId)
 
         let qVeiculos = (supabase.from('veiculos') as any)
@@ -1085,99 +1084,111 @@ export function useElenaSalvar({
         const entradasMes = totalReceitasRec > 0 ? Math.max(mediaReceitas, totalReceitasRec) : mediaReceitas
         const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelas + totalCartoes
 
+        // 🔧 FIX (18/07/2026): saída reescrita pra usar o MESMO formato de tabela
+        // markdown do resumo_mensal (pedido do Sr. Max: "a projeção deveria seguir
+        // o mesmo formato ali só que com mês diferente na parte de cima"). Antes,
+        // esse handler montava texto com "━━━" e bullets aninhados — formato
+        // diferente do resumo, o que ele percebeu e reportou como "informações
+        // embolada". A lógica de cálculo abaixo não mudou, só a montagem do texto.
         let texto = `📊 **PROJEÇÃO FINANCEIRA — ${meses === 1 ? 'PRÓXIMO MÊS' : `PRÓXIMOS ${meses} MESES`}**\n`
-        texto += `_Baseada em dados reais + contas fixas + financiamentos + cartões + investimentos_\n\n`
+        texto += `_Baseada em dados reais + contas fixas + financiamentos + cartões + investimentos_\n`
+        texto += `---\n`
 
         for (let m = 1; m <= meses; m++) {
-          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
           texto += `📅 **${nomeMes(m).toUpperCase()}**\n`
-          texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+          texto += `---\n`
 
           // ── ENTRADAS ────────────────────────────────────────────
           texto += `💰 **ENTRADAS ESTIMADAS: ${fmt(entradasMes)}**\n`
           if (totalReceitasRec > 0) {
-            texto += `  _└ ${fmt(totalReceitasRec)} confirmados (receitas recorrentes)_\n`
+            texto += `_${fmt(totalReceitasRec)} confirmados (receitas recorrentes)_\n`
           }
           if (mediaReceitas > 0 && totalReceitasRec !== mediaReceitas) {
-            texto += `  _└ Média histórica: ${fmt(mediaReceitas)} (últimos 3 meses)_\n`
+            texto += `_Média histórica: ${fmt(mediaReceitas)} (últimos 3 meses)_\n`
           }
-          texto += '\n'
+          texto += `---\n`
 
           // ── SAÍDAS DETALHADAS ───────────────────────────────────
-          texto += `💸 **SAÍDAS ESTIMADAS: ${fmt(totalSaidasMes)}**\n\n`
+          texto += `💸 **SAÍDAS ESTIMADAS: ${fmt(totalSaidasMes)}**\n`
 
           // 1. Cartões PF
           if (cartoesDetalhe.length > 0) {
-            texto += `💳 **Cartões de crédito:**\n`
+            texto += `💳 **Cartões de crédito**\n`
+            texto += `| Cartão | Venc. | Fatura estimada | Status |\n`
+            texto += `|--------|-------|-----------------:|--------|\n`
             cartoesDetalhe.forEach(c => {
               const bandeira = c.bandeira ? ` (${c.bandeira})` : ''
-              const dia = c.dia ? ` — vence dia ${c.dia}` : ''
-              const statusIcon = c.status === 'pago' ? '✅' : c.status === 'parcial' ? '🟡' : c.status === 'pendente' ? '🔴' : '⚪'
-              texto += `  ${statusIcon} **${c.nome}${bandeira}**${dia}\n`
-              texto += `     Fatura estimada: **${c.valorEstimado > 0 ? fmt(c.valorEstimado) : 'sem dados'}**\n`
+              const dia = c.dia ? String(c.dia).padStart(2, '0') : '—'
+              const statusLabel = c.status === 'pago' ? '✅ Pago' : c.status === 'parcial' ? '🟡 Parcial' : c.status === 'pendente' ? '🔴 Pendente' : '⚪ Sem dados'
+              const valorLabel = c.valorEstimado > 0 ? fmt(c.valorEstimado) : '⚪ sem dados'
+              texto += `| ${c.nome}${bandeira} | ${dia} | ${valorLabel} | ${statusLabel} |\n`
             })
             if (totalCartoes > 0) {
-              texto += `  **Subtotal cartões: ${fmt(totalCartoes)}**\n`
+              texto += `**Subtotal cartões: ${fmt(totalCartoes)}**\n`
             }
-            texto += '\n'
           }
 
           // 2. Contas fixas (compromissos_fixos) — com status de pagamento
           if ((alertasRec || []).length > 0) {
             const totalFixas = (alertasRec || []).length
             const qtdPagas = contasPagas.length
-            texto += `🔒 **Contas fixas (${totalFixas}${qtdPagas > 0 ? ` — ${qtdPagas} paga(s)` : ''}):**\n`
+            texto += `🔒 **Contas fixas (${totalFixas}${qtdPagas > 0 ? ` — ${qtdPagas} paga(s)` : ''})**\n`
+            texto += `| Conta | Dia | Valor | Status |\n`
+            texto += `|-------|-----|------:|--------|\n`
             ;(alertasRec || []).forEach((a: any) => {
               const pag = pagosMap.get(a.id)
-              const statusIcon = pag?.status === 'pago' ? '✅' : pag?.status === 'parcial' ? '🟡' : '🔴'
+              const statusLabel = pag?.status === 'pago' ? '✅ Pago' : pag?.status === 'parcial' ? '🟡 Parcial' : '🔴 Pendente'
               const emoji = contaEmoji[a.tipo_detalhe] || '📋'
-              texto += `  ${statusIcon} ${emoji} **${a.descricao}** — dia ${a.dia_vencimento} — ${a.valor ? fmt(Number(a.valor)) : 'valor a definir'}\n`
+              const valorLabel = a.valor ? fmt(Number(a.valor)) : '⚠️ valor a definir'
+              texto += `| ${emoji} ${a.descricao} | ${a.dia_vencimento} | ${valorLabel} | ${statusLabel} |\n`
             })
             if (totalContasPagas > 0) {
-              texto += `  ✅ Já pago: ${fmt(totalContasPagas)}\n`
+              texto += `✅ Já pago: ${fmt(totalContasPagas)}\n`
             }
-            texto += `  **Pendente: ${fmt(totalContasFixas)}**\n\n`
+            texto += `**Pendente: ${fmt(totalContasFixas)}**\n`
           }
 
           // 3. Financiamentos (parcelas detalhadas)
           if (parcelasAtivas.length > 0) {
-            texto += `🏦 **Financiamentos ativos (${parcelasAtivas.length}):**\n`
+            texto += `🏦 **Financiamentos ativos (${parcelasAtivas.length})**\n`
+            texto += `| Financiamento | Dia | Parcela | Progresso |\n`
+            texto += `|---------------|-----|--------:|-----------|\n`
             parcelasAtivas.forEach(p => {
               const pct = p.total > 0 ? Math.round(p.pagas / p.total * 100) : 0
-              const diaStr = p.dia ? ` — dia ${p.dia}` : ''
-              texto += `  ${p.titulo}${diaStr}\n`
-              texto += `     💰 Parcela: **${fmt(p.valor)}**/mês\n`
-              texto += `     📊 Progresso: **${p.pagas}/${p.total}** pagas (${pct}%) — faltam **${p.restantes}** parcelas\n`
+              const diaStr = p.dia ? String(p.dia).padStart(2, '0') : '—'
+              texto += `| ${p.titulo} | ${diaStr} | ${fmt(p.valor)}/mês | ${p.pagas}/${p.total} (${pct}%) — faltam ${p.restantes} |\n`
             })
-            texto += `  **Subtotal financiamentos: ${fmt(totalParcelas)}**\n\n`
+            texto += `**Subtotal financiamentos: ${fmt(totalParcelas)}**\n`
           }
 
           // 4. Gastos variáveis (média)
           if (mediaGastosVar > 0) {
-            texto += `📦 **Gastos variáveis estimados: ${fmt(mediaGastosVar)}**\n`
-            texto += `  _Média dos últimos 3 meses_\n`
+            texto += `📦 **Gastos variáveis estimados: ${fmt(mediaGastosVar)}** _(média dos últimos 3 meses)_\n`
             if (topCats.length > 0) {
+              texto += `| Categoria | Média/mês |\n`
+              texto += `|-----------|----------:|\n`
               topCats.forEach(([cat, media]) => {
                 const emoji = catEmoji[cat] || '📦'
-                texto += `  ${emoji} ${cat}: ${fmt(media)}/mês\n`
+                texto += `| ${emoji} ${cat} | ${fmt(media)} |\n`
               })
             }
-            texto += '\n'
           }
+          texto += `---\n`
 
           // ── SALDO PROJETADO ─────────────────────────────────────
           const saldoProjetado = entradasMes - totalSaidasMes
           const saldoIcon = saldoProjetado >= 0 ? '🟢' : '🔴'
-          texto += `${saldoIcon} **SALDO PROJETADO: ${fmt(saldoProjetado)}**\n\n`
+          texto += `${saldoIcon} **SALDO PROJETADO: ${fmt(saldoProjetado)}**\n`
+          texto += `---\n`
 
           // ── INVESTIMENTOS ───────────────────────────────────────
           if (ativosLista.length > 0) {
             const valorizInv = totalMercado - totalInvestido
             const rentPct = totalInvestido > 0 ? (valorizInv / totalInvestido) * 100 : 0
-            texto += `📈 **Carteira de investimentos:**\n`
-            texto += `  💰 Investido: **${fmt(totalInvestido)}**\n`
-            texto += `  📊 Mercado: **${fmt(totalMercado)}**\n`
-            texto += `  ${valorizInv >= 0 ? '🟢' : '🔴'} Resultado: **${valorizInv >= 0 ? '+' : ''}${fmt(valorizInv)} (${rentPct.toFixed(1)}%)**\n`
+            texto += `📈 **Carteira de investimentos**\n`
+            texto += `| Investido | Mercado | Resultado |\n`
+            texto += `|----------:|--------:|-----------|\n`
+            texto += `| ${fmt(totalInvestido)} | ${fmt(totalMercado)} | ${valorizInv >= 0 ? '🟢 +' : '🔴 '}${fmt(valorizInv)} (${rentPct.toFixed(1)}%) |\n`
 
             // Vencimentos de renda fixa no mês projetado
             const inicioM = new Date(agora)
@@ -1191,13 +1202,15 @@ export function useElenaSalvar({
               return dv >= inicioM && dv < fimM
             })
             if (ativosVencMes.length > 0) {
-              texto += `\n  ⏰ **Investimentos vencendo neste mês:**\n`
+              texto += `⏰ **Investimentos vencendo neste mês**\n`
+              texto += `| Vencimento | Ativo | Valor |\n`
+              texto += `|------------|-------|------:|\n`
               ativosVencMes.forEach((a: any) => {
                 const dtV = new Date(a.data_vencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                texto += `    📌 [${dtV}] ${a.ticker || a.nome} — ${fmt(Number(a.valor_investido) || 0)}\n`
+                texto += `| ${dtV} | ${a.ticker || a.nome} | ${fmt(Number(a.valor_investido) || 0)} |\n`
               })
             }
-            texto += '\n'
+            texto += `---\n`
           }
 
           // ── VENCIMENTOS DA AGENDA ───────────────────────────────
@@ -1231,17 +1244,18 @@ export function useElenaSalvar({
           })
 
           if (vencimentosReais.length > 0) {
-            texto += `📄 **Vencimentos agendados:**\n`
+            texto += `📄 **Vencimentos agendados**\n`
+            texto += `| Data | Compromisso |\n`
+            texto += `|------|-------------|\n`
             vencimentosReais.forEach((ev: any) => {
               const dt = new Date(ev.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-              texto += `  📌 [${dt}] ${ev.titulo}\n`
+              texto += `| ${dt} | ${ev.titulo} |\n`
             })
-            texto += '\n'
+            texto += `---\n`
           }
         }
 
         // ── RODAPÉ ───────────────────────────────────────────────
-        texto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
         texto += `📋 **RESUMO DAS FONTES:**\n`
         const fontes: string[] = []
         if (gastos3m?.length > 0 || receitas3m?.length > 0) fontes.push(`${gastos3m?.length || 0} gastos e ${receitas3m?.length || 0} receitas (3 meses)`)
@@ -1252,9 +1266,9 @@ export function useElenaSalvar({
         if (ativosLista.length > 0) fontes.push(`${ativosLista.length} investimentos`)
 
         if (fontes.length === 0) {
-          texto += `\n⚠️ _Sem dados suficientes. Lance suas receitas, gastos e contas fixas para projeções mais precisas._`
+          texto += `⚠️ _Sem dados suficientes. Lance suas receitas, gastos e contas fixas para projeções mais precisas._`
         } else {
-          texto += fontes.map(f => `  • ${f}`).join('\n')
+          texto += fontes.map(f => `- ${f}`).join('\n')
           texto += `\n\n_📈 Projeção baseada em dados reais do sistema. Para melhor precisão, mantenha seus lançamentos em dia!_`
         }
 
@@ -2798,12 +2812,9 @@ export function useElenaSalvar({
         const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
         // Build queries with empresa_id fallback
-        // 🔧 FIX (18/07/2026): antes filtrava .not('valor_parcela','is',null), o que
-        // fazia qualquer imóvel sem valor cadastrado (ex: valor NULL) desaparecer
-        // do resumo por completo, sem aviso — mesma causa raiz do "Sítio São Roque"
-        // nunca aparecer pro Sr. Max. Agora o imóvel entra e mostra "valor a definir".
         let qImoveisR = (supabase.from('imoveis') as any)
           .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora')
+          .not('valor_parcela', 'is', null)
         if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
 
         let qVeiculosR = (supabase.from('veiculos') as any)
@@ -2929,7 +2940,7 @@ export function useElenaSalvar({
         // ── SEÇÃO 2: BOLETOS IMÓVEIS ───────────────────────────────
         texto += `🏠 **BOLETOS IMÓVEIS**\n`
 
-        type LinhaBoleto = { desc: string; dia: string | number; valor: number; valorLabel?: string; somaNoTotal?: boolean; parcela: string; status: string; pago: boolean }
+        type LinhaBoleto = { desc: string; dia: string | number; valor: number; parcela: string; status: string; pago: boolean }
         const linhasBoletos: LinhaBoleto[] = []
 
         ;(imoveisData || []).forEach((im: any) => {
@@ -2937,13 +2948,10 @@ export function useElenaSalvar({
           if (restantes <= 0) return
           const pag = pagosImoveisMap.get(im.id)
           const statusPg = pag?.status || 'pendente'
-          const temValor = im.valor_parcela != null
           linhasBoletos.push({
             desc: im.construtora ? `${im.titulo} (${im.construtora})` : im.titulo,
             dia: im.dia_vencimento || '—',
-            valor: temValor ? Number(im.valor_parcela) : 0,
-            valorLabel: temValor ? fmt(Number(im.valor_parcela)) : '⚠️ valor a definir',
-            somaNoTotal: temValor,
+            valor: Number(im.valor_parcela) || 0,
             parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
             status: statusPg === 'pago' ? '✅ Pago' : statusPg === 'parcial' ? '🟡 Parcial' : '🔴 Pendente',
             pago: statusPg === 'pago',
@@ -2982,10 +2990,8 @@ export function useElenaSalvar({
           texto += `| Dia | Compromisso | Valor | Parcela | Status |\n`
           texto += `|-----|-------------|------:|---------|--------|\n`
           linhasBoletos.forEach(l => {
-            const valorExibido = 'valorLabel' in l ? (l as any).valorLabel : (l.valor > 0 ? fmt(l.valor) : '—')
-            texto += `| ${l.dia} | ${l.desc} | ${valorExibido} | ${l.parcela} | ${l.status} |\n`
-            const contaNoTotal = 'somaNoTotal' in l ? (l as any).somaNoTotal : true
-            if (contaNoTotal) totalBoletos += l.valor
+            texto += `| ${l.dia} | ${l.desc} | ${l.valor > 0 ? fmt(l.valor) : '—'} | ${l.parcela} | ${l.status} |\n`
+            totalBoletos += l.valor
             if (l.pago) { totalPagoBoletos += l.valor; qtdPagosBoletos++ }
           })
           texto += `🏠 **TOTAL BOLETOS: ${fmt(totalBoletos)}**\n`

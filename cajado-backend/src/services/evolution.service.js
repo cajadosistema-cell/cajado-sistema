@@ -359,6 +359,130 @@ async function listarInstancias() {
   return resp.data;
 }
 
+/**
+ * Retorna o instanceName da primeira instância Evolution conectada em memória.
+ * Usada como proxy para buscar fotos de contatos WABA.
+ * @returns {string|null}
+ */
+function getPrimeiraInstanciaEvolution() {
+  const { INSTANCE } = require("../config/env");
+  if (INSTANCE) return INSTANCE;
+  return null;
+}
+
+// ─── FOTO DE PERFIL ─────────────────────────────────────────────────────────
+
+/**
+ * Busca a URL da foto de perfil de um contato via Evolution API.
+ * Falha silenciosa — retorna null se não disponível ou se for canal Meta.
+ *
+ * @param {string} number       - Número do WhatsApp (somente dígitos, sem @)
+ * @param {string} instanceName - Nome da instância Evolution
+ * @param {string} fallbackInstance - (Opcional) instância para proxy WABA
+ * @returns {Promise<string|null>} URL pública da foto ou null
+ */
+async function buscarFotoPerfil(number, instanceName, fallbackInstance = null) {
+  // Se for canal WABA (Meta API Oficial), tenta usar uma instância Evolution como proxy
+  const isMetaChannel = /^\d{10,}$/.test(instanceName) || instanceName === "oficial";
+  let instanciaFinal = instanceName;
+  if (isMetaChannel) {
+    instanciaFinal = fallbackInstance || getPrimeiraInstanciaEvolution();
+    if (!instanciaFinal) {
+      console.log(`[Avatar] Pulando ${number} — canal WABA sem instância Evolution de fallback`);
+      return null;
+    }
+    console.log(`[Avatar] Canal WABA — usando instância Evolution "${instanciaFinal}" como proxy`);
+  }
+
+  if (!instanciaFinal || !EVOLUTION_URL || !EVOLUTION_KEY) {
+    console.log(`[Avatar] Pulando ${number} — falta instanceName/EVOLUTION_URL/EVOLUTION_KEY`);
+    return null;
+  }
+
+  try {
+    console.log(`[Avatar] Buscando foto: POST /chat/fetchProfilePictureUrl/${instanciaFinal} { number: ${number} }`);
+    const r = await evoCall("POST", `/chat/fetchProfilePictureUrl/${instanciaFinal}`, { number }, 8000);
+    const url = r.data?.profilePictureUrl || r.data?.picture || r.data?.url
+              || r?.profilePictureUrl || r?.picture || r?.url || null;
+    if (url && url.startsWith("http")) {
+      console.log(`[Avatar] ✅ URL encontrada: ${url.slice(0, 80)}...`);
+      return url;
+    }
+    console.log(`[Avatar] Sem URL válida na resposta para ${number}`);
+    return null;
+  } catch (e) {
+    console.warn(`[Avatar] ❌ Erro para ${number} (${instanciaFinal}): ${e.response?.status} ${e.response?.data ? JSON.stringify(e.response.data).slice(0,100) : e.message}`);
+    return null;
+  }
+}
+
+/**
+ * Baixa e decodifica em base64 uma mensagem de mídia recebida (imagem, áudio,
+ * vídeo ou documento) via Evolution API. Necessário porque o payload do
+ * webhook não traz o conteúdo do arquivo, só metadados — a Evolution
+ * descriptografa e converte quando chamada nesse endpoint específico.
+ */
+async function baixarMidiaBase64(instanceName, messageData) {
+  if (!instanceName || !EVOLUTION_URL || !EVOLUTION_KEY) {
+    console.log(`[Mídia] Pulando download — falta instanceName/EVOLUTION_URL/EVOLUTION_KEY`);
+    return { base64: null, mimetype: null };
+  }
+  try {
+    console.log(`[Mídia] Baixando mídia: POST /chat/getBase64FromMediaMessage/${instanceName}`);
+    const r = await evoCall("POST", `/chat/getBase64FromMediaMessage/${instanceName}`, {
+      message: { key: messageData.key, message: messageData.message },
+      convertToMp4: false,
+    }, 25000);
+    const base64 = r.data?.base64 || r?.base64 || null;
+    const mimetype = r.data?.mimetype || r.data?.mediaType || r?.mimetype || null;
+    if (base64) {
+      console.log(`[Mídia] ✅ Baixada (${Math.round(base64.length / 1024)}KB base64, ${mimetype || "mimetype desconhecido"})`);
+    } else {
+      console.log(`[Mídia] Sem base64 na resposta:`, JSON.stringify(r.data || r).slice(0, 200));
+    }
+    return { base64, mimetype };
+  } catch (e) {
+    console.warn(`[Mídia] ❌ Erro ao baixar (${instanceName}): ${e.response?.status} ${e.response?.data ? JSON.stringify(e.response.data).slice(0, 150) : e.message}`);
+    return { base64: null, mimetype: null };
+  }
+}
+
+/**
+ * Baixa e decodifica em base64 uma mídia recebida via WhatsApp Cloud API
+ * (Meta oficial). Diferente da Evolution: aqui é um fluxo em 2 passos —
+ * 1) busca a URL temporária assinada do arquivo (expira em minutos);
+ * 2) baixa o conteúdo binário dessa URL, usando o MESMO Bearer token.
+ */
+async function baixarMidiaMeta(mediaId, accessToken) {
+  if (!mediaId || !accessToken) {
+    console.log(`[Mídia-Meta] Pulando download — falta mediaId/accessToken`);
+    return { base64: null, mimetype: null };
+  }
+  try {
+    const meta = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 10000,
+    });
+    const url = meta.data?.url;
+    const mimetype = meta.data?.mime_type || null;
+    if (!url) {
+      console.log(`[Mídia-Meta] Sem URL na resposta:`, JSON.stringify(meta.data).slice(0, 200));
+      return { base64: null, mimetype };
+    }
+    const bin = await axios.get(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      responseType: "arraybuffer",
+      timeout: 20000,
+    });
+    const base64 = Buffer.from(bin.data).toString("base64");
+    console.log(`[Mídia-Meta] ✅ Baixada (${Math.round(base64.length / 1024)}KB base64, ${mimetype || "mimetype desconhecido"})`);
+    return { base64, mimetype };
+  } catch (e) {
+    console.warn(`[Mídia-Meta] ❌ Erro ao baixar mediaId=${mediaId}: ${e.response?.status} ${e.response?.data ? JSON.stringify(e.response.data).slice(0, 150) : e.message}`);
+    return { base64: null, mimetype: null };
+  }
+}
+
 module.exports = {
   enviarWhatsApp,
   enviarMetaCloudAPI,
@@ -369,4 +493,7 @@ module.exports = {
   getStatusInstancia,
   deletarInstanciaEvolution,
   listarInstancias,
+  buscarFotoPerfil,
+  baixarMidiaBase64,
+  baixarMidiaMeta,
 };

@@ -32,6 +32,19 @@ usuariosMemoria.set(ADMIN_DEFAULT.email, ADMIN_DEFAULT);
 
 const MAX_HISTORY = 12;
 
+// ─── ISOLAMENTO MULTI-TENANT DOS MAPS EM MEMÓRIA ────────────────────────────
+// conversas / conversationHistory / botPausado / clientesTransferidos eram
+// chaveados só pelo número de telefone. Se o MESMO número falasse com duas
+// empresas diferentes da plataforma, as conversas se misturavam (mensagens
+// de uma empresa vazando pro histórico/contexto de IA da outra).
+// A partir de agora, toda chave desses Maps deve ser gerada por esta função,
+// combinando empresa_id + número, para garantir que cada empresa tenha seu
+// próprio "slot" isolado mesmo quando o número de telefone é o mesmo.
+function chaveConversa(empresaId, numero) {
+  const eid = empresaId || "empresa-padrao";
+  return `${eid}::${numero}`;
+}
+
 module.exports = {
   botPausado,
   conversas,
@@ -44,4 +57,5 @@ module.exports = {
   timesMemoria,
   configMemoria,
   canaisMemoria,
+  chaveConversa,
 };

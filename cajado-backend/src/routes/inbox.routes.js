@@ -4,187 +4,69 @@ const axios = require("axios");
 
 const { supabase } = require("../config/database");
 const { EVOLUTION_URL, EVOLUTION_KEY, ADMIN_EMAIL } = require("../config/env");
-const { conversas, botPausado, canaisMemoria, ADMIN_DEFAULT } = require("../config/memory");
+const { conversas, botPausado, canaisMemoria, ADMIN_DEFAULT, chaveConversa } = require("../config/memory");
 const { registrarNaConversa } = require("../services/conversation.service");
 const { enviarWhatsApp } = require("../services/evolution.service");
 const { authMiddleware } = require("../middlewares/auth");
 
-// Verifica token secreto do Evolution API (simples, sem JWT)
-const webhookSecret = (req, res, next) => {
-  const secret = req.headers["x-webhook-secret"] || req.headers["apikey"];
-  if (secret && secret === EVOLUTION_KEY) return next();
-  // Aceita também sem token (Evolution API nem sempre envia), mas loga aviso
-  console.warn("[INBOX-WEBHOOK] Requisição sem secret recebida de:", req.ip);
-  next();
-};
+function isAdminSuper(req) {
+  const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
+  return req.user?.email?.toLowerCase() === adminEmail || req.user?.empresa_id === ADMIN_DEFAULT.empresa_id;
+}
 
-// ── Mapa de status "digitando" por número (expira em 8s) ────────
-const typingStatus = new Map(); // numero -> timestamp
-
-router.post("/inbox/webhook", webhookSecret, async (req, res) => {
-  res.sendStatus(200);
-  const data = req.body;
-  const event = data?.event?.toLowerCase();
-
-  // ── Evento: digitando (presence.update) ──────────────────────
-  if (event === 'presence.update' || event === 'presence') {
-    const presences = data?.data?.presences || {};
-    for (const jid of Object.keys(presences)) {
-      const numero = jid.split('@')[0];
-      const presence = presences[jid]?.lastKnownPresence;
-      if (presence === 'composing' || presence === 'recording') {
-        typingStatus.set(numero, Date.now());
-        // Auto-limpa após 8s (caso o webhook de parar não chegue)
-        setTimeout(() => {
-          if (typingStatus.get(numero) && Date.now() - typingStatus.get(numero) >= 7500) {
-            typingStatus.delete(numero);
-          }
-        }, 8000);
-      } else {
-        typingStatus.delete(numero);
-      }
-    }
-    return;
+/**
+ * Localiza uma conversa em memória de forma segura por tenant.
+ * Usuário normal: só pode enxergar a chave da PRÓPRIA empresa.
+ * Super admin: pode indicar ?empresa_id= explicitamente, ou (fallback)
+ * varre a memória por número — uso administrativo, não client-facing.
+ */
+function localizarConversa(numero, req) {
+  const superAdmin = isAdminSuper(req);
+  if (!superAdmin) {
+    const chave = chaveConversa(req.user.empresa_id, numero);
+    return { chave, conv: conversas.get(chave), isSuperAdmin: false };
   }
-
-  if (event !== 'messages.upsert') return;
-  const msg = data?.data;
-  if (!msg?.key || msg.key.fromMe) return;
-  const numero = msg.key.remoteJid?.split("@")[0];
-  if (!numero || msg.key.remoteJid?.includes("@g.us")) return;
-
-  const texto = msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    msg.message?.imageMessage?.caption ||
-    msg.message?.videoMessage?.caption ||
-    msg.message?.documentMessage?.caption || "";
-
-  const nome = msg.pushName || numero;
-  const mensagem = { id: msg.key.id, tipo: "recebida", texto, numero, timestamp: new Date().toISOString() };
-
-  // Verifica se é mídia
-  const hasMedia = msg.message?.imageMessage || msg.message?.audioMessage || msg.message?.videoMessage || msg.message?.documentMessage || msg.message?.documentWithCaptionMessage;
-  if (hasMedia) {
-    try {
-      const instanceName = data?.instance || "botwhatsapp01";
-      const resp = await axios.post(`${EVOLUTION_URL}/chat/getBase64FromMediaMessage/${instanceName}`, { message: msg }, { headers: { apikey: EVOLUTION_KEY } });
-      const base64Str = resp.data?.base64;
-      if (base64Str) {
-        const matches = base64Str.match(/^data:(.+);base64,(.+)$/);
-        if (matches && matches.length === 3) {
-          const mimetype = matches[1];
-          const base64Data = matches[2];
-          const ext = mimetype.split('/')[1]?.split(';')[0]?.replace('x-matroska', 'mkv') || "bin";
-          const buffer = Buffer.from(base64Data, "base64");
-          const filePath = `${numero}/${Date.now()}_received.${ext}`;
-          
-          if (supabase) {
-             const { error } = await supabase.storage.from('inbox-media').upload(filePath, buffer, { contentType: mimetype });
-             if (!error) {
-               const { data: publicUrlData } = supabase.storage.from('inbox-media').getPublicUrl(filePath);
-               mensagem.mediaUrl = publicUrlData.publicUrl;
-               mensagem.mediaType = mimetype.startsWith("image/") ? "image" : mimetype.startsWith("audio/") ? "audio" : mimetype.startsWith("video/") ? "video" : "document";
-               mensagem.mimetype = mimetype;
-               if (!mensagem.texto) mensagem.texto = `📎 ${mensagem.mediaType}`;
-             }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("[WEBHOOK] Erro ao baixar/upar mídia:", e.message);
-    }
+  const empresaExplicita = req.query?.empresa_id || req.body?.empresa_id;
+  if (empresaExplicita) {
+    const chave = chaveConversa(empresaExplicita, numero);
+    return { chave, conv: conversas.get(chave), isSuperAdmin: true };
   }
-
-  // ── Resolve empresa_id pela instância (isolamento multi-tenant) ──────────
-  const instanceRecebida = data?.instance || data?.sender || "botwhatsapp01";
-
-  // 1ª prioridade: canaisMemoria (instance_name → empresa_id) — mais confiável
-  const canalInfo = canaisMemoria.get(instanceRecebida);
-  let empresaIdCanal = (typeof canalInfo === "object" ? canalInfo?.empresa_id : canalInfo) || null;
-
-  // 2ª prioridade: banco de dados (canais)
-  if (!empresaIdCanal && supabase) {
-    try {
-      const { data: canalDb } = await supabase
-        .from("canais")
-        .select("empresa_id, dados_conexao")
-        .eq("dados_conexao->>instance_name", instanceRecebida)
-        .single();
-      if (canalDb?.empresa_id) {
-        empresaIdCanal = canalDb.empresa_id;
-        // Atualiza memória para próximas mensagens
-        canaisMemoria.set(instanceRecebida, { empresa_id: empresaIdCanal, ...canalDb.dados_conexao });
-        console.log(`[INBOX-WH] ✅ Instância ${instanceRecebida} recuperada do banco → empresa ${empresaIdCanal}`);
-      }
-    } catch {}
+  for (const [chave, conv] of conversas.entries()) {
+    if (conv.numero === numero) return { chave, conv, isSuperAdmin: true };
   }
+  return { chave: chaveConversa(ADMIN_DEFAULT.empresa_id, numero), conv: undefined, isSuperAdmin: true };
+}
 
-  // Se ainda sem empresa_id, DESCARTA (não usa ADMIN_DEFAULT para não contaminar)
-  if (!empresaIdCanal) {
-    console.warn(`[INBOX-WH] ⚠️ Instância "${instanceRecebida}" sem empresa mapeada. Mensagem descartada.`);
-    return;
-  }
-
-  const conv = await registrarNaConversa(numero, mensagem, nome, null, empresaIdCanal, instanceRecebida);
-  conv.unread = (conv.unread || 0) + 1;
-  conv.lastInboundAt = new Date().toISOString();
-  console.log(`[INBOX] ${nome} [tenant:${empresaIdCanal?.slice(0, 8)}] [inst:${instanceRecebida}]: ${texto || 'Mídia recebida'}`);
+// DESATIVADA: duplicava a lógica do canal Evolution já tratada em
+// src/routes/webhook.routes.js (POST /webhook/evolution), que é pra onde
+// a Evolution de fato aponta. Esta aqui não resolvia empresa_id nenhum
+// (tudo caía no empresa_id padrão), então era só superfície de risco sem
+// função real. Se algo inesperado ainda apontar pra cá, vai começar a
+// responder 410 em vez de processar mensagens.
+router.post("/inbox/webhook", (req, res) => {
+  res.status(410).json({ erro: "Rota desativada — use /webhook/evolution." });
 });
 
-
+// Antes sem autenticação: qualquer um podia injetar mensagem em qualquer
+// conversa. Agora exige login e só mexe na conversa da própria empresa.
 router.post("/inbox/mensagem", authMiddleware, async (req, res) => {
   const { numero, texto, tipo, nome, setor } = req.body;
   if (!numero || !texto) return res.status(400).json({ erro: "numero e texto obrigatórios" });
+
+  const { conv: convExistente } = localizarConversa(numero, req);
+  if (convExistente && !isAdminSuper(req) && convExistente.empresa_id !== req.user.empresa_id) {
+    return res.status(403).json({ erro: "Acesso negado: conversa pertence a outra empresa" });
+  }
+
+  const empresaAlvo = convExistente?.empresa_id || req.user.empresa_id;
   const mensagem = { id: Date.now().toString(), tipo: tipo || "bot", texto, numero, timestamp: new Date().toISOString() };
-  await registrarNaConversa(numero, mensagem, nome, setor);
+  await registrarNaConversa(numero, mensagem, nome, setor, empresaAlvo);
   console.log(`[BOT→INBOX] ${nome || numero}: ${texto.substring(0, 60)}`);
   res.json({ ok: true });
 });
 
 router.get("/debug/evolution", (req, res) => {
   res.json({ url: EVOLUTION_URL, key: EVOLUTION_KEY ? EVOLUTION_KEY.substring(0, 5) + "..." : "MISSING" });
-});
-
-router.get("/debug/register-cajado-channel", async (req, res) => {
-  if (!supabase) return res.json({ error: "no supabase" });
-  try {
-    const empresaIdMax = '658ed627-c84e-46c0-a9d2-83c4a1b66bca'; // max@cajado
-    const empresaIdAdmin = '9cb2f597-367d-4475-b307-43345b09dee8'; // admin@visiopro
-    
-    // Register maiara (belongs to admin@visiopro)
-    await supabase.from('canais').delete().eq('dados_conexao->>instance_name', 'maiara');
-    await supabase.from('canais').insert({
-      empresa_id: empresaIdAdmin,
-      nome: 'WhatsApp Principal (maiara)',
-      tipo: 'evolution',
-      status: 'conectado',
-      dados_conexao: {
-        instance_name: 'maiara',
-        webhook_url: 'https://scintillating-freedom-production.up.railway.app/webhook/evolution',
-        webhook_ok: true,
-        ativo: true,
-      }
-    });
-
-    // Register vp_cajado_01 (belongs to max@cajado)
-    await supabase.from('canais').delete().eq('dados_conexao->>instance_name', 'vp_cajado_01');
-    await supabase.from('canais').insert({
-      empresa_id: empresaIdMax,
-      nome: 'Cajado Evolution (vp_cajado_01)',
-      tipo: 'evolution',
-      status: 'conectado',
-      dados_conexao: {
-        instance_name: 'vp_cajado_01',
-        webhook_url: 'https://scintillating-freedom-production.up.railway.app/webhook/evolution',
-        webhook_ok: true,
-        ativo: true,
-      }
-    });
-
-    res.json({ success: true });
-  } catch (e) {
-    res.json({ error: e.message });
-  }
 });
 
 router.get("/debug/inbox", authMiddleware, async (req, res) => {
@@ -197,42 +79,35 @@ router.get("/debug/inbox", authMiddleware, async (req, res) => {
     user: { email: req.user.email, empresa_id: req.user.empresa_id, role: req.user.role },
     adminEnv: ADMIN_EMAIL,
     adminDefault: ADMIN_DEFAULT.empresa_id,
-    isSuperAdmin: req.user.email?.toLowerCase() === (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase() || req.user.email?.toLowerCase() === "admin@visiopro.com",
+    isSuperAdmin: req.user.email?.toLowerCase() === (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase(),
     conversasMemoria: Array.from(conversas.values()).map(c => ({ numero: c.numero, nome: c.nome, empresa_id: c.empresa_id, msgs: c.mensagens?.length || 0 })),
     conversasSupabase: dbConversas
   });
 });
 
 router.get("/inbox/conversas", authMiddleware, async (req, res) => {
-  // isSuperAdmin = admin master do sistema (ADMIN_EMAIL env var)
-  // Mesmo sendo superAdmin, filtra pela própria empresa (não vê outros tenants)
   const adminEmail = (ADMIN_EMAIL || "admin@visiopro.com").toLowerCase();
-  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.email?.toLowerCase() === "admin@visiopro.com";
-
-  // empresa_id efetivo: usa o do JWT (prioridade) ou ADMIN_DEFAULT se estiver vazio
-  const empresaIdEfetivo = req.user.empresa_id && req.user.empresa_id !== "vazia"
-    ? req.user.empresa_id
-    : ADMIN_DEFAULT.empresa_id;
-
+  const isSuperAdmin = req.user.email?.toLowerCase() === adminEmail || req.user.empresa_id === ADMIN_DEFAULT.empresa_id || req.user.empresa_id === "empresa-padrao";
+  
   if (supabase) {
     let query = supabase.from("whatsapp_conversas").select("dados, empresa_id");
-    // Sempre filtra pela empresa — admin usa empresaIdEfetivo (ADMIN_DEFAULT), outros usam JWT
-    query = query.eq("empresa_id", empresaIdEfetivo);
+    if (!isSuperAdmin) {
+      query = query.eq("empresa_id", req.user.empresa_id);
+    }
     const { data } = await query;
     if (data) {
       data.forEach(row => {
         if(row.dados) {
           row.dados.empresa_id = row.empresa_id;
+          const chave = chaveConversa(row.empresa_id, row.dados.numero);
 
-          const isNew = !conversas.has(row.dados.numero);
-          if (isNew) {
-            if (row.dados.botOn === false) botPausado.set(row.dados.numero, true);
-            else botPausado.delete(row.dados.numero);
-          }
-
-          const current = conversas.get(row.dados.numero);
-          if (!current || !current.mensagens || (row.dados.mensagens && row.dados.mensagens.length >= current.mensagens.length)) {
-            conversas.set(row.dados.numero, row.dados);
+          // Mesma lógica do endpoint de detalhe: só preenche a partir do banco
+          // se ainda não estiver em memória. Memória já populada é sempre a
+          // versão mais atual (atualizada de forma síncrona pelo webhook) —
+          // sobrescrever com o banco a cada poll é que causava mensagem sumindo.
+          if (!conversas.has(chave)) {
+            if (row.dados.botOn === false) botPausado.set(chave, true);
+            conversas.set(chave, row.dados);
           }
         }
       });
@@ -241,29 +116,33 @@ router.get("/inbox/conversas", authMiddleware, async (req, res) => {
 
   const lista = Array.from(conversas.values())
     .filter(c => {
-      // Filtra sempre por empresa — sem exceção para nenhum nível de admin
-      return c.empresa_id === empresaIdEfetivo ||
-             (c.empresa_id === "empresa-padrao" && isSuperAdmin);
+      if (isSuperAdmin) return true;
+      return c.empresa_id === req.user.empresa_id ||
+             (c.empresa_id === "empresa-padrao" && req.user.empresa_id === ADMIN_DEFAULT.empresa_id);
     })
     .map(c => ({
       numero: c.numero,
       nome: c.nome,
       etiqueta: c.etiqueta,
-      botOn: !botPausado.has(c.numero),
+      botOn: !botPausado.has(chaveConversa(c.empresa_id, c.numero)),
       unread: c.unread || 0,
       ultimaMensagem: c.ultimaMensagem || "",
       ultimoHorario: c.ultimoHorario || "",
       setor: c.setor || null,
       assumido_nome: c.assumido_nome || null,
       lastInboundAt: c.lastInboundAt || null,
-  }));
+      // ── Campos de identidade visual ──────────────────
+      avatarUrl: c.avatarUrl || null,         // Foto de perfil do contato
+      instanceName: c.instanceName || null,   // Instância Evolution de origem
+      canal: c.canal || null,                 // "oficial" para WABA, null para Evolution
+    }));
   // Adiciona as conversas do Webchat (Vivi site)
   let listaVivi = [];
   if (supabase) {
-    // Webchat: filtra por empresa_id (ambos admin e usuários normais)
-    let qVivi = supabase.from("vivi_conversas").select("*")
-      .eq("empresa_id", empresaIdEfetivo)
-      .order("created_at", { ascending: false });
+    let qVivi = supabase.from("vivi_conversas").select("*").order("created_at", { ascending: false });
+    if (!isSuperAdmin) {
+      qVivi = qVivi.or(`empresa_id.eq.${req.user.empresa_id},empresa_id.is.null`);
+    }
     const { data: dataVivi } = await qVivi;
     if (dataVivi) {
       const mapVivi = new Map();
@@ -310,7 +189,8 @@ router.get("/inbox/contact-photo/:numero", authMiddleware, async (req, res) => {
   }
 
   // Detecta qual instância está usando este número
-  const conv = conversas.get(numero);
+  const chave = chaveConversa(req.user.empresa_id, numero);
+  const conv = conversas.get(chave);
   const instanceName = conv?.instanceName || "botwhatsapp01";
   const jid = numero.includes("@") ? numero : `${numero}@s.whatsapp.net`;
 
@@ -330,30 +210,53 @@ router.get("/inbox/contact-photo/:numero", authMiddleware, async (req, res) => {
 });
 
 router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
-  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || "").toLowerCase();
-  const isSuperAdmin = superAdminEmail && req.user.email?.toLowerCase() === superAdminEmail;
   const numero = req.params.numero;
-  if (supabase) {
+  const isSuperAdmin = isAdminSuper(req);
+
+  // Resolve a empresa certa pra montar a chave. Usuário normal: sempre a
+  // própria empresa (não muda). Super admin: usa ?empresa_id= se veio
+  // explícito; senão, procura em memória por esse número em QUALQUER
+  // empresa (uma conversa pode pertencer a empresa diferente da que o
+  // admin master está vinculado) — só cai na própria empresa do admin
+  // como último recurso, se não achar em lugar nenhum.
+  let empresaAlvo = isSuperAdmin ? req.query.empresa_id : req.user.empresa_id;
+  if (isSuperAdmin && !empresaAlvo) {
+    for (const c of conversas.values()) {
+      if (c.numero === numero) { empresaAlvo = c.empresa_id; break; }
+    }
+  }
+  const empresaEraDesconhecida = isSuperAdmin && !empresaAlvo;
+  if (!empresaAlvo) empresaAlvo = req.user.empresa_id;
+  let chave = chaveConversa(empresaAlvo, numero);
+
+  // Só busca no Supabase se a conversa AINDA não está em memória (ex: logo
+  // após reiniciar o servidor). Reconsultar o banco a cada poll (o frontend
+  // chama essa rota a cada 2.5s) e comparar tamanhos pra decidir se sobrescreve
+  // criava uma corrida com o INSERT/UPDATE assíncrono do webhook — podia
+  // sobrescrever o estado em memória (sempre o mais atual) com uma versão do
+  // banco ainda não totalmente propagada, fazendo mensagem "sumir" no poll
+  // seguinte. Em memória já é sempre a fonte mais atual, então não precisa
+  // reconsultar o banco toda vez.
+  if (supabase && !conversas.has(chave)) {
     let query = supabase.from("whatsapp_conversas").select("dados, empresa_id").eq("numero", numero);
-    if (!isSuperAdmin) query = query.eq("empresa_id", req.user.empresa_id);
-    const { data, error: dbErr } = await query.single();
-    console.log(`[Detalhe] ${numero} | user.empresa_id=${req.user.empresa_id} | dbFound=${!!data} | dbMsgs=${data?.dados?.mensagens?.length ?? 'N/A'} | dbErr=${dbErr?.message || 'none'}`);
+    // Se a empresa ainda é um "chute" (super admin sem ?empresa_id= e não achou
+    // em memória), não filtra por empresa — deixa achar em qualquer uma.
+    if (!empresaEraDesconhecida) query = query.eq("empresa_id", empresaAlvo);
+    const { data } = await query.limit(1).maybeSingle();
     if (data && data.dados) {
-      data.dados.empresa_id = data.dados.empresa_id || "empresa-padrao";
-      const current = conversas.get(numero);
-      if (!current || !current.mensagens || (data.dados.mensagens && data.dados.mensagens.length >= current.mensagens.length)) {
-        conversas.set(numero, data.dados);
-      }
-    } else if (!isSuperAdmin) {
-      // Conversa não pertence a esta empresa
-      return res.status(403).json({ erro: "Acesso negado a esta conversa" });
+      const empresaReal = data.empresa_id || empresaAlvo;
+      data.dados.empresa_id = empresaReal;
+      chave = chaveConversa(empresaReal, numero);
+      conversas.set(chave, data.dados);
     }
   }
 
   // Se for um session_id do Webchat (contém letras ou hifens)
   if (numero && numero.match(/[a-zA-Z-]/)) {
     if (supabase) {
-      const { data } = await supabase.from("vivi_conversas").select("*").eq("session_id", numero).order("created_at", { ascending: true });
+      let qVivi = supabase.from("vivi_conversas").select("*").eq("session_id", numero).order("created_at", { ascending: true });
+      if (!isSuperAdmin) qVivi = qVivi.eq("empresa_id", req.user.empresa_id);
+      const { data } = await qVivi;
       if (data && data.length > 0) {
         // Marca como visto
         await supabase.from("vivi_conversas").update({ visto: true }).eq("session_id", numero).is("visto", false);
@@ -379,36 +282,41 @@ router.get("/inbox/conversas/:numero", authMiddleware, async (req, res) => {
     return res.json({ mensagens: [], botOn: false });
   }
 
-  const conv = conversas.get(numero);
+  const conv = conversas.get(chave);
   if (!conv) return res.json({ mensagens: [], botOn: true });
-  // Verificar empresa_id na memória também
-  if (!isSuperAdmin && conv.empresa_id && conv.empresa_id !== "empresa-padrao" && conv.empresa_id !== req.user.empresa_id) {
-    return res.status(403).json({ erro: "Acesso negado a esta conversa" });
+
+  // Verifica se a conversa pertence à empresa do usuário
+  if (!isSuperAdmin && conv.empresa_id && conv.empresa_id !== req.user.empresa_id) {
+    return res.status(403).json({ erro: "Acesso negado" });
   }
-  
+
   if (conv.unread > 0) {
     conv.unread = 0;
     if (supabase && conv.empresa_id && conv.empresa_id !== "empresa-padrao" && conv.empresa_id !== "vazia") {
       supabase.from("whatsapp_conversas").upsert({ numero, empresa_id: conv.empresa_id, dados: conv }).then(()=>{});
     }
   }
-
-  // Inclui status de digitando na resposta (TTL de 8s)
-  const isTyping = typingStatus.has(numero) && (Date.now() - typingStatus.get(numero)) < 8000;
-
-  res.json({ ...conv, botOn: !botPausado.has(numero), isTyping });
+  
+  res.json({ ...conv, botOn: !botPausado.has(chave) });
 });
 
 router.post("/inbox/enviar", authMiddleware, async (req, res) => {
   const { numero, texto, interna, media } = req.body;
   if (!numero || (!texto && !media)) return res.status(400).json({ erro: "numero e texto/media obrigatórios" });
+
+  // ── Verificação de tenant: impede que um cliente envie pelo canal de outro ──
+  const { conv: convInfo } = localizarConversa(numero, req);
+  if (convInfo && convInfo.empresa_id && !isAdminSuper(req) && convInfo.empresa_id !== req.user.empresa_id) {
+    return res.status(403).json({ erro: "Acesso negado: conversa pertence a outra empresa" });
+  }
+  const empresaAlvo = convInfo?.empresa_id || req.user.empresa_id;
+
   try {
     if (interna) {
       const mensagem = { id: Date.now().toString(), tipo: "interna", texto, numero, timestamp: new Date().toISOString() };
-      await registrarNaConversa(numero, mensagem, null, null);
+      await registrarNaConversa(numero, mensagem, null, null, empresaAlvo);
       return res.json({ ok: true, interna: true });
     }
-    const convInfo = conversas.get(numero);
     const instOverride = convInfo ? convInfo.instanceName : null;
     
     // Se for Webchat (session_id)
@@ -419,7 +327,7 @@ router.post("/inbox/enviar", authMiddleware, async (req, res) => {
           mensagem: texto,
           role: "assistant",
           canal: "site",
-          empresa_id: (req.user && req.user.empresa_id) || null,
+          empresa_id: req.user.empresa_id || null,
           visto: true
         }]);
       }
@@ -460,7 +368,7 @@ router.post("/inbox/enviar", authMiddleware, async (req, res) => {
       mensagem.mediaUrl = media.url;
       mensagem.mimetype = media.mimetype;
     }
-    await registrarNaConversa(numero, mensagem, null, null, null, instOverride);
+    await registrarNaConversa(numero, mensagem, null, null, empresaAlvo, instOverride);
     res.json({ ok: true });
   } catch (e) {
     console.error("[ENVIAR]", e.response?.data || e.message);
@@ -472,8 +380,15 @@ router.post("/inbox/enviar", authMiddleware, async (req, res) => {
 router.post("/inbox/enviar-midia", authMiddleware, async (req, res) => {
   const { numero, base64, mimetype, filename, tipo } = req.body;
   if (!numero || !base64) return res.status(400).json({ erro: "numero e base64 obrigatórios" });
+
+  // ── Verificação de tenant ─────────────────────────────────────────────────
+  const { conv: convInfo } = localizarConversa(numero, req);
+  if (convInfo && convInfo.empresa_id && !isAdminSuper(req) && convInfo.empresa_id !== req.user.empresa_id) {
+    return res.status(403).json({ erro: "Acesso negado: conversa pertence a outra empresa" });
+  }
+  const empresaAlvo = convInfo?.empresa_id || req.user.empresa_id;
+
   try {
-    const convInfo = conversas.get(numero);
     const instOverride = convInfo ? convInfo.instanceName : null;
     const instance = instOverride || process.env.INSTANCE || "botwhatsapp01";
 
@@ -489,7 +404,7 @@ router.post("/inbox/enviar-midia", authMiddleware, async (req, res) => {
     }, { headers: { apikey: EVOLUTION_KEY, "Content-Type": "application/json" } });
 
     const mensagem = { id: Date.now().toString(), tipo: "enviada", texto: `📎 ${filename || "Arquivo"}`, numero, timestamp: new Date().toISOString() };
-    await registrarNaConversa(numero, mensagem, null, null, null, instOverride);
+    await registrarNaConversa(numero, mensagem, null, null, empresaAlvo, instOverride);
     res.json({ ok: true });
   } catch (e) {
     console.error("[ENVIAR-MIDIA]", e.response?.data || e.message);
@@ -497,92 +412,74 @@ router.post("/inbox/enviar-midia", authMiddleware, async (req, res) => {
   }
 });
 
+// As 4 rotas abaixo não exigiam login antes — qualquer um sabendo um número
+// podia pausar o bot, mudar etiqueta/setor de conversas de QUALQUER empresa.
+// Agora exigem authMiddleware e resolvem/checam a empresa do usuário.
 router.post("/inbox/bot/:numero", authMiddleware, async (req, res) => {
   const { numero } = req.params;
   const { pausar } = req.body;
+  const { chave, conv } = localizarConversa(numero, req);
+  if (conv && !isAdminSuper(req) && conv.empresa_id !== req.user.empresa_id) {
+    return res.status(403).json({ erro: "Acesso negado: conversa pertence a outra empresa" });
+  }
   if (pausar) {
-    botPausado.set(numero, true);
+    botPausado.set(chave, true);
     console.log(`[BOT] Pausado para ${numero}`);
   } else {
-    botPausado.delete(numero);
+    botPausado.delete(chave);
     console.log(`[BOT] Ativado para ${numero}`);
   }
-  if (conversas.has(numero)) {
-    conversas.get(numero).botOn = !pausar;
-    await registrarNaConversa(numero, null, null, null);
+  if (conv) {
+    conv.botOn = !pausar;
+    await registrarNaConversa(numero, null, null, null, conv.empresa_id);
   }
   res.json({ ok: true, botOn: !pausar });
 });
 
-router.get("/inbox/bot/:numero/status", (req, res) => {
-  res.json({ botOn: !botPausado.has(req.params.numero) });
+router.get("/inbox/bot/:numero/status", authMiddleware, (req, res) => {
+  const { chave } = localizarConversa(req.params.numero, req);
+  res.json({ botOn: !botPausado.has(chave) });
 });
 
 router.patch("/inbox/conversas/:numero/etiqueta", authMiddleware, async (req, res) => {
   const { numero } = req.params;
-  if (conversas.has(numero)) {
-    const conv = conversas.get(numero);
+  const { conv } = localizarConversa(numero, req);
+  if (conv) {
+    if (!isAdminSuper(req) && conv.empresa_id !== req.user.empresa_id) {
+      return res.status(403).json({ erro: "Acesso negado: conversa pertence a outra empresa" });
+    }
     conv.etiqueta = req.body.etiqueta;
-    await registrarNaConversa(numero, null, null, null);
+    await registrarNaConversa(numero, null, null, null, conv.empresa_id);
   }
   res.json({ ok: true });
 });
 
 router.patch("/inbox/conversas/:numero/setor", authMiddleware, async (req, res) => {
   const { numero } = req.params;
-  if (conversas.has(numero)) {
-    const conv = conversas.get(numero);
+  const { conv } = localizarConversa(numero, req);
+  if (conv) {
+    if (!isAdminSuper(req) && conv.empresa_id !== req.user.empresa_id) {
+      return res.status(403).json({ erro: "Acesso negado: conversa pertence a outra empresa" });
+    }
     conv.setor = req.body.setor?.toLowerCase().trim() || null;
-    await registrarNaConversa(numero, null, null, null);
+    await registrarNaConversa(numero, null, null, null, conv.empresa_id);
   }
   res.json({ ok: true });
 });
 
+// ─── ROTAS DE BRIDGE — DESATIVADAS ────────────────────────────────────
+// Essas rotas não tinham NENHUMA autenticação nem verificação de empresa —
+// qualquer um na internet que descobrisse a URL conseguia ler e escrever
+// dados de conversa de qualquer empresa cadastrada. Desativadas para
+// eliminar a superfície de risco. Se precisar reativar pra algum uso
+// futuro, adicione authMiddleware + checagem de empresa antes de usar.
 ["", "/v1"].forEach(prefix => {
-  router.get(`${prefix}/conversas/:id`, async (req, res) => {
-    const { id } = req.params;
-    const conv = conversas.get(id);
-    if (conv) return res.json(conv);
-    if (supabase) {
-      const { data } = await supabase.from("whatsapp_conversas")
-        .select("*").or(`id.eq.${id},numero.eq.${id}`).limit(1).single();
-      if (data) return res.json(data);
-    }
-    res.status(404).json({ erro: "Conversa não encontrada" });
+  router.get(`${prefix}/conversas/:id`, (req, res) => {
+    res.status(410).json({ erro: "Rota de bridge desativada." });
   });
 
-  router.patch(`${prefix}/conversas/:id`, async (req, res) => {
-    const { id } = req.params;
-    const updates = req.body || {};
-    console.log(`[BRIDGE] PATCH ${prefix}/conversas/${id}`, JSON.stringify(updates));
-
-    const dbUpdate = {};
-    if (updates.etiqueta   !== undefined) dbUpdate.etiqueta = updates.etiqueta;
-    if (updates.setor      !== undefined) dbUpdate.setor = updates.setor;
-    if (updates.status     !== undefined) dbUpdate.status = updates.status;
-    if (updates.nome       !== undefined) dbUpdate.nome = updates.nome;
-    if (updates.bot_on     !== undefined) dbUpdate.bot_on = updates.bot_on;
-    if (updates.atribuido  !== undefined) dbUpdate.atribuido = updates.atribuido;
-    if (updates.observacao !== undefined) dbUpdate.observacao = updates.observacao;
-    Object.keys(updates).forEach(k => {
-      if (!dbUpdate[k] && !["id","empresa_id","created_at"].includes(k)) dbUpdate[k] = updates[k];
-    });
-
-    if (conversas.has(id)) {
-      const conv = conversas.get(id);
-      Object.assign(conv, dbUpdate);
-    }
-
-    if (supabase && Object.keys(dbUpdate).length > 0) {
-      const { error: e1 } = await supabase.from("whatsapp_conversas")
-        .update(dbUpdate).eq("id", id);
-      if (e1) {
-        await supabase.from("whatsapp_conversas")
-          .update(dbUpdate).eq("numero", id);
-      }
-    }
-
-    res.json({ ok: true, updated: dbUpdate });
+  router.patch(`${prefix}/conversas/:id`, (req, res) => {
+    res.status(410).json({ erro: "Rota de bridge desativada." });
   });
 });
 
