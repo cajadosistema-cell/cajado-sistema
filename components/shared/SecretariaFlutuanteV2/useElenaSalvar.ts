@@ -927,6 +927,15 @@ export function useElenaSalvar({
           .order('valor_investido', { ascending: false })
         if (empresaId) qAtivos = qAtivos.eq('empresa_id', empresaId)
 
+        // 🔧 FIX (20/07/2026): faltava esta seção inteira — a projeção mostrava
+        // cartões e boletos de imóveis mas nunca os contratos de investimento
+        // parcelados (ex: Bradesco Solar), diferente do resumo_mensal que já
+        // tinha isso (reportado pelo Sr. Max via áudio).
+        let qContratosInv = (supabase.from('investimentos_contratos') as any)
+          .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel')
+          .eq('mes_referencia', mesAtualRef)
+        if (empresaId) qContratosInv = qContratosInv.eq('empresa_id', empresaId)
+
         const [
           { data: gastos3m },
           { data: receitas3m },
@@ -938,6 +947,7 @@ export function useElenaSalvar({
           { data: faturasMes },
           { data: ativosProj },
           { data: pagamentosMes },
+          { data: contratosInvProj },
         ] = await Promise.all([
           // Gastos históricos (3 meses)
           (supabase.from('gastos_pessoais') as any)
@@ -985,6 +995,8 @@ export function useElenaSalvar({
             .select('compromisso_id, status, valor_pago')
             .eq('user_id', uid)
             .eq('mes_referencia', mesAtualRef),
+          // Contratos de investimento parcelados (ex: Bradesco)
+          qContratosInv,
         ])
 
         // ── 2. Calcula médias mensais (gastos variáveis) ────────
@@ -1045,6 +1057,21 @@ export function useElenaSalvar({
         })
         const totalParcelas = parcelasAtivas.reduce((s, p) => s + (p.somaNoTotal === false ? 0 : p.valor), 0)
 
+        // ── 5b. Investimentos parcelados (contratos tipo Bradesco Solar) ──
+        const investimentosAtivos: { nome: string; instituicao?: string; valor: number; parcelaStr: string }[] = []
+        ;(contratosInvProj || []).forEach((c: any) => {
+          const restantes = (c.parcela_total || 0) - (c.parcela_atual || 0)
+          if (restantes > 0) {
+            investimentosAtivos.push({
+              nome: c.nome_contrato,
+              instituicao: c.instituicao,
+              valor: Number(c.valor_mensal) || 0,
+              parcelaStr: `${c.parcela_atual}/${c.parcela_total}`,
+            })
+          }
+        })
+        const totalInvestimentosContratos = investimentosAtivos.reduce((s, i) => s + i.valor, 0)
+
         // ── 6. Cartões PF — estima fatura do próximo mês ────────
         const cartoesLista = cartoesPf || []
         const faturasMap = new Map<string, any>((faturasMes || []).map((f: any) => [f.conta_id, f]))
@@ -1100,7 +1127,7 @@ export function useElenaSalvar({
 
         // ── Totais consolidados ──────────────────────────────────
         const entradasMes = totalReceitasRec > 0 ? Math.max(mediaReceitas, totalReceitasRec) : mediaReceitas
-        const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelas + totalCartoes
+        const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelas + totalCartoes + totalInvestimentosContratos
 
         // 🔧 FIX (18/07/2026): saída reescrita pra usar o MESMO formato de tabela
         // markdown do resumo_mensal (pedido do Sr. Max: "a projeção deveria seguir
@@ -1178,6 +1205,17 @@ export function useElenaSalvar({
               texto += `| ${p.titulo} | ${diaStr} | ${valorLabel} | ${p.pagas}/${p.total} (${pct}%) — faltam ${p.restantes} |\n`
             })
             texto += `**Subtotal financiamentos: ${fmt(totalParcelas)}**\n`
+          }
+
+          // 3b. Investimentos parcelados (contratos tipo Bradesco Solar)
+          if (investimentosAtivos.length > 0) {
+            texto += `📈 **Investimentos com parcela mensal (${investimentosAtivos.length})**\n`
+            texto += `| Contrato | Instituição | Parcela | Valor Mensal |\n`
+            texto += `|----------|-------------|--------:|-------------:|\n`
+            investimentosAtivos.forEach(i => {
+              texto += `| ${i.nome} | ${i.instituicao || '—'} | ${i.parcelaStr} | ${fmt(i.valor)} |\n`
+            })
+            texto += `**Subtotal investimentos: ${fmt(totalInvestimentosContratos)}**\n`
           }
 
           // 4. Gastos variáveis (média)
@@ -1281,6 +1319,7 @@ export function useElenaSalvar({
         if ((alertasRec || []).length > 0) fontes.push(`${(alertasRec || []).length} contas fixas`)
         if ((receitasRec || []).length > 0) fontes.push(`${(receitasRec || []).length} receitas recorrentes`)
         if (parcelasAtivas.length > 0) fontes.push(`${parcelasAtivas.length} financiamentos`)
+        if (investimentosAtivos.length > 0) fontes.push(`${investimentosAtivos.length} investimentos parcelados`)
         if (cartoesDetalhe.length > 0) fontes.push(`${cartoesDetalhe.length} cartões`)
         if (ativosLista.length > 0) fontes.push(`${ativosLista.length} investimentos`)
 
