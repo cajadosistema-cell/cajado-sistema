@@ -931,9 +931,15 @@ export function useElenaSalvar({
         // cartões e boletos de imóveis mas nunca os contratos de investimento
         // parcelados (ex: Bradesco Solar), diferente do resumo_mensal que já
         // tinha isso (reportado pelo Sr. Max via áudio).
+        // 🔧 FIX 2 (20/07/2026): filtrar só pelo mês ATUAL escondia contratos
+        // que começam num mês futuro dentro da janela da projeção (ex: Sítio
+        // Vida, cuja primeira parcela só existe com mes_referencia de agosto)
+        // — usar >= mês atual pega tanto os que já estão rodando quanto os
+        // que só começam mais pra frente, sem perder nenhum dos dois casos.
         let qContratosInv = (supabase.from('investimentos_contratos') as any)
-          .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel')
-          .eq('mes_referencia', mesAtualRef)
+          .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel, mes_referencia')
+          .gte('mes_referencia', mesAtualRef)
+          .order('mes_referencia', { ascending: true })
         if (empresaId) qContratosInv = qContratosInv.eq('empresa_id', empresaId)
 
         const [
@@ -1058,15 +1064,22 @@ export function useElenaSalvar({
         const totalParcelas = parcelasAtivas.reduce((s, p) => s + (p.somaNoTotal === false ? 0 : p.valor), 0)
 
         // ── 5b. Investimentos parcelados (contratos tipo Bradesco Solar) ──
-        const investimentosAtivos: { nome: string; instituicao?: string; valor: number; parcelaStr: string }[] = []
+        const investimentosAtivos: { nome: string; instituicao?: string; valor: number; parcelaStr: string; mesRef: string }[] = []
+        const nomesContratosVistos = new Set<string>()
         ;(contratosInvProj || []).forEach((c: any) => {
+          // dedupe: se o mesmo contrato tiver linha no mês atual E numa futura
+          // (raro, mas possível), fica só com a mais próxima (lista já vem
+          // ordenada por mes_referencia ascendente)
+          if (nomesContratosVistos.has(c.nome_contrato)) return
           const restantes = (c.parcela_total || 0) - (c.parcela_atual || 0)
           if (restantes > 0) {
+            nomesContratosVistos.add(c.nome_contrato)
             investimentosAtivos.push({
               nome: c.nome_contrato,
               instituicao: c.instituicao,
               valor: Number(c.valor_mensal) || 0,
               parcelaStr: `${c.parcela_atual}/${c.parcela_total}`,
+              mesRef: c.mes_referencia,
             })
           }
         })
@@ -1213,9 +1226,14 @@ export function useElenaSalvar({
             texto += `| Contrato | Instituição | Parcela | Valor Mensal |\n`
             texto += `|----------|-------------|--------:|-------------:|\n`
             investimentosAtivos.forEach(i => {
-              texto += `| ${i.nome} | ${i.instituicao || '—'} | ${i.parcelaStr} | ${fmt(i.valor)} |\n`
+              const aindaNaoComecou = i.mesRef !== mesAtualRef
+              const marcador = aindaNaoComecou ? '🆕 ' : ''
+              texto += `| ${marcador}${i.nome} | ${i.instituicao || '—'} | ${i.parcelaStr} | ${fmt(i.valor)} |\n`
             })
             texto += `**Subtotal investimentos: ${fmt(totalInvestimentosContratos)}**\n`
+            if (investimentosAtivos.some(i => i.mesRef !== mesAtualRef)) {
+              texto += `_🆕 = contrato ainda não iniciado no mês atual, mas dentro da janela projetada_\n`
+            }
           }
 
           // 4. Gastos variáveis (média)
