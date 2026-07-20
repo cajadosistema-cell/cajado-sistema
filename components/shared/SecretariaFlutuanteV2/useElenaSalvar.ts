@@ -1012,20 +1012,38 @@ export function useElenaSalvar({
         const totalReceitasRec = (receitasRec || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
 
         // ── 5. Parcelas de financiamento (imóveis + veículos) ───
-        const parcelasAtivas: { titulo: string; valor: number; restantes: number; total: number; pagas: number; dia?: number }[] = []
+        // 🔧 FIX (20/07/2026): antes exigia `&& im.valor_parcela`, o que fazia
+        // qualquer financiamento sem valor cadastrado sumir da projeção sem
+        // aviso — mesmo bug do resumo_mensal (Sítio Zeta/São Roque). Agora
+        // entra com placeholder "valor a definir" e não soma no total.
+        const parcelasAtivas: { titulo: string; valor: number; valorLabel?: string; somaNoTotal?: boolean; restantes: number; total: number; pagas: number; dia?: number }[] = []
         ;(imoveisFinanc || []).forEach((im: any) => {
           const restantes = (im.parcelas_total || 0) - (im.parcelas_pagas || 0)
-          if (restantes > 0 && im.valor_parcela) {
-            parcelasAtivas.push({ titulo: `🏠 ${im.titulo}${im.construtora ? ` (${im.construtora})` : ''}`, valor: Number(im.valor_parcela), restantes, total: im.parcelas_total || 0, pagas: im.parcelas_pagas || 0 })
+          if (restantes > 0) {
+            const temValor = im.valor_parcela != null
+            parcelasAtivas.push({
+              titulo: `🏠 ${im.titulo}${im.construtora ? ` (${im.construtora})` : ''}`,
+              valor: temValor ? Number(im.valor_parcela) : 0,
+              valorLabel: temValor ? undefined : '⚠️ valor a definir',
+              somaNoTotal: temValor,
+              restantes, total: im.parcelas_total || 0, pagas: im.parcelas_pagas || 0,
+            })
           }
         })
         ;(veiculosFinanc || []).forEach((ve: any) => {
           const restantes = (ve.parcelas_total || 0) - (ve.parcelas_pagas || 0)
-          if (restantes > 0 && ve.valor_parcela) {
-            parcelasAtivas.push({ titulo: `🚗 ${ve.titulo}`, valor: Number(ve.valor_parcela), restantes, total: ve.parcelas_total || 0, pagas: ve.parcelas_pagas || 0, dia: ve.vencimento_dia })
+          if (restantes > 0) {
+            const temValor = ve.valor_parcela != null
+            parcelasAtivas.push({
+              titulo: `🚗 ${ve.titulo}`,
+              valor: temValor ? Number(ve.valor_parcela) : 0,
+              valorLabel: temValor ? undefined : '⚠️ valor a definir',
+              somaNoTotal: temValor,
+              restantes, total: ve.parcelas_total || 0, pagas: ve.parcelas_pagas || 0, dia: ve.vencimento_dia,
+            })
           }
         })
-        const totalParcelas = parcelasAtivas.reduce((s, p) => s + p.valor, 0)
+        const totalParcelas = parcelasAtivas.reduce((s, p) => s + (p.somaNoTotal === false ? 0 : p.valor), 0)
 
         // ── 6. Cartões PF — estima fatura do próximo mês ────────
         const cartoesLista = cartoesPf || []
@@ -1156,7 +1174,8 @@ export function useElenaSalvar({
             parcelasAtivas.forEach(p => {
               const pct = p.total > 0 ? Math.round(p.pagas / p.total * 100) : 0
               const diaStr = p.dia ? String(p.dia).padStart(2, '0') : '—'
-              texto += `| ${p.titulo} | ${diaStr} | ${fmt(p.valor)}/mês | ${p.pagas}/${p.total} (${pct}%) — faltam ${p.restantes} |\n`
+              const valorLabel = p.valorLabel || `${fmt(p.valor)}/mês`
+              texto += `| ${p.titulo} | ${diaStr} | ${valorLabel} | ${p.pagas}/${p.total} (${pct}%) — faltam ${p.restantes} |\n`
             })
             texto += `**Subtotal financiamentos: ${fmt(totalParcelas)}**\n`
           }
