@@ -271,7 +271,7 @@ interface UseElenaSalvarProps {
 const ACOES_DESTRUTIVAS = [
   'deletar_evento', 'deletar_lancamento', 'deletar_duplicados',
   'editar_lancamento', 'transferencia',
-  'confirmar_pagamento', 'reagendar_vencimento',
+  'confirmar_pagamento', 'reagendar_vencimento', 'editar_financiamento',
 ]
 const ROTULO_ACAO_DESTRUTIVA: Record<string, string> = {
   deletar_evento:     '🗑️ deletar evento',
@@ -281,6 +281,7 @@ const ROTULO_ACAO_DESTRUTIVA: Record<string, string> = {
   transferencia:      '↔️ transferência entre contas',
   confirmar_pagamento: '✅ marcar como pago',
   reagendar_vencimento: '📅 reagendar vencimento',
+  editar_financiamento: '✏️ editar financiamento',
 }
 
 interface UseElenaSalvarReturn {
@@ -3074,6 +3075,75 @@ export function useElenaSalvar({
             texto: `📅 Vencimento do **${invR[0].nome_contrato}** atualizado pra ${new Date(novaData).toLocaleDateString('pt-BR')}.` }])
         } else {
           throw new Error(`Tipo "${tipoAlvo2}" não reconhecido. Use: cartao, imovel, conta_fixa ou investimento.`)
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      // ── EDITAR FINANCIAMENTO (🆕 21/07/2026 — pedido do Sr. Max) ─────────
+      // Corrige valor da parcela / total de parcelas / parcelas já pagas de
+      // um imóvel, veículo ou contrato de investimento. Diferente do
+      // confirmar_pagamento (que só incrementa +1 quando confirma um
+      // pagamento), esse aceita QUALQUER número — é a correção manual tipo
+      // as que a gente fez via SQL o tempo todo (Sítio Mucugê, São Roque,
+      // Terreno Baron). Passa pelo gate de confirmação.
+      // dados esperados: { tipo: 'imovel'|'veiculo'|'investimento', nome: string,
+      //   novo_valor_parcela?: number, novo_total_parcelas?: number,
+      //   novas_parcelas_pagas?: number, novo_dia_vencimento?: number }
+      } else if (acao.tipo === 'editar_financiamento') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const tipoAlvo3 = acao.dados.tipo
+        const nomeAlvo3 = (acao.dados.nome || '').trim()
+        if (!nomeAlvo3) throw new Error('Informe o nome do imóvel/veículo/investimento a editar.')
+        const empresaIdEd = await getEmpresaId(uid)
+
+        const updates: Record<string, any> = {}
+        if (acao.dados.novo_valor_parcela != null) updates.valor_parcela = Number(acao.dados.novo_valor_parcela)
+        if (acao.dados.novo_total_parcelas != null) updates.parcelas_total = Number(acao.dados.novo_total_parcelas)
+        if (acao.dados.novas_parcelas_pagas != null) updates.parcelas_pagas = Number(acao.dados.novas_parcelas_pagas)
+        if (acao.dados.novo_dia_vencimento != null) updates.dia_vencimento = Number(acao.dados.novo_dia_vencimento)
+        if (Object.keys(updates).length === 0) throw new Error('Nenhuma alteração informada (valor da parcela, total de parcelas, parcelas pagas ou dia de vencimento).')
+
+        if (tipoAlvo3 === 'imovel' || tipoAlvo3 === 'veiculo') {
+          const tabelaAlvo = tipoAlvo3 === 'imovel' ? 'imoveis' : 'veiculos'
+          const colunaNome = tipoAlvo3 === 'imovel' ? 'titulo' : 'titulo'
+          let qEd = (supabase.from(tabelaAlvo) as any).select(`id, ${colunaNome}`).ilike(colunaNome, `%${nomeAlvo3}%`)
+          if (tipoAlvo3 === 'imovel' && empresaIdEd) qEd = qEd.eq('empresa_id', empresaIdEd)
+          // 🔧 lição aprendida (21/07/2026): NUNCA fazer .eq('id', ...) com um id
+          // copiado/colado — teve caso real de UPDATE por id falhar silenciosamente
+          // (0 linhas afetadas) por causa de caractere invisível no copy/paste.
+          // Resolve por nome + empresa e usa esse resultado direto, sem reconstituir
+          // o id como string em outro lugar.
+          const { data: itensAch } = await qEd.limit(5)
+          if (!itensAch?.length) throw new Error(`${tipoAlvo3 === 'imovel' ? 'Imóvel' : 'Veículo'} "${nomeAlvo3}" não encontrado.`)
+          if (itensAch.length > 1) throw new Error(`Mais de um ${tipoAlvo3} encontrado com "${nomeAlvo3}": ${itensAch.map((i: any) => i[colunaNome]).join(', ')}. Seja mais específico.`)
+          if (tipoAlvo3 === 'veiculo' && updates.dia_vencimento != null) {
+            updates.vencimento_dia = updates.dia_vencimento
+            delete updates.dia_vencimento
+          }
+          const { error: errEd } = await (supabase.from(tabelaAlvo) as any).update(updates).eq('id', itensAch[0].id)
+          if (errEd) throw new Error(errEd.message)
+          const resumoEd = Object.entries(updates).map(([k, v]) => `${k}=${v}`).join(', ')
+          setMensagens(prev => [...prev, { id: `edfin-${Date.now()}`, role: 'ai' as const,
+            texto: `✏️ **${itensAch[0][colunaNome]}** atualizado: ${resumoEd}.` }])
+
+        } else if (tipoAlvo3 === 'investimento') {
+          let qEdInv = (supabase.from('investimentos_contratos') as any).select('id, nome_contrato').ilike('nome_contrato', `%${nomeAlvo3}%`)
+          if (empresaIdEd) qEdInv = qEdInv.eq('empresa_id', empresaIdEd)
+          const { data: invEd } = await qEdInv.limit(5)
+          if (!invEd?.length) throw new Error(`Contrato "${nomeAlvo3}" não encontrado.`)
+          if (invEd.length > 1) throw new Error(`Mais de um contrato encontrado com "${nomeAlvo3}". Seja mais específico.`)
+          // Mapeia os nomes genéricos pros nomes de coluna reais de investimentos_contratos
+          const updatesInv: Record<string, any> = {}
+          if (updates.valor_parcela != null) updatesInv.valor_mensal = updates.valor_parcela
+          if (updates.parcelas_pagas != null) updatesInv.parcela_atual = updates.parcelas_pagas
+          if (updates.parcelas_total != null) updatesInv.parcela_total = updates.parcelas_total
+          const { error: errEdInv } = await (supabase.from('investimentos_contratos') as any).update(updatesInv).eq('id', invEd[0].id)
+          if (errEdInv) throw new Error(errEdInv.message)
+          const resumoEdInv = Object.entries(updatesInv).map(([k, v]) => `${k}=${v}`).join(', ')
+          setMensagens(prev => [...prev, { id: `edfin-${Date.now()}`, role: 'ai' as const,
+            texto: `✏️ **${invEd[0].nome_contrato}** atualizado: ${resumoEdInv}.` }])
+        } else {
+          throw new Error(`Tipo "${tipoAlvo3}" não reconhecido. Use: imovel, veiculo ou investimento.`)
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
