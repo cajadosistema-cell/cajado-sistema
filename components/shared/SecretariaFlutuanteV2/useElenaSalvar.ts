@@ -262,9 +262,16 @@ interface UseElenaSalvarProps {
 
 // 🔒 Ações que apagam, editam ou movem dinheiro — nunca executam sem
 // confirmação explícita do usuário (ver gate em executarAcoesAuto).
+// 🆕 (21/07/2026, pedido do Sr. Max): confirmar_pagamento e reagendar_vencimento
+// entraram aqui de propósito — marcar algo como pago ou mudar uma data de
+// vencimento é uma mudança de estado financeiro real, mesma categoria de
+// risco que editar/deletar. Antes disso, a Elena NUNCA marcava nada como
+// pago (decisão de produto deliberada); Max e Maiara confirmaram
+// explicitamente que quereriam essa reversão antes de eu construir.
 const ACOES_DESTRUTIVAS = [
   'deletar_evento', 'deletar_lancamento', 'deletar_duplicados',
   'editar_lancamento', 'transferencia',
+  'confirmar_pagamento', 'reagendar_vencimento',
 ]
 const ROTULO_ACAO_DESTRUTIVA: Record<string, string> = {
   deletar_evento:     '🗑️ deletar evento',
@@ -272,6 +279,8 @@ const ROTULO_ACAO_DESTRUTIVA: Record<string, string> = {
   deletar_duplicados: '🧹 limpar duplicados',
   editar_lancamento:  '✏️ editar lançamento',
   transferencia:      '↔️ transferência entre contas',
+  confirmar_pagamento: '✅ marcar como pago',
+  reagendar_vencimento: '📅 reagendar vencimento',
 }
 
 interface UseElenaSalvarReturn {
@@ -2914,6 +2923,160 @@ export function useElenaSalvar({
             ? `Limpeza concluida! Removi ${totalRemovidos} duplicata(s) da ${alvo}.`
             : `Nenhuma duplicata encontrada — tudo limpo, Sr. Max!` }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
+
+      // ── CONFIRMAR PAGAMENTO (🆕 21/07/2026 — pedido do Sr. Max) ─────────
+      // Marca fatura de cartão / boleto de imóvel / conta fixa / parcela de
+      // investimento como PAGA. Ação passa pelo gate de confirmação (mesma
+      // categoria de risco que editar/deletar — muda estado financeiro real).
+      // dados esperados: { tipo: 'cartao'|'imovel'|'conta_fixa'|'investimento',
+      //                     nome: string, mes_referencia?: 'YYYY-MM',
+      //                     valor_pago?: number, data_pagamento?: 'YYYY-MM-DD' }
+      } else if (acao.tipo === 'confirmar_pagamento') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const tipoAlvo = acao.dados.tipo
+        const nomeAlvo = (acao.dados.nome || '').trim()
+        const mesRefAlvo = acao.dados.mes_referencia || new Date().toISOString().substring(0, 7)
+        const dataPag = acao.dados.data_pagamento || new Date().toISOString().substring(0, 10)
+        if (!nomeAlvo) throw new Error('Informe o nome do cartão/imóvel/conta/investimento a marcar como pago.')
+        const empresaIdConf = await getEmpresaId(uid)
+
+        if (tipoAlvo === 'cartao') {
+          const cartaoPf = await resolverCartaoPf(nomeAlvo)
+          if (!cartaoPf.id) throw new Error(`Cartão "${nomeAlvo}" não encontrado.`)
+          const { data: faturaExistente } = await (supabase.from('faturas_cartoes') as any)
+            .select('id, valor_fechado').eq('conta_id', cartaoPf.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+          if (!faturaExistente) throw new Error(`Fatura de ${cartaoPf.nome} de ${mesRefAlvo} ainda não foi lançada — informe o valor da fatura primeiro.`)
+          const { error } = await (supabase.from('faturas_cartoes') as any)
+            .update({ status: 'pago', data_pagamento: dataPag, ...(acao.dados.valor_pago ? { valor_fechado: Number(acao.dados.valor_pago) } : {}) })
+            .eq('id', faturaExistente.id)
+          if (error) throw new Error(error.message)
+          setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+            texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.` }])
+
+        } else if (tipoAlvo === 'imovel') {
+          let qIm = (supabase.from('imoveis') as any).select('id, titulo').ilike('titulo', `%${nomeAlvo}%`)
+          if (empresaIdConf) qIm = qIm.eq('empresa_id', empresaIdConf)
+          const { data: imoveisAch } = await qIm.limit(5)
+          if (!imoveisAch?.length) throw new Error(`Imóvel "${nomeAlvo}" não encontrado.`)
+          if (imoveisAch.length > 1) throw new Error(`Mais de um imóvel encontrado com "${nomeAlvo}": ${imoveisAch.map((i: any) => i.titulo).join(', ')}. Seja mais específico.`)
+          const imovelAch = imoveisAch[0]
+          const { error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
+            imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
+            status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
+          }, { onConflict: 'imovel_id,mes_referencia' })
+          if (errPag) throw new Error(errPag.message)
+          // 🆕 Incrementa parcelas_pagas automaticamente — resolve exatamente o
+          // tipo de erro manual que a gente ficou corrigindo via SQL o tempo
+          // todo (Sítio Mucugê, São Roque). Nunca passa de parcelas_total.
+          const { data: imovelAtual } = await (supabase.from('imoveis') as any)
+            .select('parcelas_pagas, parcelas_total').eq('id', imovelAch.id).maybeSingle()
+          if (imovelAtual && (imovelAtual.parcelas_pagas || 0) < (imovelAtual.parcelas_total || 0)) {
+            await (supabase.from('imoveis') as any)
+              .update({ parcelas_pagas: (imovelAtual.parcelas_pagas || 0) + 1 })
+              .eq('id', imovelAch.id)
+          }
+          setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefAlvo}) marcado como pago — parcela avançada automaticamente.` }])
+
+        } else if (tipoAlvo === 'conta_fixa') {
+          const { data: contasAch } = await (supabase.from('compromissos_fixos') as any)
+            .select('id, descricao').eq('user_id', uid).ilike('descricao', `%${nomeAlvo}%`).limit(5)
+          if (!contasAch?.length) throw new Error(`Conta fixa "${nomeAlvo}" não encontrada.`)
+          if (contasAch.length > 1) throw new Error(`Mais de uma conta fixa encontrada com "${nomeAlvo}": ${contasAch.map((c: any) => c.descricao).join(', ')}. Seja mais específico.`)
+          const contaAch = contasAch[0]
+          // ⚠️ onConflict assume UNIQUE(compromisso_id, mes_referencia) em
+          // historico_pagamentos_mensal — se a tabela não tiver essa
+          // constraint, ajustar aqui ou trocar por select+insert/update manual.
+          const { error: errHist } = await (supabase.from('historico_pagamentos_mensal') as any).upsert({
+            compromisso_id: contaAch.id, user_id: uid, mes_referencia: mesRefAlvo,
+            status: 'pago', valor_pago: acao.dados.valor_pago || null,
+          }, { onConflict: 'compromisso_id,mes_referencia' })
+          if (errHist) throw new Error(errHist.message)
+          setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+            texto: `✅ Conta **${contaAch.descricao}** (${mesRefAlvo}) marcada como paga.` }])
+
+        } else if (tipoAlvo === 'investimento') {
+          let qInv = (supabase.from('investimentos_contratos') as any)
+            .select('id, nome_contrato, parcela_atual, parcela_total').ilike('nome_contrato', `%${nomeAlvo}%`).eq('mes_referencia', mesRefAlvo)
+          if (empresaIdConf) qInv = qInv.eq('empresa_id', empresaIdConf)
+          const { data: contratosAch } = await qInv.limit(5)
+          if (!contratosAch?.length) throw new Error(`Contrato "${nomeAlvo}" não encontrado para ${mesRefAlvo}.`)
+          if (contratosAch.length > 1) throw new Error(`Mais de um contrato encontrado com "${nomeAlvo}". Seja mais específico.`)
+          const contratoAch = contratosAch[0]
+          const novaParcela = Math.min((contratoAch.parcela_atual || 0) + 1, contratoAch.parcela_total || 0)
+          const { error: errInv } = await (supabase.from('investimentos_contratos') as any)
+            .update({ status: 'pago', parcela_atual: novaParcela })
+            .eq('id', contratoAch.id)
+          if (errInv) throw new Error(errInv.message)
+          setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+            texto: `✅ Contrato **${contratoAch.nome_contrato}** (${mesRefAlvo}) marcado como pago — parcela ${novaParcela}/${contratoAch.parcela_total}.` }])
+        } else {
+          throw new Error(`Tipo "${tipoAlvo}" não reconhecido. Use: cartao, imovel, conta_fixa ou investimento.`)
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      // ── REAGENDAR VENCIMENTO (🆕 21/07/2026 — pedido do Sr. Max) ────────
+      // Atualiza o dia/data de vencimento — usado quando cai em fim de
+      // semana ou precisa adiar por algum imprevisto. NÃO marca como pago
+      // (isso é o confirmar_pagamento); só move a data prevista.
+      // dados esperados: { tipo: 'cartao'|'imovel'|'conta_fixa'|'investimento',
+      //                     nome: string, novo_dia?: number, nova_data?: 'YYYY-MM-DD' }
+      } else if (acao.tipo === 'reagendar_vencimento') {
+        setAcaoStatus(msgId, acaoIdx, 'saving')
+        const tipoAlvo2 = acao.dados.tipo
+        const nomeAlvo2 = (acao.dados.nome || '').trim()
+        const novoDia = acao.dados.novo_dia ? Number(acao.dados.novo_dia) : null
+        const novaData = acao.dados.nova_data || null
+        if (!nomeAlvo2) throw new Error('Informe o nome do cartão/imóvel/conta/investimento a reagendar.')
+        if (!novoDia && !novaData) throw new Error('Informe o novo dia (ex: 25) ou a nova data completa.')
+        const empresaIdReag = await getEmpresaId(uid)
+
+        if (tipoAlvo2 === 'cartao') {
+          const cartaoReag = await resolverCartaoPf(nomeAlvo2)
+          if (!cartaoReag.id) throw new Error(`Cartão "${nomeAlvo2}" não encontrado.`)
+          if (!novoDia) throw new Error('Pra cartão, informe o novo dia do mês (ex: 25).')
+          await (supabase.from('contas') as any).update({ dia_vencimento: novoDia }).eq('id', cartaoReag.id)
+          setMensagens(prev => [...prev, { id: `reag-${Date.now()}`, role: 'ai' as const,
+            texto: `📅 Vencimento do **${cartaoReag.nome}** atualizado pro dia ${novoDia}.` }])
+
+        } else if (tipoAlvo2 === 'imovel') {
+          let qImR = (supabase.from('imoveis') as any).select('id, titulo').ilike('titulo', `%${nomeAlvo2}%`)
+          if (empresaIdReag) qImR = qImR.eq('empresa_id', empresaIdReag)
+          const { data: imR } = await qImR.limit(5)
+          if (!imR?.length) throw new Error(`Imóvel "${nomeAlvo2}" não encontrado.`)
+          if (imR.length > 1) throw new Error(`Mais de um imóvel encontrado com "${nomeAlvo2}". Seja mais específico.`)
+          if (!novoDia) throw new Error('Pra imóvel, informe o novo dia do mês (ex: 25).')
+          await (supabase.from('imoveis') as any).update({ dia_vencimento: novoDia }).eq('id', imR[0].id)
+          setMensagens(prev => [...prev, { id: `reag-${Date.now()}`, role: 'ai' as const,
+            texto: `📅 Vencimento do **${imR[0].titulo}** atualizado pro dia ${novoDia}.` }])
+
+        } else if (tipoAlvo2 === 'conta_fixa') {
+          const { data: cfR } = await (supabase.from('compromissos_fixos') as any)
+            .select('id, descricao').eq('user_id', uid).ilike('descricao', `%${nomeAlvo2}%`).limit(5)
+          if (!cfR?.length) throw new Error(`Conta fixa "${nomeAlvo2}" não encontrada.`)
+          if (cfR.length > 1) throw new Error(`Mais de uma conta fixa encontrada com "${nomeAlvo2}". Seja mais específico.`)
+          if (!novoDia) throw new Error('Pra conta fixa, informe o novo dia do mês (ex: 25).')
+          await (supabase.from('compromissos_fixos') as any).update({ dia_vencimento: novoDia }).eq('id', cfR[0].id)
+          setMensagens(prev => [...prev, { id: `reag-${Date.now()}`, role: 'ai' as const,
+            texto: `📅 Vencimento de **${cfR[0].descricao}** atualizado pro dia ${novoDia}.` }])
+
+        } else if (tipoAlvo2 === 'investimento') {
+          if (!novaData) throw new Error('Pra investimento, informe a data completa (ex: 2026-08-28), não só o dia.')
+          let qInvR = (supabase.from('investimentos_contratos') as any)
+            .select('id, nome_contrato').ilike('nome_contrato', `%${nomeAlvo2}%`)
+          if (empresaIdReag) qInvR = qInvR.eq('empresa_id', empresaIdReag)
+          const { data: invR } = await qInvR.limit(5)
+          if (!invR?.length) throw new Error(`Contrato "${nomeAlvo2}" não encontrado.`)
+          if (invR.length > 1) throw new Error(`Mais de um contrato encontrado com "${nomeAlvo2}". Seja mais específico.`)
+          await (supabase.from('investimentos_contratos') as any).update({ proximo_vencimento: novaData }).eq('id', invR[0].id)
+          setMensagens(prev => [...prev, { id: `reag-${Date.now()}`, role: 'ai' as const,
+            texto: `📅 Vencimento do **${invR[0].nome_contrato}** atualizado pra ${new Date(novaData).toLocaleDateString('pt-BR')}.` }])
+        } else {
+          throw new Error(`Tipo "${tipoAlvo2}" não reconhecido. Use: cartao, imovel, conta_fixa ou investimento.`)
+        }
+        setAcaoStatus(msgId, acaoIdx, 'saved')
+        window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       // ── RESUMO MENSAL ESTRUTURADO (formato tabela — Sr. Max) ──
       } else if (acao.tipo === 'resumo_mensal') {
