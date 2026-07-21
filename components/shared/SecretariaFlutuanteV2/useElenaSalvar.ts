@@ -913,8 +913,11 @@ export function useElenaSalvar({
         const mesAtualRef = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`
 
         // Build queries with empresa_id fallback
+        // 🔧 FIX (21/07/2026): faltava dia_vencimento — a coluna "Dia" da
+        // tabela de financiamentos sempre mostrava "—" pra imóveis (reportado
+        // pelo Sr. Max: "aparece o dos cartões, mas dos imóveis não está").
         let qImoveis = (supabase.from('imoveis') as any)
-          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, construtora')
+          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora')
         if (empresaId) qImoveis = qImoveis.eq('empresa_id', empresaId)
 
         let qVeiculos = (supabase.from('veiculos') as any)
@@ -936,8 +939,10 @@ export function useElenaSalvar({
         // Vida, cuja primeira parcela só existe com mes_referencia de agosto)
         // — usar >= mês atual pega tanto os que já estão rodando quanto os
         // que só começam mais pra frente, sem perder nenhum dos dois casos.
+        // 🔧 FIX 3 (21/07/2026): faltava proximo_vencimento — mesma reclamação
+        // do Sr. Max, a data também não aparecia na seção de investimentos.
         let qContratosInv = (supabase.from('investimentos_contratos') as any)
-          .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel, mes_referencia')
+          .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel, proximo_vencimento, mes_referencia')
           .gte('mes_referencia', mesAtualRef)
           .order('mes_referencia', { ascending: true })
         if (empresaId) qContratosInv = qContratosInv.eq('empresa_id', empresaId)
@@ -1034,7 +1039,7 @@ export function useElenaSalvar({
         // qualquer financiamento sem valor cadastrado sumir da projeção sem
         // aviso — mesmo bug do resumo_mensal (Sítio Zeta/São Roque). Agora
         // entra com placeholder "valor a definir" e não soma no total.
-        const parcelasAtivas: { titulo: string; valor: number; valorLabel?: string; somaNoTotal?: boolean; restantes: number; total: number; pagas: number; dia?: number }[] = []
+        const parcelasAtivas: { titulo: string; valor: number; valorLabel?: string; somaNoTotal?: boolean; total: number; pagas: number; dia?: number }[] = []
         ;(imoveisFinanc || []).forEach((im: any) => {
           const restantes = (im.parcelas_total || 0) - (im.parcelas_pagas || 0)
           if (restantes > 0) {
@@ -1044,7 +1049,8 @@ export function useElenaSalvar({
               valor: temValor ? Number(im.valor_parcela) : 0,
               valorLabel: temValor ? undefined : '⚠️ valor a definir',
               somaNoTotal: temValor,
-              restantes, total: im.parcelas_total || 0, pagas: im.parcelas_pagas || 0,
+              total: im.parcelas_total || 0, pagas: im.parcelas_pagas || 0,
+              dia: im.dia_vencimento, // 🔧 FIX (21/07/2026): faltava — coluna "Dia" sempre vinha "—" pra imóveis
             })
           }
         })
@@ -1057,14 +1063,26 @@ export function useElenaSalvar({
               valor: temValor ? Number(ve.valor_parcela) : 0,
               valorLabel: temValor ? undefined : '⚠️ valor a definir',
               somaNoTotal: temValor,
-              restantes, total: ve.parcelas_total || 0, pagas: ve.parcelas_pagas || 0, dia: ve.vencimento_dia,
+              total: ve.parcelas_total || 0, pagas: ve.parcelas_pagas || 0, dia: ve.vencimento_dia,
             })
           }
         })
-        const totalParcelas = parcelasAtivas.reduce((s, p) => s + (p.somaNoTotal === false ? 0 : p.valor), 0)
 
         // ── 5b. Investimentos parcelados (contratos tipo Bradesco Solar) ──
-        const investimentosAtivos: { nome: string; instituicao?: string; valor: number; parcelaStr: string; mesRef: string }[] = []
+        // 🔧 FIX (21/07/2026): faltava proximo_vencimento (Sr. Max: "a data não
+        // está aparecendo... nem nos imóveis nem nos investimentos, só do cartão").
+        function mesesEntre(mesRefBase: string, mesRefAlvo: string): number {
+          const [y1, m1] = mesRefBase.split('-').map(Number)
+          const [y2, m2] = mesRefAlvo.split('-').map(Number)
+          return (y2 - y1) * 12 + (m2 - m1)
+        }
+        function somarMeses(dataISO: string | null, meses: number): string | null {
+          if (!dataISO) return null
+          const d = new Date(dataISO)
+          d.setMonth(d.getMonth() + meses)
+          return d.toISOString().split('T')[0]
+        }
+        const investimentosAtivos: { nome: string; instituicao?: string; valor: number; parcelaAtualBase: number; parcelaTotalBase: number; proximoVencBase: string | null; offset: number }[] = []
         const nomesContratosVistos = new Set<string>()
         ;(contratosInvProj || []).forEach((c: any) => {
           // dedupe: se o mesmo contrato tiver linha no mês atual E numa futura
@@ -1078,12 +1096,14 @@ export function useElenaSalvar({
               nome: c.nome_contrato,
               instituicao: c.instituicao,
               valor: Number(c.valor_mensal) || 0,
-              parcelaStr: `${c.parcela_atual}/${c.parcela_total}`,
-              mesRef: c.mes_referencia,
+              parcelaAtualBase: c.parcela_atual || 0,
+              parcelaTotalBase: c.parcela_total || 0,
+              proximoVencBase: c.proximo_vencimento || null,
+              offset: mesesEntre(mesAtualRef, c.mes_referencia), // 0 = já em andamento; >0 = começa mais pra frente dentro da janela
             })
           }
         })
-        const totalInvestimentosContratos = investimentosAtivos.reduce((s, i) => s + i.valor, 0)
+
 
         // ── 6. Cartões PF — estima fatura do próximo mês ────────
         const cartoesLista = cartoesPf || []
@@ -1140,7 +1160,11 @@ export function useElenaSalvar({
 
         // ── Totais consolidados ──────────────────────────────────
         const entradasMes = totalReceitasRec > 0 ? Math.max(mediaReceitas, totalReceitasRec) : mediaReceitas
-        const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelas + totalCartoes + totalInvestimentosContratos
+        // 🔧 FIX (21/07/2026): totalSaidasMes/totalParcelas/totalInvestimentosContratos
+        // não existem mais como valor único fixo — cada mês do loop abaixo calcula
+        // o seu próprio, incrementando as parcelas pagas (Sr. Max: "ele não está
+        // projetando, ele está replicando" — agosto/setembro mostravam a mesma
+        // parcela de julho em vez de avançar).
 
         // 🔧 FIX (18/07/2026): saída reescrita pra usar o MESMO formato de tabela
         // markdown do resumo_mensal (pedido do Sr. Max: "a projeção deveria seguir
@@ -1155,6 +1179,22 @@ export function useElenaSalvar({
         for (let m = 1; m <= meses; m++) {
           texto += `📅 **${nomeMes(m).toUpperCase()}**\n`
           texto += `---\n`
+
+          // 🔧 FIX (21/07/2026): calculado AQUI DENTRO do loop, por mês —
+          // antes esses dois arrays eram fixos e repetiam a mesma parcela em
+          // todo mês da projeção. Agora incrementam (pagas+m) e somem da lista
+          // quando o financiamento acaba de ser pago dentro da janela.
+          const parcelasDoMes = parcelasAtivas
+            .map(p => ({ ...p, pagasProjetadas: p.pagas + m }))
+            .filter(p => p.pagasProjetadas < p.total)
+          const totalParcelasMes = parcelasDoMes.reduce((s, p) => s + (p.somaNoTotal === false ? 0 : p.valor), 0)
+
+          const investimentosDoMes = investimentosAtivos
+            .map(i => ({ ...i, parcelaProjetada: i.parcelaAtualBase + (m - i.offset), vencProjetado: somarMeses(i.proximoVencBase, m - i.offset) }))
+            .filter(i => m >= i.offset && i.parcelaProjetada < i.parcelaTotalBase)
+          const totalInvestimentosMes = investimentosDoMes.reduce((s, i) => s + i.valor, 0)
+
+          const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelasMes + totalCartoes + totalInvestimentosMes
 
           // ── ENTRADAS ────────────────────────────────────────────
           texto += `💰 **ENTRADAS ESTIMADAS: ${fmt(entradasMes)}**\n`
@@ -1207,32 +1247,34 @@ export function useElenaSalvar({
           }
 
           // 3. Financiamentos (parcelas detalhadas)
-          if (parcelasAtivas.length > 0) {
-            texto += `🏦 **Financiamentos ativos (${parcelasAtivas.length})**\n`
+          if (parcelasDoMes.length > 0) {
+            texto += `🏦 **Financiamentos ativos (${parcelasDoMes.length})**\n`
             texto += `| Financiamento | Dia | Parcela | Progresso |\n`
             texto += `|---------------|-----|--------:|-----------|\n`
-            parcelasAtivas.forEach(p => {
-              const pct = p.total > 0 ? Math.round(p.pagas / p.total * 100) : 0
+            parcelasDoMes.forEach(p => {
+              const pct = p.total > 0 ? Math.round(p.pagasProjetadas / p.total * 100) : 0
               const diaStr = p.dia ? String(p.dia).padStart(2, '0') : '—'
               const valorLabel = p.valorLabel || `${fmt(p.valor)}/mês`
-              texto += `| ${p.titulo} | ${diaStr} | ${valorLabel} | ${p.pagas}/${p.total} (${pct}%) — faltam ${p.restantes} |\n`
+              const faltam = p.total - p.pagasProjetadas
+              texto += `| ${p.titulo} | ${diaStr} | ${valorLabel} | ${p.pagasProjetadas}/${p.total} (${pct}%) — faltam ${faltam} |\n`
             })
-            texto += `**Subtotal financiamentos: ${fmt(totalParcelas)}**\n`
+            texto += `**Subtotal financiamentos: ${fmt(totalParcelasMes)}**\n`
           }
 
           // 3b. Investimentos parcelados (contratos tipo Bradesco Solar)
-          if (investimentosAtivos.length > 0) {
-            texto += `📈 **Investimentos com parcela mensal (${investimentosAtivos.length})**\n`
-            texto += `| Contrato | Instituição | Parcela | Valor Mensal |\n`
-            texto += `|----------|-------------|--------:|-------------:|\n`
-            investimentosAtivos.forEach(i => {
-              const aindaNaoComecou = i.mesRef !== mesAtualRef
+          if (investimentosDoMes.length > 0) {
+            texto += `📈 **Investimentos com parcela mensal (${investimentosDoMes.length})**\n`
+            texto += `| Contrato | Instituição | Vencimento | Parcela | Valor Mensal |\n`
+            texto += `|----------|-------------|------------|--------:|-------------:|\n`
+            investimentosDoMes.forEach(i => {
+              const aindaNaoComecou = m === i.offset && i.offset > 0
               const marcador = aindaNaoComecou ? '🆕 ' : ''
-              texto += `| ${marcador}${i.nome} | ${i.instituicao || '—'} | ${i.parcelaStr} | ${fmt(i.valor)} |\n`
+              const vencStr = i.vencProjetado ? new Date(i.vencProjetado).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+              texto += `| ${marcador}${i.nome} | ${i.instituicao || '—'} | ${vencStr} | ${i.parcelaProjetada}/${i.parcelaTotalBase} | ${fmt(i.valor)} |\n`
             })
-            texto += `**Subtotal investimentos: ${fmt(totalInvestimentosContratos)}**\n`
-            if (investimentosAtivos.some(i => i.mesRef !== mesAtualRef)) {
-              texto += `_🆕 = contrato ainda não iniciado no mês atual, mas dentro da janela projetada_\n`
+            texto += `**Subtotal investimentos: ${fmt(totalInvestimentosMes)}**\n`
+            if (investimentosDoMes.some(i => m === i.offset && i.offset > 0)) {
+              texto += `_🆕 = contrato inicia neste mês_\n`
             }
           }
 
