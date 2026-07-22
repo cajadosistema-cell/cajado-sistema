@@ -218,6 +218,36 @@ EDITAR LANÇAMENTO:
 {"acao":"deletar_lancamento","descricao":"Almoço","data":"${t.anoAtual}-06-10","tipo":"gasto"}
 \`\`\`
 
+✅ CONFIRMAR PAGAMENTO (marca fatura/boleto/conta/investimento como PAGO):
+\`\`\`json
+{"acao":"confirmar_pagamento","tipo":"imovel","nome":"Sítio Mucugê","mes_referencia":"${t.anoAtual}-${t.mesAtual}"}
+\`\`\`
+- "tipo": "cartao" | "imovel" | "conta_fixa" | "investimento"
+- "nome": nome do cartão/imóvel/conta/contrato (busca por aproximação, não precisa ser exato)
+- "mes_referencia": opcional, "YYYY-MM" — se não informar, usa o mês atual
+- "valor_pago" e "data_pagamento": opcionais
+- Pra imóvel e investimento, a parcela avança sozinha (+1) — NUNCA peça o número da parcela nova, isso é automático
+- GATILHOS: "paguei o Nubank", "o Sítio Mucugê já foi pago", "confirma o pagamento do X", "já quitei a fatura do Y"
+- Essa ação SEMPRE passa pela confirmação do Sr. Max antes de executar — nunca marca como pago sem ele confirmar
+
+📅 REAGENDAR VENCIMENTO (muda o dia/data de vencimento — ex: caiu no fim de semana):
+\`\`\`json
+{"acao":"reagendar_vencimento","tipo":"cartao","nome":"Nubank","novo_dia":17}
+\`\`\`
+- "tipo": "cartao" | "imovel" | "conta_fixa" | "investimento"
+- Pra "investimento", use "nova_data" (data completa "YYYY-MM-DD") em vez de "novo_dia"
+- Isso só move a data prevista — NÃO marca nada como pago (use confirmar_pagamento pra isso)
+- GATILHOS: "o vencimento caiu no sábado, joga pra segunda", "reagenda o Sítio X pro dia 20"
+
+✏️ EDITAR FINANCIAMENTO (corrige valor da parcela / total de parcelas / parcelas pagas / dia de vencimento de imóvel, veículo ou investimento já cadastrado):
+\`\`\`json
+{"acao":"editar_financiamento","tipo":"imovel","nome":"Sítio São Roque","novo_total_parcelas":21,"novas_parcelas_pagas":3}
+\`\`\`
+- "tipo": "imovel" | "veiculo" | "investimento"
+- Campos opcionais (inclua só o que precisa mudar): "novo_valor_parcela", "novo_total_parcelas", "novas_parcelas_pagas", "novo_dia_vencimento"
+- Diferente do confirmar_pagamento (que só soma +1), aqui pode corrigir pra QUALQUER número
+- GATILHOS: "o valor da parcela do Mucugê está errado, é 1400", "muda o total de parcelas do São Roque pra 21", "corrige a parcela paga do Terreno Baron pra 55"
+
 📈 PROJEÇÃO FINANCEIRA — PRÓXIMOS MESES:
 \`\`\`json
 {"acao":"projecao_mes","meses":1}
@@ -822,6 +852,23 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'deletar_duplicados') {
         acoes.push({ tipo: 'deletar_duplicados', dados: d, label: `🧹 Limpar duplicados: ${d.tabela || 'agenda'}`, status: 'pending' })
+
+      } else if (d.acao === 'confirmar_pagamento') {
+        const tipoLabelCP: Record<string, string> = { cartao: 'Cartão', imovel: 'Imóvel', conta_fixa: 'Conta fixa', investimento: 'Investimento' }
+        acoes.push({ tipo: 'confirmar_pagamento', dados: d, label: `✅ Marcar como pago: ${d.nome} (${tipoLabelCP[d.tipo] || d.tipo})`, status: 'pending' })
+
+      } else if (d.acao === 'reagendar_vencimento') {
+        const quandoRV = d.nova_data || (d.novo_dia ? `dia ${d.novo_dia}` : 'nova data')
+        acoes.push({ tipo: 'reagendar_vencimento', dados: d, label: `📅 Reagendar: ${d.nome} → ${quandoRV}`, status: 'pending' })
+
+      } else if (d.acao === 'editar_financiamento') {
+        const camposEF = [
+          d.novo_valor_parcela != null ? `valor R$ ${Number(d.novo_valor_parcela).toFixed(2)}` : null,
+          d.novo_total_parcelas != null ? `total ${d.novo_total_parcelas}` : null,
+          d.novas_parcelas_pagas != null ? `pagas ${d.novas_parcelas_pagas}` : null,
+          d.novo_dia_vencimento != null ? `dia ${d.novo_dia_vencimento}` : null,
+        ].filter(Boolean).join(', ')
+        acoes.push({ tipo: 'editar_financiamento', dados: d, label: `✏️ Editar ${d.nome}: ${camposEF}`, status: 'pending' })
 
       } else if (d.acao === 'resumo_mensal') {
         const mesLabel = d.mes || 'mês atual'
