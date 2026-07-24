@@ -2965,7 +2965,17 @@ export function useElenaSalvar({
           // saiu o pagamento antes de lançar. Se a Elena não perguntou isso
           // antes (deveria, ver prompt), falha aqui em vez de lançar sem saber
           // de onde debitou — mais seguro do que assumir uma conta qualquer.
-          if (!acao.dados.conta_origem) throw new Error('Preciso saber de qual conta debitou esse pagamento antes de lançar — pergunte ao Sr. Max qual conta.')
+          if (!acao.dados.conta_origem) {
+            // 🆕 (24/07/2026, pedido de Maiara) — lista as contas cadastradas
+            // junto da pergunta, pra facilitar o Max lembrar/escolher em vez
+            // de ter que digitar o nome exato de cabeça.
+            const { data: contasDisponiveis } = await (supabase.from('contas') as any)
+              .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
+            const listaContas = contasDisponiveis?.length
+              ? `\n\nSuas contas cadastradas: ${contasDisponiveis.map((c: any) => c.nome).join(', ')}.`
+              : ''
+            throw new ElenaPergunta(`De qual conta saiu o pagamento do **${imovelAch.titulo}**, Sr. Max?${listaContas}`)
+          }
           const { id: contaOrigemId } = await resolverContaQualquer(acao.dados.conta_origem)
           const { error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
             imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
