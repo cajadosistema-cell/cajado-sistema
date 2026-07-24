@@ -310,6 +310,21 @@ function SecretariaFlutuanteWidget() {
         promptFinal = `${promptFinal}\n\n[CONTEÚDO DO ARQUIVO: ${fileSnap.name}]\n${fileSnap.base64}`
       }
 
+      // ── 🆕 (24/07/2026) RETOMADA DE PERGUNTA PENDENTE ──────────────
+      // Se a Elena perguntou algo objetivo (ex: "de qual conta vai debitar?")
+      // e esta mensagem responde isso, a ação pendente é retomada DIRETO —
+      // sem re-consultar a IA (que gerava JSON/cartão duplicado e loop) e
+      // sem segundo gate (o Sr. Max já confirmou antes da pergunta).
+      if (userText && !fileSnap) {
+        const retomou = await salvar.retomarPerguntaPendente(userText)
+        if (retomou) {
+          session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))
+          setLoading(false)
+          isSendingRef.current = false
+          return
+        }
+      }
+
       const textoLower = userText?.trim().toLowerCase() || ''
       const eConfirmacao = PALAVRAS_CONFIRMACAO.some(p => textoLower === p || textoLower === p + '!' || textoLower === p + '.')
       if (eConfirmacao && session.mensagens.length >= 2 && !fileSnap) {
@@ -326,11 +341,24 @@ function SecretariaFlutuanteWidget() {
           return
         }
 
-        const ultimaElena = [...session.mensagens].reverse().find(m => m.role === 'ai' && m.texto && m.texto !== '...')
+        // 🔴🔴 FIX RAIZ DO LOOP DE CONFIRMAÇÃO (24/07/2026):
+        // A busca antiga pegava a última mensagem da Elena COM TEXTO — mas a
+        // última mensagem é quase sempre o aviso "⚠️ Confirmação necessária"
+        // (ou a pergunta "🤔 de qual conta?"), que NÃO carrega ações. O atalho
+        // nunca achava a ação pendente, caía no fallback que re-consulta a IA
+        // pedindo "gere o JSON imediatamente", a IA gerava um JSON NOVO →
+        // cartão duplicado → novo gate → cada "sim" fabricava mais um cartão.
+        // Duplicatas executando = parcelas_pagas incrementando em dobro.
+        // AGORA: o "sim" procura a última mensagem que TEM ações pendentes.
+        const ultimaComAcoesPendentes = [...session.mensagens].reverse()
+          .find(m => m.role === 'ai' && m.acoes?.some(a => a.status === 'pending'))
+        // Pro fallback textual, ainda precisamos da última fala da Elena:
+        const ultimaElena = ultimaComAcoesPendentes
+          || [...session.mensagens].reverse().find(m => m.role === 'ai' && m.texto && m.texto !== '...')
 
         // ── ATALHO DIRETO: ações pendentes → executa sem re-consultar IA ──
-        const acoesPendentes = ultimaElena?.acoes?.filter(a => a.status === 'pending')
-        if (acoesPendentes && acoesPendentes.length > 0 && ultimaElena && uid) {
+        const acoesPendentes = ultimaComAcoesPendentes?.acoes?.filter(a => a.status === 'pending')
+        if (acoesPendentes && acoesPendentes.length > 0 && ultimaComAcoesPendentes && uid) {
           confirmRetryRef.current = 0 // Reset: ações encontradas, sucesso
 
           // Verifica se alguma ação de agenda tem horário expirado (passou o tempo)
@@ -347,7 +375,10 @@ function SecretariaFlutuanteWidget() {
             try {
               // Usuário confirmou explicitamente ("sim", "pode" etc.) →
               // aqui as ações destrutivas TÊM permissão para rodar.
-              await salvar.executarAcoesAuto(ultimaElena.id, acoesPendentes, uid, { incluirDestrutivas: true })
+              // ⚠️ Passa o array COMPLETO (executarAcoesAuto já pula o que não
+              // está 'pending') — o array filtrado desalinhava o índice usado
+              // pelo setAcaoStatus quando havia ações já salvas na mesma msg.
+              await salvar.executarAcoesAuto(ultimaComAcoesPendentes.id, ultimaComAcoesPendentes.acoes!, uid, { incluirDestrutivas: true })
             } finally {
               isSendingRef.current = false
             }
@@ -795,11 +826,34 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       const acoesComStatus = acoes.map(a => ({ ...a, status: 'pending' as const }))
       const textoFormatado = formatarTexto(resposta)
 
-      session.setMensagens(prev => prev.map(m =>
-        m.id === aiMsgId
-          ? { ...m, texto: textoFormatado, acoes: acoesComStatus.length > 0 ? acoesComStatus : undefined }
-          : m
-      ))
+      // ── 🆕 (24/07/2026) DEDUPE DE AÇÕES PENDENTES ──────────────────
+      // Rede de segurança: se a IA gerou um confirmar_pagamento que já
+      // existe PENDENTE numa mensagem anterior (mesmo alvo + mês), a versão
+      // antiga é SUBSTITUÍDA — nunca podem coexistir duas pendentes do mesmo
+      // pagamento (duas executando = parcela avançando em dobro).
+      const mesAtualDedupe = new Date().toISOString().substring(0, 7)
+      const chavePagamento = (a: any): string | null =>
+        a?.tipo === 'confirmar_pagamento'
+          ? `${a.dados?.tipo || ''}|${String(a.dados?.nome || '').toLowerCase().trim()}|${a.dados?.mes_referencia || mesAtualDedupe}`
+          : null
+      const chavesNovas = new Set(acoesComStatus.map(chavePagamento).filter(Boolean) as string[])
+
+      session.setMensagens(prev => prev.map(m => {
+        if (m.id === aiMsgId) {
+          return { ...m, texto: textoFormatado, acoes: acoesComStatus.length > 0 ? acoesComStatus : undefined }
+        }
+        if (chavesNovas.size === 0 || m.role !== 'ai' || !m.acoes) return m
+        let mudou = false
+        const acoesAtualizadas = m.acoes.map(a => {
+          const ch = chavePagamento(a)
+          if (a.status === 'pending' && ch && chavesNovas.has(ch)) {
+            mudou = true
+            return { ...a, status: 'error' as const, errorMsg: '↩️ Substituída pelo pedido mais recente (abaixo)' }
+          }
+          return a
+        })
+        return mudou ? { ...m, acoes: acoesAtualizadas } : m
+      }))
 
       if (uid) {
         // 🔴 FIX: gravação SEQUENCIAL (await), não em paralelo.

@@ -45,9 +45,15 @@ import { buscarDadosRelatorio } from '../ModalRelatorio'
 // ════════════════════════════════════════════════════════════════
 class ElenaPergunta extends Error {
   readonly ehPergunta = true
-  constructor(mensagem: string) {
+  // 🆕 (24/07/2026) Qual campo da ação está faltando (ex: 'conta_origem').
+  // Permite que a resposta do Sr. Max RETOME a ação pendente diretamente
+  // (preenchendo o campo e reexecutando), sem re-consultar a IA — que era
+  // o que gerava JSONs/cartões duplicados e o loop de confirmação.
+  readonly campo?: string
+  constructor(mensagem: string, campo?: string) {
     super(mensagem)
     this.name = 'ElenaPergunta'
+    this.campo = campo
   }
 }
 
@@ -290,6 +296,7 @@ interface UseElenaSalvarReturn {
   resolverContaQualquer: (contaNome: string) => Promise<{ id: string; nome: string; categoria: string }>
   salvarAcao: (msgId: string, acaoIdx: number, acao: AcaoIA) => Promise<void>
   executarAcoesAuto: (msgId: string, acoes: AcaoIA[], uid: string, opts?: { incluirDestrutivas?: boolean }) => Promise<{ salvas: number; falhas: number; erros: string[] }>
+  retomarPerguntaPendente: (respostaUsuario: string) => Promise<boolean>
   setAcaoStatus: (msgId: string, idx: number, status: AcaoIA['status'], errorMsg?: string) => void
 }
 
@@ -613,10 +620,33 @@ export function useElenaSalvar({
     return { ...achada, categoria: cat }
   }, [carregarContas])
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 (24/07/2026) PERGUNTA PENDENTE — retomada direta
+  //
+  // Quando um handler lança ElenaPergunta com `campo` (ex: falta a
+  // conta_origem do confirmar_pagamento), guardamos AQUI qual ação
+  // ficou esperando. Quando o Sr. Max responder, a resposta preenche
+  // o campo e a MESMA ação reexecuta — sem voltar pra IA.
+  //
+  // Antes, a resposta dele ia pra IA, que gerava um JSON NOVO da mesma
+  // ação → cartão duplicado → segundo gate de confirmação → e o "sim"
+  // seguinte não achava a ação certa → loop. Duas ações pendentes do
+  // mesmo pagamento também podiam EXECUTAR DUAS VEZES, incrementando
+  // parcelas_pagas em dobro (suspeito nº 1 do "Sítio Vida andando
+  // sozinho").
+  // ═══════════════════════════════════════════════════════════════
+  const perguntaPendenteRef = useRef<{ msgId: string; acaoIdx: number; campo: string } | null>(null)
+
   // ── salvarAcao ────────────────────────────────────────────────
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA) => {
     // Lê userId da ref — nunca fica stale
     const uid = userIdRef.current
+
+    // Reexecução da ação que estava aguardando resposta → pergunta consumida.
+    // (Se ainda faltar algo, o catch re-arma com a nova pergunta.)
+    if (perguntaPendenteRef.current?.msgId === msgId && perguntaPendenteRef.current?.acaoIdx === acaoIdx) {
+      perguntaPendenteRef.current = null
+    }
 
     // ⚠️ Guard crítico: sem uid não salva nada
     if (!uid) {
@@ -2974,9 +3004,22 @@ export function useElenaSalvar({
             const listaContas = contasDisponiveis?.length
               ? `\n\nSuas contas cadastradas: ${contasDisponiveis.map((c: any) => c.nome).join(', ')}.`
               : ''
-            throw new ElenaPergunta(`De qual conta saiu o pagamento do **${imovelAch.titulo}**, Sr. Max?${listaContas}`)
+            throw new ElenaPergunta(`De qual conta saiu o pagamento do **${imovelAch.titulo}**, Sr. Max?${listaContas}`, 'conta_origem')
           }
-          const { id: contaOrigemId } = await resolverContaQualquer(acao.dados.conta_origem)
+          const { id: contaOrigemId, nome: contaOrigemNome } = await resolverContaQualquer(acao.dados.conta_origem)
+          // 🆕 (24/07/2026) Conta informada mas NÃO encontrada no cadastro →
+          // repergunta (com a lista) em vez de tentar gravar com id vazio,
+          // que estourava a FK e virava "❌ erro" assustador.
+          if (!contaOrigemId) {
+            const contaInformada = String(acao.dados.conta_origem || '')
+            delete acao.dados.conta_origem
+            const { data: contasDisponiveis } = await (supabase.from('contas') as any)
+              .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
+            const listaContas = contasDisponiveis?.length
+              ? `\n\nSuas contas cadastradas: ${contasDisponiveis.map((c: any) => c.nome).join(', ')}.`
+              : ''
+            throw new ElenaPergunta(`Não encontrei a conta "${contaInformada}" no cadastro, Sr. Max. De qual conta saiu o pagamento do **${imovelAch.titulo}**?${listaContas}`, 'conta_origem')
+          }
           const { error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
             imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
             status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
@@ -2994,7 +3037,7 @@ export function useElenaSalvar({
               .eq('id', imovelAch.id)
           }
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefAlvo}) marcado como pago — parcela avançada automaticamente.` }])
+            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefAlvo}) marcado como pago via **${contaOrigemNome}** — parcela avançada automaticamente.` }])
 
         } else if (tipoAlvo === 'conta_fixa') {
           const { data: contasAch } = await (supabase.from('compromissos_fixos') as any)
@@ -3600,6 +3643,13 @@ export function useElenaSalvar({
       if (err instanceof ElenaPergunta || err?.ehPergunta === true) {
         // A ação fica PENDENTE (aguardando resposta), não em erro.
         setAcaoStatus(msgId, acaoIdx, 'pending')
+        // 🆕 (24/07/2026) Se a pergunta indica qual campo falta, registra a
+        // ação como "aguardando resposta" — a próxima mensagem do Sr. Max
+        // pode retomá-la direto (ver retomarPerguntaPendente), sem re-gerar
+        // JSON pela IA e sem novo gate de confirmação.
+        if (err?.campo) {
+          perguntaPendenteRef.current = { msgId, acaoIdx, campo: err.campo }
+        }
         setMensagens(prev => [...prev, {
           id: `perg-${Date.now()}`,
           role: 'ai' as const,
@@ -3687,12 +3737,78 @@ export function useElenaSalvar({
     return { salvas, falhas, erros }
   }, [salvarAcao])
 
+  // ── retomarPerguntaPendente ───────────────────────────────────
+  // 🆕 (24/07/2026) Tenta interpretar a mensagem do usuário como RESPOSTA
+  // à pergunta pendente (hoje: só 'conta_origem'). Se casar com uma conta
+  // cadastrada, preenche o campo na MESMA ação e reexecuta direto.
+  //
+  // Retorna true = consumiu a mensagem (não mandar pra IA).
+  // Retorna false = não era resposta da pergunta → fluxo normal (IA).
+  //
+  // Por que NÃO passa por novo gate de confirmação: a ação SÓ chega a
+  // lançar ElenaPergunta DEPOIS que o Sr. Max já confirmou com "sim"
+  // (destrutivas nunca rodam antes disso). A pergunta já mostrou o
+  // imóvel e o valor; a conta veio literalmente da resposta dele.
+  // Pedir um segundo "sim" aqui era o atrito que ele reclamou.
+  const retomarPerguntaPendente = useCallback(async (
+    respostaUsuario: string,
+  ): Promise<boolean> => {
+    const p = perguntaPendenteRef.current
+    if (!p || p.campo !== 'conta_origem') return false
+
+    const msg = mensagensRef.current.find(m => m.id === p.msgId)
+    const acaoOriginal = msg?.acoes?.[p.acaoIdx]
+    if (!acaoOriginal || acaoOriginal.status !== 'pending') {
+      // Ação sumiu/já resolveu por outro caminho → desarma e segue normal
+      perguntaPendenteRef.current = null
+      return false
+    }
+
+    // Limpa prefixos comuns ("debitar da conta X", "pela conta X", "usa o X")
+    const limpo = String(respostaUsuario || '')
+      .replace(/^(pode( ser)?|por favor|ent[aã]o|ok|beleza|acho que)\s+/i, '')
+      .replace(/^(debit(ar|a|e)|pag(ar|a|ue)|us(ar|a|e)|sai(u)?|foi|tira|desconta)\s+/i, '')
+      .replace(/^(d[aoe]s?|pel[ao]s?|n[ao]s?|com\s+[ao]?)\s+/i, '')
+      .replace(/^(conta|cart[aã]o|banco)\s+/i, '')
+      .replace(/[.!]+$/g, '')
+      .trim()
+    if (!limpo || limpo.length > 40) return false
+
+    // A resposta é uma conta cadastrada? (fuzzy — mesmo matcher usado na
+    // transferência). Não achou / ambíguo demais → NÃO consome: deixa a IA
+    // tratar (pode ser um pedido novo, um "cancela", etc.)
+    let contaNome = ''
+    try {
+      const r = await resolverContaQualquer(limpo)
+      if (!r.id) return false
+      contaNome = r.nome
+    } catch {
+      return false
+    }
+
+    const acaoAtualizada: AcaoIA = {
+      ...acaoOriginal,
+      dados: { ...acaoOriginal.dados, conta_origem: contaNome },
+      label: `${acaoOriginal.label.replace(/ ⚠️ SEM CONTA INFORMADA$/, '').replace(/ via .*$/, '')} via ${contaNome}`,
+    }
+    // Atualiza o cartão na tela (mostra a conta escolhida) ANTES de executar
+    setMensagens(prev => prev.map(m =>
+      m.id === p.msgId
+        ? { ...m, acoes: m.acoes?.map((a, i) => (i === p.acaoIdx ? acaoAtualizada : a)) }
+        : m
+    ))
+    perguntaPendenteRef.current = null
+    await salvarAcao(p.msgId, p.acaoIdx, acaoAtualizada)
+    return true
+  }, [resolverContaQualquer, salvarAcao, mensagensRef, setMensagens])
+
   return {
     resolverContaPj,
     resolverContaPf,
     resolverContaQualquer,
     salvarAcao,
     executarAcoesAuto,
+    retomarPerguntaPendente,
     setAcaoStatus,
   }
 }

@@ -1,5 +1,5 @@
 // Usa Railway GraphQL API para forçar redeploy do scintillating-freedom
-const ACCESS_TOKEN = 'VWZhkNgHLO68gK3bchoeuNDK_6esQFUCMnhWgp7k46i';
+const ACCESS_TOKEN = '42700485-0311-4e27-b39f-1fea1b36a1a2';
 const PROJECT_ID   = '70bc1eeb-4f4f-4c60-88c8-d9b4bdfee0f9';
 const ENV_ID       = '649894fd-f5b3-440d-8945-eb9423a343e4';
 const RAILWAY_API  = 'https://backboard.railway.app/graphql/v2';
