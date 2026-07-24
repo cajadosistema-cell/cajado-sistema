@@ -60,6 +60,7 @@ export type AcaoTipo =
   | 'cadastrar_cartao'
   | 'registrar_patrimonio'
   | 'buscar_patrimonio'
+  | 'pagar_boleto_imovel'
   | 'diario'
   | 'buscar_diario'
   | 'registrar_investimento'

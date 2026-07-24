@@ -2961,9 +2961,16 @@ export function useElenaSalvar({
           if (!imoveisAch?.length) throw new Error(`Imóvel "${nomeAlvo}" não encontrado.`)
           if (imoveisAch.length > 1) throw new Error(`Mais de um imóvel encontrado com "${nomeAlvo}": ${imoveisAch.map((i: any) => i.titulo).join(', ')}. Seja mais específico.`)
           const imovelAch = imoveisAch[0]
+          // 🆕 (24/07/2026, pedido de Maiara/Max) — precisa saber de qual conta
+          // saiu o pagamento antes de lançar. Se a Elena não perguntou isso
+          // antes (deveria, ver prompt), falha aqui em vez de lançar sem saber
+          // de onde debitou — mais seguro do que assumir uma conta qualquer.
+          if (!acao.dados.conta_origem) throw new Error('Preciso saber de qual conta debitou esse pagamento antes de lançar — pergunte ao Sr. Max qual conta.')
+          const { id: contaOrigemId } = await resolverContaQualquer(acao.dados.conta_origem)
           const { error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
             imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
             status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
+            conta_origem_id: contaOrigemId,
           }, { onConflict: 'imovel_id,mes_referencia' })
           if (errPag) throw new Error(errPag.message)
           // 🆕 Incrementa parcelas_pagas automaticamente — resolve exatamente o
