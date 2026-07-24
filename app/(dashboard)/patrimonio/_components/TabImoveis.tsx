@@ -312,6 +312,210 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
   )
 }
 
+// ── Modal Pagar Boleto (debita saldo da conta) ─────────────────────
+function ModalPagarBoleto({ imovel, onClose, onPago }: {
+  imovel: Imovel
+  onClose: () => void
+  onPago: () => void
+}) {
+  const supabase = createClient()
+  const [contas, setContas] = useState<{id:string;nome:string;tipo:string;saldo_atual:number;cor?:string}[]>([])
+  const hoje = new Date()
+  const diaVenc = imovel.dia_vencimento || 10
+  const dataVenc = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc)
+  const proxParcela = (imovel.parcelas_pagas ?? 0) + 1
+
+  const [form, setForm] = useState({
+    conta_id: '',
+    valor: String(imovel.valor_parcela || ''),
+    descricao: `Pgto Parcela ${proxParcela}/${imovel.parcelas_total ?? '?'} – ${imovel.titulo}`,
+    data_pagamento: hoje.toISOString().split('T')[0],
+    categoria_financeira: imovel.categoria_financeira || 'Financiamento Imobiliário',
+    observacoes: '',
+  })
+  const [status, setStatus] = useState<'idle'|'loading'|'ok'|'erro'>('idle')
+  const [msg, setMsg] = useState('')
+
+  // Carrega contas bancárias com saldo
+  useState(() => {
+    supabase.from('contas').select('id,nome,tipo,saldo_atual,cor')
+      .in('tipo', ['corrente', 'poupanca', 'dinheiro', 'investimento'])
+      .then(({ data }) => {
+        if (data) setContas(data as any)
+      })
+  })
+
+  const contaSelecionada = contas.find(c => c.id === form.conta_id)
+
+  const handlePagar = async () => {
+    const valor = parseFloat(form.valor)
+    if (!form.conta_id) { setMsg('❗ Selecione uma conta para débito'); return }
+    if (!valor || valor <= 0) { setMsg('❗ Valor inválido'); return }
+    if (contaSelecionada && valor > contaSelecionada.saldo_atual) {
+      if (!confirm(`⚠️ O valor (R$ ${valor.toFixed(2)}) é maior que o saldo da conta (R$ ${contaSelecionada.saldo_atual.toFixed(2)}). Deseja continuar?`)) return
+    }
+
+    setStatus('loading')
+    setMsg('Processando pagamento...')
+    try {
+      // 1. Busca ou cria categoria financeira
+      let catId: string | null = null
+      const { data: cats } = await supabase
+        .from('categorias_financeiras')
+        .select('id').eq('nome', form.categoria_financeira).maybeSingle()
+      if (cats?.id) {
+        catId = cats.id
+      } else {
+        const { data: novaCat } = await (supabase.from('categorias_financeiras') as any)
+          .insert({ nome: form.categoria_financeira, tipo: 'despesa', cor: '#F59E0B' })
+          .select('id').single()
+        catId = novaCat?.id ?? null
+      }
+
+      // 2. Cria lançamento como VALIDADO (pagamento efetivo)
+      const { error: errLanc } = await (supabase.from('lancamentos') as any).insert({
+        conta_id: form.conta_id,
+        descricao: form.descricao,
+        valor: valor,
+        tipo: 'despesa',
+        regime: 'caixa',
+        status: 'validado',
+        data_competencia: form.data_pagamento,
+        data_caixa: form.data_pagamento,
+        categoria_id: catId,
+        parcela_atual: proxParcela,
+        total_parcelas: imovel.parcelas_total,
+        conciliado: true,
+        observacoes: [
+          `Imóvel: ${imovel.titulo}`,
+          imovel.indexador ? `Indexador: ${imovel.indexador}` : null,
+          form.observacoes || null,
+        ].filter(Boolean).join(' | '),
+      })
+      if (errLanc) throw new Error(`Erro ao criar lançamento: ${errLanc.message}`)
+
+      // 3. Debita saldo da conta
+      const novoSaldo = (contaSelecionada?.saldo_atual ?? 0) - valor
+      const { error: errConta } = await (supabase.from('contas') as any)
+        .update({ saldo_atual: novoSaldo })
+        .eq('id', form.conta_id)
+      if (errConta) throw new Error(`Erro ao debitar conta: ${errConta.message}`)
+
+      // 4. Incrementa parcelas_pagas no imóvel
+      const { error: errImovel } = await (supabase.from('imoveis') as any)
+        .update({ parcelas_pagas: proxParcela })
+        .eq('id', imovel.id)
+      if (errImovel) throw new Error(`Erro ao atualizar parcelas: ${errImovel.message}`)
+
+      setStatus('ok')
+      setMsg(`✅ Parcela ${proxParcela} paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
+      setTimeout(() => { onPago(); onClose() }, 2000)
+    } catch (err: any) {
+      setStatus('erro')
+      setMsg(`❌ ${err.message}`)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-5">
+          <div>
+            <h2 className="text-base font-semibold text-fg">💰 Pagar Boleto</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">{imovel.titulo}</p>
+          </div>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+
+        {/* Info da parcela */}
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300">
+          <p>📊 Parcela <strong>{proxParcela}/{imovel.parcelas_total ?? '?'}</strong> &nbsp;·&nbsp; Vence dia <strong>{diaVenc}</strong></p>
+          {imovel.indexador && <p className="mt-1">📌 Indexador: {imovel.indexador}</p>}
+        </div>
+
+        <div className="space-y-3">
+          {/* Valor */}
+          <div>
+            <label className="label">Valor do pagamento (R$) *</label>
+            <input type="number" step="0.01" className="input mt-1" value={form.valor}
+              onChange={e => setForm(f => ({...f, valor: e.target.value}))} />
+          </div>
+
+          {/* Data */}
+          <div>
+            <label className="label">Data do pagamento</label>
+            <input type="date" className="input mt-1" value={form.data_pagamento}
+              onChange={e => setForm(f => ({...f, data_pagamento: e.target.value}))} />
+          </div>
+
+          {/* Conta */}
+          <div>
+            <label className="label">Conta para débito *</label>
+            <select className="input mt-1" value={form.conta_id}
+              onChange={e => setForm(f => ({...f, conta_id: e.target.value}))}>
+              <option value="">Selecione a conta...</option>
+              {contas.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.nome} ({c.tipo}) — Saldo: R$ {c.saldo_atual.toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                </option>
+              ))}
+            </select>
+            {contaSelecionada && (
+              <div className="mt-2 p-2.5 rounded-lg bg-surface border border-border-subtle flex items-center justify-between">
+                <span className="text-xs text-fg-secondary">Saldo atual:</span>
+                <span className={`text-sm font-bold ${contaSelecionada.saldo_atual >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {formatCurrency(contaSelecionada.saldo_atual)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Categoria */}
+          <div>
+            <label className="label">Categoria financeira</label>
+            <input className="input mt-1" value={form.categoria_financeira}
+              onChange={e => setForm(f => ({...f, categoria_financeira: e.target.value}))} />
+          </div>
+
+          {/* Observações */}
+          <div>
+            <label className="label">Observações (opcional)</label>
+            <input className="input mt-1" value={form.observacoes}
+              placeholder="Multa, desconto, etc."
+              onChange={e => setForm(f => ({...f, observacoes: e.target.value}))} />
+          </div>
+        </div>
+
+        {msg && (
+          <div className={cn('rounded-xl p-3 mt-4 text-sm',
+            status==='ok' ? 'bg-emerald-500/10 text-emerald-400' :
+            status==='erro' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400')}>
+            {status==='loading' && <span className="animate-pulse">⏳ </span>}{msg}
+          </div>
+        )}
+
+        {/* Resumo do pagamento */}
+        {form.conta_id && form.valor && status === 'idle' && (
+          <div className="mt-4 p-3 rounded-xl bg-blue-500/5 border border-blue-500/20 text-xs text-blue-300 space-y-1">
+            <p className="font-semibold">📋 Resumo do pagamento:</p>
+            <p>• Parcela {proxParcela} de {imovel.parcelas_total ?? '?'}</p>
+            <p>• Valor: <strong>R$ {parseFloat(form.valor).toLocaleString('pt-BR', {minimumFractionDigits:2})}</strong></p>
+            <p>• Débito em: <strong>{contaSelecionada?.nome}</strong></p>
+            <p>• Novo saldo estimado: <strong>{formatCurrency((contaSelecionada?.saldo_atual ?? 0) - parseFloat(form.valor || '0'))}</strong></p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handlePagar} disabled={status==='loading' || status==='ok'} className="btn-primary">
+            {status==='loading' ? '⏳ Pagando...' : status==='ok' ? '✅ Pago!' : '💰 Confirmar Pagamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal de Importação via IA ──────────────────────────────────
 function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImportado: () => void }) {
   const supabase = createClient()
@@ -660,6 +864,7 @@ export function TabImoveis() {
   const [showImportIA, setShowImportIA] = useState(false)
   const [imovelLancar, setImovelLancar] = useState<Imovel | null>(null)
   const [imovelAnalisar, setImovelAnalisar] = useState<Imovel | null>(null)
+  const [imovelPagar, setImovelPagar] = useState<Imovel | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
   const { data: imoveis, refetch } = useSupabaseQuery<Imovel>('imoveis', {
@@ -1030,13 +1235,21 @@ export function TabImoveis() {
                     </div>
 
                     {/* Botões de ação */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
+                      {prog < 100 && (
+                        <button
+                          onClick={() => setImovelPagar(im)}
+                          className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                        >
+                          💰 Pagar Boleto {pp + 1}/{pt}
+                        </button>
+                      )}
                       {prog < 100 && (
                         <button
                           onClick={() => setImovelLancar(im)}
                           className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors"
                         >
-                          💳 Lançar Parcela {pp + 1}/{pt}
+                          💳 Agendar Parcela
                         </button>
                       )}
                       <button
@@ -1078,6 +1291,13 @@ export function TabImoveis() {
       )}
       {imovelAnalisar && (
         <ModalAnalisarQuitacao item={imovelAnalisar} onClose={() => setImovelAnalisar(null)} />
+      )}
+      {imovelPagar && (
+        <ModalPagarBoleto
+          imovel={imovelPagar}
+          onClose={() => setImovelPagar(null)}
+          onPago={refetch}
+        />
       )}
     </div>
   )
