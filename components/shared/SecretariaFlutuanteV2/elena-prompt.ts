@@ -225,6 +225,7 @@ EDITAR LANÇAMENTO:
 - "tipo": "cartao" | "imovel" | "conta_fixa" | "investimento"
 - "nome": nome do cartão/imóvel/conta/contrato (busca por aproximação, não precisa ser exato)
 - "conta_origem": OBRIGATÓRIO pra "imovel" — de qual conta saiu o dinheiro
+- 🔴🔴 NUNCA ADIVINHE A CONTA: só preencha "conta_origem" se o Sr. Max escreveu o NOME da conta EXPLICITAMENTE nesta mensagem (ex: "paguei pelo Itaú", "debita do Bradesco"). Mesmo que ele já tenha usado uma conta específica antes, ou que só exista uma conta cadastrada, ou que uma pareça "óbvia" — se ele NÃO escreveu o nome AGORA, o campo fica vazio e você PERGUNTA. Escolher uma conta sozinha (mesmo uma real, mesmo uma "mais provável") é um ERRO GRAVE — o dinheiro pode estar saindo do lugar errado de verdade.
 - "mes_referencia": opcional, "YYYY-MM" — se não informar, usa o mês atual
 - "valor_pago" e "data_pagamento": opcionais
 - Pra imóvel e investimento, a parcela avança sozinha (+1) — NUNCA peça o número da parcela nova, isso é automático
@@ -840,7 +841,8 @@ export function extrairAcoes(texto: string): AcaoIA[] {
 
       } else if (d.acao === 'confirmar_pagamento') {
         const tipoLabelCP: Record<string, string> = { cartao: 'Cartão', imovel: 'Imóvel', conta_fixa: 'Conta fixa', investimento: 'Investimento' }
-        acoes.push({ tipo: 'confirmar_pagamento', dados: d, label: `✅ Marcar como pago: ${d.nome} (${tipoLabelCP[d.tipo] || d.tipo})`, status: 'pending' })
+        const contaLabelCP = d.conta_origem ? ` via ${d.conta_origem}` : ' ⚠️ SEM CONTA INFORMADA'
+        acoes.push({ tipo: 'confirmar_pagamento', dados: d, label: `✅ Marcar como pago: ${d.nome} (${tipoLabelCP[d.tipo] || d.tipo})${contaLabelCP}`, status: 'pending' })
 
       } else if (d.acao === 'reagendar_vencimento') {
         const quandoRV = d.nova_data || (d.novo_dia ? `dia ${d.novo_dia}` : 'nova data')
