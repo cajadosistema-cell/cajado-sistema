@@ -2985,7 +2985,7 @@ export function useElenaSalvar({
             texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.` }])
 
         } else if (tipoAlvo === 'imovel') {
-          let qIm = (supabase.from('imoveis') as any).select('id, titulo').ilike('titulo', `%${nomeAlvo}%`)
+          let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela').ilike('titulo', `%${nomeAlvo}%`)
           if (empresaIdConf) qIm = qIm.eq('empresa_id', empresaIdConf)
           const { data: imoveisAch } = await qIm.limit(5)
           if (!imoveisAch?.length) throw new Error(`Imóvel "${nomeAlvo}" não encontrado.`)
@@ -3020,12 +3020,49 @@ export function useElenaSalvar({
               : ''
             throw new ElenaPergunta(`Não encontrei a conta "${contaInformada}" no cadastro, Sr. Max. De qual conta saiu o pagamento do **${imovelAch.titulo}**?${listaContas}`, 'conta_origem')
           }
+          // ── 🆕 (24/07/2026 v3) IDEMPOTÊNCIA ───────────────────────────
+          // Se o boleto deste mês JÁ está pago, confirmar de novo NÃO pode
+          // debitar a conta outra vez nem avançar a parcela em dobro.
+          const { data: pagExistente } = await (supabase.from('pagamentos_imoveis') as any)
+            .select('id, status').eq('imovel_id', imovelAch.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+          if (pagExistente?.status === 'pago') {
+            setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+              texto: `ℹ️ O boleto do **${imovelAch.titulo}** (${mesRefAlvo}) **já estava marcado como pago** — não lancei nada de novo pra não duplicar o débito.` }])
+            setAcaoStatus(msgId, acaoIdx, 'saved')
+            window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+            return
+          }
           const { error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
             imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
             status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
             conta_origem_id: contaOrigemId,
           }, { onConflict: 'imovel_id,mes_referencia' })
           if (errPag) throw new Error(errPag.message)
+          // ── 🆕 (24/07/2026 v3) DÉBITO REAL NA CONTA DE ORIGEM ─────────
+          // Marcar como pago sem debitar deixava o saldo da conta intocado
+          // (bug reportado: "pagou mas não saiu da conta"). Agora lança a
+          // SAÍDA na tabela `lancamentos` — o mesmo mecanismo da
+          // transferência, que é o que move o saldo em Contas & Caixa.
+          const valorDebito = Number(acao.dados.valor_pago) || Number(imovelAch.valor_parcela) || 0
+          let avisoDebito = ''
+          if (valorDebito > 0) {
+            const { error: errDeb } = await (supabase.from('lancamentos') as any).insert({
+              conta_id: contaOrigemId,
+              descricao: `🏠 Parcela ${imovelAch.titulo} (${mesRefAlvo})`,
+              valor: valorDebito, tipo: 'despesa', regime: 'caixa', status: 'validado',
+              data_competencia: dataPag, data_caixa: dataPag,
+              categoria_id: CAT_DESPESA_ID, created_by: uid,
+            })
+            if (errDeb) {
+              // Pagamento já foi registrado — não desfaz; só avisa que o
+              // débito no saldo falhou pra Maiara/Max corrigirem manualmente.
+              avisoDebito = `\n⚠️ _Não consegui lançar o débito de R$ ${valorDebito.toFixed(2)} na conta (${errDeb.message.substring(0, 80)}) — confira o saldo manualmente._`
+            } else {
+              avisoDebito = `\n💸 Debitei **R$ ${valorDebito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** da conta.`
+            }
+          } else {
+            avisoDebito = `\n⚠️ _Este imóvel está com **valor a definir** — marquei como pago, mas **não debitei nada** do saldo por não saber o valor._`
+          }
           // 🆕 Incrementa parcelas_pagas automaticamente — resolve exatamente o
           // tipo de erro manual que a gente ficou corrigindo via SQL o tempo
           // todo (Sítio Mucugê, São Roque). Nunca passa de parcelas_total.
@@ -3037,7 +3074,7 @@ export function useElenaSalvar({
               .eq('id', imovelAch.id)
           }
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefAlvo}) marcado como pago via **${contaOrigemNome}** — parcela avançada automaticamente.` }])
+            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefAlvo}) marcado como pago via **${contaOrigemNome}** — parcela avançada automaticamente.${avisoDebito}` }])
 
         } else if (tipoAlvo === 'conta_fixa') {
           const { data: contasAch } = await (supabase.from('compromissos_fixos') as any)
