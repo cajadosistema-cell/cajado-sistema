@@ -826,6 +826,33 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       const acoesComStatus = acoes.map(a => ({ ...a, status: 'pending' as const }))
       const textoFormatado = formatarTexto(resposta)
 
+      // ── 🆕 (24/07/2026 v2) GUARDA DETERMINÍSTICA DA CONTA ─────────
+      // Lição nº 5 do projeto na prática: mesmo com a regra 🔴🔴 no prompt,
+      // a IA preencheu "Bradesco PJ" sozinha puxando de uma resposta ANTERIOR
+      // da conversa (pagamento de outro imóvel). Regra de prompt não basta —
+      // agora o CÓDIGO valida: conta_origem só sobrevive se o nome da conta
+      // aparece na MENSAGEM ATUAL do Sr. Max. Senão o campo é removido e o
+      // handler pergunta (🤔 "de qual conta?") como deveria.
+      const soLetras = (s: string) => String(s || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^a-z0-9]/g, '')
+      const GENERICOS_CONTA = new Set(['pf', 'pj', 'de', 'do', 'da', 'bank', 'banco', 'conta', 'cartao', 'card'])
+      const msgNormGuard = soLetras(userText || '')
+      for (const a of acoesComStatus) {
+        if (a.tipo === 'confirmar_pagamento' && a.dados?.conta_origem) {
+          const tokens = String(a.dados.conta_origem).split(/\s+/)
+            .map(soLetras).filter(t => t.length >= 2 && !GENERICOS_CONTA.has(t))
+          const citadaAgora = tokens.length === 0
+            ? msgNormGuard.includes(soLetras(a.dados.conta_origem))
+            : tokens.some(t => msgNormGuard.includes(t))
+          if (!citadaAgora) {
+            console.warn('[Elena] 🚫 conta_origem removida — a IA preencheu sem o usuário citar na mensagem atual:', a.dados.conta_origem)
+            delete a.dados.conta_origem
+            a.label = `${a.label.replace(/ via .*$/, '').replace(/ ⚠️ SEM CONTA INFORMADA$/, '')} ⚠️ SEM CONTA INFORMADA`
+          }
+        }
+      }
+
       // ── 🆕 (24/07/2026) DEDUPE DE AÇÕES PENDENTES ──────────────────
       // Rede de segurança: se a IA gerou um confirmar_pagamento que já
       // existe PENDENTE numa mensagem anterior (mesmo alvo + mês), a versão
