@@ -31,6 +31,7 @@ type Veiculo = {
   periodicidade?: 'mensal' | 'bimestral' | 'trimestral' | 'quadrimestral' | 'semestral' | 'anual' | null
   taxa_juros_anual: number | null
   status: 'ativo' | 'vendido' | 'sinistro' | 'em_manutencao'
+  observacoes?: string | null
 }
 
 const STATUS_CONFIG = {
@@ -46,7 +47,7 @@ const FORM_INICIAL = {
   valor_compra: '', valor_mercado: '', financiado: false,
   banco_financiador: '', valor_total_financiado: '', valor_parcela: '',
   parcelas_total: '', parcelas_pagas: '0', vencimento_dia: '', periodicidade: 'mensal',
-  status: 'ativo' as Veiculo['status']
+  status: 'ativo' as Veiculo['status'], observacoes: ''
 }
 
 // ── Modal de Importação via IA ──────────────────────────────────
@@ -400,6 +401,7 @@ export function TabVeiculos() {
       vencimento_dia: form.vencimento_dia ? parseInt(form.vencimento_dia) : null,
       periodicidade: form.periodicidade || 'mensal',
       status: form.status,
+      observacoes: form.observacoes || null,
     }
     if (editId) {
       const { error } = await (supabase.from('veiculos') as any).update(payload).eq('id', editId)
@@ -434,7 +436,8 @@ export function TabVeiculos() {
       parcelas_pagas: v.parcelas_pagas ? String(v.parcelas_pagas) : '0',
       vencimento_dia: v.vencimento_dia ? String(v.vencimento_dia) : '',
       periodicidade: v.periodicidade || 'mensal',
-      status: v.status
+      status: v.status,
+      observacoes: v.observacoes || '',
     })
     setEditId(v.id); setShowForm(true)
   }
@@ -572,6 +575,17 @@ export function TabVeiculos() {
             </div>
           )}
 
+          <div>
+            <label className="label">📝 Detalhes / Bloco de Anotações</label>
+            <textarea
+              rows={3}
+              className="input mt-1 w-full resize-y min-h-[75px]"
+              value={form.observacoes}
+              placeholder="Digite aqui anotações, detalhes do veículo, seguro, manutenções, histórico..."
+              onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+            />
+          </div>
+
           <div className="flex justify-end pt-2">
             <button type="submit" className="btn-primary text-xs">
               {editId ? 'Salvar Alterações' : 'Salvar Veículo'}
@@ -694,6 +708,13 @@ export function TabVeiculos() {
                     <p className="text-sm font-semibold text-emerald-400">{v.valor_mercado ? formatCurrency(v.valor_mercado) : '—'}</p>
                   </div>
                 </div>
+
+                {v.observacoes && (
+                  <div className="mt-3 p-2.5 bg-muted/60 border border-border-subtle rounded-xl text-xs text-fg-secondary">
+                    <p className="text-[9px] text-fg-disabled uppercase tracking-widest font-semibold mb-0.5">📝 Detalhes / Anotações</p>
+                    <p className="whitespace-pre-wrap leading-relaxed">{v.observacoes}</p>
+                  </div>
+                )}
               </div>
             )
           })}

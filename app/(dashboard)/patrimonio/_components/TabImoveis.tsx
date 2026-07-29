@@ -32,6 +32,7 @@ type Imovel = {
   categoria_financeira: string | null
   taxa_juros_anual: number | null
   is_investimento?: boolean
+  observacoes?: string | null
 }
 
 const STATUS_CONFIG = {
@@ -48,7 +49,7 @@ const FORM_INICIAL = {
   valor_total_contrato: '', valor_parcela: '', parcelas_total: '',
   parcelas_pagas: '0', indexador: '', data_aquisicao: '',
   dia_vencimento: '', periodicidade: 'mensal', categoria_financeira: 'Financiamento Imobiliário',
-  taxa_juros_anual: '', is_investimento: false,
+  taxa_juros_anual: '', is_investimento: false, observacoes: '',
 }
 
 // ── Modal Análise de Quitação ────────────────────────────────
@@ -201,8 +202,8 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
     try {
       // 1. Busca ou cria categoria
       let catId: string | null = null
-      const { data: cats } = await supabase
-        .from('categorias_financeiras')
+      const { data: cats } = await (supabase
+        .from('categorias_financeiras') as any)
         .select('id').eq('nome', form.categoria_financeira).maybeSingle()
       if (cats?.id) {
         catId = cats.id
@@ -361,8 +362,8 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
     try {
       // 1. Busca ou cria categoria financeira
       let catId: string | null = null
-      const { data: cats } = await supabase
-        .from('categorias_financeiras')
+      const { data: cats } = await (supabase
+        .from('categorias_financeiras') as any)
         .select('id').eq('nome', form.categoria_financeira).maybeSingle()
       if (cats?.id) {
         catId = cats.id
@@ -899,6 +900,7 @@ export function TabImoveis() {
       categoria_financeira: form.categoria_financeira || null,
       taxa_juros_anual: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
       is_investimento: form.is_investimento,
+      observacoes: form.observacoes || null,
     }
     
     if (editId) {
@@ -951,6 +953,7 @@ export function TabImoveis() {
       periodicidade: im.periodicidade || 'mensal',
       categoria_financeira: im.categoria_financeira || 'Financiamento Imobiliário',
       taxa_juros_anual: im.taxa_juros_anual ? String(im.taxa_juros_anual) : '',
+      observacoes: im.observacoes || '',
     })
     setEditId(im.id); setShowForm(true)
   }
@@ -1123,6 +1126,16 @@ export function TabImoveis() {
               Este imóvel também é um investimento (exibir na aba Investimentos)
             </label>
           </div>
+          <div>
+            <label className="label">📝 Detalhes / Bloco de Anotações</label>
+            <textarea
+              rows={3}
+              className="input mt-1 w-full resize-y min-h-[75px]"
+              value={form.observacoes}
+              placeholder="Digite aqui anotações, detalhes do imóvel, informações do contrato, reformas, etc..."
+              onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+            />
+          </div>
           <div className="flex justify-end pt-2">
             <button type="submit" className="btn-primary text-xs">
               {editId ? 'Salvar Alterações' : 'Salvar Imóvel'}
@@ -1287,6 +1300,13 @@ export function TabImoveis() {
                     <p className="text-sm font-semibold text-emerald-400">{im.valor_mercado ? formatCurrency(im.valor_mercado) : '—'}</p>
                   </div>
                 </div>
+
+                {im.observacoes && (
+                  <div className="mt-3 p-2.5 bg-muted/60 border border-border-subtle rounded-xl text-xs text-fg-secondary">
+                    <p className="text-[9px] text-fg-disabled uppercase tracking-widest font-semibold mb-0.5">📝 Detalhes / Anotações</p>
+                    <p className="whitespace-pre-wrap leading-relaxed">{im.observacoes}</p>
+                  </div>
+                )}
               </div>
             )
           })}
