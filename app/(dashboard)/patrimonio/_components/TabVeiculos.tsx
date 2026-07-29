@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
@@ -362,6 +362,172 @@ function ModalAnalisarQuitacao({ item, onClose }: {
   )
 }
 
+// ── Modal Pagar Boleto Veículo (debita saldo da conta) ─────────────
+function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
+  veiculo: Veiculo
+  onClose: () => void
+  onPago: () => void
+}) {
+  const supabase = createClient()
+  const [contas, setContas] = useState<{id:string;nome:string;tipo:string;saldo_atual:number;cor?:string}[]>([])
+  const hoje = new Date()
+  const diaVenc = veiculo.vencimento_dia || 10
+  const proxParcela = (veiculo.parcelas_pagas ?? 0) + 1
+
+  const [form, setForm] = useState({
+    conta_id: '',
+    valor: String(veiculo.valor_parcela || ''),
+    descricao: `Pgto Parcela ${proxParcela}/${veiculo.parcelas_total ?? '?'} – ${veiculo.titulo}`,
+    data_pagamento: hoje.toISOString().split('T')[0],
+    observacoes: '',
+  })
+  const [status, setStatus] = useState<'idle'|'loading'|'ok'|'erro'>('idle')
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    supabase.from('contas').select('id,nome,tipo,saldo_atual,cor')
+      .in('tipo', ['corrente', 'poupanca', 'dinheiro', 'investimento'])
+      .then(({ data }) => {
+        if (data) setContas(data as any)
+      })
+  }, [])
+
+  const contaSelecionada = contas.find(c => c.id === form.conta_id)
+
+  const handlePagar = async () => {
+    const valor = parseFloat(form.valor)
+    if (!form.conta_id) { setMsg('❗ Selecione uma conta para débito'); return }
+    if (!valor || valor <= 0) { setMsg('❗ Valor inválido'); return }
+    if (contaSelecionada && valor > contaSelecionada.saldo_atual) {
+      if (!confirm(`⚠️ O valor (R$ ${valor.toFixed(2)}) é maior que o saldo da conta (R$ ${contaSelecionada.saldo_atual.toFixed(2)}). Deseja continuar?`)) return
+    }
+
+    setStatus('loading')
+    setMsg('Processando pagamento...')
+    try {
+      // 1. Busca categoria "Financiamento de Veículo" ou "Outras Despesas"
+      let catId: string | null = null
+      const { data: cats } = await (supabase.from('categorias_financeiras') as any)
+        .select('id').ilike('nome', '%veículo%').maybeSingle()
+      catId = cats?.id ?? null
+
+      // 2. Cria lançamento como VALIDADO
+      const { error: errLanc } = await (supabase.from('lancamentos') as any).insert({
+        conta_id: form.conta_id,
+        descricao: form.descricao,
+        valor: valor,
+        tipo: 'despesa',
+        regime: 'caixa',
+        status: 'validado',
+        data_competencia: form.data_pagamento,
+        data_caixa: form.data_pagamento,
+        categoria_id: catId,
+        parcela_atual: proxParcela,
+        total_parcelas: veiculo.parcelas_total,
+        conciliado: true,
+        observacoes: `Veículo: ${veiculo.titulo} | ${form.observacoes || ''}`,
+      })
+      if (errLanc) throw new Error(`Erro ao criar lançamento: ${errLanc.message}`)
+
+      // 3. Debita saldo da conta
+      const novoSaldo = (contaSelecionada?.saldo_atual ?? 0) - valor
+      const { error: errConta } = await (supabase.from('contas') as any)
+        .update({ saldo_atual: novoSaldo })
+        .eq('id', form.conta_id)
+      if (errConta) throw new Error(`Erro ao debitar conta: ${errConta.message}`)
+
+      // 4. Incrementa parcelas_pagas no veículo
+      const { error: errVeiculo } = await (supabase.from('veiculos') as any)
+        .update({ parcelas_pagas: proxParcela })
+        .eq('id', veiculo.id)
+      if (errVeiculo) throw new Error(`Erro ao atualizar parcelas: ${errVeiculo.message}`)
+
+      // 5. Registra no histórico de pagamentos_veiculos
+      const mesRef = form.data_pagamento.substring(0, 7)
+      await (supabase.from('pagamentos_veiculos') as any).upsert({
+        veiculo_id: veiculo.id,
+        empresa_id: (veiculo as any).empresa_id || null,
+        mes_referencia: mesRef,
+        status: 'pago',
+        valor_pago: valor,
+        data_pagamento: form.data_pagamento,
+        conta_origem_id: form.conta_id,
+        notas: form.observacoes || null,
+      }, { onConflict: 'veiculo_id,mes_referencia' })
+
+      // Dispara evento global
+      window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+
+      setStatus('ok')
+      setMsg(`✅ Parcela ${proxParcela} paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
+      setTimeout(() => { onPago(); onClose() }, 2000)
+    } catch (err: any) {
+      setStatus('erro')
+      setMsg(`❌ ${err.message}`)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-5">
+          <div>
+            <h2 className="text-base font-semibold text-fg">💰 Pagar Boleto de Veículo</h2>
+            <p className="text-xs text-fg-tertiary mt-0.5">{veiculo.titulo}</p>
+          </div>
+          <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
+        </div>
+
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300">
+          <p>📊 Parcela <strong>{proxParcela}/{veiculo.parcelas_total ?? '?'}</strong> &nbsp;·&nbsp; Vence dia <strong>{diaVenc}</strong></p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="label">Valor do pagamento (R$) *</label>
+            <input type="number" step="0.01" className="input mt-1" value={form.valor}
+              onChange={e => setForm(f => ({...f, valor: e.target.value}))} />
+          </div>
+
+          <div>
+            <label className="label">Data do pagamento</label>
+            <input type="date" className="input mt-1" value={form.data_pagamento}
+              onChange={e => setForm(f => ({...f, data_pagamento: e.target.value}))} />
+          </div>
+
+          <div>
+            <label className="label">Conta para débito (saldo real) *</label>
+            <select className="input mt-1" value={form.conta_id}
+              onChange={e => setForm(f => ({...f, conta_id: e.target.value}))}>
+              <option value="">Selecione a conta de origem...</option>
+              {contas.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.nome} ({c.tipo}) — Saldo: R$ {c.saldo_atual?.toFixed(2) ?? '0.00'}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {msg && (
+          <div className={cn('rounded-xl p-3 mt-4 text-sm',
+            status==='ok' ? 'bg-emerald-500/10 text-emerald-400' :
+            status==='erro' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400')}>
+            {status==='loading' && <span className="animate-pulse">⏳ </span>}{msg}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={handlePagar} disabled={status==='loading'} className="btn-primary bg-amber-500 hover:bg-amber-600 border-amber-600 text-black">
+            {status==='loading' ? '⏳ Paguando...' : '💰 Efetuar Pagamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Componente principal ────────────────────────────────────────
 export function TabVeiculos() {
   const supabase = createClient()
@@ -370,7 +536,32 @@ export function TabVeiculos() {
   const [editId, setEditId] = useState<string | null>(null)
   const [showImportIA, setShowImportIA] = useState(false)
   const [veiculoAnalisar, setVeiculoAnalisar] = useState<Veiculo | null>(null)
+  const [veiculoPagar, setVeiculoPagar] = useState<Veiculo | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
+
+  const mesAtual = new Date().toISOString().substring(0, 7)
+  const [pagamentosMes, setPagamentosMes] = useState<Record<string, boolean>>({})
+
+  const carregarPagamentosMes = async () => {
+    if (!empresaId) return
+    const { data } = await (supabase.from('pagamentos_veiculos') as any)
+      .select('veiculo_id, status')
+      .eq('empresa_id', empresaId)
+      .eq('mes_referencia', mesAtual)
+      .eq('status', 'pago')
+    if (data) {
+      const mapa: Record<string, boolean> = {}
+      data.forEach((p: any) => { mapa[p.veiculo_id] = true })
+      setPagamentosMes(mapa)
+    }
+  }
+
+  useEffect(() => {
+    carregarPagamentosMes()
+    const handler = () => { refetch(); carregarPagamentosMes() }
+    window.addEventListener('elena:lancamento-salvo', handler)
+    return () => window.removeEventListener('elena:lancamento-salvo', handler)
+  }, [empresaId])
 
   const { data: veiculos, refetch } = useSupabaseQuery<Veiculo>('veiculos', {
     filters: { empresa_id: empresaId || undefined },
@@ -690,10 +881,25 @@ export function TabVeiculos() {
                     {v.taxa_juros_anual && (
                       <p className="text-[10px] text-fg-disabled px-3 pb-2">📊 Taxa: {v.taxa_juros_anual}% a.a.</p>
                     )}
-                    <button onClick={() => setVeiculoAnalisar(v)}
-                      className="w-full py-2 rounded-b-xl text-[11px] font-semibold bg-emerald-500/10 border-t border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
-                      📈 Analisar Quitação
-                    </button>
+                    <div className="p-2 border-t border-border-subtle/80 flex gap-2 flex-wrap">
+                      <button onClick={() => setVeiculoPagar(v)}
+                        className={cn(
+                          "flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1",
+                          pagamentosMes[v.id]
+                            ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                            : "bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                        )}>
+                        {pagamentosMes[v.id] ? (
+                          <>✅ Parcela {pp}/{pt} Paga este Mês</>
+                        ) : (
+                          <>💰 Pagar Boleto {pp + 1}/{pt}</>
+                        )}
+                      </button>
+                      <button onClick={() => setVeiculoAnalisar(v)}
+                        className="py-1.5 px-3 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                        📈 Analisar Quitação
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -734,6 +940,13 @@ export function TabVeiculos() {
             taxa_juros_anual: veiculoAnalisar.taxa_juros_anual,
           }}
           onClose={() => setVeiculoAnalisar(null)}
+        />
+      )}
+      {veiculoPagar && (
+        <ModalPagarBoletoVeiculo
+          veiculo={veiculoPagar}
+          onClose={() => setVeiculoPagar(null)}
+          onPago={refetch}
         />
       )}
     </div>

@@ -3156,12 +3156,16 @@ export function useElenaSalvar({
             }
           }
 
-          // Incrementa parcelas_pagas no veículo
-          const ppVeAtual = Number(veiculoAch.parcelas_pagas) || 0
-          const ptVeTotal = Number(veiculoAch.parcelas_total) || 0
-          if (ptVeTotal > 0) {
+          // 🆕 (29/07/2026 v2) Busca dados FRESCOS do banco antes de incrementar
+          // — se o Max editou manualmente o nº de parcelas, a Elena precisa
+          // ler o valor atualizado, não o que veio na query inicial.
+          const { data: veiculoAtual } = await (supabase.from('veiculos') as any)
+            .select('parcelas_pagas, parcelas_total').eq('id', veiculoAch.id).maybeSingle()
+          const ppVeAtual = Number(veiculoAtual?.parcelas_pagas) || 0
+          const ptVeTotal = Number(veiculoAtual?.parcelas_total) || 0
+          if (ptVeTotal > 0 && ppVeAtual < ptVeTotal) {
             await (supabase.from('veiculos') as any)
-              .update({ parcelas_pagas: Math.min(ppVeAtual + 1, ptVeTotal) })
+              .update({ parcelas_pagas: ppVeAtual + 1 })
               .eq('id', veiculoAch.id)
           }
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,

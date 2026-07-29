@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
@@ -408,6 +408,22 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
         .update({ parcelas_pagas: proxParcela })
         .eq('id', imovel.id)
       if (errImovel) throw new Error(`Erro ao atualizar parcelas: ${errImovel.message}`)
+
+      // 5. Registra no histórico de pagamentos_imoveis para o mês de referência
+      const mesRef = form.data_pagamento.substring(0, 7)
+      await (supabase.from('pagamentos_imoveis') as any).upsert({
+        imovel_id: imovel.id,
+        empresa_id: (imovel as any).empresa_id || null,
+        mes_referencia: mesRef,
+        status: 'pago',
+        valor_pago: valor,
+        data_pagamento: form.data_pagamento,
+        conta_origem_id: form.conta_id,
+        notas: form.observacoes || null,
+      }, { onConflict: 'imovel_id,mes_referencia' })
+
+      // Dispara evento global para recarregar relatórios/botões
+      window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
 
       setStatus('ok')
       setMsg(`✅ Parcela ${proxParcela} paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
@@ -869,6 +885,30 @@ export function TabImoveis() {
   const [imovelPagar, setImovelPagar] = useState<Imovel | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
+  const mesAtual = new Date().toISOString().substring(0, 7)
+  const [pagamentosMes, setPagamentosMes] = useState<Record<string, boolean>>({})
+
+  const carregarPagamentosMes = async () => {
+    if (!empresaId) return
+    const { data } = await (supabase.from('pagamentos_imoveis') as any)
+      .select('imovel_id, status')
+      .eq('empresa_id', empresaId)
+      .eq('mes_referencia', mesAtual)
+      .eq('status', 'pago')
+    if (data) {
+      const mapa: Record<string, boolean> = {}
+      data.forEach((p: any) => { mapa[p.imovel_id] = true })
+      setPagamentosMes(mapa)
+    }
+  }
+
+  useEffect(() => {
+    carregarPagamentosMes()
+    const handler = () => { refetch(); carregarPagamentosMes() }
+    window.addEventListener('elena:lancamento-salvo', handler)
+    return () => window.removeEventListener('elena:lancamento-salvo', handler)
+  }, [empresaId])
+
   const { data: imoveis, refetch } = useSupabaseQuery<Imovel>('imoveis', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'criado_em', ascending: false },
@@ -1263,14 +1303,26 @@ export function TabImoveis() {
 
                     {/* Botões de ação */}
                     <div className="flex gap-2 flex-wrap">
-                      {prog < 100 && (
-                        <button
-                          onClick={() => setImovelPagar(im)}
-                          className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors"
-                        >
-                          💰 Pagar Boleto {pp + 1}/{pt}
-                        </button>
-                      )}
+                      {prog < 100 && (() => {
+                        const pagoEsteMes = pagamentosMes[im.id]
+                        return (
+                          <button
+                            onClick={() => setImovelPagar(im)}
+                            className={cn(
+                              "flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1",
+                              pagoEsteMes
+                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                                : "bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                            )}
+                          >
+                            {pagoEsteMes ? (
+                              <>✅ Parcela {pp}/{pt} Paga este Mês</>
+                            ) : (
+                              <>💰 Pagar Boleto {pp + 1}/{pt}</>
+                            )}
+                          </button>
+                        )
+                      })()}
                       {prog < 100 && (
                         <button
                           onClick={() => setImovelLancar(im)}
