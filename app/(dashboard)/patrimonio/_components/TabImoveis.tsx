@@ -993,6 +993,7 @@ export function TabImoveis() {
       periodicidade: im.periodicidade || 'mensal',
       categoria_financeira: im.categoria_financeira || 'Financiamento Imobiliário',
       taxa_juros_anual: im.taxa_juros_anual ? String(im.taxa_juros_anual) : '',
+      is_investimento: im.is_investimento || false,
       observacoes: im.observacoes || '',
     })
     setEditId(im.id); setShowForm(true)
