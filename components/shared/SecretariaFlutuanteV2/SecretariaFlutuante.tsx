@@ -858,6 +858,9 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       // existe PENDENTE numa mensagem anterior (mesmo alvo + mês), a versão
       // antiga é SUBSTITUÍDA — nunca podem coexistir duas pendentes do mesmo
       // pagamento (duas executando = parcela avançando em dobro).
+      // 🔴 FIX (29/07/2026): marcava como 'error' com ícone vermelho assustador.
+      // Agora marca como 'saved' (cinza, concluído) com mensagem informativa
+      // calma — o dedup NÃO é um erro, é uma otimização silenciosa.
       const mesAtualDedupe = new Date().toISOString().substring(0, 7)
       const chavePagamento = (a: any): string | null =>
         a?.tipo === 'confirmar_pagamento'
@@ -873,9 +876,11 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         let mudou = false
         const acoesAtualizadas = m.acoes.map(a => {
           const ch = chavePagamento(a)
+          // Só substitui ações que ainda estão 'pending' — nunca toca em
+          // saving/saved/error (ação já em andamento ou concluída)
           if (a.status === 'pending' && ch && chavesNovas.has(ch)) {
             mudou = true
-            return { ...a, status: 'error' as const, errorMsg: '↩️ Substituída pelo pedido mais recente (abaixo)' }
+            return { ...a, status: 'saved' as const, errorMsg: 'ℹ️ Substituída pelo pedido mais recente.' }
           }
           return a
         })
