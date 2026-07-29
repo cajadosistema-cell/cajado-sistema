@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
+import { useSupabaseQuery, useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
@@ -232,12 +232,13 @@ function ModalImportarPatrimonio({
 }
 
 function ModalProjeto({
-  onClose, onSave, editando, userId
+  onClose, onSave, editando, userId, empresaId
 }: {
   onClose: () => void
   onSave: () => void
   editando?: ProjetoPatrimonio
-  userId: string
+  userId?: string
+  empresaId?: string
 }) {
   const { insert: insertProj, update: updateProj, loading: loadingProj } = useSupabaseMutation('projetos_patrimonio')
   const { update: updateImovel, loading: loadingImovel } = useSupabaseMutation('imoveis')
@@ -285,7 +286,8 @@ function ModalProjeto({
           status: form.status,
           parcelas_total: pt,
           parcelas_pagas: pp,
-          user_id: userId,
+          user_id: userId || null,
+          empresa_id: empresaId || null,
         }
         await updateProj(editando.id, payload)
       }
@@ -300,7 +302,8 @@ function ModalProjeto({
         status: form.status,
         parcelas_total: pt,
         parcelas_pagas: pp,
-        user_id: userId,
+        user_id: userId || null,
+        empresa_id: empresaId || null,
       }
       await insertProj({ ...payload, status: 'ativo' })
     }
@@ -515,7 +518,7 @@ export default function PatrimonioClient() {
   const [modalCusto, setModalCusto] = useState<string | null>(null)
   const [projetoAberto, setProjetoAberto] = useState<string | null>(null)
   const supabase = createClient()
-  const { empresaId } = useEmpresaId()
+  const { empresaId, userId } = useEmpresaId()
 
   const handleDeleteProjeto = async (p: ProjetoPatrimonio) => {
     if (!confirm(`Excluir "${p.titulo}"? Esta ação removerá o bem e todos os custos associados.`)) return
@@ -882,6 +885,7 @@ export default function PatrimonioClient() {
           onSave={() => { refetch(); refetchImoveis() }}
           editando={editandoProjeto ?? undefined}
           userId={userId}
+          empresaId={empresaId}
         />
       )}
       {modalImport && (
