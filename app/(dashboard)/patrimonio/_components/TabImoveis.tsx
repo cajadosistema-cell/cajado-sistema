@@ -1306,21 +1306,38 @@ export function TabImoveis() {
                     <div className="flex gap-2 flex-wrap">
                       {prog < 100 && (() => {
                         const pagoEsteMes = pagamentosMes[im.id]
+                        const diaHoje = new Date().getDate()
+                        const diaVenc = im.dia_vencimento
+
+                        let btnClass = ""
+                        let btnContent = null
+
+                        if (pagoEsteMes) {
+                          btnClass = "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                          btnContent = <>✅ Parcela {pp}/{pt} Paga este Mês</>
+                        } else if (diaVenc && diaHoje === diaVenc) {
+                          // NA DATA DO VENCIMENTO: AMARELO ALERTA DESTAQUE
+                          btnClass = "bg-amber-500/25 border-2 border-amber-400 text-amber-300 hover:bg-amber-500/40 animate-pulse font-bold shadow-lg shadow-amber-500/10"
+                          btnContent = <>⏰ Vence Hoje! Pagar Boleto {pp + 1}/{pt}</>
+                        } else if (diaVenc && diaHoje > diaVenc) {
+                          // ATRASADO
+                          btnClass = "bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20"
+                          btnContent = <>🚨 Atrasado (venceu dia {diaVenc}) · Pagar {pp + 1}/{pt}</>
+                        } else {
+                          // A VENCER (AMARELO PADRÃO)
+                          btnClass = "bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                          btnContent = <>💰 Pagar Boleto {pp + 1}/{pt}{diaVenc ? ` (vence dia ${diaVenc})` : ''}</>
+                        }
+
                         return (
                           <button
                             onClick={() => setImovelPagar(im)}
                             className={cn(
-                              "flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors flex items-center justify-center gap-1",
-                              pagoEsteMes
-                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
-                                : "bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                              "flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center justify-center gap-1",
+                              btnClass
                             )}
                           >
-                            {pagoEsteMes ? (
-                              <>✅ Parcela {pp}/{pt} Paga este Mês</>
-                            ) : (
-                              <>💰 Pagar Boleto {pp + 1}/{pt}</>
-                            )}
+                            {btnContent}
                           </button>
                         )
                       })()}
