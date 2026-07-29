@@ -3076,6 +3076,97 @@ export function useElenaSalvar({
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
             texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefAlvo}) marcado como pago via **${contaOrigemNome}** — parcela avançada automaticamente.${avisoDebito}` }])
 
+        } else if (tipoAlvo === 'veiculo') {
+          // 🆕 (29/07/2026) — Pagamento de parcela de veículo com histórico
+          let qVe = (supabase.from('veiculos') as any)
+            .select('id, titulo, marca, modelo, valor_parcela, parcelas_pagas, parcelas_total')
+            .ilike('titulo', `%${nomeAlvo}%`)
+          if (empresaIdConf) qVe = qVe.eq('empresa_id', empresaIdConf)
+          const { data: veiculosAch } = await qVe.limit(5)
+          if (!veiculosAch?.length) {
+            // Tenta buscar por marca+modelo se não achou por título
+            let qVe2 = (supabase.from('veiculos') as any)
+              .select('id, titulo, marca, modelo, valor_parcela, parcelas_pagas, parcelas_total')
+              .or(`marca.ilike.%${nomeAlvo}%,modelo.ilike.%${nomeAlvo}%`)
+            if (empresaIdConf) qVe2 = qVe2.eq('empresa_id', empresaIdConf)
+            const { data: veiculosAch2 } = await qVe2.limit(5)
+            if (!veiculosAch2?.length) throw new Error(`Veículo "${nomeAlvo}" não encontrado.`)
+            if (veiculosAch2.length > 1) throw new Error(`Mais de um veículo encontrado com "${nomeAlvo}": ${veiculosAch2.map((v: any) => v.titulo || `${v.marca} ${v.modelo}`).join(', ')}. Seja mais específico.`)
+            veiculosAch.push(veiculosAch2[0])
+          }
+          if (veiculosAch.length > 1) throw new Error(`Mais de um veículo encontrado com "${nomeAlvo}": ${veiculosAch.map((v: any) => v.titulo || `${v.marca} ${v.modelo}`).join(', ')}. Seja mais específico.`)
+          const veiculoAch = veiculosAch[0]
+          const nomeVeiculo = veiculoAch.titulo || `${veiculoAch.marca || ''} ${veiculoAch.modelo || ''}`.trim()
+
+          // Pede conta de origem se não informada
+          if (!acao.dados.conta_origem) {
+            const { data: contasDisponiveis } = await (supabase.from('contas') as any)
+              .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
+            const listaContas = contasDisponiveis?.length
+              ? `\n\nSuas contas cadastradas: ${contasDisponiveis.map((c: any) => c.nome).join(', ')}.`
+              : ''
+            throw new ElenaPergunta(`De qual conta saiu o pagamento do **${nomeVeiculo}**, Sr. Max?${listaContas}`, 'conta_origem')
+          }
+          const { id: contaOrigemIdVe, nome: contaOrigemNomeVe } = await resolverContaQualquer(acao.dados.conta_origem)
+          if (!contaOrigemIdVe) {
+            const contaInformada = String(acao.dados.conta_origem || '')
+            delete acao.dados.conta_origem
+            const { data: contasDisponiveis } = await (supabase.from('contas') as any)
+              .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
+            const listaContas = contasDisponiveis?.length
+              ? `\n\nSuas contas cadastradas: ${contasDisponiveis.map((c: any) => c.nome).join(', ')}.`
+              : ''
+            throw new ElenaPergunta(`Não encontrei a conta "${contaInformada}" no cadastro, Sr. Max. De qual conta saiu o pagamento do **${nomeVeiculo}**?${listaContas}`, 'conta_origem')
+          }
+
+          // Idempotência: se já pago neste mês, não duplica
+          const { data: pagVeExistente } = await (supabase.from('pagamentos_veiculos') as any)
+            .select('id, status').eq('veiculo_id', veiculoAch.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+          if (pagVeExistente?.status === 'pago') {
+            setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+              texto: `ℹ️ A parcela do **${nomeVeiculo}** (${mesRefAlvo}) **já estava marcada como paga** — não lancei nada de novo.` }])
+            setAcaoStatus(msgId, acaoIdx, 'saved')
+            window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+            return
+          }
+
+          // Registra pagamento na tabela pagamentos_veiculos
+          const { error: errPagVe } = await (supabase.from('pagamentos_veiculos') as any).upsert({
+            veiculo_id: veiculoAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
+            status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
+            conta_origem_id: contaOrigemIdVe,
+          }, { onConflict: 'veiculo_id,mes_referencia' })
+          if (errPagVe) throw new Error(errPagVe.message)
+
+          // Débito real na conta de origem
+          const valorDebitoVe = Number(acao.dados.valor_pago) || Number(veiculoAch.valor_parcela) || 0
+          let avisoDebitoVe = ''
+          if (valorDebitoVe > 0) {
+            const { error: errDebVe } = await (supabase.from('lancamentos') as any).insert({
+              conta_id: contaOrigemIdVe,
+              descricao: `🚗 Parcela ${nomeVeiculo} (${mesRefAlvo})`,
+              valor: valorDebitoVe, tipo: 'despesa', regime: 'caixa', status: 'validado',
+              data_competencia: dataPag, data_caixa: dataPag,
+              categoria_id: CAT_DESPESA_ID, created_by: uid,
+            })
+            if (errDebVe) {
+              avisoDebitoVe = `\n⚠️ _Não consegui lançar o débito de R$ ${valorDebitoVe.toFixed(2)} na conta (${errDebVe.message.substring(0, 80)}) — confira o saldo manualmente._`
+            } else {
+              avisoDebitoVe = `\n💰 _Débito de R$ ${valorDebitoVe.toFixed(2)} lançado em **${contaOrigemNomeVe}**._`
+            }
+          }
+
+          // Incrementa parcelas_pagas no veículo
+          const ppVeAtual = Number(veiculoAch.parcelas_pagas) || 0
+          const ptVeTotal = Number(veiculoAch.parcelas_total) || 0
+          if (ptVeTotal > 0) {
+            await (supabase.from('veiculos') as any)
+              .update({ parcelas_pagas: Math.min(ppVeAtual + 1, ptVeTotal) })
+              .eq('id', veiculoAch.id)
+          }
+          setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+            texto: `✅ Parcela do **${nomeVeiculo}** (${mesRefAlvo}) marcada como paga via **${contaOrigemNomeVe}** — parcela ${Math.min(ppVeAtual + 1, ptVeTotal)}/${ptVeTotal}.${avisoDebitoVe}` }])
+
         } else if (tipoAlvo === 'conta_fixa') {
           const { data: contasAch } = await (supabase.from('compromissos_fixos') as any)
             .select('id, descricao').eq('user_id', uid).ilike('descricao', `%${nomeAlvo}%`).limit(5)
@@ -3109,7 +3200,7 @@ export function useElenaSalvar({
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
             texto: `✅ Contrato **${contratoAch.nome_contrato}** (${mesRefAlvo}) marcado como pago — parcela ${novaParcela}/${contratoAch.parcela_total}.` }])
         } else {
-          throw new Error(`Tipo "${tipoAlvo}" não reconhecido. Use: cartao, imovel, conta_fixa ou investimento.`)
+          throw new Error(`Tipo "${tipoAlvo}" não reconhecido. Use: cartao, imovel, veiculo, conta_fixa ou investimento.`)
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
         window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))

@@ -10,6 +10,7 @@ import { AppPatraoTabs } from '@/components/shared/AppPatraoTabs'
 import { TabImoveis } from './_components/TabImoveis'
 import { TabVeiculos } from './_components/TabVeiculos'
 import { TabFinanciamentos } from './_components/TabFinanciamentos'
+import { TabHistoricoPagamentos } from './_components/TabHistoricoPagamentos'
 import { SecretariaFlutuante } from '@/components/shared/SecretariaFlutuante'
 import { exportCSV, exportPDF, parseCSV } from '@/lib/export-utils'
 import { Download, Upload, FileText, X, AlertCircle, CheckCircle2, Pencil, Trash2 } from 'lucide-react'
@@ -511,7 +512,7 @@ function ModalCusto({ projetoId, onClose, onSave }: { projetoId: string; onClose
 }
 
 export default function PatrimonioClient() {
-  const [tab, setTab] = useState<'geral' | 'imoveis' | 'veiculos' | 'financiamentos' | 'outros'>('geral')
+  const [tab, setTab] = useState<'geral' | 'imoveis' | 'veiculos' | 'financiamentos' | 'historico' | 'outros'>('geral')
   const [modal, setModal] = useState(false)
   const [editandoProjeto, setEditandoProjeto] = useState<ProjetoPatrimonio | null>(null)
   const [modalImport, setModalImport] = useState(false)
@@ -647,6 +648,7 @@ export default function PatrimonioClient() {
           { key: 'imoveis',        label: '🏠 Imóveis',         labelMobile: '🏠 Imóveis' },
           { key: 'veiculos',       label: '🚗 Veículos',        labelMobile: '🚗 Veículos' },
           { key: 'financiamentos', label: '🏦 Financiamentos',  labelMobile: '🏦 Financiam.' },
+          { key: 'historico',      label: '📋 Histórico Pagos',  labelMobile: '📋 Histórico' },
           { key: 'outros',         label: '📦 Outros Bens',     labelMobile: '📦 Outros' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
@@ -669,6 +671,7 @@ export default function PatrimonioClient() {
           {tab === 'imoveis'        && 'Imóveis: apartamentos, casas, terrenos, comerciais'}
           {tab === 'veiculos'       && 'Veículos: carros, motos, caminhões'}
           {tab === 'financiamentos' && 'Contratos de financiamento e parcelas'}
+          {tab === 'historico'      && 'Histórico de parcelas e faturas pagas'}
           {tab === 'outros'         && 'Equipamentos, maquinário e outros bens'}
         </p>
         <div className="flex items-center gap-2">
@@ -878,6 +881,7 @@ export default function PatrimonioClient() {
       {tab === 'imoveis' && <TabImoveis />}
       {tab === 'veiculos' && <TabVeiculos />}
       {tab === 'financiamentos' && <TabFinanciamentos />}
+      {tab === 'historico' && <TabHistoricoPagamentos />}
 
       {modal && (
         <ModalProjeto
