@@ -470,14 +470,14 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
 
         // Imóveis parcelados (filtrado por empresa_id)
         let imoveisQuery = (supabase.from('imoveis') as any)
-          .select('titulo, parcelas_total, parcelas_pagas, valor_parcela')
+          .select('titulo, parcelas_total, parcelas_pagas, valor_parcela, periodicidade')
           .not('parcelas_total', 'is', null)
         if (empresaIdCtx) imoveisQuery = imoveisQuery.eq('empresa_id', empresaIdCtx)
         const { data: imoveisMax } = await imoveisQuery
 
         // Veículos ativos (filtrado por empresa_id)
         let veiculosQuery = (supabase.from('veiculos') as any)
-          .select('titulo, marca, modelo, parcelas_total, parcelas_pagas, valor_parcela, financiado')
+          .select('titulo, marca, modelo, parcelas_total, parcelas_pagas, valor_parcela, financiado, periodicidade')
           .eq('status', 'ativo')
         if (empresaIdCtx) veiculosQuery = veiculosQuery.eq('empresa_id', empresaIdCtx)
         const { data: veiculosMax } = await veiculosQuery
@@ -618,7 +618,8 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
           if (temImoveis) {
             blocoCartoes += '🏠 IMÓVEIS PARCELADOS (EM ABERTO):\n'
             imoveisMax.forEach((im: any) => {
-              const vlrParcela = im.valor_parcela ? ` | parcela: R$ ${Number(im.valor_parcela).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              const perStr = im.periodicidade && im.periodicidade !== 'mensal' ? ` (${im.periodicidade})` : ''
+              const vlrParcela = im.valor_parcela ? ` | parcela${perStr}: R$ ${Number(im.valor_parcela).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
               blocoCartoes += `  • "${im.titulo}" | parcelas pagas: ${im.parcelas_pagas||0}/${im.parcelas_total}${vlrParcela}\n`
             })
             blocoCartoes += '\n'
@@ -629,7 +630,8 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
             blocoCartoes += '🚗 VEÍCULOS FINANCIADOS (EM ABERTO):\n'
             veiculosFinanciados.forEach((v: any) => {
               const nome = v.titulo || `${v.marca || ''} ${v.modelo || ''}`.trim()
-              const vlrParcela = v.valor_parcela ? ` | parcela: R$ ${Number(v.valor_parcela).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
+              const perStrV = v.periodicidade && v.periodicidade !== 'mensal' ? ` (${v.periodicidade})` : ''
+              const vlrParcela = v.valor_parcela ? ` | parcela${perStrV}: R$ ${Number(v.valor_parcela).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
               blocoCartoes += `  • "${nome}" | parcelas pagas: ${v.parcelas_pagas||0}/${v.parcelas_total}${vlrParcela}\n`
             })
             blocoCartoes += '\n'

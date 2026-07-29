@@ -28,6 +28,7 @@ type Imovel = {
   indexador: string | null
   data_aquisicao: string | null
   dia_vencimento: number | null
+  periodicidade?: 'mensal' | 'bimestral' | 'trimestral' | 'quadrimestral' | 'semestral' | 'anual' | null
   categoria_financeira: string | null
   taxa_juros_anual: number | null
   is_investimento?: boolean
@@ -46,7 +47,7 @@ const FORM_INICIAL = {
   status: 'disponivel' as Imovel['status'], construtora: '', unidade: '',
   valor_total_contrato: '', valor_parcela: '', parcelas_total: '',
   parcelas_pagas: '0', indexador: '', data_aquisicao: '',
-  dia_vencimento: '', categoria_financeira: 'Financiamento Imobiliário',
+  dia_vencimento: '', periodicidade: 'mensal', categoria_financeira: 'Financiamento Imobiliário',
   taxa_juros_anual: '', is_investimento: false,
 }
 
@@ -894,6 +895,7 @@ export function TabImoveis() {
       indexador: form.indexador || null,
       data_aquisicao: form.data_aquisicao || null,
       dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
+      periodicidade: form.periodicidade || 'mensal',
       categoria_financeira: form.categoria_financeira || null,
       taxa_juros_anual: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
       is_investimento: form.is_investimento,
@@ -946,6 +948,7 @@ export function TabImoveis() {
       parcelas_pagas: im.parcelas_pagas ? String(im.parcelas_pagas) : '0',
       indexador: im.indexador || '', data_aquisicao: im.data_aquisicao || '',
       dia_vencimento: im.dia_vencimento ? String(im.dia_vencimento) : '',
+      periodicidade: im.periodicidade || 'mensal',
       categoria_financeira: im.categoria_financeira || 'Financiamento Imobiliário',
       taxa_juros_anual: im.taxa_juros_anual ? String(im.taxa_juros_anual) : '',
     })
@@ -1070,13 +1073,24 @@ export function TabImoveis() {
               </select>
             </div>
           </div>
-          {/* Vencimento e Categoria (novos campos) */}
+          {/* Vencimento, Periodicidade e Categoria (campos automatizados) */}
           <p className="text-[10px] text-fg-tertiary uppercase tracking-widest pt-1 border-t border-border-subtle">📅 Lançamento Automático de Parcela</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="label">Dia do vencimento (1–31)</label>
               <input type="number" min="1" max="31" className="input mt-1" value={form.dia_vencimento}
                 placeholder="Ex: 10" onChange={e => setForm(f => ({...f, dia_vencimento: e.target.value}))} />
+            </div>
+            <div>
+              <label className="label">Periodicidade</label>
+              <select className="input mt-1" value={form.periodicidade} onChange={e => setForm(f => ({...f, periodicidade: e.target.value}))}>
+                <option value="mensal">Mensal</option>
+                <option value="bimestral">Bimestral (a cada 2 meses)</option>
+                <option value="trimestral">Trimestral (a cada 3 meses)</option>
+                <option value="quadrimestral">Quadrimestral (a cada 4 meses)</option>
+                <option value="semestral">Semestral (a cada 6 meses)</option>
+                <option value="anual">Anual (uma vez por ano)</option>
+              </select>
             </div>
             <div>
               <label className="label">Categoria financeira</label>
@@ -1164,7 +1178,7 @@ export function TabImoveis() {
                     {/* Título do bloco */}
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-semibold text-fg-tertiary uppercase tracking-wider">
-                        📦 Parcelamento {im.indexador ? `· ${im.indexador}` : ''}
+                        📦 Parcelamento {im.indexador ? `· ${im.indexador}` : ''} {im.periodicidade && im.periodicidade !== 'mensal' ? `· (${im.periodicidade.toUpperCase()})` : ''}
                       </span>
                       {im.taxa_juros_anual && (
                         <span className="text-[10px] text-fg-disabled">📊 {im.taxa_juros_anual}% a.a.</span>
@@ -1218,11 +1232,11 @@ export function TabImoveis() {
                       </div>
                     </div>
 
-                    {/* Valores: parcela mensal + saldo restante */}
+                    {/* Valores: parcela + saldo restante */}
                     <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border-subtle/60">
                       {im.valor_parcela && (
                         <div>
-                          <p className="text-[9px] text-fg-disabled uppercase">Parcela mensal</p>
+                          <p className="text-[9px] text-fg-disabled uppercase">Parcela ({im.periodicidade || 'mensal'})</p>
                           <p className="text-xs font-bold text-amber-400">{formatCurrency(im.valor_parcela)}</p>
                         </div>
                       )}

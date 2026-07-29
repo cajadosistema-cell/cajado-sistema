@@ -16,6 +16,7 @@ type PagamentoUnificado = {
   valor_pago: number
   data_pagamento: string | null
   conta_nome: string | null
+  periodicidade?: string | null
   status: string
 }
 
@@ -64,7 +65,7 @@ export function TabHistoricoPagamentos() {
 
         // 1. Pagamentos de imóveis
         let qIm = (supabase.from('pagamentos_imoveis') as any)
-          .select('id, imovel_id, mes_referencia, status, valor_pago, data_pagamento, conta_origem_id, imoveis(titulo), contas(nome)')
+          .select('id, imovel_id, mes_referencia, status, valor_pago, data_pagamento, conta_origem_id, imoveis(titulo, periodicidade), contas(nome)')
           .eq('status', 'pago')
           .order('mes_referencia', { ascending: false })
           .limit(200)
@@ -79,13 +80,14 @@ export function TabHistoricoPagamentos() {
             valor_pago: Number(p.valor_pago) || 0,
             data_pagamento: p.data_pagamento,
             conta_nome: p.contas?.nome || null,
+            periodicidade: p.imoveis?.periodicidade || 'mensal',
             status: p.status,
           })
         }
 
         // 2. Pagamentos de veículos
         let qVe = (supabase.from('pagamentos_veiculos') as any)
-          .select('id, veiculo_id, mes_referencia, status, valor_pago, data_pagamento, conta_origem_id, veiculos(titulo, marca, modelo), contas(nome)')
+          .select('id, veiculo_id, mes_referencia, status, valor_pago, data_pagamento, conta_origem_id, veiculos(titulo, marca, modelo, periodicidade), contas(nome)')
           .eq('status', 'pago')
           .order('mes_referencia', { ascending: false })
           .limit(200)
@@ -102,6 +104,7 @@ export function TabHistoricoPagamentos() {
             valor_pago: Number(p.valor_pago) || 0,
             data_pagamento: p.data_pagamento,
             conta_nome: p.contas?.nome || null,
+            periodicidade: v?.periodicidade || 'mensal',
             status: p.status,
           })
         }
@@ -315,6 +318,11 @@ export function TabHistoricoPagamentos() {
                               <span className={cn('px-1.5 py-0.5 rounded border text-[9px] font-medium', cfg.color)}>
                                 {cfg.label}
                               </span>
+                              {p.periodicidade && p.periodicidade !== 'mensal' && (
+                                <span className="px-1.5 py-0.5 rounded border text-[9px] font-medium text-purple-400 bg-purple-500/10 border-purple-500/20">
+                                  {p.periodicidade.toUpperCase()}
+                                </span>
+                              )}
                               <span>📅 {dataFmt}</span>
                               {p.conta_nome && <span>🏦 {p.conta_nome}</span>}
                             </div>

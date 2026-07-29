@@ -28,6 +28,7 @@ type Veiculo = {
   parcelas_total: number | null
   parcelas_pagas: number | null
   vencimento_dia: number | null
+  periodicidade?: 'mensal' | 'bimestral' | 'trimestral' | 'quadrimestral' | 'semestral' | 'anual' | null
   taxa_juros_anual: number | null
   status: 'ativo' | 'vendido' | 'sinistro' | 'em_manutencao'
 }
@@ -44,7 +45,7 @@ const FORM_INICIAL = {
   placa: '', cor: '', combustivel: 'flex', km_atual: '',
   valor_compra: '', valor_mercado: '', financiado: false,
   banco_financiador: '', valor_total_financiado: '', valor_parcela: '',
-  parcelas_total: '', parcelas_pagas: '0', vencimento_dia: '',
+  parcelas_total: '', parcelas_pagas: '0', vencimento_dia: '', periodicidade: 'mensal',
   status: 'ativo' as Veiculo['status']
 }
 
@@ -397,6 +398,7 @@ export function TabVeiculos() {
       parcelas_total: form.parcelas_total ? parseInt(form.parcelas_total) : null,
       parcelas_pagas: form.parcelas_pagas ? parseInt(form.parcelas_pagas) : 0,
       vencimento_dia: form.vencimento_dia ? parseInt(form.vencimento_dia) : null,
+      periodicidade: form.periodicidade || 'mensal',
       status: form.status,
     }
     if (editId) {
@@ -431,6 +433,7 @@ export function TabVeiculos() {
       parcelas_total: v.parcelas_total ? String(v.parcelas_total) : '',
       parcelas_pagas: v.parcelas_pagas ? String(v.parcelas_pagas) : '0',
       vencimento_dia: v.vencimento_dia ? String(v.vencimento_dia) : '',
+      periodicidade: v.periodicidade || 'mensal',
       status: v.status
     })
     setEditId(v.id); setShowForm(true)
@@ -549,10 +552,21 @@ export function TabVeiculos() {
                 <div><label className="label">Banco Financiador</label><input className="input mt-1" value={form.banco_financiador} onChange={e => setForm(f => ({...f, banco_financiador: e.target.value}))} placeholder="Caixa, Bradesco..." /></div>
                 <div><label className="label">Total Financiado</label><input type="number" step="0.01" className="input mt-1" value={form.valor_total_financiado} onChange={e => setForm(f => ({...f, valor_total_financiado: e.target.value}))} /></div>
               </div>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div><label className="label">Valor Parcela</label><input type="number" step="0.01" className="input mt-1" value={form.valor_parcela} onChange={e => setForm(f => ({...f, valor_parcela: e.target.value}))} /></div>
                 <div><label className="label">Total Parcelas</label><input type="number" className="input mt-1" value={form.parcelas_total} onChange={e => setForm(f => ({...f, parcelas_total: e.target.value}))} /></div>
                 <div><label className="label">Pagas</label><input type="number" className="input mt-1" value={form.parcelas_pagas} onChange={e => setForm(f => ({...f, parcelas_pagas: e.target.value}))} /></div>
+                <div>
+                  <label className="label">Periodicidade</label>
+                  <select className="input mt-1" value={form.periodicidade} onChange={e => setForm(f => ({...f, periodicidade: e.target.value}))}>
+                    <option value="mensal">Mensal</option>
+                    <option value="bimestral">Bimestral</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="quadrimestral">Quadrimestral</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="anual">Anual</option>
+                  </select>
+                </div>
                 <div><label className="label">Vence dia</label><input type="number" min="1" max="31" className="input mt-1" value={form.vencimento_dia} onChange={e => setForm(f => ({...f, vencimento_dia: e.target.value}))} /></div>
               </div>
             </div>
@@ -611,7 +625,7 @@ export function TabVeiculos() {
                   <div className="mb-3 rounded-xl bg-surface border border-border-subtle overflow-hidden">
                     <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
                       <span className="text-[9px] font-semibold text-fg-disabled uppercase tracking-widest">
-                        🏦 {v.banco_financiador || 'Financiamento Auto'}
+                        🏦 {v.banco_financiador || 'Financiamento Auto'} {v.periodicidade && v.periodicidade !== 'mensal' ? `· (${v.periodicidade.toUpperCase()})` : ''}
                       </span>
                     </div>
                     {/* KPI boxes */}
