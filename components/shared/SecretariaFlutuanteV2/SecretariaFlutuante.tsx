@@ -470,14 +470,14 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
 
         // Imóveis parcelados (filtrado por empresa_id)
         let imoveisQuery = (supabase.from('imoveis') as any)
-          .select('titulo, parcelas_total, parcelas_pagas, valor_parcela, periodicidade')
+          .select('titulo, parcelas_total, parcelas_pagas, valor_parcela, periodicidade, observacoes')
           .not('parcelas_total', 'is', null)
         if (empresaIdCtx) imoveisQuery = imoveisQuery.eq('empresa_id', empresaIdCtx)
         const { data: imoveisMax } = await imoveisQuery
 
         // Veículos ativos (filtrado por empresa_id)
         let veiculosQuery = (supabase.from('veiculos') as any)
-          .select('titulo, marca, modelo, parcelas_total, parcelas_pagas, valor_parcela, financiado, periodicidade')
+          .select('titulo, marca, modelo, parcelas_total, parcelas_pagas, valor_parcela, financiado, periodicidade, observacoes')
           .eq('status', 'ativo')
         if (empresaIdCtx) veiculosQuery = veiculosQuery.eq('empresa_id', empresaIdCtx)
         const { data: veiculosMax } = await veiculosQuery
@@ -620,7 +620,8 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
             imoveisMax.forEach((im: any) => {
               const perStr = im.periodicidade && im.periodicidade !== 'mensal' ? ` (${im.periodicidade})` : ''
               const vlrParcela = im.valor_parcela ? ` | parcela${perStr}: R$ ${Number(im.valor_parcela).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
-              blocoCartoes += `  • "${im.titulo}" | parcelas pagas: ${im.parcelas_pagas||0}/${im.parcelas_total}${vlrParcela}\n`
+              const obsStr = im.observacoes ? ` | obs: "${im.observacoes}"` : ''
+              blocoCartoes += `  • "${im.titulo}" | parcelas pagas: ${im.parcelas_pagas||0}/${im.parcelas_total}${vlrParcela}${obsStr}\n`
             })
             blocoCartoes += '\n'
           }
@@ -632,7 +633,8 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
               const nome = v.titulo || `${v.marca || ''} ${v.modelo || ''}`.trim()
               const perStrV = v.periodicidade && v.periodicidade !== 'mensal' ? ` (${v.periodicidade})` : ''
               const vlrParcela = v.valor_parcela ? ` | parcela${perStrV}: R$ ${Number(v.valor_parcela).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
-              blocoCartoes += `  • "${nome}" | parcelas pagas: ${v.parcelas_pagas||0}/${v.parcelas_total}${vlrParcela}\n`
+              const obsStrV = v.observacoes ? ` | obs: "${v.observacoes}"` : ''
+              blocoCartoes += `  • "${nome}" | parcelas pagas: ${v.parcelas_pagas||0}/${v.parcelas_total}${vlrParcela}${obsStrV}\n`
             })
             blocoCartoes += '\n'
           }
