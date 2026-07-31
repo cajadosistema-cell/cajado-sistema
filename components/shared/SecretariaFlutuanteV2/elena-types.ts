@@ -79,6 +79,10 @@ export type AcaoTipo =
   | 'resumo_mensal'
   | 'registrar_pedido_feature'
   | 'relatorio_diagnostico'
+  | 'confirmar_pagamento'
+  | 'reagendar_vencimento'
+  | 'editar_financiamento'
+
 
 export interface AcaoIA {
   tipo: AcaoTipo

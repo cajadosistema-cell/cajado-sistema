@@ -21,6 +21,7 @@ import {
   BANDEIRAS_MAP,
 } from './elena-constants'
 import { buscarDadosRelatorio } from '../ModalRelatorio'
+import { resolverMesRefPendente } from '@/lib/utils/patrimonio-pagamentos'
 // ════════════════════════════════════════════════════════════════
 // 🔴 FIX DUPLICATA — normalização e similaridade de nomes
 //
@@ -2985,20 +2986,24 @@ export function useElenaSalvar({
             texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.` }])
 
         } else if (tipoAlvo === 'imovel') {
-          let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela').ilike('titulo', `%${nomeAlvo}%`)
+          let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela, dia_vencimento, data_aquisicao').ilike('titulo', `%${nomeAlvo}%`)
           if (empresaIdConf) qIm = qIm.eq('empresa_id', empresaIdConf)
           const { data: imoveisAch } = await qIm.limit(5)
           if (!imoveisAch?.length) throw new Error(`Imóvel "${nomeAlvo}" não encontrado.`)
           if (imoveisAch.length > 1) throw new Error(`Mais de um imóvel encontrado com "${nomeAlvo}": ${imoveisAch.map((i: any) => i.titulo).join(', ')}. Seja mais específico.`)
           const imovelAch = imoveisAch[0]
+
+          let mesRefExec = acao.dados.mes_referencia
+          if (!mesRefExec) {
+            const resRef = await resolverMesRefPendente(supabase, 'pagamentos_imoveis', 'imovel_id', imovelAch.id, imovelAch.dia_vencimento, dataPag, imovelAch.data_aquisicao)
+            mesRefExec = resRef.mesRef
+          }
+
           // 🆕 (24/07/2026, pedido de Maiara/Max) — precisa saber de qual conta
           // saiu o pagamento antes de lançar. Se a Elena não perguntou isso
           // antes (deveria, ver prompt), falha aqui em vez de lançar sem saber
           // de onde debitou — mais seguro do que assumir uma conta qualquer.
           if (!acao.dados.conta_origem) {
-            // 🆕 (24/07/2026, pedido de Maiara) — lista as contas cadastradas
-            // junto da pergunta, pra facilitar o Max lembrar/escolher em vez
-            // de ter que digitar o nome exato de cabeça.
             const { data: contasDisponiveis } = await (supabase.from('contas') as any)
               .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
             const listaContas = contasDisponiveis?.length
@@ -3007,9 +3012,6 @@ export function useElenaSalvar({
             throw new ElenaPergunta(`De qual conta saiu o pagamento do **${imovelAch.titulo}**, Sr. Max?${listaContas}`, 'conta_origem')
           }
           const { id: contaOrigemId, nome: contaOrigemNome } = await resolverContaQualquer(acao.dados.conta_origem)
-          // 🆕 (24/07/2026) Conta informada mas NÃO encontrada no cadastro →
-          // repergunta (com a lista) em vez de tentar gravar com id vazio,
-          // que estourava a FK e virava "❌ erro" assustador.
           if (!contaOrigemId) {
             const contaInformada = String(acao.dados.conta_origem || '')
             delete acao.dados.conta_origem
@@ -3020,42 +3022,35 @@ export function useElenaSalvar({
               : ''
             throw new ElenaPergunta(`Não encontrei a conta "${contaInformada}" no cadastro, Sr. Max. De qual conta saiu o pagamento do **${imovelAch.titulo}**?${listaContas}`, 'conta_origem')
           }
-          // ── 🆕 (24/07/2026 v3) IDEMPOTÊNCIA ───────────────────────────
-          // Se o boleto deste mês JÁ está pago, confirmar de novo NÃO pode
-          // debitar a conta outra vez nem avançar a parcela em dobro.
+          // ── 🆕 IDEMPOTÊNCIA ───────────────────────────
           const { data: pagExistente } = await (supabase.from('pagamentos_imoveis') as any)
-            .select('id, status').eq('imovel_id', imovelAch.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+            .select('id, status').eq('imovel_id', imovelAch.id).eq('mes_referencia', mesRefExec).maybeSingle()
           if (pagExistente?.status === 'pago') {
             setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-              texto: `ℹ️ O boleto do **${imovelAch.titulo}** (${mesRefAlvo}) **já estava marcado como pago** — não lancei nada de novo pra não duplicar o débito.` }])
+              texto: `ℹ️ O boleto do **${imovelAch.titulo}** (${mesRefExec}) **já estava marcado como pago** — não lancei nada de novo pra não duplicar o débito.` }])
             setAcaoStatus(msgId, acaoIdx, 'saved')
             window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+            window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
             return
           }
           const { error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
-            imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
+            imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefExec,
             status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
             conta_origem_id: contaOrigemId,
           }, { onConflict: 'imovel_id,mes_referencia' })
           if (errPag) throw new Error(errPag.message)
-          // ── 🆕 (24/07/2026 v3) DÉBITO REAL NA CONTA DE ORIGEM ─────────
-          // Marcar como pago sem debitar deixava o saldo da conta intocado
-          // (bug reportado: "pagou mas não saiu da conta"). Agora lança a
-          // SAÍDA na tabela `lancamentos` — o mesmo mecanismo da
-          // transferência, que é o que move o saldo em Contas & Caixa.
+
           const valorDebito = Number(acao.dados.valor_pago) || Number(imovelAch.valor_parcela) || 0
           let avisoDebito = ''
           if (valorDebito > 0) {
             const { error: errDeb } = await (supabase.from('lancamentos') as any).insert({
               conta_id: contaOrigemId,
-              descricao: `🏠 Parcela ${imovelAch.titulo} (${mesRefAlvo})`,
+              descricao: `🏠 Parcela ${imovelAch.titulo} (${mesRefExec})`,
               valor: valorDebito, tipo: 'despesa', regime: 'caixa', status: 'validado',
               data_competencia: dataPag, data_caixa: dataPag,
               categoria_id: CAT_DESPESA_ID, created_by: uid,
             })
             if (errDeb) {
-              // Pagamento já foi registrado — não desfaz; só avisa que o
-              // débito no saldo falhou pra Maiara/Max corrigirem manualmente.
               avisoDebito = `\n⚠️ _Não consegui lançar o débito de R$ ${valorDebito.toFixed(2)} na conta (${errDeb.message.substring(0, 80)}) — confira o saldo manualmente._`
             } else {
               avisoDebito = `\n💸 Debitei **R$ ${valorDebito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** da conta.`
@@ -3063,9 +3058,7 @@ export function useElenaSalvar({
           } else {
             avisoDebito = `\n⚠️ _Este imóvel está com **valor a definir** — marquei como pago, mas **não debitei nada** do saldo por não saber o valor._`
           }
-          // 🆕 Incrementa parcelas_pagas automaticamente — resolve exatamente o
-          // tipo de erro manual que a gente ficou corrigindo via SQL o tempo
-          // todo (Sítio Mucugê, São Roque). Nunca passa de parcelas_total.
+
           const { data: imovelAtual } = await (supabase.from('imoveis') as any)
             .select('parcelas_pagas, parcelas_total').eq('id', imovelAch.id).maybeSingle()
           if (imovelAtual && (imovelAtual.parcelas_pagas || 0) < (imovelAtual.parcelas_total || 0)) {
@@ -3074,19 +3067,20 @@ export function useElenaSalvar({
               .eq('id', imovelAch.id)
           }
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefAlvo}) marcado como pago via **${contaOrigemNome}** — parcela avançada automaticamente.${avisoDebito}` }])
+            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefExec}) marcado como pago via **${contaOrigemNome}** — parcela avançada automaticamente.${avisoDebito}` }])
+          window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
+
 
         } else if (tipoAlvo === 'veiculo') {
           // 🆕 (29/07/2026) — Pagamento de parcela de veículo com histórico
           let qVe = (supabase.from('veiculos') as any)
-            .select('id, titulo, marca, modelo, valor_parcela, parcelas_pagas, parcelas_total')
+            .select('id, titulo, marca, modelo, valor_parcela, parcelas_pagas, parcelas_total, vencimento_dia')
             .ilike('titulo', `%${nomeAlvo}%`)
           if (empresaIdConf) qVe = qVe.eq('empresa_id', empresaIdConf)
           const { data: veiculosAch } = await qVe.limit(5)
           if (!veiculosAch?.length) {
-            // Tenta buscar por marca+modelo se não achou por título
             let qVe2 = (supabase.from('veiculos') as any)
-              .select('id, titulo, marca, modelo, valor_parcela, parcelas_pagas, parcelas_total')
+              .select('id, titulo, marca, modelo, valor_parcela, parcelas_pagas, parcelas_total, vencimento_dia')
               .or(`marca.ilike.%${nomeAlvo}%,modelo.ilike.%${nomeAlvo}%`)
             if (empresaIdConf) qVe2 = qVe2.eq('empresa_id', empresaIdConf)
             const { data: veiculosAch2 } = await qVe2.limit(5)
@@ -3097,6 +3091,12 @@ export function useElenaSalvar({
           if (veiculosAch.length > 1) throw new Error(`Mais de um veículo encontrado com "${nomeAlvo}": ${veiculosAch.map((v: any) => v.titulo || `${v.marca} ${v.modelo}`).join(', ')}. Seja mais específico.`)
           const veiculoAch = veiculosAch[0]
           const nomeVeiculo = veiculoAch.titulo || `${veiculoAch.marca || ''} ${veiculoAch.modelo || ''}`.trim()
+
+          let mesRefExecVe = acao.dados.mes_referencia
+          if (!mesRefExecVe) {
+            const resRefVe = await resolverMesRefPendente(supabase, 'pagamentos_veiculos', 'veiculo_id', veiculoAch.id, veiculoAch.vencimento_dia, dataPag, null)
+            mesRefExecVe = resRefVe.mesRef
+          }
 
           // Pede conta de origem se não informada
           if (!acao.dados.conta_origem) {
@@ -3121,18 +3121,19 @@ export function useElenaSalvar({
 
           // Idempotência: se já pago neste mês, não duplica
           const { data: pagVeExistente } = await (supabase.from('pagamentos_veiculos') as any)
-            .select('id, status').eq('veiculo_id', veiculoAch.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+            .select('id, status').eq('veiculo_id', veiculoAch.id).eq('mes_referencia', mesRefExecVe).maybeSingle()
           if (pagVeExistente?.status === 'pago') {
             setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-              texto: `ℹ️ A parcela do **${nomeVeiculo}** (${mesRefAlvo}) **já estava marcada como paga** — não lancei nada de novo.` }])
+              texto: `ℹ️ A parcela do **${nomeVeiculo}** (${mesRefExecVe}) **já estava marcada como paga** — não lancei nada de novo.` }])
             setAcaoStatus(msgId, acaoIdx, 'saved')
             window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+            window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
             return
           }
 
           // Registra pagamento na tabela pagamentos_veiculos
           const { error: errPagVe } = await (supabase.from('pagamentos_veiculos') as any).upsert({
-            veiculo_id: veiculoAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefAlvo,
+            veiculo_id: veiculoAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefExecVe,
             status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
             conta_origem_id: contaOrigemIdVe,
           }, { onConflict: 'veiculo_id,mes_referencia' })
@@ -3144,7 +3145,7 @@ export function useElenaSalvar({
           if (valorDebitoVe > 0) {
             const { error: errDebVe } = await (supabase.from('lancamentos') as any).insert({
               conta_id: contaOrigemIdVe,
-              descricao: `🚗 Parcela ${nomeVeiculo} (${mesRefAlvo})`,
+              descricao: `🚗 Parcela ${nomeVeiculo} (${mesRefExecVe})`,
               valor: valorDebitoVe, tipo: 'despesa', regime: 'caixa', status: 'validado',
               data_competencia: dataPag, data_caixa: dataPag,
               categoria_id: CAT_DESPESA_ID, created_by: uid,
@@ -3156,9 +3157,6 @@ export function useElenaSalvar({
             }
           }
 
-          // 🆕 (29/07/2026 v2) Busca dados FRESCOS do banco antes de incrementar
-          // — se o Max editou manualmente o nº de parcelas, a Elena precisa
-          // ler o valor atualizado, não o que veio na query inicial.
           const { data: veiculoAtual } = await (supabase.from('veiculos') as any)
             .select('parcelas_pagas, parcelas_total').eq('id', veiculoAch.id).maybeSingle()
           const ppVeAtual = Number(veiculoAtual?.parcelas_pagas) || 0
@@ -3169,7 +3167,9 @@ export function useElenaSalvar({
               .eq('id', veiculoAch.id)
           }
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Parcela do **${nomeVeiculo}** (${mesRefAlvo}) marcada como paga via **${contaOrigemNomeVe}** — parcela ${Math.min(ppVeAtual + 1, ptVeTotal)}/${ptVeTotal}.${avisoDebitoVe}` }])
+            texto: `✅ Parcela do **${nomeVeiculo}** (${mesRefExecVe}) marcada como paga via **${contaOrigemNomeVe}** — parcela ${Math.min(ppVeAtual + 1, ptVeTotal)}/${ptVeTotal}.${avisoDebitoVe}` }])
+          window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
+
 
         } else if (tipoAlvo === 'conta_fixa') {
           const { data: contasAch } = await (supabase.from('compromissos_fixos') as any)

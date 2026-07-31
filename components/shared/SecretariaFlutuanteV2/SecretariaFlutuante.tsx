@@ -470,8 +470,7 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
 
         // Imóveis parcelados (filtrado por empresa_id)
         let imoveisQuery = (supabase.from('imoveis') as any)
-          .select('titulo, parcelas_total, parcelas_pagas, valor_parcela, periodicidade, observacoes')
-          .not('parcelas_total', 'is', null)
+          .select('id, titulo, parcelas_total, parcelas_pagas, valor_parcela, periodicidade, observacoes')
         if (empresaIdCtx) imoveisQuery = imoveisQuery.eq('empresa_id', empresaIdCtx)
         const { data: imoveisMax } = await imoveisQuery
 

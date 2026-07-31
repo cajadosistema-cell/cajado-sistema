@@ -7,6 +7,7 @@ import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
+import { resolverMesRefPendente, MesRefResultado } from '@/lib/utils/patrimonio-pagamentos'
 
 type Veiculo = {
   id: string
@@ -374,6 +375,9 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
   const diaVenc = veiculo.vencimento_dia || 10
   const proxParcela = (veiculo.parcelas_pagas ?? 0) + 1
 
+  const [mesReferencia, setMesReferencia] = useState(hoje.toISOString().substring(0, 7))
+  const [statusMesRef, setStatusMesRef] = useState<MesRefResultado | null>(null)
+
   const [form, setForm] = useState({
     conta_id: '',
     valor: String(veiculo.valor_parcela || ''),
@@ -381,6 +385,22 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
     data_pagamento: hoje.toISOString().split('T')[0],
     observacoes: '',
   })
+
+  useEffect(() => {
+    resolverMesRefPendente(
+      supabase,
+      'pagamentos_veiculos',
+      'veiculo_id',
+      veiculo.id,
+      veiculo.vencimento_dia,
+      form.data_pagamento,
+      null
+    ).then(res => {
+      setMesReferencia(res.mesRef)
+      setStatusMesRef(res)
+    })
+  }, [veiculo.id, form.data_pagamento])
+
   const [status, setStatus] = useState<'idle'|'loading'|'ok'|'erro'>('idle')
   const [msg, setMsg] = useState('')
 
@@ -425,7 +445,7 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
         parcela_atual: proxParcela,
         total_parcelas: veiculo.parcelas_total,
         conciliado: true,
-        observacoes: `Veículo: ${veiculo.titulo} | ${form.observacoes || ''}`,
+        observacoes: `Veículo: ${veiculo.titulo} | Mês Ref: ${mesReferencia} | ${form.observacoes || ''}`,
       })
       if (errLanc) throw new Error(`Erro ao criar lançamento: ${errLanc.message}`)
 
@@ -443,11 +463,11 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
       if (errVeiculo) throw new Error(`Erro ao atualizar parcelas: ${errVeiculo.message}`)
 
       // 5. Registra no histórico de pagamentos_veiculos
-      const mesRef = form.data_pagamento.substring(0, 7)
+      const mesRefFinal = mesReferencia || form.data_pagamento.substring(0, 7)
       await (supabase.from('pagamentos_veiculos') as any).upsert({
         veiculo_id: veiculo.id,
         empresa_id: (veiculo as any).empresa_id || null,
-        mes_referencia: mesRef,
+        mes_referencia: mesRefFinal,
         status: 'pago',
         valor_pago: valor,
         data_pagamento: form.data_pagamento,
@@ -457,9 +477,10 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
 
       // Dispara evento global
       window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+      window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
 
       setStatus('ok')
-      setMsg(`✅ Parcela ${proxParcela} paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
+      setMsg(`✅ Parcela ${proxParcela} (${mesRefFinal}) paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
       setTimeout(() => { onPago(); onClose() }, 2000)
     } catch (err: any) {
       setStatus('erro')
@@ -480,6 +501,22 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
 
         <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300">
           <p>📊 Parcela <strong>{proxParcela}/{veiculo.parcelas_total ?? '?'}</strong> &nbsp;·&nbsp; Vence dia <strong>{diaVenc}</strong></p>
+          <div className="mt-2 flex items-center justify-between gap-2 bg-surface p-2 rounded-lg border border-border-subtle">
+            <span className="text-fg-secondary text-xs">Mês de Referência:</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="month"
+                className="input py-0.5 px-2 text-xs w-36"
+                value={mesReferencia}
+                onChange={e => setMesReferencia(e.target.value)}
+              />
+              {statusMesRef?.isAtrasado && (
+                <span className="px-2 py-0.5 text-[10px] rounded bg-red-500/20 text-red-400 font-bold border border-red-500/30">
+                  🚨 Em Atraso
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -541,17 +578,17 @@ export function TabVeiculos() {
 
   const mesAtual = new Date().toISOString().substring(0, 7)
   const [pagamentosMes, setPagamentosMes] = useState<Record<string, boolean>>({})
+  const [statusPendentesMap, setStatusPendentesMap] = useState<Record<string, MesRefResultado>>({})
 
   const carregarPagamentosMes = async () => {
     if (!empresaId) return
     const { data } = await (supabase.from('pagamentos_veiculos') as any)
-      .select('veiculo_id, status')
+      .select('veiculo_id, status, mes_referencia')
       .eq('empresa_id', empresaId)
-      .eq('mes_referencia', mesAtual)
       .eq('status', 'pago')
     if (data) {
       const mapa: Record<string, boolean> = {}
-      data.forEach((p: any) => { mapa[p.veiculo_id] = true })
+      data.filter((p: any) => p.mes_referencia === mesAtual).forEach((p: any) => { mapa[p.veiculo_id] = true })
       setPagamentosMes(mapa)
     }
   }
@@ -560,7 +597,11 @@ export function TabVeiculos() {
     carregarPagamentosMes()
     const handler = () => { refetch(); carregarPagamentosMes() }
     window.addEventListener('elena:lancamento-salvo', handler)
-    return () => window.removeEventListener('elena:lancamento-salvo', handler)
+    window.addEventListener('elena:patrimonio-updated', handler)
+    return () => {
+      window.removeEventListener('elena:lancamento-salvo', handler)
+      window.removeEventListener('elena:patrimonio-updated', handler)
+    }
   }, [empresaId])
 
   const { data: veiculos, refetch } = useSupabaseQuery<Veiculo>('veiculos', {
@@ -568,6 +609,29 @@ export function TabVeiculos() {
     orderBy: { column: 'criado_em', ascending: false },
     enabled: !!empresaId,
   } as any)
+
+  useEffect(() => {
+    if (!veiculos?.length) return
+    let cancelado = false
+    async function carregarPendentes() {
+      const mapa: Record<string, MesRefResultado> = {}
+      for (const v of veiculos) {
+        mapa[v.id] = await resolverMesRefPendente(
+          supabase,
+          'pagamentos_veiculos',
+          'veiculo_id',
+          v.id,
+          v.vencimento_dia,
+          undefined,
+          null
+        )
+      }
+      if (!cancelado) setStatusPendentesMap(mapa)
+    }
+    carregarPendentes()
+    return () => { cancelado = true }
+  }, [veiculos])
+
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -655,7 +719,7 @@ export function TabVeiculos() {
                 v.km_atual??'', v.status,
                 v.valor_compra??'', v.valor_mercado??'',
                 `${v.parcelas_pagas??0}/${v.parcelas_total??0}`,
-                v.data_aquisicao||'',
+                (v as any).data_aquisicao||'',
               ])
             )
           }} className="btn-secondary text-xs">📥 Exportar CSV</button>
@@ -883,7 +947,9 @@ export function TabVeiculos() {
                     )}
                     <div className="p-2 border-t border-border-subtle/80 flex gap-2 flex-wrap">
                       {(() => {
-                        const pagoEsteMes = pagamentosMes[v.id]
+                        const statusPend = statusPendentesMap[v.id]
+                        const isAtrasado = statusPend?.isAtrasado
+                        const pagoEsteMes = pagamentosMes[v.id] && !isAtrasado
                         const diaHoje = new Date().getDate()
                         const diaVenc = v.vencimento_dia
 
@@ -893,17 +959,16 @@ export function TabVeiculos() {
                         if (pagoEsteMes) {
                           btnClass = "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
                           btnContent = <>✅ Parcela {pp}/{pt} Paga este Mês</>
+                        } else if (isAtrasado) {
+                          btnClass = "bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 font-bold"
+                          btnContent = <>🚨 {statusPend?.descricaoStatus || 'Atrasado'} · Pagar {pp + 1}/{pt}</>
                         } else if (diaVenc && diaHoje === diaVenc) {
                           // NA DATA DO VENCIMENTO: AMARELO ALERTA DESTAQUE
                           btnClass = "bg-amber-500/25 border-2 border-amber-400 text-amber-300 hover:bg-amber-500/40 animate-pulse font-bold shadow-lg shadow-amber-500/10"
                           btnContent = <>⏰ Vence Hoje! Pagar Boleto {pp + 1}/{pt}</>
-                        } else if (diaVenc && diaHoje > diaVenc) {
-                          // ATRASADO
-                          btnClass = "bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20"
-                          btnContent = <>🚨 Atrasado (venceu dia {diaVenc}) · Pagar {pp + 1}/{pt}</>
                         } else {
                           // A VENCER (AMARELO PADRÃO)
-                          btnClass = "bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                          btnClass = "bg-amber-500/10 border border-border-subtle text-amber-400 hover:bg-amber-500/20"
                           btnContent = <>💰 Pagar Boleto {pp + 1}/{pt}{diaVenc ? ` (vence dia ${diaVenc})` : ''}</>
                         }
 

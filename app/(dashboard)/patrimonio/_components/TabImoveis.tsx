@@ -7,6 +7,7 @@ import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
+import { resolverMesRefPendente, MesRefResultado } from '@/lib/utils/patrimonio-pagamentos'
 
 type Imovel = {
   id: string
@@ -327,6 +328,9 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
   const dataVenc = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc)
   const proxParcela = (imovel.parcelas_pagas ?? 0) + 1
 
+  const [mesReferencia, setMesReferencia] = useState(hoje.toISOString().substring(0, 7))
+  const [statusMesRef, setStatusMesRef] = useState<MesRefResultado | null>(null)
+
   const [form, setForm] = useState({
     conta_id: '',
     valor: String(imovel.valor_parcela || ''),
@@ -335,17 +339,33 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
     categoria_financeira: imovel.categoria_financeira || 'Financiamento Imobiliário',
     observacoes: '',
   })
+
+  useEffect(() => {
+    resolverMesRefPendente(
+      supabase,
+      'pagamentos_imoveis',
+      'imovel_id',
+      imovel.id,
+      imovel.dia_vencimento,
+      form.data_pagamento,
+      imovel.data_aquisicao
+    ).then(res => {
+      setMesReferencia(res.mesRef)
+      setStatusMesRef(res)
+    })
+  }, [imovel.id, form.data_pagamento])
+
   const [status, setStatus] = useState<'idle'|'loading'|'ok'|'erro'>('idle')
   const [msg, setMsg] = useState('')
 
   // Carrega contas bancárias com saldo
-  useState(() => {
+  useEffect(() => {
     supabase.from('contas').select('id,nome,tipo,saldo_atual,cor')
       .in('tipo', ['corrente', 'poupanca', 'dinheiro', 'investimento'])
       .then(({ data }) => {
         if (data) setContas(data as any)
       })
-  })
+  }, [])
 
   const contaSelecionada = contas.find(c => c.id === form.conta_id)
 
@@ -391,6 +411,7 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
         observacoes: [
           `Imóvel: ${imovel.titulo}`,
           imovel.indexador ? `Indexador: ${imovel.indexador}` : null,
+          `Mês Ref: ${mesReferencia}`,
           form.observacoes || null,
         ].filter(Boolean).join(' | '),
       })
@@ -409,12 +430,12 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
         .eq('id', imovel.id)
       if (errImovel) throw new Error(`Erro ao atualizar parcelas: ${errImovel.message}`)
 
-      // 5. Registra no histórico de pagamentos_imoveis para o mês de referência
-      const mesRef = form.data_pagamento.substring(0, 7)
+      // 5. Registra no histórico de pagamentos_imoveis para o mês de referência resolvido
+      const mesRefFinal = mesReferencia || form.data_pagamento.substring(0, 7)
       await (supabase.from('pagamentos_imoveis') as any).upsert({
         imovel_id: imovel.id,
         empresa_id: (imovel as any).empresa_id || null,
-        mes_referencia: mesRef,
+        mes_referencia: mesRefFinal,
         status: 'pago',
         valor_pago: valor,
         data_pagamento: form.data_pagamento,
@@ -424,9 +445,10 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
 
       // Dispara evento global para recarregar relatórios/botões
       window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+      window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
 
       setStatus('ok')
-      setMsg(`✅ Parcela ${proxParcela} paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
+      setMsg(`✅ Parcela ${proxParcela} (${mesRefFinal}) paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
       setTimeout(() => { onPago(); onClose() }, 2000)
     } catch (err: any) {
       setStatus('erro')
@@ -448,7 +470,23 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
         {/* Info da parcela */}
         <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300">
           <p>📊 Parcela <strong>{proxParcela}/{imovel.parcelas_total ?? '?'}</strong> &nbsp;·&nbsp; Vence dia <strong>{diaVenc}</strong></p>
-          {imovel.indexador && <p className="mt-1">📌 Indexador: {imovel.indexador}</p>}
+          <div className="mt-2 flex items-center justify-between gap-2 bg-surface p-2 rounded-lg border border-border-subtle">
+            <span className="text-fg-secondary text-xs">Mês de Referência:</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="month"
+                className="input py-0.5 px-2 text-xs w-36"
+                value={mesReferencia}
+                onChange={e => setMesReferencia(e.target.value)}
+              />
+              {statusMesRef?.isAtrasado && (
+                <span className="px-2 py-0.5 text-[10px] rounded bg-red-500/20 text-red-400 font-bold border border-red-500/30">
+                  🚨 Em Atraso
+                </span>
+              )}
+            </div>
+          </div>
+          {imovel.indexador && <p className="mt-1 font-mono text-[11px]">📌 Indexador: {imovel.indexador}</p>}
         </div>
 
         <div className="space-y-3">
@@ -887,17 +925,17 @@ export function TabImoveis() {
 
   const mesAtual = new Date().toISOString().substring(0, 7)
   const [pagamentosMes, setPagamentosMes] = useState<Record<string, boolean>>({})
+  const [statusPendentesMap, setStatusPendentesMap] = useState<Record<string, MesRefResultado>>({})
 
   const carregarPagamentosMes = async () => {
     if (!empresaId) return
     const { data } = await (supabase.from('pagamentos_imoveis') as any)
-      .select('imovel_id, status')
+      .select('imovel_id, status, mes_referencia')
       .eq('empresa_id', empresaId)
-      .eq('mes_referencia', mesAtual)
       .eq('status', 'pago')
     if (data) {
       const mapa: Record<string, boolean> = {}
-      data.forEach((p: any) => { mapa[p.imovel_id] = true })
+      data.filter((p: any) => p.mes_referencia === mesAtual).forEach((p: any) => { mapa[p.imovel_id] = true })
       setPagamentosMes(mapa)
     }
   }
@@ -906,7 +944,11 @@ export function TabImoveis() {
     carregarPagamentosMes()
     const handler = () => { refetch(); carregarPagamentosMes() }
     window.addEventListener('elena:lancamento-salvo', handler)
-    return () => window.removeEventListener('elena:lancamento-salvo', handler)
+    window.addEventListener('elena:patrimonio-updated', handler)
+    return () => {
+      window.removeEventListener('elena:lancamento-salvo', handler)
+      window.removeEventListener('elena:patrimonio-updated', handler)
+    }
   }, [empresaId])
 
   const { data: imoveis, refetch } = useSupabaseQuery<Imovel>('imoveis', {
@@ -914,6 +956,29 @@ export function TabImoveis() {
     orderBy: { column: 'criado_em', ascending: false },
     enabled: !!empresaId,
   } as any)
+
+  useEffect(() => {
+    if (!imoveis?.length) return
+    let cancelado = false
+    async function carregarPendentes() {
+      const mapa: Record<string, MesRefResultado> = {}
+      for (const im of imoveis) {
+        mapa[im.id] = await resolverMesRefPendente(
+          supabase,
+          'pagamentos_imoveis',
+          'imovel_id',
+          im.id,
+          im.dia_vencimento,
+          undefined,
+          im.data_aquisicao
+        )
+      }
+      if (!cancelado) setStatusPendentesMap(mapa)
+    }
+    carregarPendentes()
+    return () => { cancelado = true }
+  }, [imoveis])
+
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1305,7 +1370,9 @@ export function TabImoveis() {
                     {/* Botões de ação */}
                     <div className="flex gap-2 flex-wrap">
                       {prog < 100 && (() => {
-                        const pagoEsteMes = pagamentosMes[im.id]
+                        const statusPend = statusPendentesMap[im.id]
+                        const isAtrasado = statusPend?.isAtrasado
+                        const pagoEsteMes = pagamentosMes[im.id] && !isAtrasado
                         const diaHoje = new Date().getDate()
                         const diaVenc = im.dia_vencimento
 
@@ -1315,17 +1382,16 @@ export function TabImoveis() {
                         if (pagoEsteMes) {
                           btnClass = "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
                           btnContent = <>✅ Parcela {pp}/{pt} Paga este Mês</>
+                        } else if (isAtrasado) {
+                          btnClass = "bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 font-bold"
+                          btnContent = <>🚨 {statusPend?.descricaoStatus || 'Atrasado'} · Pagar {pp + 1}/{pt}</>
                         } else if (diaVenc && diaHoje === diaVenc) {
                           // NA DATA DO VENCIMENTO: AMARELO ALERTA DESTAQUE
                           btnClass = "bg-amber-500/25 border-2 border-amber-400 text-amber-300 hover:bg-amber-500/40 animate-pulse font-bold shadow-lg shadow-amber-500/10"
                           btnContent = <>⏰ Vence Hoje! Pagar Boleto {pp + 1}/{pt}</>
-                        } else if (diaVenc && diaHoje > diaVenc) {
-                          // ATRASADO
-                          btnClass = "bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20"
-                          btnContent = <>🚨 Atrasado (venceu dia {diaVenc}) · Pagar {pp + 1}/{pt}</>
                         } else {
                           // A VENCER (AMARELO PADRÃO)
-                          btnClass = "bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20"
+                          btnClass = "bg-amber-500/10 border border-border-subtle text-amber-400 hover:bg-amber-500/20"
                           btnContent = <>💰 Pagar Boleto {pp + 1}/{pt}{diaVenc ? ` (vence dia ${diaVenc})` : ''}</>
                         }
 
