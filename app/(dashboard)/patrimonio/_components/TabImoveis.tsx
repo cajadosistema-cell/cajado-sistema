@@ -7,7 +7,7 @@ import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn, hojeLocal, mesLocal } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
-import { resolverMesRefPendente, MesRefResultado } from '@/lib/utils/patrimonio-pagamentos'
+import { resolverMesRefPendente, calcularParcelasEmAberto, MesRefResultado, ParcelaEmAberto } from '@/lib/utils/patrimonio-pagamentos'
 
 type Imovel = {
   id: string
@@ -597,6 +597,236 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
 }
 
 // ── Modal de Importação via IA ──────────────────────────────────
+// ── Modal Registrar Parcelas Já Pagas (retroativo — NÃO debita) ────
+// Contrapartida do Pagar Boleto. Aqui o dinheiro JÁ saiu na vida real em algum
+// momento do passado; o que falta é o registro. Por isso chama a RPC
+// registrar_pagamento_retroativo, que grava o boleto com data e conta de origem
+// mas não mexe em contas.saldo_atual nem cria lançamento. Debitar de novo
+// recriaria o problema dos débitos órfãos ao contrário.
+function ModalRegistrarRetroativo({ imovel, onClose, onRegistrado }: {
+  imovel: Imovel
+  onClose: () => void
+  onRegistrado: () => void
+}) {
+  const supabase = createClient()
+  const [contas, setContas] = useState<{id:string;nome:string;tipo:string}[]>([])
+  const [contaId, setContaId] = useState('')
+  const [emAberto, setEmAberto] = useState<ParcelaEmAberto[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [sel, setSel] = useState<Record<string, { marcado: boolean; data: string; valor: string }>>({})
+  const [status, setStatus] = useState<'idle'|'loading'|'ok'|'erro'>('idle')
+  const [msg, setMsg] = useState('')
+
+  const pagas = imovel.parcelas_pagas ?? 0
+  const total = imovel.parcelas_total ?? null
+  const faltam = total != null ? Math.max(0, total - pagas) : null
+
+  useEffect(() => {
+    supabase.from('contas').select('id,nome,tipo')
+      .in('tipo', ['corrente', 'poupanca', 'dinheiro', 'investimento'])
+      .then(({ data }) => { if (data) setContas(data as any) })
+  }, [])
+
+  // Mesma função do card e do resumo da Elena — uma regra só.
+  useEffect(() => {
+    let cancelado = false
+    async function carregar() {
+      const { data: pagos } = await (supabase.from('pagamentos_imoveis') as any)
+        .select('mes_referencia, status')
+        .eq('imovel_id', imovel.id)
+        .eq('status', 'pago')
+      const mesesPagos = new Set<string>((pagos || []).map((p: any) => p.mes_referencia))
+      const calc = calcularParcelasEmAberto({
+        dataAquisicao: imovel.data_aquisicao,
+        parcelasPagas: imovel.parcelas_pagas,
+        parcelasTotal: imovel.parcelas_total,
+        periodicidade: imovel.periodicidade,
+        diaVencimento: imovel.dia_vencimento,
+      }, mesesPagos)
+      if (cancelado) return
+      setEmAberto(calc.emAberto)
+      // Pré-preenche a data com o vencimento daquele mês — quase sempre é a
+      // data real do pagamento, e o Max ajusta o que estiver diferente.
+      const dia = String(imovel.dia_vencimento || 10).padStart(2, '0')
+      const inicial: Record<string, { marcado: boolean; data: string; valor: string }> = {}
+      calc.emAberto.forEach(pa => {
+        inicial[pa.mesRef] = {
+          marcado: false,
+          data: `${pa.mesRef}-${dia}`,
+          valor: String(imovel.valor_parcela ?? ''),
+        }
+      })
+      setSel(inicial)
+      setCarregando(false)
+    }
+    carregar()
+    return () => { cancelado = true }
+  }, [imovel.id])
+
+  const marcados = emAberto.filter(pa => sel[pa.mesRef]?.marcado)
+  const totalMarcado = marcados.reduce((acc, pa) => acc + (parseFloat(sel[pa.mesRef]?.valor) || 0), 0)
+
+  const toggle = (mes: string) =>
+    setSel(s => ({ ...s, [mes]: { ...s[mes], marcado: !s[mes]?.marcado } }))
+  const setCampo = (mes: string, campo: 'data' | 'valor', v: string) =>
+    setSel(s => ({ ...s, [mes]: { ...s[mes], [campo]: v } }))
+
+  const handleRegistrar = async () => {
+    if (!contaId) { setStatus('erro'); setMsg('❗ Selecione a conta de origem'); return }
+    if (marcados.length === 0) { setStatus('erro'); setMsg('❗ Marque ao menos uma parcela'); return }
+    for (const pa of marcados) {
+      const linha = sel[pa.mesRef]
+      if (!linha.data) { setStatus('erro'); setMsg(`❗ Informe a data de pagamento de ${pa.mesRef}`); return }
+      if (!(parseFloat(linha.valor) > 0)) { setStatus('erro'); setMsg(`❗ Informe um valor válido para ${pa.mesRef}`); return }
+    }
+
+    setStatus('loading'); setMsg('')
+    const ok: string[] = []
+    const falhas: string[] = []
+
+    // Uma chamada por parcela: cada uma é atômica no banco e falha isolada não
+    // derruba as outras. O relatório no fim diz exatamente o que entrou.
+    for (const pa of marcados) {
+      const linha = sel[pa.mesRef]
+      const { data, error } = await (supabase.rpc as any)('registrar_pagamento_retroativo', {
+        p_imovel_id: imovel.id,
+        p_mes_ref:   pa.mesRef,
+        p_data_pgto: linha.data,
+        p_valor:     parseFloat(linha.valor),
+        p_conta_id:  contaId,
+        p_notas:     `Parcela ${pa.numero}${total ? '/' + total : ''}`,
+      })
+      if (error) { falhas.push(`${pa.mesRef}: ${error.message}`); continue }
+      if (data?.ok) ok.push(pa.mesRef)
+      else falhas.push(`${pa.mesRef}: ${data?.motivo || 'recusado'}`)
+    }
+
+    if (falhas.length === 0) {
+      setStatus('ok')
+      setMsg(`✅ ${ok.length} parcela(s) registrada(s). Nenhum valor foi debitado — só o histórico foi gravado.`)
+      setTimeout(() => { onRegistrado(); onClose() }, 2000)
+    } else {
+      setStatus('erro')
+      setMsg(`${ok.length > 0 ? `✅ ${ok.length} registrada(s). ` : ''}⚠️ Não entraram: ${falhas.join(' · ')}`)
+      if (ok.length > 0) onRegistrado()
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-surface border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-fg">🧾 Registrar Parcelas Já Pagas</h2>
+              <p className="text-xs text-fg-tertiary mt-0.5">{imovel.titulo}</p>
+            </div>
+            <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-lg leading-none">✕</button>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
+            <span className="text-fg-secondary">
+              <strong className="text-fg tabular-nums">{pagas}</strong> pagas
+              {total != null && <> de <strong className="text-fg tabular-nums">{total}</strong></>}
+            </span>
+            {faltam != null && (
+              <span className="text-fg-tertiary">faltam <strong className="text-fg tabular-nums">{faltam}</strong></span>
+            )}
+          </div>
+
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-[11px] text-amber-200/90 leading-relaxed">
+            Use isto para parcelas que <strong>já foram pagas</strong> e nunca foram registradas.
+            Nenhum valor é debitado e nenhum lançamento é criado — o dinheiro já saiu na época.
+            A conta serve para dizer <strong>de onde veio o recurso</strong>.
+            Para pagar uma parcela <strong>agora</strong>, feche e use <strong>Pagar Boleto</strong>.
+          </div>
+
+          <div>
+            <label className="label">Conta de origem <span className="text-red-400">*</span></label>
+            <select className="input mt-1" value={contaId} onChange={e => setContaId(e.target.value)}>
+              <option value="">Selecione…</option>
+              {contas.map(c => <option key={c.id} value={c.id}>{c.nome} ({c.tipo})</option>)}
+            </select>
+          </div>
+
+          {carregando ? (
+            <p className="text-xs text-fg-tertiary py-6 text-center">Carregando parcelas…</p>
+          ) : emAberto.length === 0 ? (
+            <p className="text-xs text-fg-tertiary py-6 text-center">
+              Nenhuma parcela em aberto — este imóvel está em dia.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[11px] text-fg-tertiary uppercase tracking-wide">Parcelas em aberto</p>
+              {emAberto.map(pa => {
+                const linha = sel[pa.mesRef] || { marcado: false, data: '', valor: '' }
+                return (
+                  <div key={pa.mesRef} className={cn(
+                    'rounded-xl border px-3 py-2.5 transition-colors',
+                    linha.marcado ? 'bg-white/5 border-white/20' : 'border-white/8'
+                  )}>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={!!linha.marcado} onChange={() => toggle(pa.mesRef)} />
+                      <span className="text-xs font-semibold text-fg">
+                        Parcela {pa.numero}{total ? `/${total}` : ''} — {pa.mesRef}
+                      </span>
+                      {pa.isAtrasado && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-bold">
+                          ATRASADA
+                        </span>
+                      )}
+                    </label>
+                    {linha.marcado && (
+                      <div className="grid grid-cols-2 gap-2 mt-2 pl-6">
+                        <div>
+                          <label className="text-[10px] text-fg-tertiary uppercase">Data do pagamento</label>
+                          <input type="date" className="input mt-0.5 text-xs" value={linha.data}
+                            onChange={e => setCampo(pa.mesRef, 'data', e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-fg-tertiary uppercase">Valor pago</label>
+                          <input type="number" step="0.01" className="input mt-0.5 text-xs" value={linha.valor}
+                            onChange={e => setCampo(pa.mesRef, 'valor', e.target.value)} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {marcados.length > 0 && (
+            <div className="flex items-center justify-between text-xs bg-white/5 rounded-xl px-4 py-2.5">
+              <span className="text-fg-secondary">{marcados.length} selecionada(s)</span>
+              <span className="font-semibold text-fg tabular-nums">{formatCurrency(totalMarcado)}</span>
+            </div>
+          )}
+
+          {msg && (
+            <p className={cn('text-xs leading-relaxed', status === 'erro' ? 'text-red-400' : 'text-emerald-400')}>
+              {msg}
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button onClick={onClose} className="flex-1 py-2 rounded-xl text-xs font-semibold border border-white/10 text-fg-tertiary hover:text-fg">
+              Cancelar
+            </button>
+            <button
+              onClick={handleRegistrar}
+              disabled={status === 'loading' || marcados.length === 0}
+              className="flex-1 py-2 rounded-xl text-xs font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {status === 'loading' ? 'Registrando…' : `Registrar ${marcados.length || ''} sem debitar`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ModalImportarIA({ onClose, onImportado }: { onClose: () => void; onImportado: () => void }) {
   const supabase = createClient()
   const [texto, setTexto] = useState('')
@@ -945,6 +1175,7 @@ export function TabImoveis() {
   const [imovelLancar, setImovelLancar] = useState<Imovel | null>(null)
   const [imovelAnalisar, setImovelAnalisar] = useState<Imovel | null>(null)
   const [imovelPagar, setImovelPagar] = useState<Imovel | null>(null)
+  const [imovelRetroativo, setImovelRetroativo] = useState<Imovel | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
   const mesAtual = mesLocal()
@@ -1009,9 +1240,13 @@ export function TabImoveis() {
 
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
+    // trim() em todo texto livre: um espaço invisível no fim do título fez o
+    // "Terreno Baron Conect " escapar de UPDATE por nome e some de busca exata.
+    const limpo = (v: string) => { const t = (v || '').trim(); return t || null }
+
     const payload: any = {
-      titulo: form.titulo,
-      endereco: form.endereco || null,
+      titulo: (form.titulo || '').trim(),
+      endereco: limpo(form.endereco),
       tipo_imovel: form.tipo_imovel,
       area_m2: form.area_m2 ? parseFloat(form.area_m2) : null,
       quartos: form.quartos ? parseInt(form.quartos) : null,
@@ -1019,23 +1254,29 @@ export function TabImoveis() {
       valor_compra: form.valor_compra ? parseFloat(form.valor_compra) : null,
       valor_mercado: form.valor_mercado ? parseFloat(form.valor_mercado) : null,
       status: form.status,
-      construtora: form.construtora || null,
-      unidade: form.unidade || null,
+      construtora: limpo(form.construtora),
+      unidade: limpo(form.unidade),
       valor_total_contrato: form.valor_total_contrato ? parseFloat(form.valor_total_contrato) : null,
       valor_parcela: form.valor_parcela ? parseFloat(form.valor_parcela) : null,
       parcelas_total: form.parcelas_total ? parseInt(form.parcelas_total) : null,
       parcelas_pagas: form.parcelas_pagas ? parseInt(form.parcelas_pagas) : 0,
-      indexador: form.indexador || null,
+      indexador: limpo(form.indexador),
       data_aquisicao: form.data_aquisicao || null,
       dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
       periodicidade: form.periodicidade || 'mensal',
       categoria_financeira: form.categoria_financeira || null,
       taxa_juros_anual: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
       is_investimento: form.is_investimento,
-      observacoes: form.observacoes || null,
+      observacoes: limpo(form.observacoes),
     }
     
     if (editId) {
+      // 01/08/2026: em EDIÇÃO o contador de parcelas pagas não vai no payload.
+      // Ele só avança por operação com procedência (pagamento efetivo ou
+      // registro retroativo, que exigem data e conta). Enquanto era digitável,
+      // ele e pagamentos_imoveis viviam divergindo e ninguém sabia qual valia.
+      // No CADASTRO ele continua editável: ali é o saldo de abertura do imóvel.
+      delete payload.parcelas_pagas
       const { error } = await (supabase.from('imoveis') as any).update(payload).eq('id', editId)
       if (error) { alert('Erro ao atualizar imóvel: ' + error.message); return }
     } else {
@@ -1197,7 +1438,38 @@ export function TabImoveis() {
           <div className="grid grid-cols-4 gap-3">
             <div><label className="label">Valor Parcela</label><input type="number" step="0.01" className="input mt-1" value={form.valor_parcela} onChange={e => setForm(f => ({...f, valor_parcela: e.target.value}))} /></div>
             <div><label className="label">Parcelas Total</label><input type="number" className="input mt-1" value={form.parcelas_total} onChange={e => setForm(f => ({...f, parcelas_total: e.target.value}))} /></div>
-            <div><label className="label">Parcelas Pagas</label><input type="number" className="input mt-1" value={form.parcelas_pagas} onChange={e => setForm(f => ({...f, parcelas_pagas: e.target.value}))} /></div>
+            <div>
+              <label className="label">Parcelas Pagas</label>
+              {editId ? (
+                <>
+                  <div className="input mt-1 flex items-center justify-between bg-white/5 text-fg-tertiary cursor-not-allowed">
+                    <span className="tabular-nums text-fg">
+                      {form.parcelas_pagas || 0}{form.parcelas_total ? ` de ${form.parcelas_total}` : ''}
+                    </span>
+                    {form.parcelas_total && (
+                      <span className="text-[10px] uppercase tracking-wide">
+                        faltam {Math.max(0, (parseInt(form.parcelas_total) || 0) - (parseInt(form.parcelas_pagas) || 0))}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-fg-tertiary mt-1 leading-relaxed">
+                    🔒 Este número não é editável. Para marcar parcelas como pagas use
+                    <strong> Pagar Boleto</strong> (paga agora, debita a conta) ou
+                    <strong> Registrar parcelas já pagas</strong> (só registra o histórico,
+                    sem debitar) — os dois pedem a data e a conta de origem.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <input type="number" className="input mt-1" value={form.parcelas_pagas}
+                    onChange={e => setForm(f => ({...f, parcelas_pagas: e.target.value}))} />
+                  <p className="text-[10px] text-fg-tertiary mt-1">
+                    Saldo de abertura: quantas parcelas já foram pagas antes de cadastrar aqui.
+                    Depois de salvo, só muda por pagamento registrado.
+                  </p>
+                </>
+              )}
+            </div>
             <div>
               <label className="label">Indexador</label>
               <select className="input mt-1" value={form.indexador} onChange={e => setForm(f => ({...f, indexador: e.target.value}))}>
@@ -1443,6 +1715,12 @@ export function TabImoveis() {
                         </button>
                       )}
                       <button
+                        onClick={() => setImovelRetroativo(im)}
+                        className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                      >
+                        🧾 Registrar já pagas
+                      </button>
+                      <button
                         onClick={() => setImovelAnalisar(im)}
                         className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                       >
@@ -1484,6 +1762,13 @@ export function TabImoveis() {
           imovel={imovelLancar}
           onClose={() => setImovelLancar(null)}
           onLancado={refetch}
+        />
+      )}
+      {imovelRetroativo && (
+        <ModalRegistrarRetroativo
+          imovel={imovelRetroativo}
+          onClose={() => setImovelRetroativo(null)}
+          onRegistrado={refetch}
         />
       )}
       {imovelAnalisar && (
