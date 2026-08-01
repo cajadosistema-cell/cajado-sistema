@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Msg } from './elena-types'
+import { hojeLocal } from '@/lib/utils'
 
 export function useElenaAlertas(supabase: any, userId: string, setMensagens: React.Dispatch<React.SetStateAction<Msg[]>>) {
   const [resumoFinanceiro, setResumoFinanceiro] = useState('')
@@ -99,7 +100,7 @@ export function useElenaAlertas(supabase: any, userId: string, setMensagens: Rea
   }, [supabase, tocarAlertaSonoro, setMensagens])
 
   const verificarVencimentos = useCallback(async (uid: string) => {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = hojeLocal()
     try {
       const { data: perfil } = await supabase.from('elena_perfil')
         .select('ultima_vez_vencimentos').eq('user_id', uid).maybeSingle()
@@ -146,7 +147,7 @@ export function useElenaAlertas(supabase: any, userId: string, setMensagens: Rea
   }, [supabase, tocarAlertaSonoro, setMensagens])
 
   const gerarBriefingMatinal = useCallback(async (uid: string) => {
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = hojeLocal()
     try {
       const { data: perfil } = await supabase.from('elena_perfil')
         .select('ultima_vez_briefing').eq('user_id', uid).maybeSingle()
@@ -186,7 +187,7 @@ export function useElenaAlertas(supabase: any, userId: string, setMensagens: Rea
         linhas.push('', '💳 **Vencimentos esta semana:**')
         vencimentos.slice(0, 4).forEach((v: any) => {
           const dataVenc = new Date(v.data_inicio)
-          const eHoje = dataVenc.toISOString().split('T')[0] === hoje
+          const eHoje = hojeLocal(dataVenc) === hoje
           const label = eHoje ? '⚠️ Hoje' : dataVenc.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })
           linhas.push(`• ${label} — ${v.titulo}`)
         })

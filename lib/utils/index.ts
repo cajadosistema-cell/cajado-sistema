@@ -28,6 +28,35 @@ export function formatCurrencyShort(value: number): string {
   return formatCurrency(value)
 }
 
+// ---- Datas LOCAIS (fuso de Brasília) ----
+//
+// ⚠️ NUNCA use `new Date().toISOString()` para extrair DIA ou MÊS.
+// toISOString() converte para UTC. Em BRT (UTC-3), das 21h à meia-noite
+// ele já devolve o DIA SEGUINTE — e na virada do mês, o MÊS SEGUINTE.
+// Foi exatamente isso que fez pagamentos feitos em 31/07 serem gravados
+// com mes_referencia = 2026-08, e o lançamento das 23h cair em agosto.
+//
+// Use hojeLocal() / mesLocal(). Funcionam igual no browser e no servidor
+// (Edge Functions), porque o fuso é explícito e não depende da máquina.
+
+const TZ_PADRAO = 'America/Sao_Paulo'
+
+/** Data no formato YYYY-MM-DD no fuso informado (padrão: Brasília). */
+export function hojeLocal(data: Date = new Date(), timeZone: string = TZ_PADRAO): string {
+  // 'en-CA' produz exatamente YYYY-MM-DD
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(data)
+}
+
+/** Mês de referência no formato YYYY-MM no fuso informado (padrão: Brasília). */
+export function mesLocal(data: Date = new Date(), timeZone: string = TZ_PADRAO): string {
+  return hojeLocal(data, timeZone).substring(0, 7)
+}
+
 // ---- Formatadores de data ----
 
 export function formatDate(date: string | Date): string {

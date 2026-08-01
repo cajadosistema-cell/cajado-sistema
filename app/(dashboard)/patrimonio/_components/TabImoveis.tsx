@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, cn, hojeLocal, mesLocal } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
 import { resolverMesRefPendente, MesRefResultado } from '@/lib/utils/patrimonio-pagamentos'
 
@@ -181,7 +181,7 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
   const hoje = new Date()
   const diaVenc = imovel.dia_vencimento || 10
   const dataVenc = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc)
-  const dataVencStr = dataVenc.toISOString().split('T')[0]
+  const dataVencStr = hojeLocal(dataVenc)
   const proxParcela = (imovel.parcelas_pagas ?? 0) + 1
 
   const [form, setForm] = useState({
@@ -357,14 +357,14 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
   const dataVenc = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc)
   const proxParcela = (imovel.parcelas_pagas ?? 0) + 1
 
-  const [mesReferencia, setMesReferencia] = useState(hoje.toISOString().substring(0, 7))
+  const [mesReferencia, setMesReferencia] = useState(mesLocal(hoje))
   const [statusMesRef, setStatusMesRef] = useState<MesRefResultado | null>(null)
 
   const [form, setForm] = useState({
     conta_id: '',
     valor: String(imovel.valor_parcela || ''),
     descricao: `Pgto Parcela ${proxParcela}/${imovel.parcelas_total ?? '?'} – ${imovel.titulo}`,
-    data_pagamento: hoje.toISOString().split('T')[0],
+    data_pagamento: hojeLocal(hoje),
     categoria_financeira: imovel.categoria_financeira || 'Financiamento Imobiliário',
     observacoes: '',
   })
@@ -944,7 +944,7 @@ export function TabImoveis() {
   const [imovelPagar, setImovelPagar] = useState<Imovel | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
-  const mesAtual = new Date().toISOString().substring(0, 7)
+  const mesAtual = mesLocal()
   const [pagamentosMes, setPagamentosMes] = useState<Record<string, boolean>>({})
   const [statusPendentesMap, setStatusPendentesMap] = useState<Record<string, MesRefResultado>>({})
 

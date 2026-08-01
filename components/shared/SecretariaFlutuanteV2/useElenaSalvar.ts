@@ -22,6 +22,7 @@ import {
 } from './elena-constants'
 import { buscarDadosRelatorio } from '../ModalRelatorio'
 import { resolverMesRefPendente } from '@/lib/utils/patrimonio-pagamentos'
+import { hojeLocal, mesLocal } from '@/lib/utils'
 // ════════════════════════════════════════════════════════════════
 // 🔴 FIX DUPLICATA — normalização e similaridade de nomes
 //
@@ -394,7 +395,7 @@ export function useElenaSalvar({
   }, [supabase, userIdRef, mensagensRef])
 
   // ── Helpers internos ──────────────────────────────────────────
-  const hoje = () => new Date().toISOString().split('T')[0]
+  const hoje = () => hojeLocal()
 
   const validarData = (data: any) =>
     data && /^\d{4}-\d{2}-\d{2}$/.test(String(data)) ? String(data) : hoje()
@@ -1005,13 +1006,13 @@ export function useElenaSalvar({
           (supabase.from('gastos_pessoais') as any)
             .select('valor, categoria, data, recorrente')
             .eq('user_id', uid)
-            .gte('data', inicio3m.toISOString().split('T')[0])
+            .gte('data', hojeLocal(inicio3m))
             .order('data'),
           // Receitas históricas (3 meses)
           (supabase.from('receitas_pessoais') as any)
             .select('valor, categoria, data, recorrente')
             .eq('user_id', uid)
-            .gte('data', inicio3m.toISOString().split('T')[0])
+            .gte('data', hojeLocal(inicio3m))
             .order('data'),
           // Contas fixas recorrentes (compromissos_fixos — tabela unificada)
           (supabase.from('compromissos_fixos') as any)
@@ -1445,10 +1446,10 @@ export function useElenaSalvar({
       } else if (acao.tipo === 'gerar_checklist') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const agora2 = new Date()
-        const hoje2 = agora2.toISOString().split('T')[0]
+        const hoje2 = hojeLocal(agora2)
         const amanha2 = new Date(agora2)
         amanha2.setDate(amanha2.getDate() + 1)
-        const amanha2Str = amanha2.toISOString().split('T')[0]
+        const amanha2Str = hojeLocal(amanha2)
         // Eventos de hoje e amanhã
         const { data: eventosHoje } = await (supabase.from('agenda_eventos') as any)
           .select('titulo, data_inicio, tipo')
@@ -1843,7 +1844,7 @@ export function useElenaSalvar({
 
       } else if (acao.tipo === 'fatura_cartao') {
         const valor = Number(acao.dados.valor) || 0
-        const mesRef = acao.dados.mes_referencia || new Date().toISOString().substring(0, 7)
+        const mesRef = acao.dados.mes_referencia || mesLocal()
         const cartaoPf = await resolverCartaoPf(acao.dados.conta_nome)
         if (!cartaoPf.id) throw new Error('Cartão não encontrado. Certifique-se de que o cartão existe na aba Cartões.')
         
@@ -2967,7 +2968,7 @@ export function useElenaSalvar({
         setAcaoStatus(msgId, acaoIdx, 'saving')
         const tipoAlvo = acao.dados.tipo
         const nomeAlvo = (acao.dados.nome || '').trim()
-        const mesRefAlvo = acao.dados.mes_referencia || new Date().toISOString().substring(0, 7)
+        const mesRefAlvo = acao.dados.mes_referencia || mesLocal()
         const dataPag = acao.dados.data_pagamento || new Date().toISOString().substring(0, 10)
         if (!nomeAlvo) throw new Error('Informe o nome do cartão/imóvel/conta/investimento a marcar como pago.')
         const empresaIdConf = await getEmpresaId(uid)

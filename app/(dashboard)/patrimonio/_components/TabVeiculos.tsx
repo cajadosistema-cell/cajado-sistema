@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useSupabaseQuery } from '@/lib/hooks/useSupabase'
 import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, cn, hojeLocal, mesLocal } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
 import { resolverMesRefPendente, MesRefResultado } from '@/lib/utils/patrimonio-pagamentos'
 
@@ -376,14 +376,14 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
   const diaVenc = veiculo.vencimento_dia || 10
   const proxParcela = (veiculo.parcelas_pagas ?? 0) + 1
 
-  const [mesReferencia, setMesReferencia] = useState(hoje.toISOString().substring(0, 7))
+  const [mesReferencia, setMesReferencia] = useState(mesLocal(hoje))
   const [statusMesRef, setStatusMesRef] = useState<MesRefResultado | null>(null)
 
   const [form, setForm] = useState({
     conta_id: '',
     valor: String(veiculo.valor_parcela || ''),
     descricao: `Pgto Parcela ${proxParcela}/${veiculo.parcelas_total ?? '?'} – ${veiculo.titulo}`,
-    data_pagamento: hoje.toISOString().split('T')[0],
+    data_pagamento: hojeLocal(hoje),
     observacoes: '',
   })
 
@@ -579,7 +579,7 @@ export function TabVeiculos() {
   const [veiculoPagar, setVeiculoPagar] = useState<Veiculo | null>(null)
   const [form, setForm] = useState(FORM_INICIAL)
 
-  const mesAtual = new Date().toISOString().substring(0, 7)
+  const mesAtual = mesLocal()
   const [pagamentosMes, setPagamentosMes] = useState<Record<string, boolean>>({})
   const [statusPendentesMap, setStatusPendentesMap] = useState<Record<string, MesRefResultado>>({})
 
