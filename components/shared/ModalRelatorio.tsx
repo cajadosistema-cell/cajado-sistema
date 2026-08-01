@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { hojeLocal, mesLocal } from '@/lib/utils'
 
 // ── Tipos ──────────────────────────────────────────────────────
 interface RelatorioData {
@@ -323,10 +324,31 @@ export function ModalRelatorio({ dados, onClose }: Props) {
 export async function buscarDadosRelatorio(
   supabase: SupabaseClient<any>,
   userId: string,
-  periodo: string = 'mes_atual'
+  periodo: string = 'mes_atual',
+  empresaId?: string,
 ): Promise<RelatorioData> {
   const agora = new Date()
-  const mesAtual = agora.toISOString().slice(0, 7)
+
+  // ── Datas LOCAIS (America/Sao_Paulo) ──────────────────────────
+  // 01/08/2026 — CORRIGIDO. Tudo aqui vinha de toISOString(), que é UTC:
+  // das 21h à meia-noite (BRT) o relatório do "mês atual" já apontava para o
+  // mês seguinte, e "últimos 7/30 dias" fechavam um dia à frente.
+  const hoje     = hojeLocal()            // YYYY-MM-DD
+  const mesAtual = mesLocal()             // YYYY-MM
+  const [anoHoje, mesHoje] = mesAtual.split('-').map(Number)
+
+  const pad = (n: number) => String(n).padStart(2, '0')
+  // Último dia do mês (mes 1-based). Date.UTC com dia 0 = último dia do mês anterior.
+  const ultimoDiaDoMes = (ano: number, mes: number) =>
+    new Date(Date.UTC(ano, mes, 0)).getUTCDate()
+  // Soma dias em cima de YYYY-MM-DD. UTC-in/UTC-out: consistente e imune a DST.
+  const somarDias = (ymd: string, dias: number) => {
+    const [y, m, d] = ymd.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d) + dias * 86_400_000).toISOString().split('T')[0]
+  }
+  const nomeMes = (ano: number, mes: number) =>
+    new Date(Date.UTC(ano, mes - 1, 1))
+      .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
   let dataInicio: string
   let dataFim: string
@@ -334,27 +356,25 @@ export async function buscarDadosRelatorio(
 
   if (periodo === 'mes_atual' || periodo === 'mes') {
     dataInicio = `${mesAtual}-01`
-    dataFim = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).toISOString().split('T')[0]
-    tituloPeriodo = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    dataFim = `${mesAtual}-${pad(ultimoDiaDoMes(anoHoje, mesHoje))}`
+    tituloPeriodo = nomeMes(anoHoje, mesHoje)
   } else if (periodo === 'ultimos_30_dias' || periodo === '30_dias') {
-    const d = new Date(); d.setDate(d.getDate() - 30)
-    dataInicio = d.toISOString().split('T')[0]
-    dataFim = agora.toISOString().split('T')[0]
+    dataInicio = somarDias(hoje, -30)
+    dataFim = hoje
     tituloPeriodo = 'Últimos 30 dias'
   } else if (periodo === 'ultimos_7_dias' || periodo === '7_dias') {
-    const d = new Date(); d.setDate(d.getDate() - 7)
-    dataInicio = d.toISOString().split('T')[0]
-    dataFim = agora.toISOString().split('T')[0]
+    dataInicio = somarDias(hoje, -7)
+    dataFim = hoje
     tituloPeriodo = 'Últimos 7 dias'
   } else if (periodo === 'ano_atual' || periodo === 'ano') {
-    dataInicio = `${agora.getFullYear()}-01-01`
-    dataFim = `${agora.getFullYear()}-12-31`
-    tituloPeriodo = `Ano ${agora.getFullYear()}`
+    dataInicio = `${anoHoje}-01-01`
+    dataFim = `${anoHoje}-12-31`
+    tituloPeriodo = `Ano ${anoHoje}`
   } else {
     // fallback: mês atual
     dataInicio = `${mesAtual}-01`
-    dataFim = new Date(agora.getFullYear(), agora.getMonth() + 1, 0).toISOString().split('T')[0]
-    tituloPeriodo = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    dataFim = `${mesAtual}-${pad(ultimoDiaDoMes(anoHoje, mesHoje))}`
+    tituloPeriodo = nomeMes(anoHoje, mesHoje)
   }
 
   // Busca paralela em todas as tabelas
@@ -393,15 +413,37 @@ export async function buscarDadosRelatorio(
       .order('created_at', { ascending: false })
       .limit(10),
 
-    // ✅ NOVO: busca lançamentos PJ da empresa no período
-    (supabase.from('lancamentos') as any)
-      .select('descricao,valor,tipo,categoria,data')
-      .eq('user_id', userId)
-      .gte('data', dataInicio)
-      .lte('data', dataFim)
-      .order('data', { ascending: false })
-      .limit(100),
+    // ── Lançamentos PJ da empresa no período ────────────────────
+    // 01/08/2026 — CORRIGIDO. A query anterior era:
+    //   .select('descricao,valor,tipo,categoria,data')
+    //   .eq('user_id', userId).gte('data', ...).lte('data', ...)
+    // NENHUMA dessas três colunas existe em `lancamentos` (confirmado no
+    // information_schema, 21 colunas): a tabela tem data_competencia (NOT NULL)
+    // e data_caixa, categoria_id (uuid) e empresa_id (uuid, NOT NULL) — não tem
+    // user_id. O PostgREST devolvia 404 e a seção PJ do relatório vinha SEMPRE
+    // vazia. São os 404 "...ta=gte.AAAA-MM-DD" que apareciam no console.
+    //
+    // Janela por data_competencia: é NOT NULL e é a data contábil, que é o que
+    // um relatório "do período" deve considerar. Se um dia o relatório precisar
+    // ser por caixa, trocar para data_caixa (mas ela é nullable — precisa de
+    // fallback).
+    empresaId
+      ? (supabase.from('lancamentos') as any)
+          .select('descricao,valor,tipo,categoria_id,data_competencia,data_caixa')
+          .eq('empresa_id', empresaId)
+          .gte('data_competencia', dataInicio)
+          .lte('data_competencia', dataFim)
+          .order('data_competencia', { ascending: false })
+          .limit(100)
+      : Promise.resolve({ data: [], error: null }),
   ])
+
+  if (!empresaId) {
+    console.warn('[buscarDadosRelatorio] empresaId não informado — seção PJ virá vazia.')
+  }
+  if (lancamentosRes?.error) {
+    console.error('[buscarDadosRelatorio] Erro ao buscar lançamentos PJ:', lancamentosRes.error.message)
+  }
 
   const gastos = (gastosRes.data || []).map((g: any) => ({
     descricao: g.descricao,
@@ -418,23 +460,41 @@ export async function buscarDadosRelatorio(
     data: r.data,
   }))
 
-  // Separa lançamentos PJ por tipo
-  const lancamentosPJ = lancamentosRes.data || []
+  // ── Lançamentos PJ ──────────────────────────────────────────────
+  const lancamentosPJ = lancamentosRes?.data || []
+
+  // `lancamentos` guarda categoria_id (uuid), não o nome. Resolve os nomes numa
+  // segunda consulta em vez de usar embed do PostgREST — embed depende de FK
+  // declarada e falha silenciosamente se ela não existir.
+  const catIds = [...new Set(lancamentosPJ.map((l: any) => l.categoria_id).filter(Boolean))]
+  const nomePorCategoria = new Map<string, string>()
+  if (catIds.length > 0) {
+    const { data: cats } = await (supabase.from('categorias_financeiras') as any)
+      .select('id,nome')
+      .in('id', catIds)
+    for (const c of (cats || [])) nomePorCategoria.set(c.id, c.nome)
+  }
+
+  // Data efetiva do lançamento: caixa quando existe, senão competência.
+  // Sem fallback para "hoje" — inventar a data de hoje num lançamento sem data
+  // jogava o registro no período errado e mascarava dado faltante.
+  const dataLancamento = (l: any) => l.data_caixa || l.data_competencia || ''
+
   const gastosEmpresa = lancamentosPJ
     .filter((l: any) => l.tipo === 'saida' || l.tipo === 'despesa')
     .map((l: any) => ({
       descricao: l.descricao || 'Lançamento empresa',
       valor: Number(l.valor),
-      categoria: l.categoria || 'operacional',
-      data: l.data || new Date().toISOString().split('T')[0],
+      categoria: nomePorCategoria.get(l.categoria_id) || 'operacional',
+      data: dataLancamento(l),
     }))
   const receitasEmpresa = lancamentosPJ
     .filter((l: any) => l.tipo === 'entrada' || l.tipo === 'receita')
     .map((l: any) => ({
       descricao: l.descricao || 'Receita empresa',
       valor: Number(l.valor),
-      categoria: l.categoria || 'vendas',
-      data: l.data || new Date().toISOString().split('T')[0],
+      categoria: nomePorCategoria.get(l.categoria_id) || 'vendas',
+      data: dataLancamento(l),
     }))
 
   const totalReceitas = receitas.reduce((a: number, r: any) => a + r.valor, 0) +
