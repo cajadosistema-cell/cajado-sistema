@@ -3366,7 +3366,7 @@ export function useElenaSalvar({
 
         // Build queries with empresa_id fallback
         let qImoveisR = (supabase.from('imoveis') as any)
-          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora')
+          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, data_aquisicao')
           .not('valor_parcela', 'is', null)
         if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
 
@@ -3514,11 +3514,15 @@ export function useElenaSalvar({
 
           const porMes: Map<string, any> = pagosImoveisPorMes.get(im.id) || new Map()
 
-          // Só consideramos "em aberto" meses a partir do primeiro que já tem
-          // registro para este imóvel. Sem isso, todo imóvel apareceria com 6
-          // meses de atraso fantasma só porque nunca houve registro nenhum.
-          const mesesComRegistro = Array.from(porMes.keys()).sort()
-          const mesInicial = mesesComRegistro.length > 0 ? mesesComRegistro[0] : mesRef
+          // Mesma regra que o botão do card usa (resolverMesRefPendente):
+          // olha para trás até a data de aquisição, limitado à janela de 6 meses.
+          // Um mês sem registro 'pago' é um mês em aberto.
+          const mesAquisicao = (im.data_aquisicao && String(im.data_aquisicao).length >= 7)
+            ? String(im.data_aquisicao).substring(0, 7)
+            : null
+          // começa no mais RECENTE entre (início da janela, mês de aquisição) —
+          // nunca antes de o imóvel existir, nunca mais de 6 meses atrás.
+          const mesInicial = (mesAquisicao && mesAquisicao > mesJanelaIni) ? mesAquisicao : mesJanelaIni
 
           const meses: string[] = []
           let cursor = mesInicial
