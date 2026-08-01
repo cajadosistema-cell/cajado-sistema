@@ -167,7 +167,10 @@ function ModalAnalisarQuitacao({ item, onClose }: {
   )
 }
 
-// ── Modal Lançar Parcela no Financeiro ────────────────────────────
+// ── Modal Provisionar Parcela no Financeiro ───────────────────────
+// ATENÇÃO: este modal NÃO paga nada. Ele só cria um lançamento PENDENTE
+// em regime de competência, para a parcela aparecer no fluxo do mês.
+// Quem paga de verdade (debita conta + marca boleto) é o ModalPagarBoleto.
 function ModalLancarParcela({ imovel, onClose, onLancado }: {
   imovel: Imovel
   onClose: () => void
@@ -231,13 +234,14 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
       })
       if (error) throw new Error(error.message)
 
-      // 3. Incrementa parcelas_pagas
-      await (supabase.from('imoveis') as any)
-        .update({ parcelas_pagas: proxParcela })
-        .eq('id', imovel.id)
+      // 3. NÃO incrementa parcelas_pagas.
+      //    Provisionar é previsão de saída, não pagamento. O incremento aqui
+      //    era o que fazia a parcela "andar sozinha" a cada clique repetido
+      //    (caso Sítio Vida: 3 cliques = 3 parcelas avançadas sem pagamento).
+      //    Quem avança a parcela é o pagamento efetivo (ModalPagarBoleto).
 
       setStatus('ok')
-      setMsg(`✅ Parcela ${proxParcela} lançada no Financeiro!`)
+      setMsg(`✅ Parcela ${proxParcela} provisionada no Financeiro (previsão). Nenhum valor foi debitado — para pagar de verdade use "Pagar Boleto".`)
       setTimeout(() => { onLancado(); onClose() }, 1500)
     } catch (err: any) {
       setStatus('erro')
@@ -250,7 +254,7 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
       <div className="bg-page border border-border-subtle rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex justify-between items-center mb-5">
           <div>
-            <h2 className="text-base font-semibold text-fg">💳 Lançar Parcela no Financeiro</h2>
+            <h2 className="text-base font-semibold text-fg">🗓️ Provisionar Parcela no Financeiro</h2>
             <p className="text-xs text-fg-tertiary mt-0.5">{imovel.titulo}</p>
           </div>
           <button onClick={onClose} className="text-fg-tertiary hover:text-fg text-xl">×</button>
@@ -260,6 +264,30 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 text-xs text-blue-300">
             <p>📊 Parcela <strong>{proxParcela}/{imovel.parcelas_total ?? '?'}</strong> &nbsp;·&nbsp; Vencimento: <strong>dia {diaVenc}</strong></p>
             {imovel.indexador && <p className="mt-1">📌 Indexador: {imovel.indexador}</p>}
+          </div>
+
+          {/* Explicação do que este botão faz — o Sr. Max confundia este fluxo
+              com o pagamento real, clicava várias vezes e a parcela avançava. */}
+          <div className="bg-surface border border-border-subtle rounded-xl p-3 text-xs space-y-2">
+            <div>
+              <p className="text-fg font-semibold mb-1">🗓️ O que este botão faz</p>
+              <ul className="text-fg-secondary space-y-0.5 list-disc list-inside">
+                <li>Cria uma <strong>previsão de saída</strong> desta parcela no Financeiro</li>
+                <li>Ela passa a aparecer no fluxo do mês como pendente</li>
+                <li>Serve para enxergar o compromisso antes de pagar</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-amber-300 font-semibold mb-1">⚠️ O que ele NÃO faz</p>
+              <ul className="text-fg-secondary space-y-0.5 list-disc list-inside">
+                <li>Não tira dinheiro de nenhuma conta</li>
+                <li>Não marca a parcela como paga</li>
+                <li>Não avança o contador de parcelas</li>
+              </ul>
+            </div>
+            <p className="text-emerald-400 pt-1 border-t border-border-subtle">
+              💰 <strong>Já pagou?</strong> Feche aqui e use <strong>Pagar Boleto</strong> — esse debita a conta, registra o pagamento e avança a parcela.
+            </p>
           </div>
 
           <div>
@@ -307,7 +335,7 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
           <button onClick={handleLancar} disabled={status==='loading'} className="btn-primary">
-            {status==='loading' ? '⏳ Lançando...' : '💳 Confirmar Lançamento'}
+            {status==='loading' ? '⏳ Provisionando...' : '🗓️ Confirmar Provisionamento'}
           </button>
         </div>
       </div>
@@ -395,65 +423,53 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
         catId = novaCat?.id ?? null
       }
 
-      // 2. Cria lançamento como VALIDADO (pagamento efetivo)
-      const { error: errLanc } = await (supabase.from('lancamentos') as any).insert({
-        conta_id: form.conta_id,
-        descricao: form.descricao,
-        valor: valor,
-        tipo: 'despesa',
-        regime: 'caixa',
-        status: 'validado',
-        data_competencia: form.data_pagamento,
-        data_caixa: form.data_pagamento,
-        categoria_id: catId,
-        parcela_atual: proxParcela,
-        total_parcelas: imovel.parcelas_total,
-        conciliado: true,
-        observacoes: [
+      // 2. Executa o pagamento inteiro numa ÚNICA transação no banco.
+      //    A RPC pagar_parcela_imovel() (migration 077) faz, atomicamente:
+      //      - debita contas.saldo_atual lendo o saldo FRESCO do banco
+      //      - insere o lançamento de saída (caixa/validado)
+      //      - avança imoveis.parcelas_pagas
+      //      - grava pagamentos_imoveis como 'pago'
+      //    Se qualquer etapa falhar, o Postgres desfaz TODAS — nunca mais
+      //    sobra débito órfão nem parcela avançada sem boleto pago.
+      const mesRefFinal = mesReferencia || form.data_pagamento.substring(0, 7)
+      const { data: resultado, error: errRpc } = await (supabase.rpc as any)('pagar_parcela_imovel', {
+        p_imovel_id: imovel.id,
+        p_conta_id: form.conta_id,
+        p_valor: valor,
+        p_data_pagamento: form.data_pagamento,
+        p_mes_referencia: mesRefFinal,
+        p_parcela_atual: proxParcela,
+        p_descricao: form.descricao,
+        p_categoria_id: catId,
+        p_observacoes: [
           `Imóvel: ${imovel.titulo}`,
           imovel.indexador ? `Indexador: ${imovel.indexador}` : null,
-          `Mês Ref: ${mesReferencia}`,
+          `Mês Ref: ${mesRefFinal}`,
           form.observacoes || null,
         ].filter(Boolean).join(' | '),
+        p_notas: form.observacoes || null,
       })
-      if (errLanc) throw new Error(`Erro ao criar lançamento: ${errLanc.message}`)
 
-      // 3. Debita saldo da conta
-      const novoSaldo = (contaSelecionada?.saldo_atual ?? 0) - valor
-      const { error: errConta } = await (supabase.from('contas') as any)
-        .update({ saldo_atual: novoSaldo })
-        .eq('id', form.conta_id)
-      if (errConta) throw new Error(`Erro ao debitar conta: ${errConta.message}`)
+      if (errRpc) throw new Error(errRpc.message)
+      if (!resultado) throw new Error('O banco não retornou resultado do pagamento.')
 
-      // 4. Incrementa parcelas_pagas no imóvel
-      const { data: dataImovel, error: errImovel } = await (supabase.from('imoveis') as any)
-        .update({ parcelas_pagas: proxParcela })
-        .eq('id', imovel.id)
-        .select()
-      if (errImovel) throw new Error(`Erro ao atualizar parcelas: ${errImovel.message}`)
-      if (!dataImovel || dataImovel.length === 0) throw new Error(`Não foi possível atualizar o imóvel. Verifique permissões.`)
-
-      // 5. Registra no histórico de pagamentos_imoveis para o mês de referência resolvido
-      const mesRefFinal = mesReferencia || form.data_pagamento.substring(0, 7)
-      const { data: dataPag, error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
-        imovel_id: imovel.id,
-        empresa_id: (imovel as any).empresa_id || empresaId || null,
-        mes_referencia: mesRefFinal,
-        status: 'pago',
-        valor_pago: valor,
-        data_pagamento: form.data_pagamento,
-        conta_origem_id: form.conta_id,
-        notas: form.observacoes || null,
-      }, { onConflict: 'imovel_id,mes_referencia' }).select()
-      if (errPag) throw new Error(`Erro ao registrar histórico: ${errPag.message}`)
-      if (!dataPag || dataPag.length === 0) throw new Error(`Não foi possível registrar histórico do pagamento.`)
+      // Boleto do mês já estava pago — não debita de novo nem avança parcela.
+      if (resultado.ok === false) {
+        setStatus('erro')
+        setMsg(`⚠️ ${resultado.mensagem ?? 'Esta parcela já estava paga.'}`)
+        return
+      }
 
       // Dispara evento global para recarregar relatórios/botões
       window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
       window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
 
       setStatus('ok')
-      setMsg(`✅ Parcela ${proxParcela} (${mesRefFinal}) paga! Debitado ${formatCurrency(valor)} da conta ${contaSelecionada?.nome ?? ''}`)
+      setMsg(
+        `✅ Parcela ${proxParcela} (${mesRefFinal}) paga! Debitado ${formatCurrency(valor)} da conta ` +
+        `${resultado.conta_nome ?? contaSelecionada?.nome ?? ''}. ` +
+        `Novo saldo: ${formatCurrency(Number(resultado.novo_saldo ?? 0))}`
+      )
       setTimeout(() => { onPago(); onClose() }, 2000)
     } catch (err: any) {
       setStatus('erro')
@@ -1417,7 +1433,7 @@ export function TabImoveis() {
                           onClick={() => setImovelLancar(im)}
                           className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-colors"
                         >
-                          💳 Agendar Parcela
+                          🗓️ Provisionar no Financeiro
                         </button>
                       )}
                       <button
