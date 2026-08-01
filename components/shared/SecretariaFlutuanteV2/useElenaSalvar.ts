@@ -21,7 +21,7 @@ import {
   BANDEIRAS_MAP,
 } from './elena-constants'
 import { buscarDadosRelatorio } from '../ModalRelatorio'
-import { resolverMesRefPendente } from '@/lib/utils/patrimonio-pagamentos'
+import { resolverMesRefPendente, calcularParcelasEmAberto } from '@/lib/utils/patrimonio-pagamentos'
 import { hojeLocal, mesLocal } from '@/lib/utils'
 // ════════════════════════════════════════════════════════════════
 // 🔴 FIX DUPLICATA — normalização e similaridade de nomes
@@ -2987,7 +2987,7 @@ export function useElenaSalvar({
             texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.` }])
 
         } else if (tipoAlvo === 'imovel') {
-          let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela, dia_vencimento, data_aquisicao').ilike('titulo', `%${nomeAlvo}%`)
+          let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela, dia_vencimento, data_aquisicao, parcelas_pagas, parcelas_total, periodicidade').ilike('titulo', `%${nomeAlvo}%`)
           if (empresaIdConf) qIm = qIm.eq('empresa_id', empresaIdConf)
           const { data: imoveisAch } = await qIm.limit(5)
           if (!imoveisAch?.length) throw new Error(`Imóvel "${nomeAlvo}" não encontrado.`)
@@ -2996,7 +2996,7 @@ export function useElenaSalvar({
 
           let mesRefExec = acao.dados.mes_referencia
           if (!mesRefExec) {
-            const resRef = await resolverMesRefPendente(supabase, 'pagamentos_imoveis', 'imovel_id', imovelAch.id, imovelAch.dia_vencimento, dataPag, imovelAch.data_aquisicao)
+            const resRef = await resolverMesRefPendente(supabase, 'pagamentos_imoveis', 'imovel_id', imovelAch.id, imovelAch.dia_vencimento, dataPag, imovelAch.data_aquisicao, imovelAch.parcelas_pagas, imovelAch.parcelas_total, imovelAch.periodicidade)
             mesRefExec = resRef.mesRef
           }
 
@@ -3355,19 +3355,15 @@ export function useElenaSalvar({
         const empresaId = await getEmpresaId(uid)
         const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
-        // Soma/subtrai meses de um 'YYYY-MM'
-        const somaMesesRef = (ref: string, delta: number) => {
-          const [a, m] = ref.split('-').map(Number)
-          const d = new Date(a, m - 1 + delta, 1)
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-        }
-        // Janela retroativa: o Sr. Max paga em atraso, então o resumo precisa
-        // enxergar meses anteriores para mostrar TODAS as parcelas em aberto.
-        const mesJanelaIni = somaMesesRef(mesRef, -5)
+        // 01/08/2026: acabou a janela fixa de 6 meses. Os meses em aberto agora
+        // são derivados do contrato (data_aquisicao + parcelas_pagas +
+        // periodicidade) por calcularParcelasEmAberto, e podem ser bem mais
+        // antigos que 6 meses — Intermediárias Ciacci tem parcela trimestral
+        // vencida desde 2025-02. Por isso a consulta abaixo perdeu o piso.
 
         // Build queries with empresa_id fallback
         let qImoveisR = (supabase.from('imoveis') as any)
-          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, data_aquisicao')
+          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, data_aquisicao, periodicidade')
           .not('valor_parcela', 'is', null)
         if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
 
@@ -3449,11 +3445,9 @@ export function useElenaSalvar({
             ? (supabase.from('pagamentos_imoveis') as any)
                 .select('imovel_id, mes_referencia, status, valor_pago, data_pagamento')
                 .eq('empresa_id', empresaId)
-                .gte('mes_referencia', mesJanelaIni)
                 .lte('mes_referencia', mesRef)
             : (supabase.from('pagamentos_imoveis') as any)
                 .select('imovel_id, mes_referencia, status, valor_pago, data_pagamento')
-                .gte('mes_referencia', mesJanelaIni)
                 .lte('mes_referencia', mesRef)),
         ])
 
@@ -3509,50 +3503,66 @@ export function useElenaSalvar({
         // Rótulo curto do mês: 'MM/AAAA'
         const rotuloMes = (m: string) => { const [a, mm] = m.split('-'); return `${mm}/${a}` }
 
+        const hojeResumo = hojeLocal()
+
         ;(imoveisData || []).forEach((im: any) => {
-          const restantes = (im.parcelas_total || 0) - (im.parcelas_pagas || 0)
-          if (restantes <= 0) return
-
           const porMes: Map<string, any> = pagosImoveisPorMes.get(im.id) || new Map()
+          const mesesPagos = new Set<string>(
+            Array.from(porMes.entries())
+              .filter(([, pg]: any) => pg?.status === 'pago')
+              .map(([m]: any) => m as string)
+          )
 
-          // Mesma regra que o botão do card usa (resolverMesRefPendente):
-          // olha para trás até a data de aquisição, limitado à janela de 6 meses.
-          // Um mês sem registro 'pago' é um mês em aberto.
-          const mesAquisicao = (im.data_aquisicao && String(im.data_aquisicao).length >= 7)
-            ? String(im.data_aquisicao).substring(0, 7)
-            : null
-          // começa no mais RECENTE entre (início da janela, mês de aquisição) —
-          // nunca antes de o imóvel existir, nunca mais de 6 meses atrás.
-          const mesInicial = (mesAquisicao && mesAquisicao > mesJanelaIni) ? mesAquisicao : mesJanelaIni
+          // MESMA função que o card do Patrimônio usa (patrimonio-pagamentos.ts).
+          // A parcela nº N vence em data_aquisicao + N × passo(periodicidade); as
+          // pagas são as primeiras parcelas_pagas. pagamentos_imoveis só refina.
+          // Enquanto as duas telas tinham lógicas próprias elas divergiam.
+          const calc = calcularParcelasEmAberto(
+            {
+              dataAquisicao: im.data_aquisicao,
+              parcelasPagas: im.parcelas_pagas,
+              parcelasTotal: im.parcelas_total,
+              periodicidade: im.periodicidade,
+              diaVencimento: im.dia_vencimento,
+            },
+            mesesPagos,
+            hojeResumo,
+          )
 
-          const meses: string[] = []
-          let cursor = mesInicial
-          while (cursor <= mesRef && meses.length < 6) {
-            meses.push(cursor)
-            cursor = somaMesesRef(cursor, 1)
-          }
+          // Contrato quitado não aparece no resumo de forma alguma.
+          if (calc.quitado) return
 
-          // Mantém os meses NÃO pagos + sempre o mês do relatório (para mostrar ✅
-          // quando o mês corrente já estiver quitado).
-          let mesesMostrar = meses.filter(m => porMes.get(m)?.status !== 'pago' || m === mesRef)
-          // Nunca exibe mais parcelas em aberto do que ainda restam no contrato
-          if (mesesMostrar.length > restantes) mesesMostrar = mesesMostrar.slice(0, restantes)
+          const descBase = im.construtora ? `${im.titulo} (${im.construtora})` : im.titulo
+          const desc = calc.semDataAquisicao ? `${descBase} ⚠️ sem data de aquisição` : descBase
 
-          mesesMostrar.forEach(m => {
-            const pag = porMes.get(m)
-            const statusPg = pag?.status || 'pendente'
-            const emAtraso = m < mesRef && statusPg !== 'pago'
+          // Nada em aberto: uma linha em dia, para o imóvel não sumir do resumo.
+          if (calc.emAberto.length === 0) {
+            const pagRef = porMes.get(mesRef)
             linhasBoletos.push({
-              desc: im.construtora ? `${im.titulo} (${im.construtora})` : im.titulo,
+              desc,
               dia: im.dia_vencimento || '—',
-              mes: rotuloMes(m),
+              mes: rotuloMes(mesRef),
               valor: Number(im.valor_parcela) || 0,
               parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
-              status: statusPg === 'pago' ? '✅ Pago'
-                : statusPg === 'parcial' ? '🟡 Parcial'
-                : emAtraso ? '⚠️ Em atraso'
+              status: pagRef?.status === 'pago' ? '✅ Pago' : '✅ Em dia',
+              pago: true,
+            })
+            return
+          }
+
+          calc.emAberto.forEach(pa => {
+            const statusPg = porMes.get(pa.mesRef)?.status || 'pendente'
+            linhasBoletos.push({
+              desc,
+              dia: im.dia_vencimento || '—',
+              mes: rotuloMes(pa.mesRef),
+              valor: Number(im.valor_parcela) || 0,
+              // número REAL da parcela no contrato, não o contador do imóvel
+              parcela: im.parcelas_total != null ? `${pa.numero}/${im.parcelas_total}` : `${pa.numero}`,
+              status: statusPg === 'parcial' ? '🟡 Parcial'
+                : pa.isAtrasado ? '⚠️ Em atraso'
                 : '🔴 Pendente',
-              pago: statusPg === 'pago',
+              pago: false,
             })
           })
         })

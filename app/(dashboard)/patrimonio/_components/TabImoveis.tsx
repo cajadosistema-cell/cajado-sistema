@@ -377,7 +377,10 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
       imovel.id,
       imovel.dia_vencimento,
       form.data_pagamento,
-      imovel.data_aquisicao
+      imovel.data_aquisicao,
+      imovel.parcelas_pagas,
+      imovel.parcelas_total,
+      imovel.periodicidade
     ).then(res => {
       setMesReferencia(res.mesRef)
       setStatusMesRef(res)
@@ -991,7 +994,10 @@ export function TabImoveis() {
           im.id,
           im.dia_vencimento,
           undefined,
-          im.data_aquisicao
+          im.data_aquisicao,
+          im.parcelas_pagas,
+          im.parcelas_total,
+          im.periodicidade
         )
       }
       if (!cancelado) setStatusPendentesMap(mapa)
