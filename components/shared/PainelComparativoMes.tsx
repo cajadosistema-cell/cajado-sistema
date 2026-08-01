@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { cn } from '@/lib/utils'
+import { cn, mesLocal } from '@/lib/utils'
 
 const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
@@ -9,10 +9,23 @@ function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+/**
+ * Mês de referência (YYYY-MM) deslocado por `offset` meses.
+ *
+ * 01/08/2026 — CORRIGIDO. A versão anterior era:
+ *   const d = new Date(); d.setMonth(d.getMonth() + offset)
+ *   return d.toISOString().substring(0, 7)
+ * Dois bugs somados:
+ *   (1) toISOString() é UTC — das 21h à meia-noite em BRT o mês corrente já
+ *       vinha como o mês SEGUINTE. Causa do Comparativo mostrar Ago/2026 em 31/07.
+ *   (2) setMonth() estoura: em 31/03, setMonth(-1) vira 03/03 (fevereiro não
+ *       tem 31), devolvendo o mês errado.
+ * Agora: mês local via mesLocal() + aritmética em inteiros, sem objeto Date.
+ */
 function anoMesStr(offset = 0): string {
-  const d = new Date()
-  d.setMonth(d.getMonth() + offset)
-  return d.toISOString().substring(0, 7)
+  const [ano, mes] = mesLocal().split('-').map(Number)
+  const total = ano * 12 + (mes - 1) + offset
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`
 }
 
 function labelMes(ym: string) {
@@ -65,7 +78,7 @@ export function PainelComparativoMes({
       const d: string = (l as any)[campoData] ?? ''
       if (d.length >= 7) set.add(d.substring(0, 7))
     })
-    // Garante os últimos 3 mesmo sem dados
+    // Garante os últimos 6 mesmo sem dados
     for (let i = 0; i < 6; i++) set.add(anoMesStr(-i))
     return [...set].sort().reverse().slice(0, 12)
   }, [lancamentos, campoData])

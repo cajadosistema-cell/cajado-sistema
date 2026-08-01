@@ -3,6 +3,17 @@
 // Lê cartões cadastrados + compromissos_fixos recorrentes e cria automaticamente
 // eventos de vencimento na agenda_eventos para os próximos 60 dias.
 // Garante idempotência via chave única no campo `descricao`.
+//
+// 31/07-01/08/2026 — CORRIGIDO:
+//   (1) FUSO: toda data agora é calculada em America/Sao_Paulo. Esta função roda
+//       em UTC no servidor; sem fuso explícito, das 21h à meia-noite (BRT) o
+//       "hoje" já era o dia seguinte, e na virada do mês, o mês seguinte.
+//   (2) DEDUP: a checagem usava .maybeSingle() com LIKE '%chave%', que casa TANTO
+//       com [CHAVE] quanto com [CHAVE_CONF]. A partir do 2º dia sempre havia 2
+//       linhas -> maybeSingle devolvia erro, data vinha null, e a função recriava
+//       os dois eventos TODO DIA. Agora usa .limit(1) e aborta em caso de erro.
+//   (3) Aritmética de mês/dia trocada por strings YYYY-MM-DD: sem setMonth(),
+//       que estoura (31/01 + 1 mês = 03/03) e depende do fuso do servidor.
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -10,6 +21,38 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// ── Helpers de data LOCAL ────────────────────────────────────────
+// Duplicados de propósito: Edge Function tem bundle Deno próprio e NÃO
+// consegue importar de @/lib/utils. Mantenha em sincronia com lib/utils/index.ts.
+const TZ = 'America/Sao_Paulo'
+
+/** Data de hoje no fuso de São Paulo, formato YYYY-MM-DD. */
+function hojeLocal(d: Date = new Date(), tz: string = TZ): string {
+  // 'en-CA' formata nativamente como YYYY-MM-DD
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d)
+}
+
+/**
+ * Soma dias a uma string YYYY-MM-DD.
+ * UTC-in/UTC-out de propósito: como entra e sai data pura (sem hora), o
+ * resultado é consistente e imune a horário de verão. Mesmo raciocínio da
+ * exceção deixada em somarMeses() no useElenaSalvar.ts.
+ */
+function somarDias(ymd: string, dias: number): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d) + dias * 86_400_000)
+    .toISOString().split('T')[0]
+}
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** Último dia do mês (mes é 1-based: 1 = janeiro). */
+function ultimoDiaDoMes(ano: number, mes: number): number {
+  return new Date(Date.UTC(ano, mes, 0)).getUTCDate()
 }
 
 serve(async (req) => {
@@ -21,13 +64,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // ── Datas: hoje e daqui 60 dias ──────────────────────────────
+    // ── Datas: hoje e daqui 60 dias (fuso de São Paulo) ──────────
     const agora     = new Date()
-    const hoje      = agora.toISOString().split('T')[0]          // YYYY-MM-DD
-    const em60dias  = new Date(agora.getTime() + 60 * 24 * 60 * 60 * 1000)
-    const ate60     = em60dias.toISOString().split('T')[0]
+    const hoje      = hojeLocal(agora)          // YYYY-MM-DD local
+    const ate60     = somarDias(hoje, 60)       // YYYY-MM-DD local
+    const [anoHoje, mesHoje] = hoje.split('-').map(Number)
 
-    console.log(`[gerar-vencimentos] Rodando em ${hoje}, janela até ${ate60}`)
+    console.log(`[gerar-vencimentos] Rodando em ${hoje} (${TZ}), janela até ${ate60}`)
 
     let totalCriados = 0
     let totalIgnorados = 0
@@ -102,38 +145,49 @@ serve(async (req) => {
 
       // ── 3. Gera eventos para cada fonte nos próximos 2 meses ──
       for (const fonte of fontes) {
+        if (!fonte.dia || Number.isNaN(fonte.dia)) continue
+
         // Verifica meses 0 (atual) e 1 (próximo)
         for (let mOffset = 0; mOffset <= 1; mOffset++) {
-          const dataAlvo = new Date(agora)
-          dataAlvo.setDate(1)
-          dataAlvo.setMonth(agora.getMonth() + mOffset)
+          // Aritmética de mês em inteiros — sem setMonth() e sem fuso
+          const totalMeses = (mesHoje - 1) + mOffset
+          const anoAlvo = anoHoje + Math.floor(totalMeses / 12)
+          const mesAlvo = (totalMeses % 12) + 1
 
           // Ajusta o dia (ex: fevereiro não tem dia 31)
-          const ultimoDiaDoMes = new Date(dataAlvo.getFullYear(), dataAlvo.getMonth() + 1, 0).getDate()
-          const diaReal = Math.min(fonte.dia, ultimoDiaDoMes)
-          dataAlvo.setDate(diaReal)
+          const diaReal = Math.min(fonte.dia, ultimoDiaDoMes(anoAlvo, mesAlvo))
 
-          const dataIsoManha = `${dataAlvo.getFullYear()}-${String(dataAlvo.getMonth() + 1).padStart(2, '0')}-${String(diaReal).padStart(2, '0')}T09:00:00`
-          const dataIsoNoite  = `${dataAlvo.getFullYear()}-${String(dataAlvo.getMonth() + 1).padStart(2, '0')}-${String(diaReal).padStart(2, '0')}T20:00:00`
+          const mesRef  = `${anoAlvo}-${pad(mesAlvo)}`
+          const dataYmd = `${mesRef}-${pad(diaReal)}`
 
-          // Só cria eventos futuros (não cria no passado)
-          if (dataAlvo < agora && dataAlvo.toISOString().split('T')[0] < hoje) continue
+          const dataIsoManha = `${dataYmd}T09:00:00`
+          const dataIsoNoite = `${dataYmd}T20:00:00`
+
+          // Só cria eventos futuros (não cria no passado) — comparação de string
+          if (dataYmd < hoje) continue
           // Só cria dentro da janela de 60 dias
-          if (dataAlvo.toISOString().split('T')[0] > ate60) continue
+          if (dataYmd > ate60) continue
 
           // ── 4. Deduplicação: verifica se já existe evento com mesma chave ──
-          // Usa a chave única no campo `descricao` iniciando com a chave AUTO
-          const mesRef = `${dataAlvo.getFullYear()}-${String(dataAlvo.getMonth() + 1).padStart(2, '0')}`
+          // ATENÇÃO: o LIKE abaixo casa com [CHAVE] E com [CHAVE_CONF].
+          // Por isso .limit(1) e NÃO .maybeSingle() — maybeSingle quebrava com
+          // 2 linhas, devolvia data=null e a função recriava tudo todo dia.
           const chaveUnica = `${fonte.chave}_${mesRef}`
 
-          const { data: jaExiste } = await supabase
+          const { data: jaExiste, error: eDedup } = await supabase
             .from('agenda_eventos')
             .select('id')
             .eq('user_id', uid)
             .like('descricao', `%${chaveUnica}%`)
-            .maybeSingle()
+            .limit(1)
 
-          if (jaExiste) {
+          if (eDedup) {
+            // Na dúvida NÃO cria: faltar um evento é melhor que duplicar
+            console.error(`[gerar-vencimentos] Dedup falhou em ${chaveUnica}: ${eDedup.message}`)
+            continue
+          }
+
+          if (jaExiste && jaExiste.length > 0) {
             totalIgnorados++
             continue
           }
@@ -174,7 +228,8 @@ serve(async (req) => {
       ok: true,
       criados: totalCriados,
       ignorados: totalIgnorados,
-      timestamp: agora.toISOString(),
+      data_local: hoje,
+      timestamp: agora.toISOString(),   // timestamp real — UTC aqui é correto
     }), {
       headers: { 'Content-Type': 'application/json', ...cors }
     })

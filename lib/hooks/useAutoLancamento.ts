@@ -1,11 +1,27 @@
 'use client'
 /**
  * useAutoLancamento — hook reutilizável
- * 
+ *
  * Dado os dados de uma parcela extraída pela IA, cria o lançamento
- * no financeiro automaticamente. Usa empresa_id da sessão.
+ * no financeiro automaticamente.
+ *
+ * 01/08/2026 — CORRIGIDO:
+ *   (1) FUSO: dataStr vinha de dataVenc.toISOString().split('T')[0], que é UTC.
+ *       Das 21h à meia-noite (BRT) a parcela era lançada no dia seguinte, e na
+ *       virada do mês, no mês seguinte. Agora monta a string a partir da data
+ *       LOCAL, sem passar por toISOString().
+ *   (2) ESTOURO DE DIA: new Date(ano, mes, 31) em fevereiro virava 03/03.
+ *       Agora o dia é limitado ao último dia do mês.
  */
 import { createClient } from '@/lib/supabase/client'
+import { hojeLocal } from '@/lib/utils'
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** Último dia do mês (mes é 1-based: 1 = janeiro). */
+function ultimoDiaDoMes(ano: number, mes: number): number {
+  return new Date(Date.UTC(ano, mes, 0)).getUTCDate()
+}
 
 export async function autoLancarParcela(opts: {
   conta_id: string
@@ -18,19 +34,21 @@ export async function autoLancarParcela(opts: {
   observacoes?: string
 }) {
   const supabase = createClient()
-  const hoje = new Date()
-  const dia = opts.dia_vencimento || hoje.getDate()
-  const dataVenc = new Date(hoje.getFullYear(), hoje.getMonth(), dia)
-  const dataStr = dataVenc.toISOString().split('T')[0]
+
+  // Data local (America/Sao_Paulo), nunca UTC
+  const [anoAtual, mesAtual, diaHoje] = hojeLocal().split('-').map(Number)
+  const diaDesejado = opts.dia_vencimento || diaHoje
+  const diaReal = Math.min(diaDesejado, ultimoDiaDoMes(anoAtual, mesAtual))
+  const dataStr = `${anoAtual}-${pad(mesAtual)}-${pad(diaReal)}`
 
   // Busca ou cria categoria
   let catId: string | null = null
   const catNome = opts.categoria || 'Financiamento'
   const { data: catExist } = await supabase
     .from('categorias_financeiras')
-    .select('id').eq('nome', catNome).maybeSingle()
-  if (catExist?.id) {
-    catId = catExist.id
+    .select('id').eq('nome', catNome).limit(1)
+  if (catExist?.[0]?.id) {
+    catId = catExist[0].id
   } else {
     const { data: novaCat } = await (supabase.from('categorias_financeiras') as any)
       .insert({ nome: catNome, tipo: 'despesa', cor: '#F59E0B' })
