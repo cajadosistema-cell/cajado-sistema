@@ -322,6 +322,7 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
   onPago: () => void
 }) {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [contas, setContas] = useState<{id:string;nome:string;tipo:string;saldo_atual:number;cor?:string}[]>([])
   const hoje = new Date()
   const diaVenc = imovel.dia_vencimento || 10
@@ -425,23 +426,27 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
       if (errConta) throw new Error(`Erro ao debitar conta: ${errConta.message}`)
 
       // 4. Incrementa parcelas_pagas no imóvel
-      const { error: errImovel } = await (supabase.from('imoveis') as any)
+      const { data: dataImovel, error: errImovel } = await (supabase.from('imoveis') as any)
         .update({ parcelas_pagas: proxParcela })
         .eq('id', imovel.id)
+        .select()
       if (errImovel) throw new Error(`Erro ao atualizar parcelas: ${errImovel.message}`)
+      if (!dataImovel || dataImovel.length === 0) throw new Error(`Não foi possível atualizar o imóvel. Verifique permissões.`)
 
       // 5. Registra no histórico de pagamentos_imoveis para o mês de referência resolvido
       const mesRefFinal = mesReferencia || form.data_pagamento.substring(0, 7)
-      await (supabase.from('pagamentos_imoveis') as any).upsert({
+      const { data: dataPag, error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
         imovel_id: imovel.id,
-        empresa_id: (imovel as any).empresa_id || null,
+        empresa_id: (imovel as any).empresa_id || empresaId || null,
         mes_referencia: mesRefFinal,
         status: 'pago',
         valor_pago: valor,
         data_pagamento: form.data_pagamento,
         conta_origem_id: form.conta_id,
         notas: form.observacoes || null,
-      }, { onConflict: 'imovel_id,mes_referencia' })
+      }, { onConflict: 'imovel_id,mes_referencia' }).select()
+      if (errPag) throw new Error(`Erro ao registrar histórico: ${errPag.message}`)
+      if (!dataPag || dataPag.length === 0) throw new Error(`Não foi possível registrar histórico do pagamento.`)
 
       // Dispara evento global para recarregar relatórios/botões
       window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))

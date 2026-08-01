@@ -370,6 +370,7 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
   onPago: () => void
 }) {
   const supabase = createClient()
+  const { empresaId } = useEmpresaId()
   const [contas, setContas] = useState<{id:string;nome:string;tipo:string;saldo_atual:number;cor?:string}[]>([])
   const hoje = new Date()
   const diaVenc = veiculo.vencimento_dia || 10
@@ -457,16 +458,18 @@ function ModalPagarBoletoVeiculo({ veiculo, onClose, onPago }: {
       if (errConta) throw new Error(`Erro ao debitar conta: ${errConta.message}`)
 
       // 4. Incrementa parcelas_pagas no veículo
-      const { error: errVeiculo } = await (supabase.from('veiculos') as any)
+      const { data: dataVeiculo, error: errVeiculo } = await (supabase.from('veiculos') as any)
         .update({ parcelas_pagas: proxParcela })
         .eq('id', veiculo.id)
+        .select()
       if (errVeiculo) throw new Error(`Erro ao atualizar parcelas: ${errVeiculo.message}`)
+      if (!dataVeiculo || dataVeiculo.length === 0) throw new Error(`Não foi possível atualizar o veículo. Verifique permissões.`)
 
       // 5. Registra no histórico de pagamentos_veiculos
       const mesRefFinal = mesReferencia || form.data_pagamento.substring(0, 7)
-      await (supabase.from('pagamentos_veiculos') as any).upsert({
+      const { data: dataPag, error: errPag } = await (supabase.from('pagamentos_veiculos') as any).upsert({
         veiculo_id: veiculo.id,
-        empresa_id: (veiculo as any).empresa_id || null,
+        empresa_id: (veiculo as any).empresa_id || empresaId || null,
         mes_referencia: mesRefFinal,
         status: 'pago',
         valor_pago: valor,
