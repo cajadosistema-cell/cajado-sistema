@@ -3497,13 +3497,24 @@ export function useElenaSalvar({
         // ── SEÇÃO 2: BOLETOS IMÓVEIS ───────────────────────────────
         texto += `🏠 **BOLETOS IMÓVEIS**\n`
 
-        type LinhaBoleto = { desc: string; dia: string | number; mes: string; valor: number; parcela: string; status: string; pago: boolean }
+        // `atrasado` é campo próprio de propósito: antes o total de atrasadas era
+        // deduzido com status.startsWith('⚠️'), que quebra a cada mudança de rótulo.
+        type LinhaBoleto = { desc: string; dia: string | number; mes: string; valor: number; parcela: string; status: string; pago: boolean; atrasado: boolean }
         const linhasBoletos: LinhaBoleto[] = []
 
         // Rótulo curto do mês: 'MM/AAAA'
         const rotuloMes = (m: string) => { const [a, mm] = m.split('-'); return `${mm}/${a}` }
 
         const hojeResumo = hojeLocal()
+
+        // "há 3 meses" / "há 1 mês" — dá noção de gravidade sem o Max ter de
+        // fazer conta de cabeça olhando a coluna Mês Ref.
+        const mesesDeAtraso = (m: string) => {
+          const [ay, am] = m.split('-').map(Number)
+          const [by, bm] = mesRef.split('-').map(Number)
+          const d = (by * 12 + bm) - (ay * 12 + am)
+          return d <= 0 ? 'vencida' : d === 1 ? 'há 1 mês' : `há ${d} meses`
+        }
 
         ;(imoveisData || []).forEach((im: any) => {
           const porMes: Map<string, any> = pagosImoveisPorMes.get(im.id) || new Map()
@@ -3546,6 +3557,7 @@ export function useElenaSalvar({
               parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
               status: pagRef?.status === 'pago' ? '✅ Pago' : '✅ Em dia',
               pago: true,
+              atrasado: false,
             })
             return
           }
@@ -3559,10 +3571,13 @@ export function useElenaSalvar({
               valor: Number(im.valor_parcela) || 0,
               // número REAL da parcela no contrato, não o contador do imóvel
               parcela: im.parcelas_total != null ? `${pa.numero}/${im.parcelas_total}` : `${pa.numero}`,
-              status: statusPg === 'parcial' ? '🟡 Parcial'
-                : pa.isAtrasado ? '⚠️ Em atraso'
-                : '🔴 Pendente',
+              // 🔴 é reservado para ATRASO. O que ainda não venceu fica 🟡 —
+              // antes era o contrário e o vermelho caía no item menos urgente.
+              status: pa.isAtrasado ? `🔴 **ATRASADO** (${mesesDeAtraso(pa.mesRef)})`
+                : statusPg === 'parcial' ? '🟠 Parcial'
+                : `🟡 A vencer`,
               pago: false,
+              atrasado: pa.isAtrasado,
             })
           })
         })
@@ -3575,8 +3590,9 @@ export function useElenaSalvar({
             mes: rotuloMes(mesRef),
             valor: Number(ve.valor_parcela) || 0,
             parcela: `${ve.parcelas_pagas}/${ve.parcelas_total}`,
-            status: '🔴 Pendente',
+            status: '🟡 A vencer',
             pago: false,
+            atrasado: false,
           })
         })
         ;(alertasRec || []).forEach((al: any) => {
@@ -3588,8 +3604,9 @@ export function useElenaSalvar({
             mes: rotuloMes(mesRef),
             valor: Number(al.valor) || 0,
             parcela: '—',
-            status: pago ? '✅ Pago' : pag?.status === 'parcial' ? '🟡 Parcial' : '🔴 Pendente',
+            status: pago ? '✅ Pago' : pag?.status === 'parcial' ? '🟠 Parcial' : '🟡 A vencer',
             pago,
+            atrasado: false,
           })
         })
 
@@ -3601,17 +3618,22 @@ export function useElenaSalvar({
         } else {
           texto += `| Dia | Compromisso | Mês Ref | Valor | Parcela | Status |\n`
           texto += `|-----|-------------|---------|------:|---------|--------|\n`
-          linhasBoletos.forEach(l => {
-            texto += `| ${l.dia} | ${l.desc} | ${l.mes} | ${l.valor > 0 ? fmt(l.valor) : '—'} | ${l.parcela} | ${l.status} |\n`
+          // Atrasadas primeiro: o bloco vermelho fica junto, no topo da tabela.
+          const ordenadas = [...linhasBoletos].sort((a, b) =>
+            (a.atrasado === b.atrasado) ? 0 : (a.atrasado ? -1 : 1))
+
+          ordenadas.forEach(l => {
+            const nome = l.atrasado ? `🔴 **${l.desc}**` : l.desc
+            texto += `| ${l.dia} | ${nome} | ${l.mes} | ${l.valor > 0 ? fmt(l.valor) : '—'} | ${l.parcela} | ${l.status} |\n`
             totalBoletos += l.valor
             if (l.pago) { totalPagoBoletos += l.valor; qtdPagosBoletos++ }
-            if (l.status.startsWith('⚠️')) { qtdAtrasadas++; totalAtrasado += l.valor }
+            if (l.atrasado) { qtdAtrasadas++; totalAtrasado += l.valor }
           })
           texto += `🏠 **TOTAL BOLETOS: ${fmt(totalBoletos)}**\n`
           texto += `💰 VALOR PAGO: ${fmt(totalPagoBoletos)} | RESTA: ${fmt(totalBoletos - totalPagoBoletos)}\n`
           texto += `📊 STATUS: ${qtdPagosBoletos}/${linhasBoletos.length} pagos ✅\n`
           if (qtdAtrasadas > 0) {
-            texto += `⚠️ **EM ATRASO: ${qtdAtrasadas} parcela(s) de meses anteriores — ${fmt(totalAtrasado)}**\n`
+            texto += `🔴 **EM ATRASO: ${qtdAtrasadas} parcela(s) — ${fmt(totalAtrasado)}**\n`
           }
         }
         texto += `---\n`
