@@ -3363,7 +3363,7 @@ export function useElenaSalvar({
 
         // Build queries with empresa_id fallback
         let qImoveisR = (supabase.from('imoveis') as any)
-          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, data_aquisicao, periodicidade')
+          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, data_aquisicao, periodicidade, proximo_vencimento')
           .not('valor_parcela', 'is', null)
         if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
 
@@ -3535,6 +3535,7 @@ export function useElenaSalvar({
               parcelasTotal: im.parcelas_total,
               periodicidade: im.periodicidade,
               diaVencimento: im.dia_vencimento,
+              proximoVencimento: im.proximo_vencimento,
             },
             mesesPagos,
             hojeResumo,

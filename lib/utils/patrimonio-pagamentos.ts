@@ -58,6 +58,13 @@ export interface ContratoParcelado {
   parcelasTotal?: number | null
   periodicidade?: string | null
   diaVencimento?: number | null
+  /**
+   * Âncora opcional para contrato irregular (intermediárias, balão, reajuste).
+   * Quando preenchida, a próxima parcela em aberto vence NESTA data e as
+   * seguintes seguem a periodicidade a partir daqui — a derivação por
+   * data_aquisicao é ignorada. Ver migration 079.
+   */
+  proximoVencimento?: string | null
 }
 
 export interface CalculoParcelas {
@@ -100,7 +107,11 @@ export function calcularParcelasEmAberto(
   }
 
   const aq = contrato.dataAquisicao ? String(contrato.dataAquisicao) : ''
-  if (aq.length < 7) {
+  const temAncoraPrevia = !!contrato.proximoVencimento &&
+                          String(contrato.proximoVencimento).length >= 10
+  // Sem data de aquisição MAS com âncora dá para calcular normalmente — a
+  // âncora não depende da data da compra.
+  if (aq.length < 7 && !temAncoraPrevia) {
     // Sem data de aquisição não há como calcular vencimento nenhum. Mostra só o
     // mês corrente — o imóvel não some do radar — e sinaliza o dado faltando.
     const emAberto = mesesPagos.has(mesAtual)
@@ -109,12 +120,28 @@ export function calcularParcelasEmAberto(
     return { emAberto, quitado: false, semDataAquisicao: true, proximaParcela: null }
   }
 
-  const mesBase = aq.substring(0, 7)
-  const passo   = passoMeses(contrato.periodicidade)
+  const passo = passoMeses(contrato.periodicidade)
+
+  // ── Âncora explícita tem prioridade sobre a fórmula ─────────────
+  // Contrato irregular não segue passo rígido desde a compra. Quando o
+  // usuário informa quando a PRÓXIMA parcela vence, esse dado vale mais do
+  // que qualquer extrapolação nossa. Caso real: Intermediárias Ciacci, cuja
+  // derivação cravava fev/2025 quando a próxima vence de fato em 25/09/2026.
+  const ancora = contrato.proximoVencimento ? String(contrato.proximoVencimento) : ''
+  const temAncora = ancora.length >= 10
+
+  // Com âncora, o dia de vencimento é o da própria data informada.
+  const diaEfetivo = temAncora ? Number(ancora.substring(8, 10)) : diaVenc
+
+  // Mês da parcela de índice n (0-based) dentro do contrato.
+  const mesDaParcela = temAncora
+    // A âncora é a parcela nº (pagas + 1), ou seja, índice `pagas`.
+    ? (n: number) => somaMesesRef(ancora.substring(0, 7), (n - pagas) * passo)
+    : (n: number) => somaMesesRef(aq.substring(0, 7), n * passo)
 
   // Último mês cuja parcela já venceu. Antes do dia de vencimento, o mês
   // corrente ainda não é devido.
-  const mesLimite = diaHoje >= diaVenc ? mesAtual : somaMesesRef(mesAtual, -1)
+  const mesLimite = diaHoje >= diaEfetivo ? mesAtual : somaMesesRef(mesAtual, -1)
 
   const emAberto: ParcelaEmAberto[] = []
   let proximaParcela: string | null = null
@@ -123,13 +150,13 @@ export function calcularParcelasEmAberto(
   const teto = total != null ? total : pagas + 240
 
   for (let n = pagas; n < teto; n++) {
-    const mes = somaMesesRef(mesBase, n * passo)
+    const mes = mesDaParcela(n)
     if (mes > mesLimite) { proximaParcela = mes; break }
     if (!mesesPagos.has(mes)) {
       emAberto.push({
         mesRef: mes,
         numero: n + 1,
-        isAtrasado: mes < mesAtual || (mes === mesAtual && diaHoje > diaVenc),
+        isAtrasado: mes < mesAtual || (mes === mesAtual && diaHoje > diaEfetivo),
       })
       if (emAberto.length >= maxLinhas) break
     }
@@ -171,6 +198,7 @@ export async function resolverMesRefPendente(
   parcelasPagas?: number | null,
   parcelasTotal?: number | null,
   periodicidade?: string | null,
+  proximoVencimento?: string | null,
 ): Promise<MesRefResultado> {
   const hoje = dataPagamentoStr && dataPagamentoStr.length >= 10
     ? dataPagamentoStr.substring(0, 10)
@@ -196,6 +224,7 @@ export async function resolverMesRefPendente(
         parcelasTotal,
         periodicidade,
         diaVencimento,
+        proximoVencimento,
       },
       mesesPagos,
       hoje,

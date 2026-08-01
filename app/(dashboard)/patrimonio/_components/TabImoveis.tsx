@@ -30,6 +30,7 @@ type Imovel = {
   data_aquisicao: string | null
   dia_vencimento: number | null
   periodicidade?: 'mensal' | 'bimestral' | 'trimestral' | 'quadrimestral' | 'semestral' | 'anual' | null
+  proximo_vencimento?: string | null
   categoria_financeira: string | null
   taxa_juros_anual: number | null
   is_investimento?: boolean
@@ -380,7 +381,8 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
       imovel.data_aquisicao,
       imovel.parcelas_pagas,
       imovel.parcelas_total,
-      imovel.periodicidade
+      imovel.periodicidade,
+      imovel.proximo_vencimento
     ).then(res => {
       setMesReferencia(res.mesRef)
       setStatusMesRef(res)
@@ -642,6 +644,7 @@ function ModalRegistrarRetroativo({ imovel, onClose, onRegistrado }: {
         parcelasTotal: imovel.parcelas_total,
         periodicidade: imovel.periodicidade,
         diaVencimento: imovel.dia_vencimento,
+        proximoVencimento: imovel.proximo_vencimento,
       }, mesesPagos)
       if (cancelado) return
       setEmAberto(calc.emAberto)
@@ -1228,7 +1231,8 @@ export function TabImoveis() {
           im.data_aquisicao,
           im.parcelas_pagas,
           im.parcelas_total,
-          im.periodicidade
+          im.periodicidade,
+          im.proximo_vencimento
         )
       }
       if (!cancelado) setStatusPendentesMap(mapa)
