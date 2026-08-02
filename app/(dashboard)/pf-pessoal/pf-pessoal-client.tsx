@@ -361,11 +361,21 @@ function TabContasPFInline({
     ? TIPOS.filter(t => TIPOS_BANCARIOS.includes(t.id))
     : TIPOS.filter(t => TIPOS_CARTAO.includes(t.id))
   const [editando, setEditando] = useState<any>(null)
-  const [formEdit, setFormEdit] = useState({ nome: '', tipo: 'corrente', saldo_atual: '' })
+  const [formEdit, setFormEdit] = useState({ nome: '', tipo: 'corrente', saldo_inicial: '', saldo_atual: '' })
   const [salvandoEdit, setSalvandoEdit] = useState(false)
+  // Enquanto o usuário não mexer no saldo atual, ele acompanha o inicial. É o
+  // caso comum: conta nova sem movimento, os dois valores são o mesmo. Quem
+  // precisa de valores diferentes edita o atual e o espelho para de agir.
+  const [atualTocado, setAtualTocado] = useState(false)
 
   const abrirEditar = (c: any) => {
-    setFormEdit({ nome: c.nome, tipo: c.tipo, saldo_atual: c.saldo_atual != null ? String(c.saldo_atual) : '' })
+    setFormEdit({
+      nome: c.nome,
+      tipo: c.tipo,
+      saldo_inicial: c.saldo_inicial != null ? String(c.saldo_inicial) : '',
+      saldo_atual:   c.saldo_atual   != null ? String(c.saldo_atual)   : '',
+    })
+    setAtualTocado(false)
     setEditando(c)
   }
 
@@ -373,10 +383,12 @@ function TabContasPFInline({
     e.preventDefault()
     if (!editando) return
     setSalvandoEdit(true)
+    // Campo vazio conta como zero de propósito: é assim que se zera uma conta.
     await (supabase.from('contas') as any).update({
       nome: formEdit.nome,
       tipo: formEdit.tipo,
-      saldo_atual: formEdit.saldo_atual ? Number(formEdit.saldo_atual) : 0,
+      saldo_inicial: formEdit.saldo_inicial !== '' ? Number(formEdit.saldo_inicial) : 0,
+      saldo_atual:   formEdit.saldo_atual   !== '' ? Number(formEdit.saldo_atual)   : 0,
     }).eq('id', editando.id)
     setSalvandoEdit(false)
     setEditando(null)
@@ -581,12 +593,33 @@ function TabContasPFInline({
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="label">Saldo Atual (R$)</label>
-                <input className="input mt-1 w-full" type="number" step="0.01"
-                  value={formEdit.saldo_atual} onChange={e => setFormEdit(f => ({ ...f, saldo_atual: e.target.value }))} />
-                <p className="text-[10px] text-fg-tertiary mt-1">Corrija se houve erro. Não reconstrói histórico automático.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Saldo Inicial (R$)</label>
+                  <input className="input mt-1 w-full" type="number" step="0.01"
+                    value={formEdit.saldo_inicial}
+                    onChange={e => {
+                      const v = e.target.value
+                      setFormEdit(f => ({
+                        ...f,
+                        saldo_inicial: v,
+                        saldo_atual: atualTocado ? f.saldo_atual : v,
+                      }))
+                    }} />
+                </div>
+                <div>
+                  <label className="label">Saldo Atual (R$)</label>
+                  <input className="input mt-1 w-full" type="number" step="0.01"
+                    value={formEdit.saldo_atual}
+                    onChange={e => { setAtualTocado(true); setFormEdit(f => ({ ...f, saldo_atual: e.target.value })) }} />
+                </div>
               </div>
+              <p className="text-[10px] text-fg-tertiary -mt-2">
+                O <strong>inicial</strong> é o ponto de partida da conta; o <strong>atual</strong> é
+                quanto tem hoje. Ao digitar o inicial, o atual acompanha sozinho — mexa nele só se
+                os dois forem diferentes. Campo em branco vale zero. Corrigir aqui não reconstrói
+                histórico.
+              </p>
               <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
                 <button type="button" onClick={() => setEditando(null)} className="btn-secondary">Cancelar</button>
                 <button type="submit" disabled={salvandoEdit} className="btn-primary">

@@ -196,7 +196,7 @@ function ModalLancarParcela({ imovel, onClose, onLancado }: {
   const [msg, setMsg] = useState('')
 
   useState(() => {
-    supabase.from('contas').select('id,nome,tipo').then(({ data }) => {
+    supabase.from('contas').select('id,nome,tipo').eq('ativo', true).then(({ data }) => {
       if (data) setContas(data as any)
     })
   })
@@ -395,6 +395,7 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
   // Carrega contas bancárias com saldo
   useEffect(() => {
     supabase.from('contas').select('id,nome,tipo,saldo_atual,cor')
+      .eq('ativo', true)
       .in('tipo', ['corrente', 'poupanca', 'dinheiro', 'investimento'])
       .then(({ data }) => {
         if (data) setContas(data as any)
@@ -651,6 +652,7 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
 
   useEffect(() => {
     supabase.from('contas').select('id,nome,tipo,saldo_atual')
+      .eq('ativo', true)
       .in('tipo', ['corrente', 'poupanca', 'dinheiro', 'investimento'])
       .then(({ data }) => { if (data) setContas(data as any) })
   }, [])
