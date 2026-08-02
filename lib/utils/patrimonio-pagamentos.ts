@@ -158,6 +158,89 @@ export interface CalculoParcelas {
 /** Teto de linhas por imóvel, para um contrato muito atrasado não estourar o resumo. */
 const LIMITE_LINHAS = 12
 
+interface Calendario {
+  pagas: number
+  total: number | null
+  /** Dia do mês em que a parcela vence (o da âncora, quando houver). */
+  diaEfetivo: number
+  /** Mês 'YYYY-MM' da parcela de índice n (0-based). */
+  mesDaParcela: (n: number) => string
+  quitado: boolean
+  /** Sem data de aquisição E sem âncora: não há como montar calendário. */
+  indeterminado: boolean
+}
+
+/**
+ * Traduz o contrato num calendário de vencimentos.
+ *
+ * Existe para que `calcularParcelasEmAberto` (o que está vencido) e
+ * `proximasParcelas` (o que vem pela frente) partam EXATAMENTE da mesma
+ * derivação. Foi ter duas derivações paralelas que fez o card e o resumo
+ * divergirem em 31/07.
+ */
+function montarCalendario(contrato: ContratoParcelado): Calendario {
+  const pagas = Math.max(0, Number(contrato.parcelasPagas) || 0)
+  const total = contrato.parcelasTotal != null ? Number(contrato.parcelasTotal) : null
+  const diaVenc = contrato.diaVencimento || 10
+
+  if (total != null && pagas >= total) {
+    return { pagas, total, diaEfetivo: diaVenc, mesDaParcela: () => '', quitado: true, indeterminado: false }
+  }
+
+  const aq = contrato.dataAquisicao ? String(contrato.dataAquisicao) : ''
+  const ancora = contrato.proximoVencimento ? String(contrato.proximoVencimento) : ''
+  const temAncora = ancora.length >= 10
+
+  if (aq.length < 7 && !temAncora) {
+    return { pagas, total, diaEfetivo: diaVenc, mesDaParcela: () => '', quitado: false, indeterminado: true }
+  }
+
+  const passo = passoMeses(contrato.periodicidade)
+  // Com âncora, o dia de vencimento é o da própria data informada.
+  const diaEfetivo = temAncora ? Number(ancora.substring(8, 10)) : diaVenc
+
+  const mesDaParcela = temAncora
+    // A âncora é a parcela nº (pagas + 1), ou seja, índice `pagas`.
+    ? (n: number) => somaMesesRef(ancora.substring(0, 7), (n - pagas) * passo)
+    : (n: number) => somaMesesRef(aq.substring(0, 7), n * passo)
+
+  return { pagas, total, diaEfetivo, mesDaParcela, quitado: false, indeterminado: false }
+}
+
+/**
+ * As próximas parcelas NÃO PAGAS, tenham vencido ou não.
+ *
+ * É o que a tela de quitação em lote precisa: adiantar pagamento é pagar
+ * parcelas que ainda vão vencer. Se houver atrasada, ela vem primeiro na lista
+ * e não pode ser pulada — o contador `parcelas_pagas` anda em sequência.
+ *
+ * Diferente de `calcularParcelasEmAberto`, que responde "o que está vencido e
+ * não foi pago" e é o que alimenta cobrança, cor de card e resumo mensal.
+ */
+export function proximasParcelas(
+  contrato: ContratoParcelado,
+  mesesPagos: Set<string> = new Set<string>(),
+  quantidade: number = LIMITE_LINHAS,
+  hojeStr?: string,
+): ParcelaEmAberto[] {
+  const hoje = hojeStr || hojeLocal()
+  const cal = montarCalendario(contrato)
+  if (cal.quitado || cal.indeterminado) return []
+
+  const out: ParcelaEmAberto[] = []
+  const teto = cal.total != null ? cal.total : cal.pagas + 240
+  for (let n = cal.pagas; n < teto && out.length < quantidade; n++) {
+    const mes = cal.mesDaParcela(n)
+    if (mesesPagos.has(mes)) continue
+    out.push({
+      mesRef: mes,
+      numero: n + 1,
+      isAtrasado: hoje > vencimentoEfetivo(mes, cal.diaEfetivo),
+    })
+  }
+  return out
+}
+
 /**
  * Calcula quais parcelas de um contrato estão em aberto hoje.
  *
@@ -176,21 +259,19 @@ export function calcularParcelasEmAberto(
   const diaHoje  = Number(hoje.substring(8, 10))
   const diaVenc  = contrato.diaVencimento || 10
 
-  const pagas = Math.max(0, Number(contrato.parcelasPagas) || 0)
-  const total = contrato.parcelasTotal != null ? Number(contrato.parcelasTotal) : null
+  const cal = montarCalendario(contrato)
+  const pagas = cal.pagas
+  const total = cal.total
 
   // Contrato quitado: nada em aberto, nunca. (Caso Refinanciamento Ciacci, 6/6,
   // que aparecia no resumo mesmo estando pago.)
-  if (total != null && pagas >= total) {
+  if (cal.quitado) {
     return { emAberto: [], quitado: true, semDataAquisicao: false, proximaParcela: null, proximaNumero: null }
   }
 
-  const aq = contrato.dataAquisicao ? String(contrato.dataAquisicao) : ''
-  const temAncoraPrevia = !!contrato.proximoVencimento &&
-                          String(contrato.proximoVencimento).length >= 10
   // Sem data de aquisição MAS com âncora dá para calcular normalmente — a
   // âncora não depende da data da compra.
-  if (aq.length < 7 && !temAncoraPrevia) {
+  if (cal.indeterminado) {
     // Sem data de aquisição não há como calcular vencimento nenhum. Mostra só o
     // mês corrente — o imóvel não some do radar — e sinaliza o dado faltando.
     const emAberto = mesesPagos.has(mesAtual)
@@ -199,24 +280,9 @@ export function calcularParcelasEmAberto(
     return { emAberto, quitado: false, semDataAquisicao: true, proximaParcela: null, proximaNumero: null }
   }
 
-  const passo = passoMeses(contrato.periodicidade)
-
-  // ── Âncora explícita tem prioridade sobre a fórmula ─────────────
-  // Contrato irregular não segue passo rígido desde a compra. Quando o
-  // usuário informa quando a PRÓXIMA parcela vence, esse dado vale mais do
-  // que qualquer extrapolação nossa. Caso real: Intermediárias Ciacci, cuja
-  // derivação cravava fev/2025 quando a próxima vence de fato em 25/09/2026.
-  const ancora = contrato.proximoVencimento ? String(contrato.proximoVencimento) : ''
-  const temAncora = ancora.length >= 10
-
-  // Com âncora, o dia de vencimento é o da própria data informada.
-  const diaEfetivo = temAncora ? Number(ancora.substring(8, 10)) : diaVenc
-
-  // Mês da parcela de índice n (0-based) dentro do contrato.
-  const mesDaParcela = temAncora
-    // A âncora é a parcela nº (pagas + 1), ou seja, índice `pagas`.
-    ? (n: number) => somaMesesRef(ancora.substring(0, 7), (n - pagas) * passo)
-    : (n: number) => somaMesesRef(aq.substring(0, 7), n * passo)
+  // Âncora explícita tem prioridade sobre a fórmula — ver montarCalendario.
+  const diaEfetivo = cal.diaEfetivo
+  const mesDaParcela = cal.mesDaParcela
 
   // Último mês cuja parcela já venceu. Antes do dia de vencimento, o mês
   // corrente ainda não é devido. Repare que aqui vale o vencimento NOMINAL: a

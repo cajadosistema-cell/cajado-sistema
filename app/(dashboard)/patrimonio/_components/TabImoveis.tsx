@@ -7,7 +7,7 @@ import { useEmpresaId } from '@/lib/hooks/useEmpresaId'
 import { EmptyState } from '@/components/shared/ui'
 import { formatCurrency, cn, hojeLocal, mesLocal } from '@/lib/utils'
 import { exportCSV } from '@/lib/export-utils'
-import { resolverMesRefPendente, calcularParcelasEmAberto, MesRefResultado, ParcelaEmAberto } from '@/lib/utils/patrimonio-pagamentos'
+import { resolverMesRefPendente, calcularParcelasEmAberto, proximasParcelas, vencimentoNominal, MesRefResultado, ParcelaEmAberto, CalculoParcelas } from '@/lib/utils/patrimonio-pagamentos'
 
 type Imovel = {
   id: string
@@ -613,6 +613,13 @@ function ModalPagarBoleto({ imovel, onClose, onPago }: {
 //     O dinheiro sai AGORA. Cada chamada é atômica no banco: debita a conta,
 //     cria o lançamento, avança parcelas_pagas e grava o boleto.
 //
+// LISTAS DIFERENTES:
+//   'pagar' lista as PRÓXIMAS parcelas não pagas, tenham vencido ou não
+//   (proximasParcelas) — o uso principal é ADIANTAR pagamento. Atrasada, se
+//   houver, aparece no topo e não pode ser pulada.
+//   'retroativo' lista só o que já venceu (calcularParcelasEmAberto): não faz
+//   sentido registrar como "já paga" uma parcela que ainda nem venceu.
+//
 // SELEÇÃO DIFERENTE EM CADA MODO, de propósito:
 //   'pagar' é CUMULATIVO a partir da mais antiga. `parcelas_pagas` é um
 //   contador e a regra vigente diz que as pagas são as PRIMEIRAS N parcelas —
@@ -631,6 +638,7 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
   const [contas, setContas] = useState<{id:string;nome:string;tipo:string;saldo_atual:number}[]>([])
   const [contaId, setContaId] = useState('')
   const [emAberto, setEmAberto] = useState<ParcelaEmAberto[]>([])
+  const [calculo, setCalculo] = useState<CalculoParcelas | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [sel, setSel] = useState<Record<string, { marcado: boolean; data: string; valor: string }>>({})
   const [dataLote, setDataLote] = useState(hojeLocal())
@@ -656,21 +664,26 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
         .eq('imovel_id', imovel.id)
         .eq('status', 'pago')
       const mesesPagos = new Set<string>((pagos || []).map((p: any) => p.mes_referencia))
-      const calc = calcularParcelasEmAberto({
+      const contrato = {
         dataAquisicao: imovel.data_aquisicao,
         parcelasPagas: imovel.parcelas_pagas,
         parcelasTotal: imovel.parcelas_total,
         periodicidade: imovel.periodicidade,
         diaVencimento: imovel.dia_vencimento,
         proximoVencimento: imovel.proximo_vencimento,
-      }, mesesPagos)
+      }
+      const calc = calcularParcelasEmAberto(contrato, mesesPagos)
+      // Pagando: as próximas 24, vencidas ou não — adiantar é o uso principal.
+      // Registrando retroativo: só o que já venceu.
+      const lista = pagando ? proximasParcelas(contrato, mesesPagos, 24) : calc.emAberto
       if (cancelado) return
-      setEmAberto(calc.emAberto)
+      setEmAberto(lista)
+      setCalculo(calc)
       // Retroativo: data pré-preenchida com o vencimento daquele mês, que quase
       // sempre é a data real do pagamento. Pagando agora, a data é uma só (hoje).
       const dia = String(imovel.dia_vencimento || 10).padStart(2, '0')
       const inicial: Record<string, { marcado: boolean; data: string; valor: string }> = {}
-      calc.emAberto.forEach(pa => {
+      lista.forEach(pa => {
         inicial[pa.mesRef] = {
           marcado: false,
           data: `${pa.mesRef}-${dia}`,
@@ -682,7 +695,7 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
     }
     carregar()
     return () => { cancelado = true }
-  }, [imovel.id])
+  }, [imovel.id, pagando])
 
   const marcados = emAberto.filter(pa => sel[pa.mesRef]?.marcado)
   const totalMarcado = marcados.reduce((acc, pa) => acc + (parseFloat(sel[pa.mesRef]?.valor) || 0), 0)
@@ -877,11 +890,12 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
 
           {pagando ? (
             <div className="bg-violet-500/10 border border-violet-500/25 rounded-xl px-4 py-3 text-[11px] text-violet-200/90 leading-relaxed">
-              O dinheiro sai <strong>agora</strong>: cada parcela marcada debita a conta e gera um
-              lançamento. A seleção é <strong>da mais antiga para a mais nova</strong> — não dá para
-              pular uma no meio, porque o contador de parcelas pagas anda em sequência.
-              Para parcelas que <strong>já foram pagas</strong> e só faltou registrar, feche e use
-              <strong> Registrar já pagas</strong>.
+              Serve para <strong>adiantar parcelas</strong>: marque até onde quer quitar e o
+              dinheiro sai agora, um lançamento por parcela. A seleção é sempre
+              <strong> da mais antiga para a mais nova</strong> — não dá para pular uma no meio,
+              porque o contador de parcelas pagas anda em sequência. Havendo atrasada, ela entra
+              junto. Para parcela que <strong>já foi paga</strong> e só faltou registrar, feche e
+              use <strong>Registrar já pagas</strong>.
             </div>
           ) : (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-[11px] text-amber-200/90 leading-relaxed">
@@ -918,13 +932,45 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
           {carregando ? (
             <p className="text-xs text-fg-tertiary py-6 text-center">Carregando parcelas…</p>
           ) : emAberto.length === 0 ? (
-            <p className="text-xs text-fg-tertiary py-6 text-center">
-              Nenhuma parcela em aberto — este imóvel está em dia.
-            </p>
+            <div className="py-6 text-center space-y-1.5">
+              {calculo?.quitado ? (
+                <p className="text-xs text-fg-tertiary">
+                  Contrato quitado — todas as {total} parcelas já foram pagas.
+                </p>
+              ) : !pagando && calculo?.proximaParcela ? (
+                <>
+                  <p className="text-xs text-fg-secondary">
+                    Nada vencido. A próxima é a <strong>nº {calculo.proximaNumero}</strong>, que
+                    vence em{' '}
+                    <strong>
+                      {(() => {
+                        const d = imovel.proximo_vencimento && calculo.proximaNumero === pagas + 1
+                          ? String(imovel.proximo_vencimento).substring(0, 10)
+                          : vencimentoNominal(calculo.proximaParcela, imovel.dia_vencimento || 10)
+                        return `${d.substring(8, 10)}/${d.substring(5, 7)}/${d.substring(0, 4)}`
+                      })()}
+                    </strong>.
+                  </p>
+                  <p className="text-[11px] text-fg-tertiary">
+                    Esta tela só lista parcelas que já venceram. As {faltam} que faltam entram aqui
+                    conforme forem vencendo.
+                  </p>
+                </>
+              ) : calculo?.semDataAquisicao ? (
+                <p className="text-xs text-amber-400/90">
+                  Sem data de aquisição e sem próximo vencimento, não dá para calcular o
+                  calendário deste contrato. Preencha um dos dois na edição do imóvel.
+                </p>
+              ) : (
+                <p className="text-xs text-fg-tertiary">
+                  {pagando ? 'Não há parcela a pagar neste contrato.' : 'Nenhuma parcela em aberto.'}
+                </p>
+              )}
+            </div>
           ) : (
             <div className="space-y-2">
               <p className="text-[11px] text-fg-tertiary uppercase tracking-wide">
-                Parcelas em aberto{pagando ? ' · clique para quitar até ela' : ''}
+                {pagando ? 'Próximas parcelas · clique para quitar até ela' : 'Parcelas em aberto'}
               </p>
               {emAberto.map(pa => {
                 const linha = sel[pa.mesRef] || { marcado: false, data: '', valor: '' }
@@ -940,11 +986,18 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
                       <span className="text-xs font-semibold text-fg">
                         Parcela nº {pa.numero}{total ? ` de ${total}` : ''} — {pa.mesRef}
                       </span>
-                      {pa.isAtrasado && (
+                      {pa.isAtrasado ? (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 font-bold">
                           ATRASADA
                         </span>
-                      )}
+                      ) : pagando ? (
+                        <span className="text-[10px] text-fg-tertiary">
+                          vence {(() => {
+                            const d = vencimentoNominal(pa.mesRef, imovel.dia_vencimento || 10)
+                            return `${d.substring(8, 10)}/${d.substring(5, 7)}/${d.substring(0, 4)}`
+                          })()}
+                        </span>
+                      ) : null}
                     </label>
                     {linha.marcado && (
                       <div className={cn('grid gap-2 mt-2 pl-6', pagando ? 'grid-cols-1' : 'grid-cols-2')}>
@@ -1011,7 +1064,7 @@ function ModalParcelasEmLote({ imovel, modo, onClose, onConcluido }: {
               {status === 'loading'
                 ? (pagando ? 'Pagando…' : 'Registrando…')
                 : pagando
-                  ? `Pagar ${marcados.length || ''} agora`
+                  ? `Pagar ${marcados.length || ''} agora${totalMarcado ? ' · ' + formatCurrency(totalMarcado) : ''}`
                   : `Registrar ${marcados.length || ''} sem debitar`}
             </button>
           </div>
