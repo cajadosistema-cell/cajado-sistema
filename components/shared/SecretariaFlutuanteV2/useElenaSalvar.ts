@@ -3362,8 +3362,7 @@ export function useElenaSalvar({
 
         // Build queries with empresa_id fallback
         let qImoveisR = (supabase.from('imoveis') as any)
-          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, data_aquisicao, periodicidade, proximo_vencimento')
-          .not('valor_parcela', 'is', null)
+          .select('id, titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, data_aquisicao, periodicidade, proximo_vencimento, is_investimento, unidade, valor_compra, valor_total_contrato, valor_mercado')
         if (empresaId) qImoveisR = qImoveisR.eq('empresa_id', empresaId)
 
         let qVeiculosR = (supabase.from('veiculos') as any)
@@ -3520,7 +3519,7 @@ export function useElenaSalvar({
           return d <= 0 ? 'vencida' : d === 1 ? 'há 1 mês' : `há ${d} meses`
         }
 
-        ;(imoveisData || []).forEach((im: any) => {
+        ;(imoveisData || []).filter((im: any) => im.valor_parcela != null).forEach((im: any) => {
           const porMes: Map<string, any> = pagosImoveisPorMes.get(im.id) || new Map()
           const mesesPagos = new Set<string>(
             Array.from(porMes.entries())
@@ -3646,7 +3645,19 @@ export function useElenaSalvar({
         // ── SEÇÃO 3: INVESTIMENTOS (contratos parcelados) ──────────
         const contratosInv = contratosInvData || []
         let totalContratos = 0, totalPagoContratos = 0, qtdPagosContratos = 0
-        const ativosLista = ativosData || []
+        const ativosDBLista = ativosData || []
+        const imoveisLista = imoveisData || []
+        const imoveisInvestimento = imoveisLista
+          .filter((im: any) => im.is_investimento === true)
+          .map((im: any) => ({
+            ticker: null,
+            nome: im.titulo + (im.unidade ? ` (${im.unidade})` : ''),
+            tipo: 'imóvel',
+            valor_investido: im.valor_compra || im.valor_total_contrato || 0,
+            valor_atual: im.valor_mercado || null
+          }))
+        
+        const ativosLista = [...ativosDBLista, ...imoveisInvestimento]
         let totalInvestido = 0, totalMercadoInv = 0
 
         if (contratosInv.length > 0) {
