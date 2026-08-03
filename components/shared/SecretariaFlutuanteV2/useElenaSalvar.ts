@@ -3402,9 +3402,9 @@ export function useElenaSalvar({
             .eq('user_id', uid).eq('ativo', true)
             .in('tipo', ['cartao_credito', 'cartao_debito'])
             .order('dia_vencimento', { ascending: true, nullsFirst: false }),
-          // Faturas do mês
+          // Faturas do mês (valor_previsto = prévia manual, valor_fechado = fatura real)
           (supabase.from('faturas_cartoes') as any)
-            .select('conta_id, valor_fechado, status, data_pagamento')
+            .select('conta_id, valor_previsto, valor_fechado, status, data_pagamento')
             .eq('user_id', uid)
             .eq('mes_referencia', mesRef),
           // Imóveis com parcelas
@@ -3471,16 +3471,6 @@ export function useElenaSalvar({
         const cartoesLista = cartoes || []
         let totalCartoes = 0, totalPagoCartoes = 0, qtdPagosCartoes = 0
 
-        // Calcula prévia por cartão: soma gastos - estornos vinculados ao conta_id
-        const gastosDoMes = gastosMes || []
-        const previaPorCartao = new Map<string, number>()
-        for (const cartao of cartoesLista) {
-          const gastosCartao = gastosDoMes
-            .filter((g: any) => g.conta_id === cartao.id)
-            .reduce((a: number, g: any) => a + (Number(g.valor) || 0), 0)
-          previaPorCartao.set(cartao.id, gastosCartao)
-        }
-
         if (cartoesLista.length === 0) {
           texto += `_Nenhum cartão cadastrado._\n\n`
         } else {
@@ -3488,17 +3478,17 @@ export function useElenaSalvar({
           texto += `|--------|-------|-------:|-------:|--------|\n`
           for (const cartao of cartoesLista) {
             const fatura = (faturas || []).find((f: any) => f.conta_id === cartao.id)
-            const valorFechado = fatura ? Number(fatura.valor_fechado) : 0
-            const previa = previaPorCartao.get(cartao.id) || 0
-            // Valor de referência: fatura fechada tem prioridade, senão prévia
-            const valorRef = valorFechado > 0 ? valorFechado : previa
+            const valorFechado = fatura ? Number(fatura.valor_fechado) || 0 : 0
+            const valorPrevisto = fatura ? Number(fatura.valor_previsto) || 0 : 0
+            // Valor de referência: fatura fechada > prévia manual > zero
+            const valorRef = valorFechado > 0 ? valorFechado : valorPrevisto
             const statusRaw = fatura?.status || 'sem_fatura'
             const statusLabel = statusRaw === 'pago' ? '✅ Pago'
               : statusRaw === 'parcial' ? '🟡 Parcial'
               : statusRaw === 'pendente' ? '🔴 Pendente'
-              : previa > 0 ? '📋 Prévia' : '⚪ Sem fatura'
+              : valorPrevisto > 0 ? '📋 Prévia' : '⚪ Sem fatura'
             const venc = cartao.dia_vencimento ? `${String(cartao.dia_vencimento).padStart(2, '0')}/${String(mesNumRef).padStart(2, '0')}` : '—'
-            texto += `| ${cartao.nome} | ${venc} | ${valorFechado > 0 ? fmt(valorFechado) : '—'} | ${previa > 0 ? fmt(previa) : '—'} | ${statusLabel} |\n`
+            texto += `| ${cartao.nome} | ${venc} | ${valorFechado > 0 ? fmt(valorFechado) : '—'} | ${valorPrevisto > 0 ? fmt(valorPrevisto) : '—'} | ${statusLabel} |\n`
             totalCartoes += valorRef
             if (statusRaw === 'pago') { totalPagoCartoes += valorRef; qtdPagosCartoes++ }
           }
