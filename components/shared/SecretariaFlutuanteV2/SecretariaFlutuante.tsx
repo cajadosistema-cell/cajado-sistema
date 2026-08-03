@@ -973,8 +973,8 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       {isOpen && (
         <div className="fixed inset-0 z-[90] flex items-end justify-end p-4 sm:p-6 pointer-events-none">
           <div
-            className="w-full max-w-sm bg-[#0a0d16] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto"
-            style={{ height: '520px', animation: 'slideUpElena 0.25s ease-out' }}
+            className="w-full max-w-sm md:max-w-xl h-[520px] md:h-[75vh] md:max-h-[800px] bg-[#0a0d16] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto"
+            style={{ animation: 'slideUpElena 0.25s ease-out' }}
           >
             {/* Header */}
             <div className="px-4 py-3 bg-gradient-to-r from-[#0d1522] to-[#080b14] border-b border-white/5 flex items-center justify-between shrink-0">
