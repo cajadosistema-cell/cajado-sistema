@@ -1836,7 +1836,19 @@ export function TabImoveis() {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h3 className="text-sm font-bold text-fg">{im.titulo}</h3>
-                    <p className="text-xs text-fg-tertiary capitalize">{im.tipo_imovel}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-xs text-fg-tertiary capitalize">{im.tipo_imovel}</p>
+                      {/* Selo de investimento: sem ele a unica forma de saber se a
+                          flag esta marcada era abrir o modal de edicao. */}
+                      {im.is_investimento && (
+                        <span
+                          title="Também aparece na aba Investimentos"
+                          className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30"
+                        >
+                          📈 Investimento
+                        </span>
+                      )}
+                    </div>
                     {im.construtora && <p className="text-[10px] text-fg-disabled mt-0.5">🏗️ {im.construtora}{im.unidade ? ` · ${im.unidade}` : ''}</p>}
                   </div>
                   <div className="flex gap-1.5 items-center">
