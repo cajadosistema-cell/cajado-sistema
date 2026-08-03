@@ -3465,6 +3465,29 @@ export function useElenaSalvar({
         let texto = `📊 **RESUMO ${mesAnoMax} — CARTÕES, BOLETOS & INVESTIMENTOS**\n`
         texto += `---\n`
 
+        // ── SEMÁFORO DO RESUMO ─────────────────────────────────────
+        // Uma regra de cor só, usada pelas QUATRO fontes (cartões,
+        // imóveis, veículos, contas fixas) e pelos investimentos.
+        // 🔴 é EXCLUSIVO de vencimento já passado; 🟡 é a vencer.
+        const hojeResumo = hojeLocal()
+
+        // Vencimento nominal dentro do mês de referência, como STRING
+        // 'AAAA-MM-DD', para comparar com hojeResumo (que já é data local).
+        // Nada de `new Date` aqui: armadilha nº6 do projeto.
+        // Clamp ao último dia do mês: contrato com vencimento 31 em fevereiro.
+        const vencDoMes = (dia: any) => {
+          const d = Math.min(Math.max(Number(dia) || 1, 1), ultimoDia)
+          return `${mesRef}-${String(d).padStart(2, '0')}`
+        }
+        // Já venceu e ninguém pagou?
+        const jaVenceu = (dia: any) => hojeResumo > vencDoMes(dia)
+        // dd/mm a partir da string, sem new Date (que parseia como UTC e
+        // mostra um dia a menos em BRT).
+        const dataBR = (iso: string) => {
+          const [a, m, d] = String(iso || '').slice(0, 10).split('-')
+          return (a && m && d) ? `${d}/${m}/${a}` : '—'
+        }
+
         // ── SEÇÃO 1: CARTÕES DE CRÉDITO ────────────────────────────
         texto += `💳 **CARTÕES DE CRÉDITO**\n`
         const cartoesLista = cartoes || []
@@ -3482,9 +3505,12 @@ export function useElenaSalvar({
             // Valor de referência: fatura fechada > prévia manual > zero
             const valorRef = valorFechado > 0 ? valorFechado : valorPrevisto
             const statusRaw = fatura?.status || 'sem_fatura'
+            // Antes: qualquer fatura pendente vinha 🔴, mesmo vencendo dia 28.
+            // O vermelho caía no item menos urgente e o Max parou de confiar na cor.
+            const atrasadoCartao = statusRaw === 'pendente' && !!cartao.dia_vencimento && jaVenceu(cartao.dia_vencimento)
             const statusLabel = statusRaw === 'pago' ? '✅ Pago'
-              : statusRaw === 'parcial' ? '🟡 Parcial'
-              : statusRaw === 'pendente' ? '🔴 Pendente'
+              : statusRaw === 'parcial' ? '🟠 Parcial'
+              : statusRaw === 'pendente' ? (atrasadoCartao ? '🔴 **ATRASADO**' : '🟡 A vencer')
               : valorPrevisto > 0 ? '📋 Prévia' : '⚪ Sem fatura'
             const venc = cartao.dia_vencimento ? `${String(cartao.dia_vencimento).padStart(2, '0')}/${String(mesNumRef).padStart(2, '0')}` : '—'
             texto += `| ${cartao.nome} | ${venc} | ${valorFechado > 0 ? fmt(valorFechado) : '—'} | ${valorPrevisto > 0 ? fmt(valorPrevisto) : '—'} | ${statusLabel} |\n`
@@ -3502,13 +3528,12 @@ export function useElenaSalvar({
 
         // `atrasado` é campo próprio de propósito: antes o total de atrasadas era
         // deduzido com status.startsWith('⚠️'), que quebra a cada mudança de rótulo.
-        type LinhaBoleto = { desc: string; dia: string | number; mes: string; valor: number; parcela: string; status: string; pago: boolean; atrasado: boolean }
+        type LinhaBoleto = { desc: string; dia: string | number; mes: string; valor: number; parcela: string; status: string; pago: boolean; atrasado: boolean; futuro?: boolean }
         const linhasBoletos: LinhaBoleto[] = []
 
         // Rótulo curto do mês: 'MM/AAAA'
         const rotuloMes = (m: string) => { const [a, mm] = m.split('-'); return `${mm}/${a}` }
 
-        const hojeResumo = hojeLocal()
 
         // "há 3 meses" / "há 1 mês" — dá noção de gravidade sem o Max ter de
         // fazer conta de cabeça olhando a coluna Mês Ref.
@@ -3550,18 +3575,33 @@ export function useElenaSalvar({
           const descBase = im.construtora ? `${im.titulo} (${im.construtora})` : im.titulo
           const desc = calc.semDataAquisicao ? `${descBase} ⚠️ sem data de aquisição` : descBase
 
-          // Nada em aberto: uma linha em dia, para o imóvel não sumir do resumo.
+          // Nada em aberto: o imóvel não sumiu, mas a linha tem de dizer a
+          // verdade sobre QUANDO vence. `proximo_vencimento` é a âncora
+          // (migration 079): preenchida, ela manda.
           if (calc.emAberto.length === 0) {
-            const pagRef = porMes.get(mesRef)
+            const ancora = String(im.proximo_vencimento || '').slice(0, 10)
+            const mesAncora = ancora.slice(0, 7)
+            // Âncora em mês posterior (Intermediárias Ciacci é trimestral):
+            // não é boleto DESTE mês. Aparece como 🟢 Futuro e fica FORA dos
+            // totais — antes entrava como se vencesse agora e inflava o mês.
+            const futuro = !!ancora && mesAncora > mesRef
+            const mesLinha = ancora ? mesAncora : mesRef
+            const pagRef = porMes.get(mesLinha)
             linhasBoletos.push({
               desc,
-              dia: im.dia_vencimento || '—',
-              mes: rotuloMes(mesRef),
+              dia: ancora ? Number(ancora.slice(8, 10)) : (im.dia_vencimento || '—'),
+              mes: rotuloMes(mesLinha),
               valor: Number(im.valor_parcela) || 0,
               parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
-              status: pagRef?.status === 'pago' ? '✅ Pago' : '✅ Em dia',
-              pago: true,
+              // Pago é ✅. Não pago e ainda dentro do mês é 🟡 a vencer —
+              // '✅ Em dia' escondia do Max o boleto que ele ainda tem de pagar.
+              status: pagRef?.status === 'pago' ? '✅ Pago'
+                : pagRef?.status === 'parcial' ? '🟠 Parcial'
+                : futuro ? '🟢 Futuro'
+                : '🟡 A vencer',
+              pago: pagRef?.status === 'pago',
               atrasado: false,
+              futuro,
             })
             return
           }
@@ -3586,14 +3626,6 @@ export function useElenaSalvar({
           })
         })
 
-        // Vencimento nominal dentro do mês de referência, como STRING
-        // 'AAAA-MM-DD', para comparar com hojeResumo (que já é data local).
-        // Nada de `new Date` aqui: armadilha nº6 do projeto.
-        // Clamp ao último dia do mês: contrato com vencimento 31 em fevereiro.
-        const vencDoMes = (dia: any) => {
-          const d = Math.min(Math.max(Number(dia) || 1, 1), ultimoDia)
-          return `${mesRef}-${String(d).padStart(2, '0')}`
-        }
 
         ;(veiculosData || []).forEach((ve: any) => {
           const restantes = (ve.parcelas_total || 0) - (ve.parcelas_pagas || 0)
@@ -3645,13 +3677,16 @@ export function useElenaSalvar({
           ordenadas.forEach(l => {
             const nome = l.atrasado ? `🔴 **${l.desc}**` : l.desc
             texto += `| ${l.dia} | ${nome} | ${l.mes} | ${l.valor > 0 ? fmt(l.valor) : '—'} | ${l.parcela} | ${l.status} |\n`
+            // Linha de mês futuro é informativa: não entra no total do mês.
+            if (l.futuro) return
             totalBoletos += l.valor
             if (l.pago) { totalPagoBoletos += l.valor; qtdPagosBoletos++ }
             if (l.atrasado) { qtdAtrasadas++; totalAtrasado += l.valor }
           })
           texto += `🏠 **TOTAL BOLETOS: ${fmt(totalBoletos)}**\n`
           texto += `💰 VALOR PAGO: ${fmt(totalPagoBoletos)} | RESTA: ${fmt(totalBoletos - totalPagoBoletos)}\n`
-          texto += `📊 STATUS: ${qtdPagosBoletos}/${linhasBoletos.length} pagos ✅\n`
+          const qtdDoMes = linhasBoletos.filter(l => !l.futuro).length
+          texto += `📊 STATUS: ${qtdPagosBoletos}/${qtdDoMes} pagos ✅\n`
           if (qtdAtrasadas > 0) {
             texto += `🔴 **EM ATRASO: ${qtdAtrasadas} parcela(s) — ${fmt(totalAtrasado)}**\n`
           }
@@ -3684,10 +3719,12 @@ export function useElenaSalvar({
           contratosInv.forEach((c: any) => {
             const valor = Number(c.valor_mensal) || 0
             const parcelaStr = `${c.parcela_atual}/${c.parcela_total}`
-            const venc = new Date(c.proximo_vencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            const vencIso = String(c.proximo_vencimento || '').slice(0, 10)
+            const venc = dataBR(vencIso)
             const statusLabel = c.status === 'pago' ? '✅ Pago'
-              : (c.parcela_atual === 0 && new Date(c.proximo_vencimento) > agora) ? '🟢 Futuro'
-              : '🔴 Pendente'
+              : (vencIso && vencIso < hojeResumo) ? '🔴 **ATRASADO**'
+              : (vencIso.slice(0, 7) > mesRef) ? '🟢 Futuro'
+              : '🟡 A vencer'
             const variavel = c.valor_variavel ? '*' : ''
             texto += `| ${c.nome_contrato} | ${parcelaStr} | ${fmt(valor)}${variavel} | ${venc} | ${statusLabel} |\n`
             totalContratos += valor
