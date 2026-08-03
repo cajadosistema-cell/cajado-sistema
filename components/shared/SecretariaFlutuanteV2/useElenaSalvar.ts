@@ -3372,10 +3372,12 @@ export function useElenaSalvar({
           .eq('financiado', true)
         if (empresaId) qVeiculosR = qVeiculosR.eq('empresa_id', empresaId)
 
+        // 02/08/2026: tabela `ativos` migrou para isolamento por user_id
+        // (migration 072). Filtrar por empresa_id escondia todos os ativos do Max.
         let qAtivosR = (supabase.from('ativos') as any)
           .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, data_vencimento, corretora')
+          .eq('user_id', uid)
           .order('valor_investido', { ascending: false })
-        if (empresaId) qAtivosR = qAtivosR.eq('empresa_id', empresaId)
 
         let qContratosInvR = (supabase.from('investimentos_contratos') as any)
           .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel, proximo_vencimento, status, data_pagamento')
@@ -3667,11 +3669,15 @@ export function useElenaSalvar({
           texto += `📊 STATUS: ${qtdPagosContratos}/${contratosInv.length} pagos ✅\n`
           texto += `_*Parcela variável_\n`
           texto += `---\n`
-        } else if (ativosLista.length > 0) {
-          // Sem contratos, mas há carteira de mercado — mostra ela
-          texto += `📈 **INVESTIMENTOS / CARTEIRA**\n`
-          texto += `| Ativo | Investido | Atual | Resultado |\n`
-          texto += `|-------|----------:|------:|-----------|\n`
+        }
+
+        // Carteira de mercado (ativos) — mostra SEMPRE que houver, mesmo se
+        // já exibiu contratos acima. Antes era `else if`, e os ativos do Max
+        // sumiam quando havia contratos Bradesco.
+        if (ativosLista.length > 0) {
+          texto += `📈 **CARTEIRA DE INVESTIMENTOS**\n`
+          texto += `| Ativo | Tipo | Investido | Atual | Resultado |\n`
+          texto += `|-------|------|----------:|------:|-----------|\n`
           ativosLista.forEach((a: any) => {
             const vi = Number(a.valor_investido) || 0
             const va = Number(a.valor_atual) || vi
@@ -3679,7 +3685,7 @@ export function useElenaSalvar({
             const pct = vi > 0 ? (res / vi) * 100 : 0
             totalInvestido += vi
             totalMercadoInv += va
-            texto += `| ${a.ticker || a.nome} | ${fmt(vi)} | ${fmt(va)} | ${res >= 0 ? '🟢 +' : '🔴 '}${pct.toFixed(1)}% |\n`
+            texto += `| ${a.ticker || a.nome} | ${a.tipo || '—'} | ${fmt(vi)} | ${fmt(va)} | ${res >= 0 ? '🟢 +' : '🔴 '}${pct.toFixed(1)}% |\n`
           })
           texto += `📈 **TOTAL INVESTIDO: ${fmt(totalInvestido)}** | ATUAL: **${fmt(totalMercadoInv)}**\n`
           texto += `---\n`
