@@ -19,6 +19,20 @@ type Financiamento = {
   vencimento_dia: number | null
 }
 
+type InvestimentoContrato = {
+  id: string
+  nome_contrato: string
+  instituicao: string
+  parcela_atual: number
+  parcela_total: number
+  valor_mensal: number
+  valor_variavel: boolean
+  mes_referencia: string
+  proximo_vencimento: string | null
+  status: string
+  data_pagamento: string | null
+}
+
 export function TabFinanciamentos() {
   const supabase = createClient()
   const { empresaId } = useEmpresaId()
@@ -32,6 +46,12 @@ export function TabFinanciamentos() {
   const { data: financiamentos, refetch } = useSupabaseQuery<Financiamento>('financiamentos', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'criado_em', ascending: false },
+    enabled: !!empresaId,
+  } as any)
+
+  const { data: contratosInv } = useSupabaseQuery<InvestimentoContrato>('investimentos_contratos', {
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'proximo_vencimento', ascending: true },
     enabled: !!empresaId,
   } as any)
 
@@ -95,7 +115,17 @@ export function TabFinanciamentos() {
     return acc + (faltam * f.valor_parcela)
   }, 0)
 
-  const custoMensal = financiamentos.reduce((acc, f) => acc + (f.valor_parcela || 0), 0)
+  const saldoDevedorContratos = contratosInv.reduce((acc, c) => {
+    if (!c.valor_mensal || !c.parcela_total) return acc
+    const faltam = Math.max(0, c.parcela_total - (c.parcela_atual || 0))
+    return acc + (faltam * c.valor_mensal)
+  }, 0)
+
+  const custoMensalBancos = financiamentos.reduce((acc, f) => acc + (f.valor_parcela || 0), 0)
+  const custoMensalContratos = contratosInv.reduce((acc, c) => acc + (c.valor_mensal || 0), 0)
+
+  const custoMensal = custoMensalBancos + custoMensalContratos
+  const saldoTotal = saldoDevedorEstimado + saldoDevedorContratos
 
   return (
     <div className="space-y-4">
@@ -107,12 +137,12 @@ export function TabFinanciamentos() {
         </div>
         <div className="bg-page border border-border-subtle rounded-xl p-4">
           <p className="text-[10px] text-fg-tertiary uppercase tracking-widest mb-1">Saldo Devedor Estimado</p>
-          <p className="text-2xl font-bold text-fg">{formatCurrency(saldoDevedorEstimado)}</p>
+          <p className="text-2xl font-bold text-fg">{formatCurrency(saldoTotal)}</p>
         </div>
       </div>
 
       <div className="flex justify-between items-center mt-6">
-        <h2 className="text-sm font-semibold text-fg">🏦 Contratos Ativos</h2>
+        <h2 className="text-sm font-semibold text-fg">🏦 Financiamentos Bancários</h2>
         <button onClick={() => {
           if (showForm) {
             setShowForm(false)
@@ -197,6 +227,54 @@ export function TabFinanciamentos() {
               </div>
              )
           })}
+        </div>
+      )}
+
+      {/* Seção: Contratos de Investimento (Consórcios, Lotes, etc.) */}
+      {contratosInv.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold text-fg mb-4">📈 Contratos de Investimento (Consórcios, Terrenos, etc.)</h2>
+          <div className="space-y-3">
+            {contratosInv.map(c => {
+               const progresso = c.parcela_total ? Math.min(100, ((c.parcela_atual || 0) / c.parcela_total) * 100) : 0
+               return (
+                <div key={c.id} className="bg-page border border-border-subtle rounded-xl p-5 hover:border-border-subtle transition-colors">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-fg flex items-center gap-2">📄 {c.nome_contrato}</h3>
+                      <p className="text-xs text-fg-tertiary mt-0.5">{c.instituicao}</p>
+                      {c.proximo_vencimento && <p className="text-xs text-fg-tertiary mt-0.5">Vence: {c.proximo_vencimento.substring(8, 10)}/{c.proximo_vencimento.substring(5, 7)}/{c.proximo_vencimento.substring(0, 4)}</p>}
+                    </div>
+                    <div className="text-right flex flex-col items-end">
+                      <p className="text-xs text-fg-tertiary uppercase tracking-widest">Valor Mensal</p>
+                      <p className="text-lg font-bold text-red-400">{c.valor_mensal ? formatCurrency(c.valor_mensal) : '—'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-[10px] text-fg-disabled uppercase tracking-widest">Progresso</p>
+                      <p className="text-sm font-medium text-emerald-400">
+                        {c.parcela_atual || 0} de {c.parcela_total || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-fg-disabled uppercase tracking-widest">Status</p>
+                      <p className="text-sm text-fg-secondary font-medium uppercase">{c.status}</p>
+                    </div>
+                  </div>
+
+                  {c.parcela_total && (
+                    <div className="mt-2">
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${progresso}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+               )
+            })}
+          </div>
         </div>
       )}
     </div>

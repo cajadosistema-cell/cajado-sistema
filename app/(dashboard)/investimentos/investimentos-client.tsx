@@ -27,6 +27,20 @@ type Ativo = {
   is_imovel_patrimonio?: boolean
 }
 
+type InvestimentoContrato = {
+  id: string
+  nome_contrato: string
+  instituicao: string
+  parcela_atual: number
+  parcela_total: number
+  valor_mensal: number
+  valor_variavel: boolean
+  mes_referencia: string
+  proximo_vencimento: string | null
+  status: string
+  data_pagamento: string | null
+}
+
 const TIPO_COLORS: Record<string, string> = {
   acao:       '#3B82F6', fii:        '#10B981', fundo:      '#8B5CF6',
   cdb:        '#F59E0B', lci:        '#06B6D4', lca:        '#6EE7B7',
@@ -343,6 +357,12 @@ export default function InvestimentosClient() {
     enabled: !!empresaId,
   } as any)
 
+  const { data: contratosInv } = useSupabaseQuery<InvestimentoContrato>('investimentos_contratos', {
+    filters: { empresa_id: empresaId || undefined },
+    orderBy: { column: 'proximo_vencimento', ascending: true },
+    enabled: !!empresaId,
+  } as any)
+
   const handleRefetch = () => {
     refetch()
     refetchImoveis()
@@ -605,6 +625,59 @@ export default function InvestimentosClient() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Tabela de Contratos Parcelados */}
+      {contratosInv.length > 0 && (
+        <div className="mt-8 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-semibold text-fg">📈 Contratos de Investimento (Consórcios, Lotes, etc.)</h2>
+          </div>
+          <div className="card p-0 overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border-subtle">
+                  <th className="table-header">Contrato</th>
+                  <th className="table-header">Instituição</th>
+                  <th className="table-header">Progresso</th>
+                  <th className="table-header text-right">Valor Mensal</th>
+                  <th className="table-header hidden md:table-cell">Vencimento</th>
+                  <th className="table-header hidden md:table-cell">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contratosInv.map(c => {
+                  const progresso = c.parcela_total ? Math.min(100, ((c.parcela_atual || 0) / c.parcela_total) * 100) : 0
+                  return (
+                    <tr key={c.id} className="table-row">
+                      <td className="table-cell font-semibold text-sm text-fg">📄 {c.nome_contrato}</td>
+                      <td className="table-cell text-sm text-fg-secondary">{c.instituicao}</td>
+                      <td className="table-cell text-sm text-fg-secondary">
+                        <div className="flex items-center gap-2">
+                          <span className="text-emerald-400 font-medium whitespace-nowrap">{c.parcela_atual || 0} de {c.parcela_total || '—'}</span>
+                          {c.parcela_total && (
+                            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden hidden sm:block">
+                              <div className="h-full bg-emerald-500" style={{ width: `${progresso}%` }} />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="table-cell text-right text-red-400 font-semibold">{c.valor_mensal ? formatCurrency(c.valor_mensal) : '—'}</td>
+                      <td className="table-cell hidden md:table-cell text-sm text-fg-secondary">
+                        {c.proximo_vencimento ? `${c.proximo_vencimento.substring(8, 10)}/${c.proximo_vencimento.substring(5, 7)}/${c.proximo_vencimento.substring(0, 4)}` : '—'}
+                      </td>
+                      <td className="table-cell hidden md:table-cell">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase bg-page border border-border-subtle">
+                          {c.status}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
