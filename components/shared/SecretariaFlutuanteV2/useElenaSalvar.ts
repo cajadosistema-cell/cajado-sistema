@@ -3584,16 +3584,22 @@ export function useElenaSalvar({
               atrasado: pa.isAtrasado,
             })
           })
-        const hojeLocal = new Date(agora)
-        hojeLocal.setHours(0, 0, 0, 0)
+        })
+
+        // Vencimento nominal dentro do mês de referência, como STRING
+        // 'AAAA-MM-DD', para comparar com hojeResumo (que já é data local).
+        // Nada de `new Date` aqui: armadilha nº6 do projeto.
+        // Clamp ao último dia do mês: contrato com vencimento 31 em fevereiro.
+        const vencDoMes = (dia: any) => {
+          const d = Math.min(Math.max(Number(dia) || 1, 1), ultimoDia)
+          return `${mesRef}-${String(d).padStart(2, '0')}`
+        }
 
         ;(veiculosData || []).forEach((ve: any) => {
           const restantes = (ve.parcelas_total || 0) - (ve.parcelas_pagas || 0)
           if (restantes <= 0) return
           
-          const diaVenc = Number(ve.vencimento_dia) || 1
-          const dataVenc = new Date(anoRef, mesNumRef - 1, diaVenc)
-          const isAtrasado = dataVenc < hojeLocal
+          const isAtrasado = hojeResumo > vencDoMes(ve.vencimento_dia)
           
           linhasBoletos.push({
             desc: ve.titulo,
@@ -3610,9 +3616,7 @@ export function useElenaSalvar({
           const pag = pagosMapResumo.get(al.id)
           const pago = pag?.status === 'pago'
           
-          const diaVenc = Number(al.dia_vencimento) || 1
-          const dataVenc = new Date(anoRef, mesNumRef - 1, diaVenc)
-          const isAtrasado = !pago && (dataVenc < hojeLocal)
+          const isAtrasado = !pago && hojeResumo > vencDoMes(al.dia_vencimento)
           
           linhasBoletos.push({
             desc: al.descricao,
