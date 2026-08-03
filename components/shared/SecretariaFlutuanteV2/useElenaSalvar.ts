@@ -3371,12 +3371,12 @@ export function useElenaSalvar({
           .eq('financiado', true)
         if (empresaId) qVeiculosR = qVeiculosR.eq('empresa_id', empresaId)
 
-        // 02/08/2026: tabela `ativos` migrou para isolamento por user_id
-        // (migration 072). Filtrar por empresa_id escondia todos os ativos do Max.
+        // 02/08/2026: tabela `ativos` NÃO tem user_id (migration 072 não aplicada).
+        // Usa empresa_id como filtro, e sem ele busca sem filtro (RLS cuida).
         let qAtivosR = (supabase.from('ativos') as any)
           .select('ticker, nome, tipo, quantidade, preco_medio, valor_investido, valor_atual, data_vencimento, corretora')
-          .eq('user_id', uid)
           .order('valor_investido', { ascending: false })
+        if (empresaId) qAtivosR = qAtivosR.eq('empresa_id', empresaId)
 
         let qContratosInvR = (supabase.from('investimentos_contratos') as any)
           .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel, proximo_vencimento, status, data_pagamento')
