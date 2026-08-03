@@ -3584,33 +3584,45 @@ export function useElenaSalvar({
               atrasado: pa.isAtrasado,
             })
           })
-        })
+        const hojeLocal = new Date(agora)
+        hojeLocal.setHours(0, 0, 0, 0)
+
         ;(veiculosData || []).forEach((ve: any) => {
           const restantes = (ve.parcelas_total || 0) - (ve.parcelas_pagas || 0)
           if (restantes <= 0) return
+          
+          const diaVenc = Number(ve.vencimento_dia) || 1
+          const dataVenc = new Date(anoRef, mesNumRef - 1, diaVenc)
+          const isAtrasado = dataVenc < hojeLocal
+          
           linhasBoletos.push({
             desc: ve.titulo,
             dia: ve.vencimento_dia || '—',
             mes: rotuloMes(mesRef),
             valor: Number(ve.valor_parcela) || 0,
             parcela: `${ve.parcelas_pagas}/${ve.parcelas_total}`,
-            status: '🟡 A vencer',
+            status: isAtrasado ? `🔴 **ATRASADO**` : '🟡 A vencer',
             pago: false,
-            atrasado: false,
+            atrasado: isAtrasado,
           })
         })
         ;(alertasRec || []).forEach((al: any) => {
           const pag = pagosMapResumo.get(al.id)
           const pago = pag?.status === 'pago'
+          
+          const diaVenc = Number(al.dia_vencimento) || 1
+          const dataVenc = new Date(anoRef, mesNumRef - 1, diaVenc)
+          const isAtrasado = !pago && (dataVenc < hojeLocal)
+          
           linhasBoletos.push({
             desc: al.descricao,
             dia: al.dia_vencimento,
             mes: rotuloMes(mesRef),
             valor: Number(al.valor) || 0,
             parcela: '—',
-            status: pago ? '✅ Pago' : pag?.status === 'parcial' ? '🟠 Parcial' : '🟡 A vencer',
+            status: pago ? '✅ Pago' : pag?.status === 'parcial' ? '🟠 Parcial' : isAtrasado ? `🔴 **ATRASADO**` : '🟡 A vencer',
             pago,
-            atrasado: false,
+            atrasado: isAtrasado,
           })
         })
 
