@@ -3230,20 +3230,88 @@ export function useElenaSalvar({
 
         } else if (tipoAlvo === 'conta_fixa') {
           const { data: contasAch } = await (supabase.from('compromissos_fixos') as any)
-            .select('id, descricao').eq('user_id', uid).ilike('descricao', `%${nomeAlvo}%`).limit(5)
+            .select('id, descricao, valor, dia_vencimento').eq('user_id', uid).ilike('descricao', `%${nomeAlvo}%`).limit(5)
           if (!contasAch?.length) throw new Error(`Conta fixa "${nomeAlvo}" não encontrada.`)
           if (contasAch.length > 1) throw new Error(`Mais de uma conta fixa encontrada com "${nomeAlvo}": ${contasAch.map((c: any) => c.descricao).join(', ')}. Seja mais específico.`)
           const contaAch = contasAch[0]
-          // ⚠️ onConflict assume UNIQUE(compromisso_id, mes_referencia) em
-          // historico_pagamentos_mensal — se a tabela não tiver essa
-          // constraint, ajustar aqui ou trocar por select+insert/update manual.
+
+          // ── 04/08/2026: conta fixa passou a MEXER EM DINHEIRO ────────
+          // Antes isto só marcava "pago" e nada saía de lugar nenhum: a conta
+          // recorrente ficava eternamente fora da MOVIMENTAÇÃO DO MÊS, porque
+          // `gastos_pessoais` é filtrado por `data` e ninguém materializava a
+          // linha do mês. Agora o pagamento cria a saída de verdade, como já
+          // acontece em imóvel e veículo — mesmo padrão, mesma ordem.
+          if (!acao.dados.conta_origem) {
+            const { data: contasDisponiveis } = await (supabase.from('contas') as any)
+              .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
+            const listaContas = contasDisponiveis?.length
+              ? `\n\nSuas contas cadastradas: ${contasDisponiveis.map((c: any) => c.nome).join(', ')}.`
+              : ''
+            throw new ElenaPergunta(`De qual conta saiu o pagamento da **${contaAch.descricao}**, Sr. Max?${listaContas}`, 'conta_origem')
+          }
+          const { id: contaOrigemIdCf, nome: contaOrigemNomeCf } = await resolverContaQualquer(acao.dados.conta_origem)
+          if (!contaOrigemIdCf) {
+            const contaInformadaCf = String(acao.dados.conta_origem || '')
+            delete acao.dados.conta_origem
+            const { data: contasDisponiveis } = await (supabase.from('contas') as any)
+              .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
+            const listaContas = contasDisponiveis?.length
+              ? `\n\nSuas contas cadastradas: ${contasDisponiveis.map((c: any) => c.nome).join(', ')}.`
+              : ''
+            throw new ElenaPergunta(`Não encontrei a conta "${contaInformadaCf}" no cadastro, Sr. Max. De qual conta saiu o pagamento da **${contaAch.descricao}**?${listaContas}`, 'conta_origem')
+          }
+
+          // Idempotência: se já está paga neste mês, não debita de novo.
+          const { data: histExistente } = await (supabase.from('historico_pagamentos_mensal') as any)
+            .select('id, status').eq('compromisso_id', contaAch.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+          if (histExistente?.status === 'pago') {
+            setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+              texto: `ℹ️ A **${contaAch.descricao}** (${mesRefAlvo}) **já estava marcada como paga** — não lancei nada de novo pra não duplicar o débito.` }])
+            setAcaoStatus(msgId, acaoIdx, 'saved')
+            window.dispatchEvent(new CustomEvent('elena:lancamento-salvo'))
+            return
+          }
+
+          const valorCf = Number(acao.dados.valor_pago) || Number(contaAch.valor) || 0
+
+          // onConflict confere: UNIQUE (compromisso_id, mes_referencia) existe em
+          // historico_pagamentos_mensal — verificado no banco em 04/08/2026.
           const { error: errHist } = await (supabase.from('historico_pagamentos_mensal') as any).upsert({
             compromisso_id: contaAch.id, user_id: uid, mes_referencia: mesRefAlvo,
-            status: 'pago', valor_pago: acao.dados.valor_pago || null,
+            status: 'pago', valor_pago: valorCf || null,
           }, { onConflict: 'compromisso_id,mes_referencia' })
           if (errHist) throw new Error(errHist.message)
+
+          let avisoDebitoCf = ''
+          if (valorCf > 0) {
+            const { error: errDebCf } = await (supabase.from('lancamentos') as any).insert({
+              conta_id: contaOrigemIdCf,
+              descricao: `📋 ${contaAch.descricao} (${mesRefAlvo})`,
+              valor: valorCf, tipo: 'despesa', regime: 'caixa', status: 'validado',
+              data_competencia: dataPag, data_caixa: dataPag,
+              categoria_id: CAT_DESPESA_ID, created_by: uid,
+            })
+            if (errDebCf) {
+              avisoDebitoCf = `\n⚠️ _Marquei como paga, mas não consegui lançar o débito de R$ ${valorCf.toFixed(2)} (${errDebCf.message.substring(0, 80)}) — confira o saldo manualmente._`
+            } else {
+              avisoDebitoCf = `\n💸 Debitei **R$ ${valorCf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** da conta.`
+              const { data: contaSaldoCf } = await (supabase.from('contas') as any)
+                .select('saldo_atual').eq('id', contaOrigemIdCf).maybeSingle()
+              if (contaSaldoCf && contaSaldoCf.saldo_atual !== null && contaSaldoCf.saldo_atual !== undefined) {
+                const { error: errSaldoCf } = await (supabase.from('contas') as any)
+                  .update({ saldo_atual: Number(contaSaldoCf.saldo_atual) - valorCf })
+                  .eq('id', contaOrigemIdCf)
+                if (errSaldoCf) avisoDebitoCf += `\n⚠️ _O lançamento entrou, mas não consegui atualizar o saldo da conta — confira em Contas & Caixa._`
+              } else {
+                avisoDebitoCf += `\n⚠️ _O lançamento entrou, mas não consegui ler o saldo da conta para atualizar — confira em Contas & Caixa._`
+              }
+            }
+          } else {
+            avisoDebitoCf = `\n⚠️ _Esta conta está **sem valor cadastrado** — marquei como paga, mas **não debitei nada** por não saber o valor._`
+          }
+
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Conta **${contaAch.descricao}** (${mesRefAlvo}) marcada como paga.` }])
+            texto: `✅ Conta **${contaAch.descricao}** (${mesRefAlvo}) marcada como paga via **${contaOrigemNomeCf}**.${avisoDebitoCf}` }])
 
         } else if (tipoAlvo === 'investimento') {
           // 04/08/2026: TIRADO o `.eq('mes_referencia', mesRefAlvo)`. Aqui existe
@@ -3490,7 +3558,7 @@ export function useElenaSalvar({
           qVeiculosR,
           // Contas recorrentes (compromissos_fixos — tabela unificada)
           (supabase.from('compromissos_fixos') as any)
-            .select('id, descricao, valor, dia_vencimento, tipo_detalhe')
+            .select('id, descricao, valor, dia_vencimento, tipo_detalhe, categoria')
             .eq('user_id', uid).eq('ativo', true)
             .eq('recorrente', true)
             .order('dia_vencimento'),
@@ -3769,15 +3837,28 @@ export function useElenaSalvar({
             futuro: false,
           })
         })
+        // Emoji por tipo, mesmo mapa usado na ação `alertar_recorrente`, para o
+        // Max reconhecer a conta de relance.
+        const EMOJI_FIXA: Record<string, string> = {
+          agua: '🚰', energia: '💡', internet: '📡', telefone: '📱',
+          aluguel: '🏠', condominio: '🏢', plano_saude: '💊',
+          financiamento: '🏦', boleto: '📄', cartao: '💳', outro: '📋',
+        }
+        // 04/08/2026 — pedido do Max: contas pessoais fixas (plano de saúde,
+        // telefone, água, luz) merecem categoria PRÓPRIA. Antes TODO
+        // `compromissos_fixos` caía na tabela de boletos de imóveis, então plano
+        // de saúde aparecia como se fosse boleto de imóvel.
+        // Aluguel e condomínio continuam nos boletos: `categoria = 'boleto_imovel'`
+        // é o que a própria ação da Elena grava para eles, e ali é o lugar certo.
+        const linhasFixas: LinhaBoleto[] = []
         ;(alertasRec || []).forEach((al: any) => {
           const pag = pagosMapResumo.get(al.id)
           const pago = pag?.status === 'pago'
-          
           const vencAl = vencEm(mesRef, al.dia_vencimento)
           const isAtrasado = !pago && jaVenceu(vencAl)
-          
-          linhasBoletos.push({
-            desc: al.descricao,
+          const emoji = EMOJI_FIXA[String(al.tipo_detalhe || '').toLowerCase()] || '📋'
+          const linha: LinhaBoleto = {
+            desc: al.categoria === 'boleto_imovel' ? al.descricao : `${emoji} ${al.descricao}`,
             venc: vencAl,
             valor: Number(al.valor) || 0,
             parcela: '—',
@@ -3785,7 +3866,9 @@ export function useElenaSalvar({
             pago,
             atrasado: isAtrasado,
             futuro: false,
-          })
+          }
+          if (al.categoria === 'boleto_imovel') linhasBoletos.push(linha)
+          else linhasFixas.push(linha)
         })
 
         let totalBoletos = 0, totalPagoBoletos = 0, qtdPagosBoletos = 0
@@ -3827,6 +3910,57 @@ export function useElenaSalvar({
           }
         }
         texto += `---\n`
+
+        // ── SEÇÃO 2b: CONTAS FIXAS PESSOAIS ────────────────────────
+        // Categoria própria, pedida pelo Max em 04/08/2026: plano de saúde,
+        // telefone, água, luz. Mesma regra de cor e mesma ordem cronológica
+        // das outras seções.
+        let totalFixas = 0, totalPagoFixas = 0, qtdPagasFixas = 0
+        if (linhasFixas.length > 0) {
+          texto += `📋 **CONTAS FIXAS**\n`
+          texto += `| Vencimento | Conta | Valor | Status |\n`
+          texto += `|------------|-------|------:|--------|\n`
+          ;[...linhasFixas]
+            .sort((a, b) => a.venc.localeCompare(b.venc) || a.desc.localeCompare(b.desc, 'pt-BR'))
+            .forEach(l => {
+              const nome = l.atrasado ? `🔴 **${l.desc}**` : l.desc
+              texto += `| ${dataBR(l.venc)} | ${nome} | ${l.valor > 0 ? fmt(l.valor) : '—'} | ${l.status} |\n`
+              totalFixas += l.valor
+              if (l.pago) { totalPagoFixas += l.valor; qtdPagasFixas++ }
+            })
+          texto += `📋 **TOTAL CONTAS FIXAS ${mesAnoMax}: ${fmt(totalFixas)}**\n`
+          texto += `💰 VALOR PAGO: ${fmt(totalPagoFixas)} | RESTA: ${fmt(totalFixas - totalPagoFixas)}\n`
+          texto += `📊 STATUS: ${qtdPagasFixas}/${linhasFixas.length} pagas ✅\n`
+          texto += `---\n`
+        }
+
+        // ── SEÇÃO 2c: GASTOS AVULSOS DO MÊS ────────────────────────
+        // Pedido do Max 04/08/2026: listar cada gasto avulso (gastos_pessoais)
+        // em ordem cronológica com data, descrição, valor e categoria.
+        const gastosAvulsos = gastosMes || []
+        let totalAvulsos = 0
+        if (gastosAvulsos.length > 0) {
+          const catEmojisAvulso: Record<string, string> = {
+            alimentacao: '🍽️', transporte: '🚗', saude: '💊', lazer: '🎮',
+            educacao: '📚', moradia: '🏠', vestuario: '👕', tecnologia: '💻', outros: '📦',
+          }
+          texto += `🛒 **GASTOS AVULSOS**\n`
+          texto += `| Data | Descrição | Valor | Categoria | Pagamento |\n`
+          texto += `|------|-----------|------:|-----------|-----------|\n`
+          // Já vem ordenado do banco por data (order('data') na query)
+          gastosAvulsos.forEach((g: any) => {
+            const valor = Number(g.valor) || 0
+            totalAvulsos += valor
+            const emoji = catEmojisAvulso[g.categoria || 'outros'] || '📦'
+            const formaPag = g.forma_pagamento
+              ? g.forma_pagamento.replace(/_/g, ' ')
+              : '—'
+            texto += `| ${dataBR(g.data)} | ${g.descricao || '—'} | ${fmt(valor)} | ${emoji} ${g.categoria || 'outros'} | ${formaPag} |\n`
+          })
+          texto += `🛒 **TOTAL GASTOS AVULSOS ${mesAnoMax}: ${fmt(totalAvulsos)}**\n`
+          texto += `📊 ${gastosAvulsos.length} lançamento(s)\n`
+          texto += `---\n`
+        }
 
         // ── SEÇÃO 3: INVESTIMENTOS (contratos parcelados) ──────────
         const contratosInv = contratosInvData || []
@@ -3914,28 +4048,32 @@ export function useElenaSalvar({
 
         // ── CONSOLIDADO GERAL (formato Sr. Max) ────────────────────
         texto += `💰 **CONSOLIDADO GERAL**\n`
-        const totalGeral = totalCartoes + totalBoletos + totalContratos
-        const totalPagoGeral = totalPagoCartoes + totalPagoBoletos + totalPagoContratos
-        const qtdItensGeral = cartoesLista.length + linhasBoletos.length + invNaTabela.length
-        const qtdPagosGeral = qtdPagosCartoes + qtdPagosBoletos + qtdPagosContratos
+        // As contas fixas entram no consolidado como quarta categoria (04/08/2026).
+        // Gastos avulsos entram como quinta categoria (04/08/2026).
+        const totalGeral = totalCartoes + totalBoletos + totalFixas + totalContratos
+        const totalPagoGeral = totalPagoCartoes + totalPagoBoletos + totalPagoFixas + totalPagoContratos
+        const qtdItensGeral = cartoesLista.length + linhasBoletos.length + linhasFixas.length + invNaTabela.length
+        const qtdPagosGeral = qtdPagosCartoes + qtdPagosBoletos + qtdPagasFixas + qtdPagosContratos
         const qtdPendencias = qtdItensGeral - qtdPagosGeral
-        texto += `• CARTÕES + BOLETOS + INVESTIMENTOS: **${fmt(totalGeral)}**\n`
+        texto += `• CARTÕES + BOLETOS${linhasFixas.length > 0 ? ' + CONTAS FIXAS' : ''} + INVESTIMENTOS: **${fmt(totalGeral)}**\n`
+        if (totalAvulsos > 0) texto += `• GASTOS AVULSOS: **${fmt(totalAvulsos)}** _(${gastosAvulsos.length} lançamentos)_\n`
         texto += `• TOTAL PAGO: ${fmt(totalPagoGeral)} | TOTAL PENDENTE: ${fmt(totalGeral - totalPagoGeral)}\n`
         texto += `• STATUS GERAL: ${qtdPagosGeral}/${qtdItensGeral} pagos ✅\n`
         texto += `• PENDÊNCIAS: ${qtdPendencias} ${qtdPendencias === 1 ? 'item' : 'itens'} 🔴\n`
         texto += `\n🎯 Resumo gerado com dados reais do sistema.\n`
 
-        // ── SEÇÃO 3: RESUMO FINANCEIRO (receitas/gastos do mês) ────
+        // ── SEÇÃO 4: RESUMO FINANCEIRO (receitas/gastos do mês) ────
         texto += `---\n`
         texto += `💰 **MOVIMENTAÇÃO DO MÊS**\n`
 
-        const totalGastos = (gastosMes || []).reduce((s: number, g: any) => s + Number(g.valor), 0)
+        // totalAvulsos já foi calculado na seção GASTOS AVULSOS
+        const totalGastos = totalAvulsos
         const totalReceitas = (receitasMes || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
         const saldoMes = totalReceitas - totalGastos
         const saldoIcon = saldoMes >= 0 ? '🟢' : '🔴'
 
         texto += `📈 Entradas: **${fmt(totalReceitas)}** _(${(receitasMes || []).length} lançamentos)_\n`
-        texto += `📉 Saídas: **${fmt(totalGastos)}** _(${(gastosMes || []).length} lançamentos)_\n`
+        texto += `📉 Saídas: **${fmt(totalGastos)}** _(${gastosAvulsos.length} lançamentos)_\n`
         texto += `${saldoIcon} Saldo: **${fmt(saldoMes)}**\n\n`
 
         // Top 5 categorias de gasto
