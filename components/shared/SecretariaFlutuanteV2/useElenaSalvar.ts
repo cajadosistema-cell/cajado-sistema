@@ -2987,7 +2987,7 @@ export function useElenaSalvar({
             texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.` }])
 
         } else if (tipoAlvo === 'imovel') {
-          let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela, dia_vencimento, data_aquisicao, parcelas_pagas, parcelas_total, periodicidade').ilike('titulo', `%${nomeAlvo}%`)
+          let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela, dia_vencimento, data_aquisicao, parcelas_pagas, parcelas_total, periodicidade, proximo_vencimento').ilike('titulo', `%${nomeAlvo}%`)
           if (empresaIdConf) qIm = qIm.eq('empresa_id', empresaIdConf)
           const { data: imoveisAch } = await qIm.limit(5)
           if (!imoveisAch?.length) throw new Error(`Imóvel "${nomeAlvo}" não encontrado.`)
@@ -3034,14 +3034,18 @@ export function useElenaSalvar({
             window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
             return
           }
+          // 04/08/2026: o valor é resolvido ANTES do upsert para ser gravado em
+          // `valor_pago`. Antes ficava NULL quando o Max não dizia o valor, e o
+          // registro do pagamento não sabia quanto tinha sido pago — o débito
+          // existia em `lancamentos` e o boleto não tinha valor nenhum.
+          const valorDebito = Number(acao.dados.valor_pago) || Number(imovelAch.valor_parcela) || 0
+
           const { error: errPag } = await (supabase.from('pagamentos_imoveis') as any).upsert({
             imovel_id: imovelAch.id, empresa_id: empresaIdConf, mes_referencia: mesRefExec,
-            status: 'pago', valor_pago: acao.dados.valor_pago || null, data_pagamento: dataPag,
+            status: 'pago', valor_pago: valorDebito || null, data_pagamento: dataPag,
             conta_origem_id: contaOrigemId,
           }, { onConflict: 'imovel_id,mes_referencia' })
           if (errPag) throw new Error(errPag.message)
-
-          const valorDebito = Number(acao.dados.valor_pago) || Number(imovelAch.valor_parcela) || 0
           let avisoDebito = ''
           if (valorDebito > 0) {
             const { error: errDeb } = await (supabase.from('lancamentos') as any).insert({
@@ -3055,20 +3059,72 @@ export function useElenaSalvar({
               avisoDebito = `\n⚠️ _Não consegui lançar o débito de R$ ${valorDebito.toFixed(2)} na conta (${errDeb.message.substring(0, 80)}) — confira o saldo manualmente._`
             } else {
               avisoDebito = `\n💸 Debitei **R$ ${valorDebito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** da conta.`
+              // `contas.saldo_atual` é coluna ARMAZENADA, mantida pela aplicação —
+              // não existe trigger que a derive de `lancamentos`. Sem este update o
+              // Max paga, a Elena confirma e o saldo na tela não muda. Confirmado
+              // nos dados reais em 04/08/2026: R$2.435 saíram e o saldo ficou parado.
+              // Só mexe se conseguiu LER o saldo antes: sem a leitura, subtrair de
+              // um zero presumido deixaria a conta negativa por engano.
+              const { data: contaSaldo } = await (supabase.from('contas') as any)
+                .select('saldo_atual').eq('id', contaOrigemId).maybeSingle()
+              if (contaSaldo && contaSaldo.saldo_atual !== null && contaSaldo.saldo_atual !== undefined) {
+                const { error: errSaldo } = await (supabase.from('contas') as any)
+                  .update({ saldo_atual: Number(contaSaldo.saldo_atual) - valorDebito })
+                  .eq('id', contaOrigemId)
+                if (errSaldo) avisoDebito += `\n⚠️ _O lançamento entrou, mas não consegui atualizar o saldo da conta — confira em Contas & Caixa._`
+              } else {
+                avisoDebito += `\n⚠️ _O lançamento entrou, mas não consegui ler o saldo da conta para atualizar — confira em Contas & Caixa._`
+              }
             }
           } else {
             avisoDebito = `\n⚠️ _Este imóvel está com **valor a definir** — marquei como pago, mas **não debitei nada** do saldo por não saber o valor._`
           }
 
+          // Soma N meses a 'AAAA-MM-DD' com clamp no último dia do mês destino
+          // (dia 31 em fevereiro cai no 28/29). Aritmética inteira, sem `new Date`.
+          const somarMesesISO = (iso: string, n: number): string | null => {
+            const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number)
+            if (!a || !m || !d) return null
+            const totalMes = a * 12 + (m - 1) + n
+            const anoNovo = Math.floor(totalMes / 12)
+            const mesNovo = (totalMes % 12) + 1
+            const bissexto = (anoNovo % 4 === 0 && anoNovo % 100 !== 0) || anoNovo % 400 === 0
+            const ultimo = [31, bissexto ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mesNovo - 1]
+            const diaNovo = Math.min(d, ultimo)
+            return `${anoNovo}-${String(mesNovo).padStart(2, '0')}-${String(diaNovo).padStart(2, '0')}`
+          }
+          // Passo por periodicidade. NÃO tem default de propósito: chutar "mensal"
+          // num contrato trimestral (Intermediárias Ciacci) quebraria justamente o
+          // que hoje está certo. Periodicidade desconhecida = não mexe na âncora.
+          const PASSO_PERIODICIDADE: Record<string, number> = {
+            mensal: 1, bimestral: 2, trimestral: 3, quadrimestral: 4, semestral: 6, anual: 12,
+          }
+
           const { data: imovelAtual } = await (supabase.from('imoveis') as any)
-            .select('parcelas_pagas, parcelas_total').eq('id', imovelAch.id).maybeSingle()
+            .select('parcelas_pagas, parcelas_total, periodicidade, proximo_vencimento').eq('id', imovelAch.id).maybeSingle()
+          let avisoAncora = ''
+          let textoProxima = ''
           if (imovelAtual && (imovelAtual.parcelas_pagas || 0) < (imovelAtual.parcelas_total || 0)) {
-            await (supabase.from('imoveis') as any)
-              .update({ parcelas_pagas: (imovelAtual.parcelas_pagas || 0) + 1 })
-              .eq('id', imovelAch.id)
+            const updImovel: any = { parcelas_pagas: (imovelAtual.parcelas_pagas || 0) + 1 }
+            // A âncora TEM de andar junto com o contador: ela é sempre a parcela
+            // nº (parcelas_pagas + 1). Quando só o contador subia, a numeração
+            // desandava um mês no mês seguinte e o contrato "quitava" adiantado.
+            const ancoraAtual = String(imovelAtual.proximo_vencimento || '').slice(0, 10)
+            if (ancoraAtual) {
+              const passo = PASSO_PERIODICIDADE[String(imovelAtual.periodicidade || '').toLowerCase()]
+              const novaAncora = passo ? somarMesesISO(ancoraAtual, passo) : null
+              if (novaAncora) {
+                updImovel.proximo_vencimento = novaAncora
+                const [aN, mN, dN] = novaAncora.split('-')
+                textoProxima = ` A próxima é a parcela nº ${(imovelAtual.parcelas_pagas || 0) + 2}, vence ${dN}/${mN}/${aN}.`
+              } else {
+                avisoAncora = `\n⚠️ _Não avancei o próximo vencimento: periodicidade "${imovelAtual.periodicidade || 'não informada'}" não reconhecida. Ajuste na tela do Patrimônio._`
+              }
+            }
+            await (supabase.from('imoveis') as any).update(updImovel).eq('id', imovelAch.id)
           }
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefExec}) marcado como pago via **${contaOrigemNome}** — parcela avançada automaticamente.${avisoDebito}` }])
+            texto: `✅ Boleto do **${imovelAch.titulo}** (${mesRefExec}) marcado como pago via **${contaOrigemNome}**.${textoProxima}${avisoDebito}${avisoAncora}` }])
           window.dispatchEvent(new CustomEvent('elena:patrimonio-updated'))
 
 
@@ -3190,20 +3246,37 @@ export function useElenaSalvar({
             texto: `✅ Conta **${contaAch.descricao}** (${mesRefAlvo}) marcada como paga.` }])
 
         } else if (tipoAlvo === 'investimento') {
+          // 04/08/2026: TIRADO o `.eq('mes_referencia', mesRefAlvo)`. Aqui existe
+          // UMA linha por contrato e o `mes_referencia` fica congelado no mês em
+          // que a linha nasceu (2026-07 em todas as do Sr. Max). O filtro casava
+          // em julho e passou a não achar nada em agosto — bomba de tempo: a Elena
+          // respondia "contrato não encontrado" para um contrato que existe.
           let qInv = (supabase.from('investimentos_contratos') as any)
-            .select('id, nome_contrato, parcela_atual, parcela_total').ilike('nome_contrato', `%${nomeAlvo}%`).eq('mes_referencia', mesRefAlvo)
+            .select('id, nome_contrato, parcela_atual, parcela_total, proximo_vencimento, status').ilike('nome_contrato', `%${nomeAlvo}%`)
           if (empresaIdConf) qInv = qInv.eq('empresa_id', empresaIdConf)
           const { data: contratosAch } = await qInv.limit(5)
           if (!contratosAch?.length) throw new Error(`Contrato "${nomeAlvo}" não encontrado para ${mesRefAlvo}.`)
           if (contratosAch.length > 1) throw new Error(`Mais de um contrato encontrado com "${nomeAlvo}". Seja mais específico.`)
           const contratoAch = contratosAch[0]
+          // Idempotência: não avança o contador duas vezes no mesmo pedido.
+          if (contratoAch.status === 'pago') {
+            setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+              texto: `ℹ️ O contrato **${contratoAch.nome_contrato}** já estava marcado como pago — não mexi em nada.` }])
+            setAcaoStatus(msgId, acaoIdx, 'saved')
+            return
+          }
           const novaParcela = Math.min((contratoAch.parcela_atual || 0) + 1, contratoAch.parcela_total || 0)
+          // A âncora NÃO é avançada aqui de propósito. Diferente dos imóveis, que
+          // têm `pagamentos_imoveis` guardando o pagamento de cada mês, aqui a
+          // linha do contrato é o único registro que existe: se a âncora pulasse
+          // para o mês seguinte, o pagamento deste mês desapareceria do resumo do
+          // mês. Empurrar a âncora é trabalho de virada de mês, não de pagamento.
           const { error: errInv } = await (supabase.from('investimentos_contratos') as any)
-            .update({ status: 'pago', parcela_atual: novaParcela })
+            .update({ status: 'pago', parcela_atual: novaParcela, data_pagamento: dataPag })
             .eq('id', contratoAch.id)
           if (errInv) throw new Error(errInv.message)
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Contrato **${contratoAch.nome_contrato}** (${mesRefAlvo}) marcado como pago — parcela ${novaParcela}/${contratoAch.parcela_total}.` }])
+            texto: `✅ Contrato **${contratoAch.nome_contrato}** marcado como pago — parcela nº ${novaParcela} de ${contratoAch.parcela_total}.` }])
         } else {
           throw new Error(`Tipo "${tipoAlvo}" não reconhecido. Use: cartao, imovel, veiculo, conta_fixa ou investimento.`)
         }
