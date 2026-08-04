@@ -94,7 +94,28 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
 
         let sid = localStorage.getItem(`elena_sessao_id_${uid}`)
         if (!sid) {
-          sid = Date.now().toString()
+          // Busca a última sessão do usuário no banco para tentar adotá-la
+          const { data: lastMsg } = await (supabase.from('elena_conversas') as any)
+            .select('sessao_id, created_at')
+            .eq('user_id', uid)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+            
+          if (lastMsg && lastMsg.sessao_id) {
+            const lastMsgDate = new Date(lastMsg.created_at).getTime()
+            const now = Date.now()
+            const hoursDiff = (now - lastMsgDate) / (1000 * 60 * 60)
+            
+            // Janela de 24 horas para emendar a sessão antiga
+            if (hoursDiff <= 24) {
+              sid = lastMsg.sessao_id
+            }
+          }
+          
+          if (!sid) {
+            sid = Date.now().toString()
+          }
           localStorage.setItem(`elena_sessao_id_${uid}`, sid)
         }
         setSessaoId(sid)
@@ -110,15 +131,39 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
           .limit(30)
 
         if (hist && hist.length > 0) {
-          const historico: Msg[] = (hist as any[]).reverse().map((r: any) => ({
-            id: r.id,
-            role: r.role as 'ai' | 'user',
-            texto: r.texto,
-            acoes: r.acoes ?? undefined,
-            created_at: r.created_at,
-          }))
+          const historico: Msg[] = (hist as any[]).reverse().map((r: any) => {
+            let txt = r.texto
+            let acoes = r.acoes
+            
+            // Guarda: ação pendente restaurada vira texto inerte marcado como expirada
+            if (acoes && Array.isArray(acoes)) {
+              const temPendente = acoes.some(a => a.status === 'pending')
+              if (temPendente) {
+                acoes = acoes.map(a => a.status === 'pending' ? { ...a, status: 'expired' } : a)
+                txt += '\n\n⏳ _(Ação expirada: o histórico foi recarregado. Se ainda quiser registrar, peça novamente.)_'
+              }
+            }
+            
+            // Guarda: mensagem restaurada mostra a data em que foi gerada
+            if (r.created_at) {
+              const d = new Date(r.created_at)
+              const hoje = new Date()
+              const ehHoje = d.getDate() === hoje.getDate() && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear()
+              const dtFmt = ehHoje ? 'Hoje' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+              const hrFmt = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+              txt = `*[${dtFmt} às ${hrFmt}]*\n${txt}`
+            }
+
+            return {
+              id: r.id,
+              role: r.role as 'ai' | 'user',
+              texto: txt,
+              acoes: acoes ?? undefined,
+              created_at: r.created_at,
+            }
+          })
           setMensagens([
-            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! ðŸ‘‹ Carreguei o histórico recente. O que faremos agora?' },
+            { id: '1', role: 'ai', texto: 'Olá, Sr. Max! 👋 Carreguei o histórico recente. O que faremos agora?' },
             ...historico,
           ])
         }
@@ -441,13 +486,35 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
       .limit(40)
 
     if (hist && hist.length > 0) {
-      const historico: Msg[] = (hist as any[]).reverse().map((r: any) => ({
-        id: r.id,
-        role: r.role as 'ai' | 'user',
-        texto: r.texto,
-        acoes: r.acoes ?? undefined,
-        created_at: r.created_at,
-      }))
+      const historico: Msg[] = (hist as any[]).reverse().map((r: any) => {
+        let txt = r.texto
+        let acoes = r.acoes
+        
+        if (acoes && Array.isArray(acoes)) {
+          const temPendente = acoes.some(a => a.status === 'pending')
+          if (temPendente) {
+            acoes = acoes.map(a => a.status === 'pending' ? { ...a, status: 'expired' } : a)
+            txt += '\n\n⏳ _(Ação expirada: histórico antigo recarregado.)_'
+          }
+        }
+        
+        if (r.created_at) {
+          const d = new Date(r.created_at)
+          const hoje = new Date()
+          const ehHoje = d.getDate() === hoje.getDate() && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear()
+          const dtFmt = ehHoje ? 'Hoje' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+          const hrFmt = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          txt = `*[${dtFmt} às ${hrFmt}]*\n${txt}`
+        }
+
+        return {
+          id: r.id,
+          role: r.role as 'ai' | 'user',
+          texto: txt,
+          acoes: acoes ?? undefined,
+          created_at: r.created_at,
+        }
+      })
       setMensagens([{ id: '1', role: 'ai', texto: 'Histórico carregado! O que faremos com ele?' }, ...historico])
       setSessaoId(sid)
       localStorage.setItem(`elena_sessao_id_${uid}`, sid)

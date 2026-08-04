@@ -88,7 +88,7 @@ export interface AcaoIA {
   tipo: AcaoTipo
   dados: Record<string, any>
   label: string
-  status?: 'pending' | 'saving' | 'saved' | 'error'
+  status?: 'pending' | 'saving' | 'saved' | 'error' | 'expired'
   errorMsg?: string
 }
 
