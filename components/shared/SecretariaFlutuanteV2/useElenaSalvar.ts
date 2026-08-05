@@ -3918,8 +3918,8 @@ export function useElenaSalvar({
         // telefone, água, luz. Mesma regra de cor e mesma ordem cronológica
         // das outras seções.
         let totalFixas = 0, totalPagoFixas = 0, qtdPagasFixas = 0
+        texto += `📋 **CONTAS FIXAS**\n`
         if (linhasFixas.length > 0) {
-          texto += `📋 **CONTAS FIXAS**\n`
           texto += `| Vencimento | Conta | Valor | Status |\n`
           texto += `|------------|-------|------:|--------|\n`
           ;[...linhasFixas]
@@ -3933,20 +3933,23 @@ export function useElenaSalvar({
           texto += `📋 **TOTAL CONTAS FIXAS ${mesAnoMax}: ${fmt(totalFixas)}**\n`
           texto += `💰 VALOR PAGO: ${fmt(totalPagoFixas)} | RESTA: ${fmt(totalFixas - totalPagoFixas)}\n`
           texto += `📊 STATUS: ${qtdPagasFixas}/${linhasFixas.length} pagas ✅\n`
-          texto += `---\n`
+        } else {
+          texto += `_Nenhuma conta fixa cadastrada (água, luz, internet, etc.)._\n`
+          texto += `_Use: "cria alerta recorrente de internet R$ 120 dia 5" para cadastrar._\n`
         }
+        texto += `---\n`
 
         // ── SEÇÃO 2c: GASTOS AVULSOS DO MÊS ────────────────────────
         // Pedido do Max 04/08/2026: listar cada gasto avulso (gastos_pessoais)
         // em ordem cronológica com data, descrição, valor e categoria.
         const gastosAvulsos = gastosMes || []
         let totalAvulsos = 0
+        const catEmojisAvulso: Record<string, string> = {
+          alimentacao: '🍽️', transporte: '🚗', saude: '💊', lazer: '🎮',
+          educacao: '📚', moradia: '🏠', vestuario: '👕', tecnologia: '💻', outros: '📦',
+        }
+        texto += `🛒 **GASTOS AVULSOS**\n`
         if (gastosAvulsos.length > 0) {
-          const catEmojisAvulso: Record<string, string> = {
-            alimentacao: '🍽️', transporte: '🚗', saude: '💊', lazer: '🎮',
-            educacao: '📚', moradia: '🏠', vestuario: '👕', tecnologia: '💻', outros: '📦',
-          }
-          texto += `🛒 **GASTOS AVULSOS**\n`
           texto += `| Data | Descrição | Valor | Categoria | Pagamento |\n`
           texto += `|------|-----------|------:|-----------|-----------|\n`
           // Já vem ordenado do banco por data (order('data') na query)
@@ -3961,8 +3964,10 @@ export function useElenaSalvar({
           })
           texto += `🛒 **TOTAL GASTOS AVULSOS ${mesAnoMax}: ${fmt(totalAvulsos)}**\n`
           texto += `📊 ${gastosAvulsos.length} lançamento(s)\n`
-          texto += `---\n`
+        } else {
+          texto += `_Nenhum gasto avulso registrado em ${nomeMes}._\n`
         }
+        texto += `---\n`
 
         // ── SEÇÃO 3: INVESTIMENTOS (contratos parcelados) ──────────
         const contratosInv = contratosInvData || []
