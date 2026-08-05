@@ -266,6 +266,7 @@ interface UseElenaSalvarProps {
   ultimoRegistroRef: React.MutableRefObject<{ tabela: string; id: string } | null>
   setMensagens: React.Dispatch<React.SetStateAction<Msg[]>>
   setRelatorioData: (data: any) => void
+  salvarHistorico?: (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sessaoId?: string) => Promise<void>
 }
 
 // 🔒 Ações que apagam, editam ou movem dinheiro — nunca executam sem
@@ -311,6 +312,7 @@ export function useElenaSalvar({
   ultimoRegistroRef,
   setMensagens,
   setRelatorioData,
+  salvarHistorico,
 }: UseElenaSalvarProps): UseElenaSalvarReturn {
 
   // Cache da conta PJ padrão para evitar queries repetidas
@@ -4099,6 +4101,10 @@ export function useElenaSalvar({
         texto += `\n🎯 Atualizado! Dados reais do sistema — sem estimativas.`
 
         setMensagens(prev => [...prev, { id: `resumo-${Date.now()}`, role: 'ai' as const, texto }])
+        // 04/08/2026: persiste o resumo no banco para sobreviver a reload/deploy
+        if (salvarHistorico) {
+          salvarHistorico(uid, 'ai', texto, undefined, sessaoIdRef.current).catch(() => {})
+        }
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // ── REGISTRAR PEDIDO DE FEATURE ──────────────────────────

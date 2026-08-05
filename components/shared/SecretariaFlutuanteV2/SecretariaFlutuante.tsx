@@ -152,6 +152,7 @@ function SecretariaFlutuanteWidget() {
     ultimoRegistroRef,
     setMensagens:     session.setMensagens,
     setRelatorioData,
+    salvarHistorico:  session.salvarHistorico,
   })
 
   const offline = useElenaOffline({
