@@ -826,7 +826,7 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
       }
 
       const resposta: string = data.result ?? ''
-      const acoes = extrairAcoes(resposta)
+      const acoes = extrairAcoes(resposta, userText)
       const acoesComStatus = acoes.map(a => ({ ...a, status: 'pending' as const }))
       const textoFormatado = formatarTexto(resposta)
 

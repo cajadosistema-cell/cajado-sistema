@@ -317,15 +317,19 @@ EXEMPLOS OBRIGATÓRIOS:
 \`\`\`
 
 📄 BOLETO / CONTA A PAGAR — DOIS LEMBRETES (manhã + noite):
-Use quando mencionar: boleto, conta de luz, água, internet, aluguel, IPTU, plano, financiamento, mensalidade, etc.
+Use quando mencionar: boleto, conta de luz, água, internet, IPTU, etc. — SEM indicação de repetição.
+⚠️ Se a frase tiver QUALQUER marca de repetição, NÃO é agenda: use alertar_recorrente (abaixo).
 
-🔁 CONTA RECORRENTE MENSAL ("todo mês", "mensal", "recorrente"):
+🔁 CONTA RECORRENTE MENSAL — marcas de repetição: "todo mês", "mensal", "recorrente",
+"de cada mês", "cada mês", "todo dia 5", "dia 5 de cada mês", "todos os meses":
 \`\`\`json
 {"acao":"alertar_recorrente","descricao":"Internet Vivo","valor":120.00,"dia_vencimento":5,"tipo":"internet"}
 \`\`\`
 - TIPOS: boleto, cartao, agua, energia, internet, telefone, aluguel, condominio, plano_saude, financiamento, outro
 - ⚠️ DIFERENÇA: 'alertar_recorrente' = contas que repetem todo mês. 'agenda' = eventos pontuais/únicos.
 - ⚠️ Para FINANCIAMENTOS: use OBRIGATORIAMENTE alertar_recorrente com tipo financiamento, NUNCA agenda.
+- ⚠️ Plano de saúde, mensalidade, aluguel e condomínio são SEMPRE alertar_recorrente (tipo plano_saude,
+  outro, aluguel, condominio), NUNCA agenda — são contas que repetem, não eventos de um dia.
 
 📋 LISTAR CONTAS RECORRENTES:
 \`\`\`json
@@ -680,7 +684,56 @@ function* varrerJsonComPos(txt: string): Generator<{ json: string; ini: number }
   }
 }
 
-export function extrairAcoes(texto: string): AcaoIA[] {
+// ── Guarda determinística de recorrência ─────────────────────
+// 05/08/2026: o Sr. Max pediu "plano de saúde, valor tal, todo dia cinco de
+// cada mês" e a Elena criou EVENTO DE AGENDA em vez de conta fixa. Não foi a
+// IA inventando: a palavra "plano" estava listada como gatilho do bloco de
+// agenda e "de cada mês" não estava na lista de recorrência. O prompt foi
+// corrigido, mas regra de prompt não segura comportamento (armadilha 8 do
+// projeto) — então o código também decide.
+const MARCAS_RECORRENCIA = [
+  'todo mes', 'todos os meses', 'de cada mes', 'cada mes', 'mensal',
+  'mensalmente', 'recorrente', 'por mes',
+]
+const TIPO_POR_PALAVRA: Array<[RegExp, string]> = [
+  [/plano de saude|plano medico|unimed|amil|hapvida|bradesco saude/, 'plano_saude'],
+  [/conta de luz|energia|eletrica|coelba|neoenergia/, 'energia'],
+  [/agua|embasa|saneamento/, 'agua'],
+  [/internet|banda larga|fibra|wifi/, 'internet'],
+  [/telefone|celular|vivo|claro|tim /, 'telefone'],
+  [/aluguel/, 'aluguel'],
+  [/condominio/, 'condominio'],
+  [/financiamento|consorcio/, 'financiamento'],
+  [/mensalidade|escola|faculdade|academia/, 'outro'],
+]
+const semAcento = (t?: string) =>
+  String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+/** A mensagem do usuário indica conta que repete todo mês? */
+export function temMarcaDeRecorrencia(mensagemUsuario?: string): boolean {
+  if (!mensagemUsuario) return false
+  const m = semAcento(mensagemUsuario)
+  if (MARCAS_RECORRENCIA.some(p => m.includes(p))) return true
+  // "todo dia 5", "todo dia cinco", "todos os dias 5"
+  return /\btodo(s)? (o(s)? )?dia\b/.test(m)
+}
+
+function tipoRecorrentePelaFrase(mensagemUsuario?: string): string {
+  const m = semAcento(mensagemUsuario)
+  for (const [re, tipo] of TIPO_POR_PALAVRA) if (re.test(m)) return tipo
+  return 'boleto'
+}
+
+/** Dia do vencimento: primeiro pelo ISO que o modelo gerou, senão pela frase. */
+function diaDoVencimento(d: any, mensagemUsuario?: string): number | null {
+  const diaIso = Number(String(d?.data_inicio || '').slice(0, 10).split('-')[2])
+  if (diaIso >= 1 && diaIso <= 31) return diaIso
+  const casa = semAcento(mensagemUsuario).match(/\bdia (\d{1,2})\b/)
+  const diaTexto = casa ? Number(casa[1]) : NaN
+  return diaTexto >= 1 && diaTexto <= 31 ? diaTexto : null
+}
+
+export function extrairAcoes(texto: string, mensagemUsuario?: string): AcaoIA[] {
   const acoes: AcaoIA[] = []
   const candidatos: string[] = []
   const cobertos: [number, number][] = []
@@ -727,7 +780,30 @@ export function extrairAcoes(texto: string): AcaoIA[] {
         acoes.push({ tipo: 'ideia', dados: d, label: `💡 Ideia: ${d.titulo}`, status: 'pending' })
 
       } else if (d.acao === 'agenda') {
-        acoes.push({ tipo: 'agenda', dados: d, label: `📅 ${d.titulo}`, status: 'pending' })
+        // Conta que repete todo mês nunca é evento de agenda. Se a frase do
+        // usuário tem marca de recorrência, o CÓDIGO converte — sem depender
+        // de o modelo ter lido a instrução certa.
+        const diaRec = temMarcaDeRecorrencia(mensagemUsuario) ? diaDoVencimento(d, mensagemUsuario) : null
+        if (diaRec) {
+          const descricaoRec = String(d.titulo || d.descricao || '')
+            .replace(/^(pagar|pagamento d[eoa]|conta d[eoa])\s+/i, '')
+            .replace(/\s*[-–]\s*R\$.*$/i, '')
+            .trim() || 'Conta recorrente'
+          const dadosRec = {
+            acao: 'alertar_recorrente',
+            descricao: descricaoRec,
+            valor: Number(d.valor) || null,
+            dia_vencimento: diaRec,
+            tipo: d.tipo_detalhe || tipoRecorrentePelaFrase(mensagemUsuario),
+          }
+          acoes.push({
+            tipo: 'alertar_recorrente', dados: dadosRec,
+            label: `📌 Cadastrar conta fixa: ${descricaoRec} — todo dia ${diaRec}`,
+            status: 'pending',
+          })
+        } else {
+          acoes.push({ tipo: 'agenda', dados: d, label: `📅 ${d.titulo}`, status: 'pending' })
+        }
 
       } else if (d.acao === 'ocorrencia') {
         acoes.push({ tipo: 'ocorrencia', dados: d, label: `📋 Ocorrência ${d.tipo}: ${d.descricao?.substring(0, 40)}`, status: 'pending' })
