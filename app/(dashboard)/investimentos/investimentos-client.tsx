@@ -345,7 +345,7 @@ export default function InvestimentosClient() {
     refetch()
   }
 
-  const { empresaId } = useEmpresaId()
+  const { empresaId, userId } = useEmpresaId()
   const { data: ativosDB, refetch } = useSupabaseQuery<Ativo>('ativos', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'valor_investido', ascending: false },
