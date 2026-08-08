@@ -66,7 +66,6 @@ function ModalNovaEntrada({ userId, onClose, onSave }: { userId: string; onClose
     setErro('')
     if (!form.texto.trim()) { setErro('O texto da entrada é obrigatório.'); return }
     const result = await insert({
-      user_id: userId, // Certificando que o user_id seja passado se a tabela permitir
       titulo: form.titulo || null,
       texto: form.texto,
       tipo: form.tipo,
