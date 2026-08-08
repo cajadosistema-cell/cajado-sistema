@@ -71,7 +71,7 @@ export function TabFinanciamentos() {
       const { error } = await (supabase.from('financiamentos') as any).update(payload).eq('id', editId)
       if (error) { alert('Erro ao atualizar financiamento: ' + error.message); return }
     } else {
-      const { error } = await (supabase.from('financiamentos') as any).insert(payload)
+      const { error } = await (supabase.from('financiamentos') as any).insert({ ...payload, empresa_id: empresaId })
       if (error) { alert('Erro ao cadastrar financiamento: ' + error.message); return }
     }
 
