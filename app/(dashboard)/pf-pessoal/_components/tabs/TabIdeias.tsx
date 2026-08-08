@@ -176,12 +176,19 @@ function ModalIdeia({ inicial, userId, onClose, onSave }: {
     if (!form.titulo.trim()) return
     setLoading(true)
     const payload = { ...form, user_id: userId, descricao: form.descricao || null, notas: form.notas || null }
+    let result;
     if (inicial?.id) {
-      await (supabase.from('elena_ideias') as any).update(payload).eq('id', inicial.id)
+      result = await (supabase.from('elena_ideias') as any).update(payload).eq('id', inicial.id)
     } else {
-      await (supabase.from('elena_ideias') as any).insert(payload)
+      result = await (supabase.from('elena_ideias') as any).insert(payload)
     }
+    
     setLoading(false)
+    if (result.error) {
+      alert(`Erro ao salvar: ${result.error.message}`)
+      return
+    }
+    
     onSave()
     onClose()
   }
