@@ -665,7 +665,8 @@ export function TabVeiculos() {
       const { error } = await (supabase.from('veiculos') as any).update(payload).eq('id', editId)
       if (error) { alert('Erro ao atualizar veículo: ' + error.message); return }
     } else {
-      const { error } = await (supabase.from('veiculos') as any).insert(payload)
+      const insertPayload = { ...payload, ...(empresaId ? { empresa_id: empresaId } : {}) }
+      const { error } = await (supabase.from('veiculos') as any).insert(insertPayload)
       if (error) { alert('Erro ao cadastrar veículo: ' + error.message); return }
     }
     setShowForm(false); setEditId(null); refetch(); setForm(FORM_INICIAL)
