@@ -2971,6 +2971,66 @@ export function useElenaSalvar({
         const tipoAlvo = acao.dados.tipo
         const nomeAlvo = (acao.dados.nome || '').trim()
         const mesRefAlvo = acao.dados.mes_referencia || mesLocal()
+
+        // ── DÉBITO: um lugar só, usado por TODOS os tipos de pagamento ─────
+        // 10/08/2026, decisão da Maiara: marcar como pago tem de subtrair da
+        // conta escolhida, em qualquer tipo. Antes cada ramo fazia à sua
+        // maneira — imóvel debitava e ajustava saldo, veículo debitava e
+        // ESQUECIA o saldo, cartão e investimento não faziam nada. Saldo que
+        // cai só às vezes é pior que saldo que nunca cai: o Max não consegue
+        // nem confiar nem desconfiar do número.
+        // Nada aqui derruba o pagamento: toda falha vira aviso na resposta.
+        const debitarDaConta = async (
+          contaId: string, contaNome: string, valor: number, descricao: string,
+        ): Promise<string> => {
+          if (!(valor > 0)) {
+            return `\n⚠️ _Marquei como pago, mas **não debitei nada**: não sei o valor. Me diga o valor que eu lanço._`
+          }
+          const { error: errDeb } = await (supabase.from('lancamentos') as any).insert({
+            conta_id: contaId, descricao,
+            valor, tipo: 'despesa', regime: 'caixa', status: 'validado',
+            data_competencia: dataPag, data_caixa: dataPag,
+            categoria_id: CAT_DESPESA_ID, created_by: uid,
+          })
+          if (errDeb) {
+            return `\n⚠️ _Não consegui lançar o débito de R$ ${valor.toFixed(2)} (${errDeb.message.substring(0, 80)}) — confira o saldo manualmente._`
+          }
+          let aviso = `\n💸 Debitei **R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** de **${contaNome}**.`
+          // `contas.saldo_atual` é coluna armazenada, mantida pela aplicação —
+          // não há trigger derivando de `lancamentos`. Só mexe se conseguiu LER
+          // o saldo: subtrair de um zero presumido deixaria a conta negativa.
+          const { data: contaSaldo } = await (supabase.from('contas') as any)
+            .select('saldo_atual').eq('id', contaId).maybeSingle()
+          if (contaSaldo && contaSaldo.saldo_atual !== null && contaSaldo.saldo_atual !== undefined) {
+            const { error: errSaldo } = await (supabase.from('contas') as any)
+              .update({ saldo_atual: Number(contaSaldo.saldo_atual) - valor })
+              .eq('id', contaId)
+            if (errSaldo) aviso += `\n⚠️ _O lançamento entrou, mas não consegui atualizar o saldo da conta — confira em Contas & Caixa._`
+          } else {
+            aviso += `\n⚠️ _O lançamento entrou, mas não consegui ler o saldo da conta para atualizar — confira em Contas & Caixa._`
+          }
+          return aviso
+        }
+
+        // Pergunta a conta de origem quando o Sr. Max não disse de qual sai.
+        // Usado por todos os tipos, para o comportamento ser sempre o mesmo.
+        const exigirContaOrigem = async (rotulo: string): Promise<{ id: string; nome: string }> => {
+          const listar = async () => {
+            const { data: cs } = await (supabase.from('contas') as any)
+              .select('nome, tipo').eq('empresa_id', empresaIdConf).order('nome')
+            return cs?.length ? `\n\nSuas contas cadastradas: ${cs.map((c: any) => c.nome).join(', ')}.` : ''
+          }
+          if (!acao.dados.conta_origem) {
+            throw new ElenaPergunta(`De qual conta saiu o pagamento de **${rotulo}**, Sr. Max?${await listar()}`, 'conta_origem')
+          }
+          const { id, nome } = await resolverContaQualquer(acao.dados.conta_origem)
+          if (!id) {
+            const informada = String(acao.dados.conta_origem || '')
+            delete acao.dados.conta_origem
+            throw new ElenaPergunta(`Não encontrei a conta "${informada}" no cadastro, Sr. Max. De qual conta saiu o pagamento de **${rotulo}**?${await listar()}`, 'conta_origem')
+          }
+          return { id, nome }
+        }
         const dataPag = acao.dados.data_pagamento || new Date().toISOString().substring(0, 10)
         if (!nomeAlvo) throw new Error('Informe o nome do cartão/imóvel/conta/investimento a marcar como pago.')
         const empresaIdConf = await getEmpresaId(uid)
@@ -2979,14 +3039,27 @@ export function useElenaSalvar({
           const cartaoPf = await resolverCartaoPf(nomeAlvo)
           if (!cartaoPf.id) throw new Error(`Cartão "${nomeAlvo}" não encontrado.`)
           const { data: faturaExistente } = await (supabase.from('faturas_cartoes') as any)
-            .select('id, valor_fechado').eq('conta_id', cartaoPf.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+            .select('id, valor_fechado, status').eq('conta_id', cartaoPf.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
           if (!faturaExistente) throw new Error(`Fatura de ${cartaoPf.nome} de ${mesRefAlvo} ainda não foi lançada — informe o valor da fatura primeiro.`)
+          // Idempotência: fatura já paga não debita de novo.
+          if (faturaExistente.status === 'pago') {
+            setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
+              texto: `ℹ️ A fatura do **${cartaoPf.nome}** (${mesRefAlvo}) **já estava paga** — não lancei nada de novo pra não duplicar o débito.` }])
+            setAcaoStatus(msgId, acaoIdx, 'saved')
+            return
+          }
+          const contaCartao = await exigirContaOrigem(`fatura do ${cartaoPf.nome} (${mesRefAlvo})`)
           const { error } = await (supabase.from('faturas_cartoes') as any)
             .update({ status: 'pago', data_pagamento: dataPag, ...(acao.dados.valor_pago ? { valor_fechado: Number(acao.dados.valor_pago) } : {}) })
             .eq('id', faturaExistente.id)
           if (error) throw new Error(error.message)
+          const valorFatura = Number(acao.dados.valor_pago) || Number(faturaExistente.valor_fechado) || 0
+          const avisoCartao = await debitarDaConta(
+            contaCartao.id, contaCartao.nome, valorFatura,
+            `💳 Fatura ${cartaoPf.nome} (${mesRefAlvo})`,
+          )
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.` }])
+            texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.${avisoCartao}` }])
 
         } else if (tipoAlvo === 'imovel') {
           let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela, dia_vencimento, data_aquisicao, parcelas_pagas, parcelas_total, periodicidade, proximo_vencimento').ilike('titulo', `%${nomeAlvo}%`)
@@ -3048,39 +3121,10 @@ export function useElenaSalvar({
             conta_origem_id: contaOrigemId,
           }, { onConflict: 'imovel_id,mes_referencia' })
           if (errPag) throw new Error(errPag.message)
-          let avisoDebito = ''
-          if (valorDebito > 0) {
-            const { error: errDeb } = await (supabase.from('lancamentos') as any).insert({
-              conta_id: contaOrigemId,
-              descricao: `🏠 Parcela ${imovelAch.titulo} (${mesRefExec})`,
-              valor: valorDebito, tipo: 'despesa', regime: 'caixa', status: 'validado',
-              data_competencia: dataPag, data_caixa: dataPag,
-              categoria_id: CAT_DESPESA_ID, created_by: uid,
-            })
-            if (errDeb) {
-              avisoDebito = `\n⚠️ _Não consegui lançar o débito de R$ ${valorDebito.toFixed(2)} na conta (${errDeb.message.substring(0, 80)}) — confira o saldo manualmente._`
-            } else {
-              avisoDebito = `\n💸 Debitei **R$ ${valorDebito.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** da conta.`
-              // `contas.saldo_atual` é coluna ARMAZENADA, mantida pela aplicação —
-              // não existe trigger que a derive de `lancamentos`. Sem este update o
-              // Max paga, a Elena confirma e o saldo na tela não muda. Confirmado
-              // nos dados reais em 04/08/2026: R$2.435 saíram e o saldo ficou parado.
-              // Só mexe se conseguiu LER o saldo antes: sem a leitura, subtrair de
-              // um zero presumido deixaria a conta negativa por engano.
-              const { data: contaSaldo } = await (supabase.from('contas') as any)
-                .select('saldo_atual').eq('id', contaOrigemId).maybeSingle()
-              if (contaSaldo && contaSaldo.saldo_atual !== null && contaSaldo.saldo_atual !== undefined) {
-                const { error: errSaldo } = await (supabase.from('contas') as any)
-                  .update({ saldo_atual: Number(contaSaldo.saldo_atual) - valorDebito })
-                  .eq('id', contaOrigemId)
-                if (errSaldo) avisoDebito += `\n⚠️ _O lançamento entrou, mas não consegui atualizar o saldo da conta — confira em Contas & Caixa._`
-              } else {
-                avisoDebito += `\n⚠️ _O lançamento entrou, mas não consegui ler o saldo da conta para atualizar — confira em Contas & Caixa._`
-              }
-            }
-          } else {
-            avisoDebito = `\n⚠️ _Este imóvel está com **valor a definir** — marquei como pago, mas **não debitei nada** do saldo por não saber o valor._`
-          }
+          let avisoDebito = await debitarDaConta(
+            contaOrigemId, contaOrigemNome, valorDebito,
+            `🏠 Parcela ${imovelAch.titulo} (${mesRefExec})`,
+          )
 
           // Soma N meses a 'AAAA-MM-DD' com clamp no último dia do mês destino
           // (dia 31 em fevereiro cai no 28/29). Aritmética inteira, sem `new Date`.
@@ -3198,23 +3242,13 @@ export function useElenaSalvar({
           }, { onConflict: 'veiculo_id,mes_referencia' })
           if (errPagVe) throw new Error(errPagVe.message)
 
-          // Débito real na conta de origem
+          // Débito pelo helper único: o ramo de veículo criava o lançamento mas
+          // NÃO atualizava `contas.saldo_atual` — o saldo na tela ficava parado.
           const valorDebitoVe = Number(acao.dados.valor_pago) || Number(veiculoAch.valor_parcela) || 0
-          let avisoDebitoVe = ''
-          if (valorDebitoVe > 0) {
-            const { error: errDebVe } = await (supabase.from('lancamentos') as any).insert({
-              conta_id: contaOrigemIdVe,
-              descricao: `🚗 Parcela ${nomeVeiculo} (${mesRefExecVe})`,
-              valor: valorDebitoVe, tipo: 'despesa', regime: 'caixa', status: 'validado',
-              data_competencia: dataPag, data_caixa: dataPag,
-              categoria_id: CAT_DESPESA_ID, created_by: uid,
-            })
-            if (errDebVe) {
-              avisoDebitoVe = `\n⚠️ _Não consegui lançar o débito de R$ ${valorDebitoVe.toFixed(2)} na conta (${errDebVe.message.substring(0, 80)}) — confira o saldo manualmente._`
-            } else {
-              avisoDebitoVe = `\n💰 _Débito de R$ ${valorDebitoVe.toFixed(2)} lançado em **${contaOrigemNomeVe}**._`
-            }
-          }
+          const avisoDebitoVe = await debitarDaConta(
+            contaOrigemIdVe, contaOrigemNomeVe, valorDebitoVe,
+            `🚗 Parcela ${nomeVeiculo} (${mesRefExecVe})`,
+          )
 
           const { data: veiculoAtual } = await (supabase.from('veiculos') as any)
             .select('parcelas_pagas, parcelas_total').eq('id', veiculoAch.id).maybeSingle()
@@ -3284,33 +3318,10 @@ export function useElenaSalvar({
           }, { onConflict: 'compromisso_id,mes_referencia' })
           if (errHist) throw new Error(errHist.message)
 
-          let avisoDebitoCf = ''
-          if (valorCf > 0) {
-            const { error: errDebCf } = await (supabase.from('lancamentos') as any).insert({
-              conta_id: contaOrigemIdCf,
-              descricao: `📋 ${contaAch.descricao} (${mesRefAlvo})`,
-              valor: valorCf, tipo: 'despesa', regime: 'caixa', status: 'validado',
-              data_competencia: dataPag, data_caixa: dataPag,
-              categoria_id: CAT_DESPESA_ID, created_by: uid,
-            })
-            if (errDebCf) {
-              avisoDebitoCf = `\n⚠️ _Marquei como paga, mas não consegui lançar o débito de R$ ${valorCf.toFixed(2)} (${errDebCf.message.substring(0, 80)}) — confira o saldo manualmente._`
-            } else {
-              avisoDebitoCf = `\n💸 Debitei **R$ ${valorCf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}** da conta.`
-              const { data: contaSaldoCf } = await (supabase.from('contas') as any)
-                .select('saldo_atual').eq('id', contaOrigemIdCf).maybeSingle()
-              if (contaSaldoCf && contaSaldoCf.saldo_atual !== null && contaSaldoCf.saldo_atual !== undefined) {
-                const { error: errSaldoCf } = await (supabase.from('contas') as any)
-                  .update({ saldo_atual: Number(contaSaldoCf.saldo_atual) - valorCf })
-                  .eq('id', contaOrigemIdCf)
-                if (errSaldoCf) avisoDebitoCf += `\n⚠️ _O lançamento entrou, mas não consegui atualizar o saldo da conta — confira em Contas & Caixa._`
-              } else {
-                avisoDebitoCf += `\n⚠️ _O lançamento entrou, mas não consegui ler o saldo da conta para atualizar — confira em Contas & Caixa._`
-              }
-            }
-          } else {
-            avisoDebitoCf = `\n⚠️ _Esta conta está **sem valor cadastrado** — marquei como paga, mas **não debitei nada** por não saber o valor._`
-          }
+          const avisoDebitoCf = await debitarDaConta(
+            contaOrigemIdCf, contaOrigemNomeCf, valorCf,
+            `📋 ${contaAch.descricao} (${mesRefAlvo})`,
+          )
 
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
             texto: `✅ Conta **${contaAch.descricao}** (${mesRefAlvo}) marcada como paga via **${contaOrigemNomeCf}**.${avisoDebitoCf}` }])
@@ -3321,12 +3332,43 @@ export function useElenaSalvar({
           // que a linha nasceu (2026-07 em todas as do Sr. Max). O filtro casava
           // em julho e passou a não achar nada em agosto — bomba de tempo: a Elena
           // respondia "contrato não encontrado" para um contrato que existe.
+          // 10/08/2026: o `ilike` com a frase inteira NÃO servia. O Sr. Max falou
+          // por voz e o modelo gerou nome "Energia Solar Jurema"; o contrato no
+          // banco é "Energia Solar (Jurema)". `%Energia Solar Jurema%` não casa
+          // com parêntese no meio, e a Elena respondeu "não encontrado" para um
+          // contrato que existe — registrado em elena_diagnostico às 15:45.
+          // Agora: traz os contratos da empresa (são poucos) e casa em memória,
+          // ignorando acento e pontuação, exigindo todas as palavras da busca.
           let qInv = (supabase.from('investimentos_contratos') as any)
-            .select('id, nome_contrato, parcela_atual, parcela_total, proximo_vencimento, status').ilike('nome_contrato', `%${nomeAlvo}%`)
+            .select('id, nome_contrato, parcela_atual, parcela_total, proximo_vencimento, status, valor_mensal, valor_variavel')
           if (empresaIdConf) qInv = qInv.eq('empresa_id', empresaIdConf)
-          const { data: contratosAch } = await qInv.limit(5)
-          if (!contratosAch?.length) throw new Error(`Contrato "${nomeAlvo}" não encontrado para ${mesRefAlvo}.`)
-          if (contratosAch.length > 1) throw new Error(`Mais de um contrato encontrado com "${nomeAlvo}". Seja mais específico.`)
+          const { data: todosContratos } = await qInv.limit(200)
+
+          const normalizarNome = (t: any) => String(t || '').toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, ' ').trim()
+          const palavrasBusca = normalizarNome(nomeAlvo).split(' ').filter(Boolean)
+          // 1ª tentativa: todas as palavras da busca aparecem no nome.
+          let contratosAch = (todosContratos || []).filter((c: any) => {
+            const alvo = normalizarNome(c.nome_contrato)
+            return palavrasBusca.every(p => alvo.includes(p))
+          })
+          // 2ª tentativa: só as palavras distintivas (4+ letras), para "Jurema"
+          // achar "Energia Solar (Jurema)" mesmo se o resto vier diferente.
+          if (contratosAch.length === 0) {
+            const distintivas = palavrasBusca.filter(p => p.length >= 4)
+            if (distintivas.length > 0) {
+              contratosAch = (todosContratos || []).filter((c: any) => {
+                const alvo = normalizarNome(c.nome_contrato)
+                return distintivas.some(p => alvo.includes(p))
+              })
+            }
+          }
+          if (!contratosAch.length) {
+            const nomesExistentes = (todosContratos || []).map((c: any) => c.nome_contrato).join(', ')
+            throw new Error(`Contrato "${nomeAlvo}" não encontrado.${nomesExistentes ? ` Contratos cadastrados: ${nomesExistentes}.` : ''}`)
+          }
+          if (contratosAch.length > 1) throw new Error(`Mais de um contrato encontrado com "${nomeAlvo}": ${contratosAch.map((c: any) => c.nome_contrato).join(', ')}. Seja mais específico.`)
           const contratoAch = contratosAch[0]
           // Idempotência: não avança o contador duas vezes no mesmo pedido.
           if (contratoAch.status === 'pago') {
@@ -3335,6 +3377,7 @@ export function useElenaSalvar({
             setAcaoStatus(msgId, acaoIdx, 'saved')
             return
           }
+          const contaInv = await exigirContaOrigem(contratoAch.nome_contrato)
           const novaParcela = Math.min((contratoAch.parcela_atual || 0) + 1, contratoAch.parcela_total || 0)
           // A âncora NÃO é avançada aqui de propósito. Diferente dos imóveis, que
           // têm `pagamentos_imoveis` guardando o pagamento de cada mês, aqui a
@@ -3345,8 +3388,17 @@ export function useElenaSalvar({
             .update({ status: 'pago', parcela_atual: novaParcela, data_pagamento: dataPag })
             .eq('id', contratoAch.id)
           if (errInv) throw new Error(errInv.message)
+          const valorInv = Number(acao.dados.valor_pago) || Number(contratoAch.valor_mensal) || 0
+          const avisoInv = await debitarDaConta(
+            contaInv.id, contaInv.nome, valorInv,
+            `📈 ${contratoAch.nome_contrato} (${mesRefAlvo})`,
+          )
+          // Contrato de parcela variável: o valor cadastrado é estimativa.
+          const avisoVariavel = contratoAch.valor_variavel && !acao.dados.valor_pago
+            ? `\n_A parcela deste contrato é variável — debitei o valor estimado. Se o boleto veio diferente, me diga o valor._`
+            : ''
           setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Contrato **${contratoAch.nome_contrato}** marcado como pago — parcela nº ${novaParcela} de ${contratoAch.parcela_total}.` }])
+            texto: `✅ Contrato **${contratoAch.nome_contrato}** marcado como pago — parcela nº ${novaParcela} de ${contratoAch.parcela_total}.${avisoInv}${avisoVariavel}` }])
         } else {
           throw new Error(`Tipo "${tipoAlvo}" não reconhecido. Use: cartao, imovel, veiculo, conta_fixa ou investimento.`)
         }

@@ -62,14 +62,15 @@ const RISCO_LABELS = ['', 'Muito Baixo', 'Baixo', 'Médio', 'Alto', 'Muito Alto'
 const RISCO_COLORS = ['', 'text-emerald-400', 'text-green-400', 'text-amber-400', 'text-orange-400', 'text-red-400']
 
 function ModalAtivo({
-  onClose, onSave, editando, userId
+  onClose, onSave, editando, empresaId
 }: {
   onClose: () => void
   onSave: () => void
   editando?: Ativo
-  userId: string
+  empresaId: string | null
 }) {
   const { insert, update, loading } = useSupabaseMutation('ativos')
+  const [erro, setErro] = useState<string | null>(null)
   const [form, setForm] = useState({
     ticker:      editando?.ticker      ?? '',
     nome:        editando?.nome        ?? '',
@@ -98,14 +99,28 @@ function ModalAtivo({
       liquidez: form.liquidez, data_vencimento: form.data_vencimento || null,
       risco_nivel: parseInt(form.risco_nivel),
       corretora: form.corretora || null,
-      user_id: userId,
+      // `empresa_id` é NULLABLE e sem default nesta tabela. Sem mandar, a linha
+      // nasce com empresa_id nulo e some da lista, que filtra por ele — trocaria
+      // "não salvou" por "salvou e sumiu", que é pior.
+      empresa_id: empresaId,
     }
-    if (editando) {
-      await update(editando.id, payload)
-    } else {
-      await insert(payload)
+    // 10/08/2026: `user_id` SAIU do payload. A tabela `ativos` NÃO tem essa
+    // coluna — o PostgREST recusava o insert inteiro e o modal fechava como se
+    // tivesse salvo, porque ninguém olhava o retorno. Foi assim que o projeto
+    // solar do Sr. Max "sumiu": nunca chegou a ser gravado. A importação por
+    // CSV logo abaixo sempre funcionou justamente por não mandar user_id.
+    setErro(null)
+    try {
+      const res: any = editando
+        ? await update(editando.id, payload)
+        : await insert(payload)
+      // O hook pode devolver { error } em vez de lançar — cobre os dois casos.
+      if (res?.error) throw new Error(res.error.message || 'Erro ao salvar.')
+      onSave(); onClose()
+    } catch (e: any) {
+      // Erro NUNCA fecha o modal calado: o que o Max digitou fica na tela.
+      setErro(e?.message || 'Não consegui salvar. Tente novamente.')
     }
-    onSave(); onClose()
   }
 
   return (
@@ -210,6 +225,11 @@ function ModalAtivo({
               <span>Muito Baixo</span><span>Médio</span><span>Muito Alto</span>
             </div>
           </div>
+          {erro && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              ⚠️ {erro}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" className="btn-primary" disabled={loading}>
@@ -223,7 +243,7 @@ function ModalAtivo({
 }
 
 // ── Modal Importar CSV ────────────────────────────────────────────────────────
-function ModalImportarAtivos({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+function ModalImportarAtivos({ onClose, onImported, empresaId }: { onClose: () => void; onImported: () => void; empresaId: string | null }) {
   const { insert } = useSupabaseMutation('ativos')
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<Record<string, string>[]>([])
@@ -252,12 +272,14 @@ function ModalImportarAtivos({ onClose, onImported }: { onClose: () => void; onI
       reader.onload = async ev => {
         const rows = parseCSV(ev.target?.result as string)
         let ok = 0
+        let falhas = 0
+        let primeiroErro = ''
         for (const r of rows) {
           const qtd = parseFloat(r.quantidade || '0')
           const pm = parseFloat(r.preco_medio || '0')
           const pa = r.preco_atual ? parseFloat(r.preco_atual) : null
           if (!r.nome || isNaN(qtd) || isNaN(pm)) continue
-          await insert({
+          const resImp: any = await insert({
             ticker: r.ticker || null, nome: r.nome,
             tipo: (r.tipo || 'outro') as Ativo['tipo'],
             quantidade: qtd, preco_medio: pm, preco_atual: pa,
@@ -267,10 +289,15 @@ function ModalImportarAtivos({ onClose, onImported }: { onClose: () => void; onI
             data_vencimento: r.data_vencimento || null,
             risco_nivel: parseInt(r.risco_nivel || '3'),
             corretora: r.corretora || null,
+            empresa_id: empresaId,
           })
-          ok++
+          // Só conta o que entrou de verdade — antes o contador subia mesmo
+          // com o insert falhando, e a mensagem dizia "importado com sucesso".
+          if (resImp?.error) { falhas++; if (!primeiroErro) primeiroErro = resImp.error.message } else { ok++ }
         }
-        setMsg(`${ok} ativo(s) importado(s) com sucesso`)
+        setMsg(falhas > 0
+          ? `${ok} ativo(s) importado(s), ${falhas} falharam${primeiroErro ? ` — ${primeiroErro}` : ''}`
+          : `${ok} ativo(s) importado(s) com sucesso`)
         setStatus('done')
         onImported()
       }
@@ -345,7 +372,7 @@ export default function InvestimentosClient() {
     refetch()
   }
 
-  const { empresaId, userId } = useEmpresaId()
+  const { empresaId } = useEmpresaId()
   const { data: ativosDB, refetch } = useSupabaseQuery<Ativo>('ativos', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'valor_investido', ascending: false },
@@ -686,10 +713,10 @@ export default function InvestimentosClient() {
           onClose={() => { setModal(false); setEditando(null) }}
           onSave={refetch}
           editando={editando ?? undefined}
-          userId={userId}
+          empresaId={empresaId}
         />
       )}
-      {modalImport && <ModalImportarAtivos onClose={() => setModalImport(false)} onImported={refetch} />}
+      {modalImport && <ModalImportarAtivos onClose={() => setModalImport(false)} onImported={refetch} empresaId={empresaId} />}
 
       {/* Secretária Flutuante do Patrão */}
       <SecretariaFlutuante />
