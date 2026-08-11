@@ -2968,7 +2968,7 @@ export function useElenaSalvar({
       //                     valor_pago?: number, data_pagamento?: 'YYYY-MM-DD' }
       } else if (acao.tipo === 'confirmar_pagamento') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
-        const tipoAlvo = acao.dados.tipo
+        let tipoAlvo = acao.dados.tipo
         const nomeAlvo = (acao.dados.nome || '').trim()
         const mesRefAlvo = acao.dados.mes_referencia || mesLocal()
 
@@ -3030,6 +3030,67 @@ export function useElenaSalvar({
             throw new ElenaPergunta(`Não encontrei a conta "${informada}" no cadastro, Sr. Max. De qual conta saiu o pagamento de **${rotulo}**?${await listar()}`, 'conta_origem')
           }
           return { id, nome }
+        }
+
+        // ── CORREÇÃO DE TIPO ───────────────────────────────────────────────
+        // 11/08/2026: o Sr. Max pediu para pagar a "Energia Solar Jurema" e o
+        // modelo classificou como tipo `conta_fixa`. O item existe, mas em
+        // `investimentos_contratos` — a Elena procurou na tabela errada e
+        // respondeu "Conta fixa não encontrada" para algo que está cadastrado.
+        // Regra de prompt não segura classificação (armadilha 8), então o
+        // código confere: se não existe na tabela do tipo declarado mas existe
+        // em UMA outra, o tipo é corrigido antes de despachar. Se existe em
+        // mais de uma, não adivinha — deixa o erro original acontecer.
+        const normalizarBusca = (t: any) => String(t || '').toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, ' ').trim()
+        // Força do casamento: 'forte' = todas as palavras da busca aparecem no
+        // nome; 'fraca' = só uma palavra distintiva. A distinção evita trocar
+        // "Sítio Mucugê" (imóvel, casamento forte) por "Condomínio Mucugê"
+        // (conta fixa, casamento fraco só pela palavra "mucuge").
+        const forcaNome = (candidato: any, busca: string): 'forte' | 'fraca' | null => {
+          const alvo = normalizarBusca(candidato)
+          const palavras = normalizarBusca(busca).split(' ').filter(Boolean)
+          if (palavras.length === 0) return null
+          if (palavras.every(pp => alvo.includes(pp))) return 'forte'
+          const distintivas = palavras.filter(pp => pp.length >= 4)
+          return distintivas.length > 0 && distintivas.some(pp => alvo.includes(pp)) ? 'fraca' : null
+        }
+        const existeNoTipo = async (tipo: string): Promise<'forte' | 'fraca' | null> => {
+          const fontes: Record<string, { tabela: string; campo: string; porEmpresa: boolean }> = {
+            imovel:       { tabela: 'imoveis',                 campo: 'titulo',        porEmpresa: true },
+            veiculo:      { tabela: 'veiculos',                campo: 'modelo',        porEmpresa: true },
+            conta_fixa:   { tabela: 'compromissos_fixos',      campo: 'descricao',     porEmpresa: false },
+            investimento: { tabela: 'investimentos_contratos', campo: 'nome_contrato', porEmpresa: true },
+          }
+          const f = fontes[tipo]
+          if (!f) return false
+          let q = (supabase.from(f.tabela) as any).select(f.campo).limit(200)
+          q = f.porEmpresa
+            ? (empresaIdConf ? q.eq('empresa_id', empresaIdConf) : q)
+            : q.eq('user_id', uid)
+          const { data } = await q
+          let melhor: 'forte' | 'fraca' | null = null
+          for (const r of (data || [])) {
+            const forca = forcaNome(r[f.campo], nomeAlvo)
+            if (forca === 'forte') return 'forte'
+            if (forca === 'fraca') melhor = 'fraca'
+          }
+          return melhor
+        }
+        const TIPOS_BUSCAVEIS = ['imovel', 'veiculo', 'conta_fixa', 'investimento']
+        if (nomeAlvo && TIPOS_BUSCAVEIS.includes(tipoAlvo)) {
+          const forcas: Record<string, 'forte' | 'fraca' | null> = {}
+          for (const t of TIPOS_BUSCAVEIS) forcas[t] = await existeNoTipo(t)
+          const comForte = TIPOS_BUSCAVEIS.filter(t => forcas[t] === 'forte')
+          const comAlgum = TIPOS_BUSCAVEIS.filter(t => forcas[t] !== null)
+          // Só corrige quando não há ambiguidade. Na dúvida, deixa o tipo
+          // declarado e o erro original acontecer — melhor errar avisando.
+          if (forcas[tipoAlvo] !== 'forte' && comForte.length === 1) {
+            tipoAlvo = comForte[0]
+          } else if (forcas[tipoAlvo] === null && comAlgum.length === 1) {
+            tipoAlvo = comAlgum[0]
+          }
         }
         const dataPag = acao.dados.data_pagamento || new Date().toISOString().substring(0, 10)
         if (!nomeAlvo) throw new Error('Informe o nome do cartão/imóvel/conta/investimento a marcar como pago.')
