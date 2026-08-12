@@ -38,10 +38,12 @@ export function TabFinanciamentos() {
   const { empresaId } = useEmpresaId()
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    credor: '', valor_financiado: '', taxa_juros_anual: '', parcelas_total: '',
-    parcelas_pagas: '0', valor_parcela: '', dia_vencimento: ''
-  })
+  const FORM_VAZIO = {
+    nome_contrato: '', credor: '', valor_financiado: '', taxa_juros_anual: '',
+    parcelas_total: '', parcelas_pagas: '0', valor_parcela: '', dia_vencimento: '',
+  }
+  const [form, setForm] = useState(FORM_VAZIO)
+  const [erro, setErro] = useState<string | null>(null)
 
   const { data: financiamentos, refetch } = useSupabaseQuery<Financiamento>('financiamentos', {
     filters: { empresa_id: empresaId || undefined },
@@ -49,37 +51,81 @@ export function TabFinanciamentos() {
     enabled: !!empresaId,
   } as any)
 
-  const { data: contratosInv } = useSupabaseQuery<InvestimentoContrato>('investimentos_contratos', {
+  const { data: contratosInv, refetch: refetchInv } = useSupabaseQuery<InvestimentoContrato>('investimentos_contratos', {
     filters: { empresa_id: empresaId || undefined },
     orderBy: { column: 'proximo_vencimento', ascending: true },
     enabled: !!empresaId,
   } as any)
 
+  // Monta 'AAAA-MM-DD' do PRÓXIMO vencimento a partir do dia informado, com
+  // clamp no último dia do mês. Se o dia deste mês já passou, vai para o mês
+  // seguinte. Aritmética inteira, sem toISOString (armadilha nº6).
+  const proximoVencimentoDoDia = (dia: number): string => {
+    const agora = new Date()
+    let ano = agora.getFullYear()
+    let mes = agora.getMonth() + 1
+    if (dia < agora.getDate()) { mes += 1; if (mes > 12) { mes = 1; ano += 1 } }
+    const bissexto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0
+    const ultimo = [31, bissexto ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes - 1]
+    const d = Math.min(Math.max(dia, 1), ultimo)
+    return `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
+
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
-    const payload = {
-      credor: form.credor,
-      valor_financiado: form.valor_financiado ? parseFloat(form.valor_financiado) : null,
-      taxa_juros_anual: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
-      parcelas_total: form.parcelas_total ? parseInt(form.parcelas_total) : null,
-      parcelas_pagas: parseInt(form.parcelas_pagas) || 0,
-      valor_parcela: form.valor_parcela ? parseFloat(form.valor_parcela) : null,
-      dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
+    setErro(null)
+
+    // Editar registro ANTIGO continua atualizando `financiamentos`, para não
+    // quebrar o que já existe lá.
+    if (editId) {
+      const payload = {
+        credor: form.credor,
+        valor_financiado: form.valor_financiado ? parseFloat(form.valor_financiado) : null,
+        taxa_juros_anual: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
+        parcelas_total: form.parcelas_total ? parseInt(form.parcelas_total) : null,
+        parcelas_pagas: parseInt(form.parcelas_pagas) || 0,
+        valor_parcela: form.valor_parcela ? parseFloat(form.valor_parcela) : null,
+        dia_vencimento: form.dia_vencimento ? parseInt(form.dia_vencimento) : null,
+      }
+      const { error } = await (supabase.from('financiamentos') as any).update(payload).eq('id', editId)
+      if (error) { setErro('Erro ao atualizar: ' + error.message); return }
+      setShowForm(false); setEditId(null); refetch(); setForm(FORM_VAZIO)
+      return
     }
 
-    if (editId) {
-      const { error } = await (supabase.from('financiamentos') as any).update(payload).eq('id', editId)
-      if (error) { alert('Erro ao atualizar financiamento: ' + error.message); return }
-    } else {
-      const insertPayload = { ...payload, ...(empresaId ? { empresa_id: empresaId } : {}) }
-      const { error } = await (supabase.from('financiamentos') as any).insert(insertPayload)
-      if (error) { alert('Erro ao cadastrar financiamento: ' + error.message); return }
+    // 12/08/2026: cadastro NOVO passa a gravar em `investimentos_contratos`.
+    // Motivo: `financiamentos` não tem status por mês, nem próximo vencimento,
+    // nem registro de pagamento — o resumo da Elena nunca leu essa tabela e o
+    // Sr. Max cadastrou a placa solar aqui e não a viu no resumo.
+    // `investimentos_contratos` já tem cadastro → resumo → pagamento →
+    // lançamento → saldo funcionando. Uma caixa a menos para o dado se perder.
+    if (!empresaId) { setErro('Não identifiquei a empresa. Recarregue a página e tente de novo.'); return }
+    const dia = form.dia_vencimento ? parseInt(form.dia_vencimento) : 0
+    if (!(dia >= 1 && dia <= 31)) { setErro('Informe o dia do vencimento (1 a 31).'); return }
+
+    const agora = new Date()
+    const payloadInv = {
+      empresa_id: empresaId,
+      nome_contrato: form.nome_contrato.trim(),
+      instituicao: form.credor.trim(),
+      valor_mensal: form.valor_parcela ? parseFloat(form.valor_parcela) : 0,
+      valor_variavel: false,
+      parcela_atual: parseInt(form.parcelas_pagas) || 0,
+      parcela_total: form.parcelas_total ? parseInt(form.parcelas_total) : null,
+      proximo_vencimento: proximoVencimentoDoDia(dia),
+      status: 'pendente',
+      mes_referencia: `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`,
+      valor_financiado: form.valor_financiado ? parseFloat(form.valor_financiado) : null,
+      taxa_juros: form.taxa_juros_anual ? parseFloat(form.taxa_juros_anual) : null,
     }
+    const { error } = await (supabase.from('investimentos_contratos') as any).insert(payloadInv)
+    // Erro NUNCA fecha o formulário calado: o que o Sr. Max digitou fica na tela.
+    if (error) { setErro('Erro ao cadastrar: ' + error.message); return }
 
     setShowForm(false)
     setEditId(null)
-    refetch()
-    setForm({ credor: '', valor_financiado: '', taxa_juros_anual: '', parcelas_total: '', parcelas_pagas: '0', valor_parcela: '', dia_vencimento: '' })
+    refetchInv()
+    setForm(FORM_VAZIO)
   }
 
   const handleExcluir = async (id: string, credor: string) => {
@@ -91,6 +137,7 @@ export function TabFinanciamentos() {
 
   const handleEdit = (financiamento: Financiamento) => {
     setForm({
+      nome_contrato: financiamento.credor,
       credor: financiamento.credor,
       valor_financiado: financiamento.valor_financiado ? String(financiamento.valor_financiado) : '',
       taxa_juros_anual: financiamento.taxa_juros_anual ? String(financiamento.taxa_juros_anual) : '',
@@ -103,7 +150,17 @@ export function TabFinanciamentos() {
     setShowForm(true)
   }
 
+  // 12/08/2026: este botão dizia "Pagar Parcela ✅" e só somava 1 no contador.
+  // Não debita conta, não cria lançamento, não pergunta de onde sai o dinheiro.
+  // É a armadilha 12 do projeto — botão que parece mexer em dinheiro e não mexe.
+  // Enquanto a seção antiga existir, o rótulo e o aviso dizem a verdade.
   const addParcelaPaga = async (f: Financiamento) => {
+    const ok = confirm(
+      `Isto só avança o contador de parcelas de "${f.credor}" (${f.parcelas_pagas} → ${f.parcelas_pagas + 1}).\n\n` +
+      `NÃO debita conta nenhuma e NÃO lança a saída no financeiro.\n\n` +
+      `Para o pagamento sair da conta, cadastre em Contratos de Investimento e diga à Elena que pagou.\n\nContinuar?`
+    )
+    if (!ok) return
     const { error } = await (supabase.from('financiamentos') as any).update({ parcelas_pagas: f.parcelas_pagas + 1 }).eq('id', f.id)
     if (error) { alert('Erro ao registrar parcela: ' + error.message); return }
     refetch()
@@ -143,12 +200,20 @@ export function TabFinanciamentos() {
       </div>
 
       <div className="flex justify-between items-center mt-6">
-        <h2 className="text-sm font-semibold text-fg">🏦 Financiamentos Bancários</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-fg">🏦 Financiamentos Bancários</h2>
+          {financiamentos.length > 0 && (
+            <p className="text-[11px] text-fg-tertiary mt-0.5">
+              Seção antiga — não recebe cadastro novo e não aparece no resumo da Elena.
+            </p>
+          )}
+        </div>
         <button onClick={() => {
           if (showForm) {
             setShowForm(false)
             setEditId(null)
-            setForm({ credor: '', valor_financiado: '', taxa_juros_anual: '', parcelas_total: '', parcelas_pagas: '0', valor_parcela: '', dia_vencimento: '' })
+            setForm(FORM_VAZIO)
+            setErro(null)
           } else {
             setShowForm(true)
           }
@@ -161,9 +226,19 @@ export function TabFinanciamentos() {
         <form onSubmit={handleSalvar} className="bg-page border border-border-subtle rounded-xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
+              {/* 12/08/2026: campo de NOME separado do banco. Antes só existia
+                  "Instituição / Banco" e o Sr. Max usava esse campo como nome —
+                  foi assim que "PLACA SOLAR-COMPLEMENTO JUREMA" ficou gravado
+                  como se fosse um banco. */}
+              <label className="label">Nome do financiamento *</label>
+              <input className="input mt-1" required value={form.nome_contrato} onChange={e => setForm(f => ({...f, nome_contrato: e.target.value}))} placeholder="Placa Solar, Caminhonete..." />
+            </div>
+            <div>
               <label className="label">Instituição Financeira / Banco *</label>
               <input className="input mt-1" required value={form.credor} onChange={e => setForm(f => ({...f, credor: e.target.value}))} placeholder="Caixa, Itaú..." />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div><label className="label">Vencimento (Dia)</label><input type="number" max="31" min="1" className="input mt-1" value={form.dia_vencimento} onChange={e => setForm(f => ({...f, dia_vencimento: e.target.value}))} /></div>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -175,6 +250,17 @@ export function TabFinanciamentos() {
             <div><label className="label">Prazo (Meses)</label><input type="number" className="input mt-1" value={form.parcelas_total} onChange={e => setForm(f => ({...f, parcelas_total: e.target.value}))} /></div>
             <div><label className="label">Parcelas Pagas (Início)</label><input type="number" className="input mt-1" value={form.parcelas_pagas} onChange={e => setForm(f => ({...f, parcelas_pagas: e.target.value}))} /></div>
           </div>
+          {erro && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              ⚠️ {erro}
+            </div>
+          )}
+          {!editId && (
+            <p className="text-[11px] text-fg-tertiary">
+              Será cadastrado em <strong>Contratos de Investimento</strong>, abaixo — é de lá que a Elena
+              lê o resumo do mês e recebe o pagamento.
+            </p>
+          )}
           <div className="flex justify-end pt-2">
             <button type="submit" className="btn-primary text-xs">
               {editId ? 'Salvar Alterações' : 'Salvar Financiamento'}
@@ -214,11 +300,11 @@ export function TabFinanciamentos() {
                     <p className="text-sm font-medium text-emerald-400">{f.parcelas_pagas} de {f.parcelas_total}</p>
                   </div>
                   <div className="flex items-end justify-end">
-                    <button onClick={() => addParcelaPaga(f)} className="btn-ghost text-xs border border-border-subtle">Pagar Parcela ✅</button>
+                    <button onClick={() => addParcelaPaga(f)} title="Só avança o contador — não movimenta dinheiro" className="btn-ghost text-xs border border-border-subtle">+1 parcela</button>
                   </div>
                 </div>
 
-                {f.prazo_meses && (
+                {f.parcelas_total && (
                   <div className="mt-2">
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${progresso}%` }} />
