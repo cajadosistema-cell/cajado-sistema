@@ -3078,6 +3078,15 @@ export function useElenaSalvar({
           }
           return melhor
         }
+        const dataPag = acao.dados.data_pagamento || new Date().toISOString().substring(0, 10)
+        if (!nomeAlvo) throw new Error('Informe o nome do cartão/imóvel/conta/investimento a marcar como pago.')
+        const empresaIdConf = await getEmpresaId(uid)
+
+        // ⚠️ Este bloco EXECUTA (não é definição de função), então tem de vir
+        // DEPOIS de `empresaIdConf` e `uid` existirem. Colocado antes, dava
+        // "Cannot access '_' before initialization" — TDZ, o mesmo tipo de erro
+        // que derrubou o resumo em 03/08. Definição de função pode vir antes;
+        // código que roda, não.
         const TIPOS_BUSCAVEIS = ['imovel', 'veiculo', 'conta_fixa', 'investimento']
         if (nomeAlvo && TIPOS_BUSCAVEIS.includes(tipoAlvo)) {
           const forcas: Record<string, 'forte' | 'fraca' | null> = {}
@@ -3092,9 +3101,6 @@ export function useElenaSalvar({
             tipoAlvo = comAlgum[0]
           }
         }
-        const dataPag = acao.dados.data_pagamento || new Date().toISOString().substring(0, 10)
-        if (!nomeAlvo) throw new Error('Informe o nome do cartão/imóvel/conta/investimento a marcar como pago.')
-        const empresaIdConf = await getEmpresaId(uid)
 
         if (tipoAlvo === 'cartao') {
           const cartaoPf = await resolverCartaoPf(nomeAlvo)
