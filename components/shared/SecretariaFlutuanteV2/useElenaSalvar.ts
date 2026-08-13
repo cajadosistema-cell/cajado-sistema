@@ -4126,17 +4126,21 @@ export function useElenaSalvar({
         // os que têm cobrança NESTE mês entram na somatória. É deste mês quando
         // a âncora cai até o fim do mês do resumo e ainda não foi paga, ou
         // quando já foi paga com âncora dentro do mês.
+        // 13/08/2026: REVERTIDO para TODOS na tabela. O Max reclamou que 3
+        // contratos futuros (Intermediárias, Energia Solar) sumiram quando o
+        // filtro ehDoMes os jogou para a linha "🟢 Só nos próximos meses".
+        // Diferente dos boletos (que são muitos e poluem), os investimentos são
+        // poucos e ele QUER ver todos. Futuros ficam na tabela com 🟢 Futuro,
+        // mas não entram no total.
         const ehDoMes = (c: any) => {
           const v = String(c.proximo_vencimento || '').slice(0, 10)
           if (!v) return false
           const mesVenc = v.slice(0, 7)
           return c.status === 'pago' ? mesVenc === mesRef : mesVenc <= mesRef
         }
-        const porVencimento = (a: any, b: any) =>
-          String(a.proximo_vencimento || '9999').localeCompare(String(b.proximo_vencimento || '9999'))
-        // Mesma regra dos boletos (pedido do Max, 12/08): a tabela é do MÊS.
-        const invNaTabela = contratosInv.filter(ehDoMes).sort(porVencimento)
-        const invOutrosMeses = contratosInv.filter((c: any) => !ehDoMes(c)).sort(porVencimento)
+        const invNaTabela = [...contratosInv].sort((a: any, b: any) =>
+          String(a.proximo_vencimento || '9999').localeCompare(String(b.proximo_vencimento || '9999')))
+        const qtdInvDoMes = invNaTabela.filter(ehDoMes).length
 
         if (invNaTabela.length > 0) {
           // Título sem instituição: com vários bancos na lista, o nome do
@@ -4151,20 +4155,23 @@ export function useElenaSalvar({
               ? `nº ${c.parcela_atual} de ${c.parcela_total}`
               : `nº ${proxNumero} de ${c.parcela_total}`
             const vencIso = String(c.proximo_vencimento || '').slice(0, 10)
-            const statusLabel = semaforo(vencIso, c.status === 'pago', c.status === 'parcial')
+            const doMes = ehDoMes(c)
+            const statusLabel = doMes
+              ? semaforo(vencIso, c.status === 'pago', c.status === 'parcial')
+              : (c.status === 'pago' ? '✅ Pago' : '🟢 Futuro')
             const variavel = c.valor_variavel ? '*' : ''
             const nome = statusLabel.startsWith('🔴') ? `🔴 **${c.nome_contrato}**` : c.nome_contrato
             texto += `| ${dataBR(vencIso)} | ${nome} | ${parcelaStr} | ${fmt(valor)}${variavel} | ${statusLabel} |\n`
+            // Fora do mês: aparece, mas não soma.
+            if (!doMes) return
             totalContratos += valor
             if (c.status === 'pago') { totalPagoContratos += valor; qtdPagosContratos++ }
           })
           texto += `📈 **TOTAL INVESTIMENTOS ${mesAnoMax}: ${fmt(totalContratos)}**\n`
           texto += `💰 VALOR PAGO: ${fmt(totalPagoContratos)} | RESTA: ${fmt(totalContratos - totalPagoContratos)}\n`
-          texto += `📊 STATUS: ${qtdPagosContratos}/${invNaTabela.length} pagos ✅\n`
+          texto += `📊 STATUS: ${qtdPagosContratos}/${qtdInvDoMes} pagos ✅\n`
           if (invNaTabela.some((c: any) => c.valor_variavel)) texto += `_*Valor da parcela é variável — o número acima é estimativa._\n`
-        }
-        if (invOutrosMeses.length > 0) {
-          texto += `${invNaTabela.length > 0 ? '' : '📈 **INVESTIMENTOS**\n'}🟢 _Só nos próximos meses: ${invOutrosMeses.map((c: any) => `${c.nome_contrato} ${dataBR(String(c.proximo_vencimento || '').slice(0, 10))}`).join(' · ')}_\n`
+          if (invNaTabela.length > qtdInvDoMes) texto += `_🟢 As linhas de outros meses aparecem para você ver o que vem, mas não entram no total acima._\n`
         }
         if (contratosInv.length > 0) texto += `---\n`
 
@@ -4195,7 +4202,7 @@ export function useElenaSalvar({
         const totalGeral = totalCartoes + totalBoletos + totalFixas + totalContratos
         const totalPagoGeral = totalPagoCartoes + totalPagoBoletos + totalPagoFixas + totalPagoContratos
         const boletosDoMes = linhasBoletos.filter(l => !l.futuro).length
-        const qtdItensGeral = boletosDoMes + cartoesLista.length + linhasFixas.length + invNaTabela.length
+        const qtdItensGeral = boletosDoMes + cartoesLista.length + linhasFixas.length + qtdInvDoMes
         const qtdPagosGeral = qtdPagosCartoes + qtdPagosBoletos + qtdPagasFixas + qtdPagosContratos
         const qtdPendencias = qtdItensGeral - qtdPagosGeral
         texto += `• CARTÕES + BOLETOS${linhasFixas.length > 0 ? ' + CONTAS FIXAS' : ''} + INVESTIMENTOS: **${fmt(totalGeral)}**\n`
