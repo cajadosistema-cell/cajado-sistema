@@ -4194,7 +4194,8 @@ export function useElenaSalvar({
         // Gastos avulsos entram como quinta categoria (04/08/2026).
         const totalGeral = totalCartoes + totalBoletos + totalFixas + totalContratos
         const totalPagoGeral = totalPagoCartoes + totalPagoBoletos + totalPagoFixas + totalPagoContratos
-        const qtdItensGeral = doMesBoletos.length + cartoesLista.length + linhasFixas.length + invNaTabela.length
+        const boletosDoMes = linhasBoletos.filter(l => !l.futuro).length
+        const qtdItensGeral = boletosDoMes + cartoesLista.length + linhasFixas.length + invNaTabela.length
         const qtdPagosGeral = qtdPagosCartoes + qtdPagosBoletos + qtdPagasFixas + qtdPagosContratos
         const qtdPendencias = qtdItensGeral - qtdPagosGeral
         texto += `• CARTÕES + BOLETOS${linhasFixas.length > 0 ? ' + CONTAS FIXAS' : ''} + INVESTIMENTOS: **${fmt(totalGeral)}**\n`
