@@ -642,6 +642,51 @@ export function useElenaSalvar({
   const perguntaPendenteRef = useRef<{ msgId: string; acaoIdx: number; campo: string } | null>(null)
 
   // ── salvarAcao ────────────────────────────────────────────────
+// ── Relatório em TEXTO, para o chat ────────────────────────────
+// 15/08/2026, pedido do Sr. Max: o relatório abre num modal, que é bom por
+// causa do PDF, mas some quando ele fecha. Esta versão vai como mensagem e
+// fica no histórico da conversa. Compacta de propósito: os números que ele
+// olha primeiro, e só as primeiras linhas de cada lista.
+function relatorioEmTexto(d: any): string {
+  const brl = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+  const dataBr = (iso: any) => {
+    const [a, m, dd] = String(iso || '').slice(0, 10).split('-')
+    return (a && m && dd) ? `${dd}/${m}` : '—'
+  }
+  const fin = d?.financeiro || {}
+  const saldo = Number(fin.saldo || 0)
+  const L: string[] = []
+  L.push(`📊 **${d?.titulo || 'Relatório Financeiro'}**`)
+  L.push(`_${d?.periodo || ''} · gerado em ${d?.geradoEm || ''}_`)
+  L.push('---')
+  L.push(`📈 RECEITAS: **${brl(fin.totalReceitas)}**`)
+  L.push(`📉 GASTOS: **${brl(fin.totalGastos)}**`)
+  L.push(`${saldo >= 0 ? '🟢' : '🔴'} SALDO: **${brl(saldo)}**`)
+
+  const secao = (titulo: string, itens: any[], linha: (x: any) => string) => {
+    if (!itens?.length) return
+    L.push('---')
+    L.push(`${titulo} _(${itens.length})_`)
+    itens.slice(0, 8).forEach(x => L.push(`• ${linha(x)}`))
+    if (itens.length > 8) L.push(`_… e mais ${itens.length - 8}. A lista completa está no relatório aberto ao lado._`)
+  }
+
+  secao('💸 **GASTOS PF**', fin.gastos || [], (g: any) => `${dataBr(g.data)} · ${g.descricao} — ${brl(g.valor)}`)
+  secao('💰 **RECEITAS PF**', fin.receitas || [], (r: any) => `${dataBr(r.data)} · ${r.descricao} — ${brl(r.valor)}`)
+  secao('🏢 **GASTOS PJ**', fin.gastosEmpresa || [], (g: any) => `${dataBr(g.data)} · ${g.descricao} — ${brl(g.valor)}`)
+  secao('🏢 **RECEITAS PJ**', fin.receitasEmpresa || [], (r: any) => `${dataBr(r.data)} · ${r.descricao} — ${brl(r.valor)}`)
+  secao('📅 **AGENDA**', d?.agenda || [], (e: any) => `${dataBr(e.data_inicio)} · ${e.titulo}`)
+  secao('🗂️ **REGISTROS**', d?.registros || [], (r: any) => `${r.titulo}${r.valor ? ` — ${brl(r.valor)}` : ''}`)
+
+  if (!(fin.gastos?.length || fin.receitas?.length || fin.gastosEmpresa?.length || fin.receitasEmpresa?.length)) {
+    L.push('---')
+    L.push('_Nenhum lançamento financeiro no período._')
+  }
+  L.push('---')
+  L.push('_Abri também o relatório completo ao lado, com o botão de exportar em PDF._')
+  return L.join('\n')
+}
+
   const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA) => {
     // Lê userId da ref — nunca fica stale
     const uid = userIdRef.current
@@ -938,8 +983,18 @@ export function useElenaSalvar({
       // ── RELATÓRIO ────────────────────────────────────────────
       } else if (acao.tipo === 'relatorio') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
-        const dados = await buscarDadosRelatorio(supabase, uid, acao.dados.periodo || 'mes_atual')
+        // 15/08/2026 — pendência D do handoff v8, finalmente fechada: faltava o
+        // 4º parâmetro. Sem `empresaId`, a query de `lancamentos` nem roda e a
+        // seção PJ vem vazia — era por isso que o relatório de agosto aparecia
+        // R$ 0,00 mesmo com R$5.587,50 pagos pela Elena no mesmo dia (os
+        // pagamentos dela gravam em `lancamentos`, não em `gastos_pessoais`).
+        const empresaIdRel = await getEmpresaId(uid)
+        const dados = await buscarDadosRelatorio(supabase, uid, acao.dados.periodo || 'mes_atual', empresaIdRel || undefined)
         setRelatorioData(dados)
+        // O modal some quando ele fecha; o chat fica. Vai a versão em texto
+        // junto, para o relatório entrar no histórico da conversa.
+        setMensagens(prev => [...prev, { id: `rel-${Date.now()}`, role: 'ai' as const,
+          texto: relatorioEmTexto(dados) }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // ── PROJEÇÃO DO PRÓXIMO MÊS(ES) ──────────────────────────
@@ -1440,8 +1495,11 @@ export function useElenaSalvar({
       // ── GERAR DASHBOARD (alias do relatório) ─────────────────
       } else if (acao.tipo === 'gerar_dashboard') {
         setAcaoStatus(msgId, acaoIdx, 'saving')
-        const dados = await buscarDadosRelatorio(supabase, uid, 'mes_atual')
+        const empresaIdDash = await getEmpresaId(uid)
+        const dados = await buscarDadosRelatorio(supabase, uid, 'mes_atual', empresaIdDash || undefined)
         setRelatorioData(dados)
+        setMensagens(prev => [...prev, { id: `rel-${Date.now()}`, role: 'ai' as const,
+          texto: relatorioEmTexto(dados) }])
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
       // ── GERAR CHECKLIST ──────────────────────────────────────
