@@ -841,7 +841,29 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .toLowerCase().replace(/[^a-z0-9]/g, '')
       const GENERICOS_CONTA = new Set(['pf', 'pj', 'de', 'do', 'da', 'bank', 'banco', 'conta', 'cartao', 'card'])
-      const msgNormGuard = soLetras(userText || '')
+      // 🆕 15/08/2026 — JANELA DO PEDIDO ATUAL.
+      // A versão de 24/07 olhava SÓ a mensagem atual, e isso virou atrito real:
+      // o Sr. Max abriu com "pagamentos feitos pela conta BRADESCO OPERACIONAL
+      // PF", a Elena repetiu a conta de volta, e mesmo assim perguntou duas
+      // vezes de qual conta era — porque na hora de executar a mensagem atual
+      // era só o "SIM", que não tem nome de conta.
+      // Agora a janela é tudo o que ele escreveu DESDE O ÚLTIMO PAGAMENTO
+      // EFETIVAMENTE EXECUTADO. Assim que um `confirmar_pagamento` é salvo, a
+      // janela zera — é isso que continua impedindo o bug original de 24/07,
+      // que era reaproveitar a conta de um pagamento ANTERIOR já concluído.
+      const textoDoPedidoAtual = (() => {
+        const partes: string[] = [userText || '']
+        const msgs = session.mensagens || []
+        for (let i = msgs.length - 1; i >= 0 && partes.length <= 8; i--) {
+          const m: any = msgs[i]
+          const fechouPagamento = m?.role === 'ai' && Array.isArray(m?.acoes)
+            && m.acoes.some((x: any) => x?.tipo === 'confirmar_pagamento' && x?.status === 'saved')
+          if (fechouPagamento) break
+          if (m?.role === 'user' && m?.texto) partes.push(String(m.texto))
+        }
+        return partes.join(' ')
+      })()
+      const msgNormGuard = soLetras(textoDoPedidoAtual)
       for (const a of acoesComStatus) {
         if (a.tipo === 'confirmar_pagamento' && a.dados?.conta_origem) {
           const tokens = String(a.dados.conta_origem).split(/\s+/)
@@ -850,7 +872,7 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
             ? msgNormGuard.includes(soLetras(a.dados.conta_origem))
             : tokens.some(t => msgNormGuard.includes(t))
           if (!citadaAgora) {
-            console.warn('[Elena] 🚫 conta_origem removida — a IA preencheu sem o usuário citar na mensagem atual:', a.dados.conta_origem)
+            console.warn('[Elena] 🚫 conta_origem removida — o usuário não citou essa conta neste pedido:', a.dados.conta_origem)
             delete a.dados.conta_origem
             a.label = `${a.label.replace(/ via .*$/, '').replace(/ ⚠️ SEM CONTA INFORMADA$/, '')} ⚠️ SEM CONTA INFORMADA`
           }
