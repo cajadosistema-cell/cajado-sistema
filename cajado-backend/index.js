@@ -4,6 +4,7 @@ const axios = require("axios");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
@@ -97,17 +98,10 @@ app.use("/minha-conta", require("./src/routes/admin.routes"));
 app.use("/canais", require("./src/routes/canais.routes"));
 
 // ─── WABA EMBEDDED SIGNUP (Conectar com o Facebook — automático) ───────
-// NOVO: faltava essa rota, por isso dava erro ao clicar "Continuar com o
-// Facebook" (a chamada caía no catch-all do SPA e devolvia HTML/erro em
-// vez de JSON).
-//
-// IMPORTANTE: o frontend chama fetch('/api/inbox-proxy/api/waba/connect')
-// com uma URL RELATIVA. Como esse mesmo Express (cajado-sistema) é quem
-// serve o domínio sistema.cajadosolucoes.com.br (confirmado nas configs
-// de rede do Railway), essa chamada chega aqui com o caminho completo,
-// SEM nenhum prefixo removido — por isso o mount é exatamente
-// "/api/inbox-proxy/api/waba" (e não apenas "/api/waba").
+// Suporta tanto chamadas diretas ao backend (/api/waba), quanto proxied (/api/inbox-proxy/api/waba) ou (/waba)
+app.use("/api/waba", require("./src/routes/waba.routes"));
 app.use("/api/inbox-proxy/api/waba", require("./src/routes/waba.routes"));
+app.use("/waba", require("./src/routes/waba.routes"));
 
 // ─── VIVI ───────────────────
 app.use("/vivi", require("./src/routes/vivi.routes"));
@@ -134,9 +128,13 @@ app.use('/api', require('./src/routes/alertas-whatsapp.routes').router);
 // Todas as rotas foram modularizadas em src/routes/.
 
 
-// Qualquer rota não encontrada → serve o frontend (SPA)
+// Qualquer rota não encontrada → serve o frontend (SPA) se existir, senão 404 JSON
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  const indexPath = path.join(__dirname, "public", "index.html");
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  return res.status(404).json({ erro: "Rota não encontrada", path: req.path });
 });
 
 
@@ -152,7 +150,8 @@ app.listen(PORT, () => {
   console.log(`   GET  /inbox/conversas`);
   console.log(`   POST /inbox/enviar`);
   console.log(`   POST /auth/login`);
-  console.log(`   POST /api/inbox-proxy/api/waba/connect  ← Embedded Signup (Facebook)`);
+  console.log(`   GET  /api/waba/config      ← Embedded Signup Config`);
+  console.log(`   POST /api/waba/connect     ← Embedded Signup (Facebook)`);
   console.log(`   GET  /api/status`);
   console.log(`   GET  /                     ← Frontend`);
 });
