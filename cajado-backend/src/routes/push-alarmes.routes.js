@@ -1,24 +1,25 @@
-// cajado-backend/src/routes/push-alarmes.routes.js
-// Cron: verifica alarmes vencidos e envia push notification para o dispositivo do usuário
-
 const express = require('express')
 const router = express.Router()
-const { createClient } = require('@supabase/supabase-js')
+const { supabase } = require('../config/database')
 const webpush = require('web-push')
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+let vapidConfigured = false
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || 'BDTr-UnYGrhffBkUnBtgNOultBRobUHHysKflg8b2kgZ0FLL2zia_vet1Kzv6pD3UUb7XVM3aMhcFORUESEo0iw'
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || 'rxYWkBX1IeOUKML2p_U-PNfK41_Mt6oT1dcc04L8snU'
+const vapidContact = process.env.VAPID_CONTACT || 'mailto:contato@cajadosolucoes.com.br'
 
-webpush.setVapidDetails(
-  'mailto:sistema@cajado.com',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-)
+try {
+  if (vapidPublicKey && vapidPrivateKey) {
+    webpush.setVapidDetails(vapidContact, vapidPublicKey, vapidPrivateKey)
+    vapidConfigured = true
+  }
+} catch (e) {
+  console.warn('[Push Alarmes] VAPID details não configurados:', e.message)
+}
 
 // ── Função principal: verifica e dispara alarmes ──────────────────────────
 async function verificarAlarmes() {
+  if (!supabase || !vapidConfigured) return
   try {
     const agora   = new Date()
     const em15min = new Date(agora.getTime() + 15 * 60 * 1000)

@@ -8,13 +8,8 @@
 
 const express = require('express')
 const router  = express.Router()
-const { createClient } = require('@supabase/supabase-js')
+const { supabase } = require('../config/database')
 const { enviarWhatsApp } = require('../services/evolution.service')
-
-const supabase = createClient(
-  process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 // ── Número padrão para alertas do dono (fallback se perfil não tiver) ────────
 // Configure ALERTA_WHATSAPP_DONO no Railway com o número do Sr. Max (ex: 5571999999999)
