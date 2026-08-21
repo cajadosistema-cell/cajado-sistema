@@ -1028,16 +1028,17 @@ function TabWhatsAppMeta() {
       if (!originOk) return
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
-        if (data.type === 'WA_EMBEDDED_SIGNUP') {
-          const evt = data.event || ''
-          if (evt.includes('FINISH')) {
-            signupWabaId = data.data?.waba_id || data.data?.business_id || null
-            signupPhoneId = data.data?.phone_number_id || null
-            if (signupCode && signupWabaId && signupPhoneId) {
-              window.removeEventListener('message', msgHandler)
-              conectarComBackend(signupCode, signupWabaId, signupPhoneId)
-              signupCode = null
-            }
+        if (data && (data.type === 'WA_EMBEDDED_SIGNUP' || data.event === 'WA_EMBEDDED_SIGNUP')) {
+          if (data.data?.waba_id || data.data?.business_id || data.data?.wabaId) {
+            signupWabaId = data.data.waba_id || data.data.business_id || data.data.wabaId
+          }
+          if (data.data?.phone_number_id || data.data?.phoneNumberId) {
+            signupPhoneId = data.data.phone_number_id || data.data.phoneNumberId
+          }
+          if (signupCode && signupWabaId) {
+            window.removeEventListener('message', msgHandler)
+            conectarComBackend(signupCode, signupWabaId, signupPhoneId)
+            signupCode = null
           }
         }
       } catch {}
@@ -1047,19 +1048,19 @@ function TabWhatsAppMeta() {
     ;(window as any).FB.login((response: any) => {
       if (response.authResponse) {
         signupCode = response.authResponse.code || response.authResponse.accessToken || null
-        if (signupCode && signupWabaId && signupPhoneId) {
+        if (signupCode && signupWabaId) {
           window.removeEventListener('message', msgHandler)
           conectarComBackend(signupCode, signupWabaId, signupPhoneId)
           signupCode = null
+        } else {
+          setTimeout(() => {
+            if (signupCode) {
+              window.removeEventListener('message', msgHandler)
+              conectarComBackend(signupCode, signupWabaId, signupPhoneId)
+              signupCode = null
+            }
+          }, 3000)
         }
-        // Fallback: se postMessage não chegou em 5s, tenta só com o code
-        setTimeout(() => {
-          if (signupCode) {
-            window.removeEventListener('message', msgHandler)
-            conectarComBackend(signupCode, null, null)
-            signupCode = null
-          }
-        }, 5000)
       } else {
         window.removeEventListener('message', msgHandler)
         setStatus('idle')

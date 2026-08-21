@@ -867,10 +867,14 @@ function SecaoWhatsApp() {
       if (!originOk) return
       try {
         const d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
-        if (d.type === 'WA_EMBEDDED_SIGNUP' && (d.event || '').includes('FINISH')) {
-          signupWabaId = d.data?.waba_id || d.data?.business_id || null
-          signupPhoneId = d.data?.phone_number_id || null
-          if (signupCode && signupWabaId && signupPhoneId) {
+        if (d && (d.type === 'WA_EMBEDDED_SIGNUP' || d.event === 'WA_EMBEDDED_SIGNUP')) {
+          if (d.data?.waba_id || d.data?.business_id || d.data?.wabaId) {
+            signupWabaId = d.data.waba_id || d.data.business_id || d.data.wabaId
+          }
+          if (d.data?.phone_number_id || d.data?.phoneNumberId) {
+            signupPhoneId = d.data.phone_number_id || d.data.phoneNumberId
+          }
+          if (signupCode && signupWabaId) {
             window.removeEventListener('message', msgHandler)
             conectarEmbedded(signupCode, signupWabaId, signupPhoneId)
             signupCode = null
@@ -883,18 +887,19 @@ function SecaoWhatsApp() {
     ;(window as any).FB.login((response: any) => {
       if (response.authResponse) {
         signupCode = response.authResponse.code || response.authResponse.accessToken || null
-        if (signupCode && signupWabaId && signupPhoneId) {
+        if (signupCode && signupWabaId) {
           window.removeEventListener('message', msgHandler)
           conectarEmbedded(signupCode, signupWabaId, signupPhoneId)
           signupCode = null
+        } else {
+          setTimeout(() => {
+            if (signupCode) {
+              window.removeEventListener('message', msgHandler)
+              conectarEmbedded(signupCode, signupWabaId, signupPhoneId)
+              signupCode = null
+            }
+          }, 3000)
         }
-        setTimeout(() => {
-          if (signupCode) {
-            window.removeEventListener('message', msgHandler)
-            conectarEmbedded(signupCode, null, null)
-            signupCode = null
-          }
-        }, 5000)
       } else {
         window.removeEventListener('message', msgHandler)
         setSalvandoApi(false)

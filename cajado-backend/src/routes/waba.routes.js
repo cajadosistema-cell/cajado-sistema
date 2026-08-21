@@ -143,8 +143,16 @@ router.post("/connect", async (req, res) => {
           timeout: 10000,
         });
         const scopes = debugRes.data?.data?.granular_scopes || [];
-        const waScope = scopes.find(s => s.scope === "whatsapp_business_management");
-        if (waScope?.target_ids?.length) wabaIdFinal = waScope.target_ids[0];
+        for (const s of scopes) {
+          if (s.target_ids && s.target_ids.length > 0) {
+            wabaIdFinal = s.target_ids[0];
+            console.log(`[WABA-CONNECT] WABA ID encontrado via granular_scope '${s.scope}':`, wabaIdFinal);
+            break;
+          }
+        }
+        if (!wabaIdFinal && debugRes.data?.data?.target_ids?.length) {
+          wabaIdFinal = debugRes.data.data.target_ids[0];
+        }
       } catch (e) {
         console.warn("[WABA-CONNECT] debug_token falhou:", e?.response?.data || e.message);
       }
@@ -168,13 +176,29 @@ router.post("/connect", async (req, res) => {
           params: { access_token: userToken },
           timeout: 10000,
         });
-        const primeiroNegocio = bizRes.data?.data?.[0];
-        if (primeiroNegocio?.id) {
-          const wabasRes = await axios.get(
-            `https://graph.facebook.com/${GRAPH_VERSION}/${primeiroNegocio.id}/owned_whatsapp_business_accounts`,
-            { params: { access_token: userToken }, timeout: 10000 }
-          );
-          wabaIdFinal = wabasRes.data?.data?.[0]?.id || null;
+        const businesses = bizRes.data?.data || [];
+        for (const biz of businesses) {
+          if (!biz.id) continue;
+          try {
+            const wabasRes = await axios.get(
+              `https://graph.facebook.com/${GRAPH_VERSION}/${biz.id}/owned_whatsapp_business_accounts`,
+              { params: { access_token: userToken }, timeout: 10000 }
+            );
+            if (wabasRes.data?.data?.length) {
+              wabaIdFinal = wabasRes.data.data[0].id;
+              break;
+            }
+          } catch {}
+          try {
+            const clientWabasRes = await axios.get(
+              `https://graph.facebook.com/${GRAPH_VERSION}/${biz.id}/client_whatsapp_business_accounts`,
+              { params: { access_token: userToken }, timeout: 10000 }
+            );
+            if (clientWabasRes.data?.data?.length) {
+              wabaIdFinal = clientWabasRes.data.data[0].id;
+              break;
+            }
+          } catch {}
         }
       } catch (e) {
         console.warn("[WABA-CONNECT] /me/businesses falhou:", e?.response?.data || e.message);
@@ -182,8 +206,21 @@ router.post("/connect", async (req, res) => {
     }
 
     if (!wabaIdFinal) {
+      try {
+        const appToken = `${APP_ID}|${APP_SECRET}`;
+        const appWabas = await axios.get(
+          `https://graph.facebook.com/${GRAPH_VERSION}/${APP_ID}/whatsapp_business_accounts`,
+          { params: { access_token: appToken }, timeout: 10000 }
+        );
+        if (appWabas.data?.data?.length) {
+          wabaIdFinal = appWabas.data.data[0].id;
+        }
+      } catch {}
+    }
+
+    if (!wabaIdFinal) {
       return res.status(400).json({
-        erro: "Login no Facebook funcionou, mas não foi possível encontrar nenhuma conta do WhatsApp Business vinculada. Verifique se o número já foi adicionado durante o fluxo do Facebook."
+        erro: "Login no Facebook funcionou, mas não foi possível encontrar nenhuma conta do WhatsApp Business vinculada. Verifique se concluiu todas as etapas na janela da Meta (seleção de empresa e número)."
       });
     }
 
