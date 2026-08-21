@@ -922,7 +922,8 @@ function SecaoWhatsApp() {
       if (data.ok || data.success) {
         setApiConectada({ numero: data.phone_number || data.numero || '', nome: data.verified_name || data.nome_verificado || '' })
       } else {
-        setApiErro(data.erro || data.error || 'Erro ao conectar. Verifique as permissões na Meta.')
+        const msg = data.erro || (typeof data.error === 'string' ? data.error : data.error?.message) || data.detalhe || data.message || 'Erro ao conectar. Verifique as permissões na Meta.'
+        setApiErro(typeof msg === 'object' ? JSON.stringify(msg) : String(msg))
       }
     } catch (e: any) {
       setApiErro('Erro de rede: ' + e.message)

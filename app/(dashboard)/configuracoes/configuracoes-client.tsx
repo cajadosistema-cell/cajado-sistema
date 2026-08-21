@@ -1005,7 +1005,8 @@ function TabWhatsAppMeta() {
         setResultado(data)
       } else {
         setStatus('error')
-        setErroMsg(data.erro || data.error || 'Erro ao conectar. Verifique as permissões na Meta.')
+        const msg = data.erro || (typeof data.error === 'string' ? data.error : data.error?.message) || data.detalhe || data.message || 'Erro ao conectar. Verifique as permissões na Meta.'
+        setErroMsg(typeof msg === 'object' ? JSON.stringify(msg) : String(msg))
       }
     } catch (e: any) {
       setStatus('error')
