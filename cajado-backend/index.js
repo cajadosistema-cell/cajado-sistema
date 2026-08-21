@@ -96,6 +96,19 @@ app.use("/minha-conta", require("./src/routes/admin.routes"));
 // ─── CANAIS ───────────────────
 app.use("/canais", require("./src/routes/canais.routes"));
 
+// ─── WABA EMBEDDED SIGNUP (Conectar com o Facebook — automático) ───────
+// NOVO: faltava essa rota, por isso dava erro ao clicar "Continuar com o
+// Facebook" (a chamada caía no catch-all do SPA e devolvia HTML/erro em
+// vez de JSON).
+//
+// IMPORTANTE: o frontend chama fetch('/api/inbox-proxy/api/waba/connect')
+// com uma URL RELATIVA. Como esse mesmo Express (cajado-sistema) é quem
+// serve o domínio sistema.cajadosolucoes.com.br (confirmado nas configs
+// de rede do Railway), essa chamada chega aqui com o caminho completo,
+// SEM nenhum prefixo removido — por isso o mount é exatamente
+// "/api/inbox-proxy/api/waba" (e não apenas "/api/waba").
+app.use("/api/inbox-proxy/api/waba", require("./src/routes/waba.routes"));
+
 // ─── VIVI ───────────────────
 app.use("/vivi", require("./src/routes/vivi.routes"));
 
@@ -139,6 +152,7 @@ app.listen(PORT, () => {
   console.log(`   GET  /inbox/conversas`);
   console.log(`   POST /inbox/enviar`);
   console.log(`   POST /auth/login`);
+  console.log(`   POST /api/inbox-proxy/api/waba/connect  ← Embedded Signup (Facebook)`);
   console.log(`   GET  /api/status`);
   console.log(`   GET  /                     ← Frontend`);
 });
