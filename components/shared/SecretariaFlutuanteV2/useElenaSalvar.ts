@@ -1094,8 +1094,15 @@ function relatorioEmTexto(d: any): string {
             .eq('user_id', uid).eq('ativo', true)
             .in('tipo', ['cartao_credito', 'cartao_debito']),
           // Faturas do mês atual (para estimar próximo mês)
+          // 🔴 FIX (03/09/2026): faltava `valor_previsto`. A tabela guarda dois
+          // valores (migration 039): `valor_previsto` é a prévia que o Sr. Max
+          // digita antes do fechamento, `valor_fechado` é o valor real depois.
+          // Lendo só o fechado, toda fatura ainda em aberto virava "sem dados" e
+          // ficava FORA do subtotal — em setembro/2026 isso escondeu
+          // R$ 11.163,96 de cartão e fez o resultado do mês parecer três vezes
+          // melhor do que era. O resumo mensal já lia as duas colunas; aqui não.
           (supabase.from('faturas_cartoes') as any)
-            .select('conta_id, valor_fechado, status')
+            .select('conta_id, valor_previsto, valor_fechado, status')
             .eq('user_id', uid)
             .eq('mes_referencia', mesAtualRef),
           // Investimentos / Ativos
@@ -1205,16 +1212,25 @@ function relatorioEmTexto(d: any): string {
 
 
         // ── 6. Cartões PF — estima fatura do próximo mês ────────
+        // Precedência igual à do resumo mensal: fatura fechada > prévia > zero.
+        // `ehPrevia` viaja junto para a tabela poder marcar o que é estimativa
+        // do Sr. Max e o que é número já fechado pelo banco.
         const cartoesLista = cartoesPf || []
         const faturasMap = new Map<string, any>((faturasMes || []).map((f: any) => [f.conta_id, f]))
         let totalCartoes = 0
-        const cartoesDetalhe: { nome: string; bandeira: string; dia: number; valorEstimado: number; status: string }[] = []
+        const cartoesDetalhe: { nome: string; bandeira: string; dia: number; valorEstimado: number; status: string; ehPrevia: boolean }[] = []
         cartoesLista.forEach((c: any) => {
           const fat: any = faturasMap.get(c.id)
-          const valorEst = fat ? Number(fat.valor_fechado) || 0 : 0
+          const valorFechado  = fat ? Number(fat.valor_fechado)  || 0 : 0
+          const valorPrevisto = fat ? Number(fat.valor_previsto) || 0 : 0
+          const valorEst = valorFechado > 0 ? valorFechado : valorPrevisto
+          const ehPrevia = valorFechado <= 0 && valorPrevisto > 0
           const status = fat?.status || 'sem_fatura'
           totalCartoes += valorEst
-          cartoesDetalhe.push({ nome: c.nome, bandeira: c.bandeira || '', dia: c.dia_vencimento || 0, valorEstimado: valorEst, status })
+          cartoesDetalhe.push({
+            nome: c.nome, bandeira: c.bandeira || '', dia: c.dia_vencimento || 0,
+            valorEstimado: valorEst, status, ehPrevia,
+          })
         })
 
         // ── 7. Investimentos — vencimentos futuros ──────────────
@@ -1317,11 +1333,19 @@ function relatorioEmTexto(d: any): string {
               const bandeira = c.bandeira ? ` (${c.bandeira})` : ''
               const dia = c.dia ? String(c.dia).padStart(2, '0') : '—'
               const statusLabel = c.status === 'pago' ? '✅ Pago' : c.status === 'parcial' ? '🟡 Parcial' : c.status === 'pendente' ? '🔴 Pendente' : '⚪ Sem dados'
-              const valorLabel = c.valorEstimado > 0 ? fmt(c.valorEstimado) : '⚪ sem dados'
+              // Prévia entra na conta, mas fica marcada: é estimativa do
+              // Sr. Max, não número fechado pelo banco.
+              const valorLabel = c.valorEstimado > 0
+                ? `${fmt(c.valorEstimado)}${c.ehPrevia ? ' _(prévia)_' : ''}`
+                : '⚪ sem dados'
               texto += `| ${c.nome}${bandeira} | ${dia} | ${valorLabel} | ${statusLabel} |\n`
             })
             if (totalCartoes > 0) {
-              texto += `**Subtotal cartões: ${fmt(totalCartoes)}**\n`
+              const qtdPrevia = cartoesDetalhe.filter(c => c.ehPrevia).length
+              texto += `**Subtotal cartões: ${fmt(totalCartoes)}**`
+              texto += qtdPrevia > 0
+                ? ` _(${qtdPrevia} ${qtdPrevia === 1 ? 'fatura ainda em prévia' : 'faturas ainda em prévia'})_\n`
+                : `\n`
             }
           }
 
