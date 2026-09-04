@@ -1099,10 +1099,15 @@ function relatorioEmTexto(d: any): string {
           // Parcelas de veículos (financiamentos ativos)
           qVeiculos,
           // Cartões PF com dia de vencimento
+          // Ordem cronológica por dia de vencimento — o mesmo pedido do Sr. Max
+          // que o resumo mensal já atendia. Aqui a lista saía na ordem que o
+          // banco devolvesse (25, 01, 03, 15, 13…), e ele não conseguia ler a
+          // tabela de cima para baixo. Cartão sem dia cai no fim.
           (supabase.from('contas') as any)
             .select('id, nome, bandeira, dia_vencimento, limite')
             .eq('user_id', uid).eq('ativo', true)
-            .in('tipo', ['cartao_credito', 'cartao_debito']),
+            .in('tipo', ['cartao_credito', 'cartao_debito'])
+            .order('dia_vencimento', { ascending: true, nullsFirst: false }),
           // Faturas do mês atual (para estimar próximo mês)
           // 🔴 FIX (03/09/2026): faltava `valor_previsto`. A tabela guarda dois
           // valores (migration 039): `valor_previsto` é a prévia que o Sr. Max
@@ -1198,6 +1203,11 @@ function relatorioEmTexto(d: any): string {
             })
           }
         })
+
+        // Financiamentos em ordem cronológica pelo dia de vencimento, como no
+        // resumo. Sem isso a tabela saía na ordem do banco e o Sr. Max tinha de
+        // procurar o que vence primeiro. Sem dia cai no fim.
+        parcelasAtivas.sort((a, b) => (Number(a.dia) || 99) - (Number(b.dia) || 99))
 
         // ── 5b. Investimentos parcelados (contratos tipo Bradesco Solar) ──
         // 🔧 FIX (21/07/2026): faltava proximo_vencimento (Sr. Max: "a data não
