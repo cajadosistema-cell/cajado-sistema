@@ -372,6 +372,39 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
                 briefing += '\n'
               }
 
+              // ── AUDITORIA DE INVARIANTES (migration 081) ─────────────
+              // 04/09/2026: dos oito defeitos encontrados esta semana, todos
+              // tinham deixado rastro no banco dias antes de o Sr. Max notar —
+              // as cinco contas fixas ficaram sem valor de 25/08 a 03/09, e ele
+              // só descobriu porque foi olhar a projeção. Quem descobria o
+              // problema era ele, tarde. Agora o sistema avisa na manhã seguinte.
+              //
+              // Só a severidade 'usuario' entra aqui: são as pendências que ele
+              // resolve respondendo um valor. O que é defeito de código
+              // (severidade 'sistema') não incomoda o Sr. Max — sai na consulta
+              // que a Maiara roda no SQL Editor.
+              //
+              // try/catch próprio de propósito: o briefing inteiro está dentro
+              // de um catch silencioso, e sem este bloco uma view ausente
+              // (migration 081 não aplicada) levaria o briefing junto.
+              try {
+                const { data: pendencias } = await (supabase.from('auditoria_invariantes') as any)
+                  .select('item, referencia, explicacao')
+                  .eq('severidade', 'usuario')
+                  .limit(12)
+
+                if (pendencias && pendencias.length > 0) {
+                  const n = pendencias.length
+                  briefing += `⚠️ **${n} cadastro(s) incompleto(s):**\n`
+                  pendencias.forEach((p: any) => {
+                    briefing += `  • ${p.item} (${p.referencia})\n`
+                  })
+                  briefing += n === 1
+                    ? `_Sem valor cadastrado ela não entra no total do mês. Me diga quanto é que eu registro._\n\n`
+                    : `_Sem valor cadastrado elas não entram no total do mês. Me diga os valores que eu registro._\n\n`
+                }
+              } catch { /* view ainda não criada — briefing segue normal */ }
+
               briefing += `_Como posso ajudá-lo hoje, Sr. Max?_ 💼`
 
               // ── Resumo falado do briefing (só na 1ª abertura do dia) ──────────
