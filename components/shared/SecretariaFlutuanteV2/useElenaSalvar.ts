@@ -1067,7 +1067,6 @@ function relatorioEmTexto(d: any): string {
           { data: cartoesPf },
           { data: faturasMes },
           { data: ativosProj },
-          { data: pagamentosMes },
           { data: contratosInvProj },
         ] = await Promise.all([
           // Gastos históricos (3 meses)
@@ -1118,11 +1117,11 @@ function relatorioEmTexto(d: any): string {
             .eq('mes_referencia', mesAtualRef),
           // Investimentos / Ativos
           qAtivos,
-          // Histórico de pagamentos do mês atual (compromissos já pagos)
-          (supabase.from('historico_pagamentos_mensal') as any)
-            .select('compromisso_id, status, valor_pago')
-            .eq('user_id', uid)
-            .eq('mes_referencia', mesAtualRef),
+          // (04/09/2026) A consulta de `historico_pagamentos_mensal` saiu daqui.
+          // Ela servia para descontar da projeção as contas fixas já pagas no mês
+          // corrente — o que estava errado: a projeção é de meses futuros, em que
+          // essas contas vencem de novo. Quem cruza pagamento com compromisso é o
+          // resumo mensal, que fala do mês atual.
           // Contratos de investimento parcelados (ex: Bradesco)
           qContratosInv,
         ])
@@ -1135,18 +1134,17 @@ function relatorioEmTexto(d: any): string {
         const totalReceitas = (receitas3m || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
         const mediaReceitas = totalReceitas / 3
 
-        // ── 3. Contas fixas (compromissos_fixos) — cruza com pagamentos ──
-        const pagosMap = new Map<string, any>((pagamentosMes || []).map((p: any) => [p.compromisso_id, p]))
-        const contasPendentes = (alertasRec || []).filter((a: any) => {
-          const pag = pagosMap.get(a.id)
-          return !pag || pag.status !== 'pago'
-        })
-        const contasPagas = (alertasRec || []).filter((a: any) => {
-          const pag = pagosMap.get(a.id)
-          return pag && pag.status === 'pago'
-        })
-        const totalContasFixas = contasPendentes.reduce((s: number, a: any) => s + (Number(a.valor) || 0), 0)
-        const totalContasPagas = contasPagas.reduce((s: number, a: any) => s + (Number(a.valor) || 0), 0)
+        // ── 3. Contas fixas (compromissos_fixos) ────────────────
+        // 🔴 FIX (04/09/2026): aqui a projeção cruzava as contas com os
+        // pagamentos do MÊS CORRENTE e só somava as pendentes. Mas a projeção é
+        // de meses FUTUROS, e conta fixa recorrente vence de novo em todos
+        // eles — o que já foi pago em setembro continua devido em outubro.
+        // Na prática, a previsão encolhia conforme o Sr. Max pagava as contas
+        // do mês: com as sete quitadas, R$ 3.021,30 sumiam da projeção de
+        // outubro. O status de pago descreve o mês atual e não tem lugar aqui;
+        // quem mostra isso é o resumo mensal.
+        const totalContasFixasRecorrentes = (alertasRec || [])
+          .reduce((s: number, a: any) => s + (Number(a.valor) || 0), 0)
 
         // ── 4. Receitas recorrentes confirmadas ─────────────────
         const totalReceitasRec = (receitasRec || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
@@ -1348,7 +1346,7 @@ function relatorioEmTexto(d: any): string {
             .filter(i => m >= i.offset && i.parcelaProjetada < i.parcelaTotalBase)
           const totalInvestimentosMes = investimentosDoMes.reduce((s, i) => s + i.valor, 0)
 
-          const totalSaidasMes = mediaGastosVar + totalContasFixas + totalParcelasMes + totalCartoes + totalInvestimentosMes
+          const totalSaidasMes = mediaGastosVar + totalContasFixasRecorrentes + totalParcelasMes + totalCartoes + totalInvestimentosMes
 
           // ── ENTRADAS ────────────────────────────────────────────
           texto += `💰 **ENTRADAS ESTIMADAS: ${fmt(entradasMes)}**\n`
@@ -1388,24 +1386,24 @@ function relatorioEmTexto(d: any): string {
             }
           }
 
-          // 2. Contas fixas (compromissos_fixos) — com status de pagamento
+          // 2. Contas fixas (compromissos_fixos)
+          // Sem coluna de status: "pago" descreve o mês CORRENTE, e esta tabela
+          // é de um mês futuro em que todas voltam a vencer. Mostrar ✅ Pago
+          // aqui dizia ao Sr. Max que uma conta de outubro já estava quitada.
           if ((alertasRec || []).length > 0) {
-            const totalFixas = (alertasRec || []).length
-            const qtdPagas = contasPagas.length
-            texto += `🔒 **Contas fixas (${totalFixas}${qtdPagas > 0 ? ` — ${qtdPagas} paga(s)` : ''})**\n`
-            texto += `| Conta | Dia | Valor | Status |\n`
-            texto += `|-------|-----|------:|--------|\n`
+            texto += `🔒 **Contas fixas (${(alertasRec || []).length})**\n`
+            texto += `| Conta | Dia | Valor |\n`
+            texto += `|-------|-----|------:|\n`
             ;(alertasRec || []).forEach((a: any) => {
-              const pag = pagosMap.get(a.id)
-              const statusLabel = pag?.status === 'pago' ? '✅ Pago' : pag?.status === 'parcial' ? '🟡 Parcial' : '🔴 Pendente'
               const emoji = contaEmoji[a.tipo_detalhe] || '📋'
               const valorLabel = a.valor ? fmt(Number(a.valor)) : '⚠️ valor a definir'
-              texto += `| ${emoji} ${a.descricao} | ${a.dia_vencimento} | ${valorLabel} | ${statusLabel} |\n`
+              texto += `| ${emoji} ${a.descricao} | ${a.dia_vencimento} | ${valorLabel} |\n`
             })
-            if (totalContasPagas > 0) {
-              texto += `✅ Já pago: ${fmt(totalContasPagas)}\n`
+            texto += `**Subtotal contas fixas: ${fmt(totalContasFixasRecorrentes)}**\n`
+            const semValorFixas = (alertasRec || []).filter((a: any) => !(Number(a.valor) > 0)).length
+            if (semValorFixas > 0) {
+              texto += `_⚠️ ${semValorFixas} sem valor cadastrado — não entram no subtotal._\n`
             }
-            texto += `**Pendente: ${fmt(totalContasFixas)}**\n`
           }
 
           // 3. Financiamentos (parcelas detalhadas)
