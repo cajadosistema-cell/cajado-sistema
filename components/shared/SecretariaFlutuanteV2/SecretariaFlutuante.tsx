@@ -11,7 +11,7 @@ import { ElenaErrorBoundary } from './ElenaErrorBoundary'
 
 // Hooks
 import { useElenaSession }  from './useElenaSession'
-import { useElenaSalvar }   from './useElenaSalvar'
+import { useElenaSalvar, ACOES_DESTRUTIVAS } from './useElenaSalvar'
 import { useElenaVoz }      from './useElenaVoz'
 import { useElenaOffline }  from './useElenaOffline'
 import { useElenaAlertas }  from './useElenaAlertas'
@@ -23,6 +23,32 @@ import { comprimirHistorico } from './elena-history-compressor'
 import { detectarModulosContexto, dadosNecessarios } from './elena-module-detector'
 import type { ElenaModulo } from './elena-module-detector'
 import type { AcaoIA, AttachedFile, Msg } from './elena-types'
+
+// ── PALAVRAS_CONFIRMACAO_FORTE ────────────────────────────────────
+// 05/09/2026. `PALAVRAS_CONFIRMACAO` tem cerca de cinquenta entradas, e
+// muitas delas são o que qualquer pessoa responde por educação no meio de
+// uma conversa: "ok", "certo", "isso", "beleza", "perfeito", "show", "boa",
+// "tá", "vai". Qualquer uma autorizava o LOTE INTEIRO de ações pendentes,
+// incluindo as que mexem em dinheiro.
+//
+// Foi assim que em 01/09 o Sr. Max, conversando sobre os VALORES das contas,
+// respondeu uma dessas e cinco pagamentos que ele não pediu entraram no
+// banco. Ele achou que estava concordando com o assunto; o sistema entendeu
+// autorização financeira.
+//
+// A lista abaixo é curta de propósito: só o que ninguém diz por acidente.
+// Ela vale APENAS quando o lote pendente contém ação destrutiva. Para
+// criar um gasto ou um evento de agenda, a lista larga continua valendo —
+// não há motivo para pôr fricção onde não há risco.
+//
+// Quem responde "ok" a um lote com dinheiro não é ignorado: a Elena repete
+// a pergunta pedindo um "sim" explícito. Custa uma mensagem a mais e evita
+// um pagamento que ninguém pediu.
+const PALAVRAS_CONFIRMACAO_FORTE = [
+  'sim', 'sim pode', 'pode', 'pode sim', 'pode fazer', 'pode executar',
+  'confirmo', 'confirmado', 'confirma', 'confirmar',
+  'autorizo', 'autorizado', 'executa', 'execute', 'executar',
+]
 
 // ── processarArquivo: processa imagens e PDFs ──────────────────────
 async function processarArquivo(
@@ -369,6 +395,32 @@ function SecretariaFlutuanteWidget() {
             const dataAcao = new Date(a.dados.data_inicio || 0)
             return !isNaN(dataAcao.getTime()) && dataAcao.getTime() < agora
           })
+
+          // 🔒 SEGUNDO PORTÃO (05/09/2026): lote com ação destrutiva só roda
+          // com palavra forte. "ok", "beleza", "perfeito" e companhia param
+          // aqui e viram uma pergunta explícita, em vez de virarem pagamento.
+          const temDestrutiva = acoesPendentes.some(a => ACOES_DESTRUTIVAS.includes(a.tipo))
+          const confirmacaoForte = PALAVRAS_CONFIRMACAO_FORTE.some(
+            p => textoLower === p || textoLower === p + '!' || textoLower === p + '.',
+          )
+          if (temDestrutiva && !confirmacaoForte) {
+            const qtd = acoesPendentes.filter(a => ACOES_DESTRUTIVAS.includes(a.tipo)).length
+            const lista = acoesPendentes
+              .filter(a => ACOES_DESTRUTIVAS.includes(a.tipo))
+              .map((a, i) => `${i + 1}. ${a.label || a.tipo}`)
+              .join('\n')
+            confirmRetryRef.current = 0
+            session.setMensagens(prev => prev.map(m =>
+              m.id === aiMsgId
+                ? { ...m, texto:
+                    `🔒 Entendi o "${userText.trim()}", mas ${qtd === 1 ? 'essa ação mexe' : `essas ${qtd} ações mexem`} em dinheiro ou apaga${qtd === 1 ? '' : 'm'} dados — para ${qtd === 1 ? 'ela' : 'elas'} eu preciso de um **"sim"** explícito:\n\n${lista}\n\n` +
+                    `Responda **"sim"** para executar, ou me diga o que mudar.` }
+                : m,
+            ))
+            setLoading(false)
+            isSendingRef.current = false
+            return
+          }
 
           if (!temAgendaExpirada) {
             session.setMensagens(prev => prev.filter(m => m.id !== aiMsgId))

@@ -277,7 +277,12 @@ interface UseElenaSalvarProps {
 // risco que editar/deletar. Antes disso, a Elena NUNCA marcava nada como
 // pago (decisão de produto deliberada); Max e Maiara confirmaram
 // explicitamente que quereriam essa reversão antes de eu construir.
-const ACOES_DESTRUTIVAS = [
+// 05/09/2026: passou a ser EXPORTADA. O atalho de confirmação em
+// SecretariaFlutuante.tsx precisa saber se o lote pendente contém alguma
+// dessas para exigir uma palavra forte. Duplicar a lista lá seria repetir
+// exatamente a doença que estamos combatendo — uma lista em dois lugares
+// diverge no primeiro dia em que alguém adiciona um tipo novo.
+export const ACOES_DESTRUTIVAS = [
   'deletar_evento', 'deletar_lancamento', 'deletar_duplicados',
   'editar_lancamento', 'transferencia',
   'confirmar_pagamento', 'reagendar_vencimento', 'editar_financiamento',
@@ -4042,11 +4047,29 @@ function relatorioEmTexto(d: any): string {
             const vencLinha = temPagamentoNoMes
               ? vencEm(mesRef, ancora ? Number(ancora.slice(8, 10)) : im.dia_vencimento)
               : (ancora || vencEm(mesRef, im.dia_vencimento))
+            // 🔴 FIX (05/09/2026): aqui ia o CONTADOR do imóvel
+            // (`parcelas_pagas`), enquanto o ramo de baixo — o das parcelas em
+            // aberto — já mostrava o número REAL da parcela, com o comentário
+            // "não o contador do imóvel". Quem corrigiu na época corrigiu um
+            // ramo só, e a mesma coluna passou a ter dois significados.
+            // O Sr. Max viu em 04/09: Sítio Mucugê como "16/18" numa linha que
+            // vence em 05/09 — mas a 16ª ele pagou em agosto; a de setembro é
+            // a 17ª. Ele perguntou "não teria que aparecer 17?". Tinha.
+            //
+            // Duas situações, dois números:
+            //   pagamento registrado NESTE mês → a linha fala da parcela paga,
+            //     e o contador já foi incrementado: o número é ele mesmo.
+            //   parcela a vencer → a linha fala da PRÓXIMA, que é contador + 1
+            //     (é exatamente o que `calc.proximaNumero` devolve, derivado do
+            //     mesmo calendário que o card do Patrimônio usa).
+            const numeroLinha = temPagamentoNoMes
+              ? Number(im.parcelas_pagas)
+              : (calc.proximaNumero ?? (Number(im.parcelas_pagas) || 0) + 1)
             linhasBoletos.push({
               desc,
               venc: vencLinha,
               valor: Number(im.valor_parcela) || 0,
-              parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${im.parcelas_pagas}/${im.parcelas_total}` : '—',
+              parcela: (im.parcelas_pagas != null && im.parcelas_total != null) ? `${numeroLinha}/${im.parcelas_total}` : '—',
               status: semaforo(vencLinha, pagRef?.status === 'pago', pagRef?.status === 'parcial'),
               pago: pagRef?.status === 'pago',
               atrasado: false,
