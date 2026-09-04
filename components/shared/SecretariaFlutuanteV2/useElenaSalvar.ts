@@ -4581,7 +4581,16 @@ function relatorioEmTexto(d: any): string {
         // de produto (fluxo sem fricção).
         if (!opts?.incluirDestrutivas && ACOES_DESTRUTIVAS.includes(acoes[i].tipo)) {
           aguardandoConfirmacao++
-          tiposAguardando.push(ROTULO_ACAO_DESTRUTIVA[acoes[i].tipo] || acoes[i].tipo)
+          // 🔴 FIX (04/09/2026): aqui ia só o RÓTULO DO TIPO. Quando a Elena
+          // gerava cinco pagamentos na mesma resposta, a mensagem virava
+          // "marcar como pago, marcar como pago, marcar como pago…" — sem dizer
+          // de QUÊ. Em 01/09 o Sr. Max leu exatamente isso, respondeu "sim", e
+          // cinco pagamentos que ele não pediu entraram no banco; ele achou que
+          // estava confirmando os VALORES das contas, que era o assunto.
+          // O `label` da ação já descreve a operação inteira
+          // ("✅ Marcar como pago: Net casa (Conta fixa) via PF Operacional").
+          // É ele que tem de aparecer — o rótulo do tipo fica só de reserva.
+          tiposAguardando.push(acoes[i].label || ROTULO_ACAO_DESTRUTIVA[acoes[i].tipo] || acoes[i].tipo)
           continue
         }
         try {
@@ -4597,9 +4606,22 @@ function relatorioEmTexto(d: any): string {
     }
 
     if (aguardandoConfirmacao > 0) {
+      // Uma linha por ação, numerada. Em bloco e sem nome, o Sr. Max não tem
+      // como saber o que está autorizando — e um "sim" libera TODAS de uma vez.
+      // Enquanto a confirmação for em lote, ele precisa no mínimo enxergar a
+      // lista inteira antes de responder.
+      const lista = tiposAguardando.map((t, i) => `${i + 1}. ${t}`).join('\n')
+      const uma = aguardandoConfirmacao === 1
       setMensagens(prev => [...prev, {
         id: `confirm-req-${Date.now()}`, role: 'ai' as const,
-        texto: `⚠️ **Confirmação necessária:** ${tiposAguardando.join(', ')}. Essa ação altera ou remove dados — responda **"sim"** para eu executar, ou ignore para cancelar.`,
+        texto:
+          (uma
+            ? `⚠️ **Confirmação necessária** — essa ação altera dados ou mexe em dinheiro:\n\n`
+            : `⚠️ **${aguardandoConfirmacao} ações aguardando confirmação** — todas alteram dados ou mexem em dinheiro:\n\n`) +
+          `${lista}\n\n` +
+          (uma
+            ? `Responda **"sim"** para eu executar, ou ignore para cancelar.`
+            : `⛔ Um **"sim"** executa **as ${aguardandoConfirmacao}**. Confira a lista acima antes de responder — se alguma não era o que você pediu, me diga o que fazer em vez de confirmar.`),
       }])
     }
     return { salvas, falhas, erros }

@@ -699,11 +699,41 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
 
           if (temRecorrentes) {
             blocoCartoes += '🔁 CONTAS RECORRENTES CADASTRADAS (alertas automáticos):\n'
+            // 🔴 FIX (04/09/2026) — DOIS defeitos nesta linha.
+            //
+            // 1) Conta com valor 0 era injetada SEM valor nenhum (`: ''`), então
+            //    a Elena não tinha como distinguir "não cadastrado" de "não me
+            //    mostraram" — e preenchia a lacuna com o número que lembrava da
+            //    conversa. Em 01/09 ela afirmou ao Sr. Max que tinha os valores
+            //    das cinco contas fixas ("VALORES FIXOS JÁ CADASTRADOS"), todos
+            //    zerados no banco, e ainda trocou quatro deles entre as contas.
+            //    Ele parou de cobrar por nove dias acreditando que estava feito.
+            //    Ausência agora é dita com todas as letras.
+            //
+            // 2) `r.tipo` NÃO EXISTE. A consulta seleciona `tipo_detalhe`, e
+            //    `compromissos_fixos` nunca teve coluna `tipo` (migrations 060 e
+            //    061). Toda conta entrava no contexto como "(undefined)".
+            let semValor = 0
             recorrentesMax.forEach((r: any) => {
-              const valor = r.valor ? ` R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
-              blocoCartoes += `  • Dia ${r.dia_vencimento} — ${r.descricao}${valor} (${r.tipo})\n`
+              const temValorReal = Number(r.valor) > 0
+              if (!temValorReal) semValor++
+              const valor = temValorReal
+                ? ` R$ ${Number(r.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                : ' ⚠️ SEM VALOR CADASTRADO'
+              blocoCartoes += `  • Dia ${r.dia_vencimento} — ${r.descricao}${valor} (${r.tipo_detalhe || 'outro'})\n`
             })
-            blocoCartoes += '⚠️ NÃO cadastre novamente como recorrente algo que já aparece aqui.\n\n'
+            blocoCartoes += '⚠️ NÃO cadastre novamente como recorrente algo que já aparece aqui.\n'
+            if (semValor > 0) {
+              blocoCartoes += `🔴 ${semValor} conta(s) acima está(ão) marcada(s) como SEM VALOR CADASTRADO.\n`
+              blocoCartoes += '   Isso significa que o sistema NÃO tem o valor delas. Regras:\n'
+              blocoCartoes += '   • NUNCA diga que sabe, tem ou já salvou o valor de uma conta marcada assim.\n'
+              blocoCartoes += '   • NUNCA repita um número que apareceu na conversa como se estivesse salvo —\n'
+              blocoCartoes += '     enquanto não estiver escrito nesta lista, ele NÃO está no sistema.\n'
+              blocoCartoes += '   • Ao somar contas fixas, some só as que têm valor e diga quantas ficaram de fora.\n'
+              blocoCartoes += '   • Se o Sr. Max informar o valor, gere a ação alertar_recorrente para SALVAR.\n'
+              blocoCartoes += '     Só depois que o card de confirmação aparecer o valor existe de verdade.\n'
+            }
+            blocoCartoes += '\n'
           }
 
           blocoCartoes += 'INSTRUÇÕES: NUNCA cadastre novamente algo que já aparece na lista acima.\n'
