@@ -76,6 +76,27 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
       const uid = data.user.id
       setUserId(uid)
 
+      // ── VIRADA DE MÊS DOS INVESTIMENTOS (migration 083) ──────────
+      // O handler de pagamento deixa o contrato com status='pago' e a
+      // âncora no mês pago DE PROPÓSITO: essa linha é o único registro
+      // do pagamento, e avançar a âncora na hora faria o pagamento
+      // sumir do resumo do próprio mês. Quem devia empurrar a âncora
+      // depois era a "virada de mês" — que nunca foi escrita.
+      //
+      // Consequência em 04/09/2026: três contratos do Sr. Max ficaram
+      // com data de agosto na tela de setembro, marcados como pagos, e
+      // R$ 8.578,15 fora do total do mês. Ele viu antes de nós.
+      //
+      // A função avança um mês por chamada e só quando o mês da âncora
+      // já passou, então rodar toda abertura de sessão é inofensivo:
+      // dentro do mês corrente ela não faz nada.
+      //
+      // try/catch próprio: se a migration 083 ainda não foi aplicada, a
+      // sessão da Elena abre normalmente.
+      try {
+        await (supabase as any).rpc('virar_mes_investimentos')
+      } catch { /* migration ainda não aplicada — segue o jogo */ }
+
       // Verifica mic no banco se localStorage foi limpo
       if (!micPermitidoRef.current) {
         try {
