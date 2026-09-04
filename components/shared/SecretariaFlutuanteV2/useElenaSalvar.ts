@@ -21,7 +21,7 @@ import {
   BANDEIRAS_MAP,
 } from './elena-constants'
 import { buscarDadosRelatorio } from '../ModalRelatorio'
-import { resolverMesRefPendente, calcularParcelasEmAberto } from '@/lib/utils/patrimonio-pagamentos'
+import { resolverMesRefPendente, calcularParcelasEmAberto, passoMeses } from '@/lib/utils/patrimonio-pagamentos'
 import { hojeLocal, mesLocal } from '@/lib/utils'
 // ════════════════════════════════════════════════════════════════
 // 🔴 FIX DUPLICATA — normalização e similaridade de nomes
@@ -1015,8 +1015,13 @@ function relatorioEmTexto(d: any): string {
         // 🔧 FIX (21/07/2026): faltava dia_vencimento — a coluna "Dia" da
         // tabela de financiamentos sempre mostrava "—" pra imóveis (reportado
         // pelo Sr. Max: "aparece o dos cartões, mas dos imóveis não está").
+        // 🔴 FIX (04/09/2026): faltavam `periodicidade` e `proximo_vencimento`.
+        // Sem periodicidade, TODO financiamento era tratado como mensal — as
+        // Intermediárias Ciacci (R$ 10.000, trimestral) entravam em todos os
+        // meses da projeção em vez de um a cada três. O resumo mensal já trazia
+        // os dois campos e acertava; aqui não.
         let qImoveis = (supabase.from('imoveis') as any)
-          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora')
+          .select('titulo, valor_parcela, parcelas_total, parcelas_pagas, dia_vencimento, construtora, periodicidade, proximo_vencimento')
         if (empresaId) qImoveis = qImoveis.eq('empresa_id', empresaId)
 
         let qVeiculos = (supabase.from('veiculos') as any)
@@ -1040,10 +1045,16 @@ function relatorioEmTexto(d: any): string {
         // que só começam mais pra frente, sem perder nenhum dos dois casos.
         // 🔧 FIX 3 (21/07/2026): faltava proximo_vencimento — mesma reclamação
         // do Sr. Max, a data também não aparecia na seção de investimentos.
+        // 🔴 FIX 4 (04/09/2026): o filtro `.gte('mes_referencia', mesAtualRef)`
+        // escondia TODOS os contratos. `mes_referencia` fica congelado no mês em
+        // que a linha nasceu (os 8 contratos do Sr. Max estão em 2026-07/08), então
+        // a partir do mês seguinte nenhum passava no filtro e a seção inteira
+        // sumia da projeção. O resumo mensal removeu esse mesmo filtro em
+        // 03/08/2026 pelo mesmo motivo — a âncora é `proximo_vencimento`, não o
+        // mes_referencia. Esta correção só chegou aqui agora.
         let qContratosInv = (supabase.from('investimentos_contratos') as any)
           .select('nome_contrato, instituicao, parcela_atual, parcela_total, valor_mensal, valor_variavel, proximo_vencimento, mes_referencia')
-          .gte('mes_referencia', mesAtualRef)
-          .order('mes_referencia', { ascending: true })
+          .order('proximo_vencimento', { ascending: true })
         if (empresaId) qContratosInv = qContratosInv.eq('empresa_id', empresaId)
 
         const [
@@ -1145,7 +1156,17 @@ function relatorioEmTexto(d: any): string {
         // qualquer financiamento sem valor cadastrado sumir da projeção sem
         // aviso — mesmo bug do resumo_mensal (Sítio Zeta/São Roque). Agora
         // entra com placeholder "valor a definir" e não soma no total.
-        const parcelasAtivas: { titulo: string; valor: number; valorLabel?: string; somaNoTotal?: boolean; total: number; pagas: number; dia?: number }[] = []
+        // Quantos meses até a próxima parcela cair. `proximo_vencimento` é a
+        // âncora do contrato: a parcela nº (parcelas_pagas + 1) vence NESSA data.
+        // Âncora vencida ou deste mês → 0 (a parcela é devida já).
+        const offsetDaAncora = (iso: any): number => {
+          const mes = String(iso || '').slice(0, 7)
+          if (mes.length < 7) return 0
+          const d = mesesEntre(mesAtualRef, mes)
+          return d > 0 ? d : 0
+        }
+
+        const parcelasAtivas: { titulo: string; valor: number; valorLabel?: string; somaNoTotal?: boolean; total: number; pagas: number; dia?: number; passo: number; offsetAncora: number }[] = []
         ;(imoveisFinanc || []).forEach((im: any) => {
           const restantes = (im.parcelas_total || 0) - (im.parcelas_pagas || 0)
           if (restantes > 0) {
@@ -1157,6 +1178,8 @@ function relatorioEmTexto(d: any): string {
               somaNoTotal: temValor,
               total: im.parcelas_total || 0, pagas: im.parcelas_pagas || 0,
               dia: im.dia_vencimento, // 🔧 FIX (21/07/2026): faltava — coluna "Dia" sempre vinha "—" pra imóveis
+              passo: passoMeses(im.periodicidade),
+              offsetAncora: offsetDaAncora(im.proximo_vencimento),
             })
           }
         })
@@ -1170,6 +1193,10 @@ function relatorioEmTexto(d: any): string {
               valorLabel: temValor ? undefined : '⚠️ valor a definir',
               somaNoTotal: temValor,
               total: ve.parcelas_total || 0, pagas: ve.parcelas_pagas || 0, dia: ve.vencimento_dia,
+              // Veículos não trazem periodicidade nem âncora na consulta —
+              // seguem mensais a partir do próximo mês, como antes.
+              passo: 1,
+              offsetAncora: 0,
             })
           }
         })
@@ -1205,7 +1232,10 @@ function relatorioEmTexto(d: any): string {
               parcelaAtualBase: c.parcela_atual || 0,
               parcelaTotalBase: c.parcela_total || 0,
               proximoVencBase: c.proximo_vencimento || null,
-              offset: mesesEntre(mesAtualRef, c.mes_referencia), // 0 = já em andamento; >0 = começa mais pra frente dentro da janela
+              // Âncora = proximo_vencimento (não mes_referencia, que fica
+              // congelado na criação da linha). 0 = já em andamento ou vencido;
+              // >0 = começa mais pra frente dentro da janela.
+              offset: offsetDaAncora(c.proximo_vencimento),
             })
           }
         })
@@ -1299,9 +1329,18 @@ function relatorioEmTexto(d: any): string {
           // antes esses dois arrays eram fixos e repetiam a mesma parcela em
           // todo mês da projeção. Agora incrementam (pagas+m) e somem da lista
           // quando o financiamento acaba de ser pago dentro da janela.
+          // 🔴 FIX (04/09/2026): antes somava a parcela de TODO financiamento em
+          // TODO mês (`pagas + m`), ignorando a periodicidade — as Intermediárias
+          // Ciacci (R$ 10.000, trimestral) entravam três vezes a cada trimestre.
+          // Agora o financiamento só entra nos meses em que a parcela realmente
+          // cai: a partir da âncora, de `passo` em `passo` meses.
+          // `pagasProjetadas` passou a ser o NÚMERO da parcela paga naquele mês
+          // (a âncora é a nº pagas+1), então o contrato sai da lista no mês certo
+          // — antes ele aparecia um mês a mais do que devia.
           const parcelasDoMes = parcelasAtivas
-            .map(p => ({ ...p, pagasProjetadas: p.pagas + m }))
-            .filter(p => p.pagasProjetadas < p.total)
+            .filter(p => m >= p.offsetAncora && (m - p.offsetAncora) % p.passo === 0)
+            .map(p => ({ ...p, pagasProjetadas: p.pagas + 1 + Math.floor((m - p.offsetAncora) / p.passo) }))
+            .filter(p => p.pagasProjetadas <= p.total)
           const totalParcelasMes = parcelasDoMes.reduce((s, p) => s + (p.somaNoTotal === false ? 0 : p.valor), 0)
 
           const investimentosDoMes = investimentosAtivos
