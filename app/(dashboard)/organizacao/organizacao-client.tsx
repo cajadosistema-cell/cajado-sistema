@@ -7,6 +7,7 @@ import { formatRelative, formatDate, cn } from '@/lib/utils'
 import { PageHeader, StatusBadge, EmptyState } from '@/components/shared/ui'
 import { TabPendencias } from './_components/TabPendencias'
 import { TabReunioes } from './_components/TabReunioes'
+import { TabFluxogramas } from './_components/TabFluxogramas'
 
 // ── Types ───────────────────────────────────────────────────
 type Projeto = {
@@ -286,7 +287,7 @@ function ProgressBar({ value, className }: { value: number; className?: string }
 
 // ── Main ─────────────────────────────────────────────────────
 export default function OrganizacaoClient() {
-  const [tab, setTab] = useState<'projetos' | 'ideias' | 'decisoes' | 'pendencias' | 'reunioes'>('projetos')
+  const [tab, setTab] = useState<'projetos' | 'ideias' | 'decisoes' | 'pendencias' | 'reunioes' | 'fluxos'>('projetos')
   const [modalProjeto, setModalProjeto] = useState(false)
   const [modalIdeia, setModalIdeia] = useState(false)
   const [editandoProjeto, setEditandoProjeto] = useState<Projeto | null>(null)
@@ -350,11 +351,12 @@ export default function OrganizacaoClient() {
     { key: 'decisoes',  label: '📖 Decisões' },
     { key: 'pendencias', label: '📋 Pendências' },
     { key: 'reunioes',  label: '🤝 Reuniões' },
+    { key: 'fluxos',    label: '🔄 Fluxogramas & POPs' },
   ] as const
 
   return (
     <>
-      <PageHeader title="Organização" subtitle="Projetos · Ideias · Histórico de decisões">
+      <PageHeader title="Organização" subtitle="Projetos · Ideias · Decisões · Fluxogramas & POPs">
         {tab === 'projetos' && (
           <button onClick={() => setModalProjeto(true)} className="btn-primary">+ Projeto</button>
         )}
@@ -606,6 +608,9 @@ export default function OrganizacaoClient() {
 
       {/* Tab: Reuniões */}
       {tab === 'reunioes' && <TabReunioes projetos={projetos} />}
+
+      {/* Tab: Fluxogramas & POPs */}
+      {tab === 'fluxos' && <TabFluxogramas />}
 
       {/* Modais */}
       {(modalProjeto || editandoProjeto) && (
