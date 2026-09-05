@@ -35,6 +35,7 @@ const NAV_EMPRESA: Array<{
   {
     group: '🏢 Equipe & Operações', id: 'eqp',
     items: [
+      { href: '/processos',    label: '🔄 Processos & Fluxos',        tooltip: 'Fluxogramas, POPs e procedimentos operacionais padrão da empresa.' },
       { href: '/comunicacao',  label: '🗨️ Chat da Equipe',           tooltip: 'Canal de comunicação interna com toda a equipe.' },
       { href: '/inteligencia', label: '🧠 IA & Automações',           tooltip: 'Configure e monitore automações e respostas da IA Elena.' },
       { href: '/organizacao',  label: '✅ Tarefas & Projetos',        tooltip: 'Gerencie tarefas, projetos e prazos da equipe.' },
@@ -97,7 +98,7 @@ export function Sidebar() {
   const [isAdmin, setIsAdmin] = useState(true)
   const [permissoes, setPermissoes] = useState<string[]>([])
   const [userData, setUserData] = useState<{nome: string, cargo: string, email: string} | null>(null)
-  const [expanded, setExpanded] = useState<string[]>(['fin', 'crm'])
+  const [expanded, setExpanded] = useState<string[]>(['fin', 'crm', 'eqp'])
 
   const toggleGroup = (id: string) => {
     setExpanded(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id])
