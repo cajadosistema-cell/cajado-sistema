@@ -16,7 +16,8 @@ const mainItems = [
 ]
 
 const moreItems = [
-  // Equipe
+  // Equipe & Operações
+  { href: '/processos',    label: 'Processos',        icon: '🔄' },
   { href: '/comunicacao',  label: 'Chat Equipe',      icon: '🗨️' },
   { href: '/inteligencia', label: 'IA & Auto',        icon: '🧠' },
   { href: '/organizacao',  label: 'Tarefas',          icon: '✅' },

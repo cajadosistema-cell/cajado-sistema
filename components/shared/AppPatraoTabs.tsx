@@ -35,6 +35,16 @@ const APP_PATRAO_MODULES = [
     text: 'text-violet-400',
     glow: 'shadow-violet-500/20',
   },
+  {
+    href: '/processos',
+    label: 'Processos & POPs',
+    labelMobile: 'Processos',
+    emoji: '🔄',
+    gradient: 'from-amber-500/20 to-orange-500/10',
+    border: 'border-amber-500/30',
+    text: 'text-amber-400',
+    glow: 'shadow-amber-500/20',
+  },
 ]
 
 export function AppPatraoTabs() {
