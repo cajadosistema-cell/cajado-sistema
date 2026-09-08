@@ -287,6 +287,80 @@ export const ACOES_DESTRUTIVAS = [
   'editar_lancamento', 'transferencia',
   'confirmar_pagamento', 'reagendar_vencimento', 'editar_financiamento',
 ]
+// ── ENVELOPE ERRADO ───────────────────────────────────────────────
+// 08/09/2026. O Sr. Max escreveu "plano de saude, sitio mucuge pagos,
+// saindo da conta operacional bradesco". A Elena respondeu "Registrando
+// pagamento do Plano de Saúde agora…" e emitiu:
+//
+//   { "tipo": "registro",
+//     "dados": { "acao": "registrar_pagamento", "descricao": "Plano de
+//                Saúde", "valor": 2362.5, "conta_origem": "…",
+//                "data_pagamento": "…" } }
+//
+// `registro` grava uma ANOTAÇÃO em elena_registro. Não marca nada como
+// pago. E como não está em ACOES_DESTRUTIVAS, passou direto pelo portão
+// de confirmação sem perguntar nada, "deu certo", e nenhum erro foi para
+// elena_diagnostico. Silencioso nas três camadas: o Sr. Max só descobriu
+// dias depois, olhando a tela e vendo os boletos ainda vencidos.
+//
+// O modelo SABIA o que queria — está escrito `acao: "registrar_pagamento"`
+// dentro dos dados, com valor, conta de origem e data corretos. Ele só
+// errou o envelope. Regra de prompt não segura isso (é a armadilha 8, a
+// mesma que obrigou a CORREÇÃO DE TIPO lá embaixo): quem tem de conferir
+// é o código.
+//
+// Aqui a intenção é lida de `dados.acao` e o envelope é reescrito. O
+// resultado passa a ser `confirmar_pagamento`, que ESTÁ na lista
+// destrutiva — então em vez de executar calado, o pagamento vira uma
+// linha na tela pedindo o "sim" do Sr. Max. Se o nome não bater com
+// nada, o handler estoura um erro visível e grava o diagnóstico. As duas
+// saídas são melhores que a de hoje, que é fingir que fez.
+const ENVELOPE_CORRETO: Record<string, string> = {
+  registrar_pagamento: 'confirmar_pagamento',
+  marcar_como_pago:    'confirmar_pagamento',
+  marcar_pago:         'confirmar_pagamento',
+  pagar:               'confirmar_pagamento',
+  confirmar_pagamento: 'confirmar_pagamento',
+}
+
+export function normalizarEnvelopeAcao(acao: any): any {
+  if (!acao || typeof acao !== 'object') return acao
+  const intencao = String(acao?.dados?.acao || '').toLowerCase().trim()
+  const alvo = ENVELOPE_CORRETO[intencao]
+  // Sem intenção declarada, ou envelope já correto: não mexe em nada.
+  if (!alvo || acao.tipo === alvo) return acao
+
+  const d: Record<string, any> = { ...(acao.dados || {}) }
+
+  if (alvo === 'confirmar_pagamento') {
+    // O handler lê `nome`, `valor_pago` e `tipo`; o modelo escreveu
+    // `descricao`, `valor` e pôs o nome da AÇÃO em `tipo`. Só preenche o
+    // que falta — nunca sobrescreve campo que já veio certo.
+    if (d.nome == null && d.descricao != null) d.nome = d.descricao
+    if (d.valor_pago == null && d.valor != null) d.valor_pago = d.valor
+    // `tipo` aqui deveria ser imovel/conta_fixa/cartao/veiculo/investimento.
+    // Veio 'registrar_pagamento'. Marcar como indefinido faz a CORREÇÃO DE
+    // TIPO do handler procurar o nome nas tabelas e descobrir sozinha —
+    // é o mesmo mecanismo que resolveu a "Energia Solar Jurema" em 11/08.
+    if (!['cartao', 'imovel', 'veiculo', 'conta_fixa', 'investimento'].includes(String(d.tipo))) {
+      d.tipo = 'indefinido'
+    }
+  }
+
+  const nomeRotulo = d.nome || d.descricao || 'item'
+  const valorRotulo = Number(d.valor_pago ?? d.valor)
+  return {
+    ...acao,
+    tipo: alvo,
+    dados: d,
+    // Rótulo reescrito: é ele que o Sr. Max lê na lista de confirmação, e
+    // o rótulo antigo dizia "registro", que é justamente o engano.
+    label: valorRotulo > 0
+      ? `✅ Marcar como pago: ${nomeRotulo} — R$ ${valorRotulo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+      : `✅ Marcar como pago: ${nomeRotulo}`,
+  }
+}
+
 const ROTULO_ACAO_DESTRUTIVA: Record<string, string> = {
   deletar_evento:     '🗑️ deletar evento',
   deletar_lancamento: '🗑️ deletar lançamento',
@@ -692,7 +766,12 @@ function relatorioEmTexto(d: any): string {
   return L.join('\n')
 }
 
-  const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acao: AcaoIA) => {
+  const salvarAcao = useCallback(async (msgId: string, acaoIdx: number, acaoBruta: AcaoIA) => {
+    // 08/09/2026: envelope errado é corrigido ANTES de qualquer coisa. Ver o
+    // comentário de `normalizarEnvelopeAcao`. Vale tanto para o botão Salvar
+    // quanto para a execução automática — este é o único caminho por onde
+    // toda ação passa.
+    const acao = normalizarEnvelopeAcao(acaoBruta) as AcaoIA
     // Lê userId da ref — nunca fica stale
     const uid = userIdRef.current
 
@@ -3222,7 +3301,13 @@ function relatorioEmTexto(d: any): string {
         // que derrubou o resumo em 03/08. Definição de função pode vir antes;
         // código que roda, não.
         const TIPOS_BUSCAVEIS = ['imovel', 'veiculo', 'conta_fixa', 'investimento']
-        if (nomeAlvo && TIPOS_BUSCAVEIS.includes(tipoAlvo)) {
+        // 08/09/2026: a condição era `TIPOS_BUSCAVEIS.includes(tipoAlvo)`, ou
+        // seja, só corrigia tipo que já era um dos quatro. Tipo desconhecido —
+        // 'indefinido' vindo do normalizador de envelope, ou lixo do modelo —
+        // pulava a busca e caía direto no `else` final, "Tipo não reconhecido".
+        // Justamente o caso em que a busca é mais necessária. Cartão fica de
+        // fora porque não mora em nenhuma dessas quatro tabelas.
+        if (nomeAlvo && tipoAlvo !== 'cartao') {
           const forcas: Record<string, 'forte' | 'fraca' | null> = {}
           for (const t of TIPOS_BUSCAVEIS) forcas[t] = await existeNoTipo(t)
           const comForte = TIPOS_BUSCAVEIS.filter(t => forcas[t] === 'forte')
@@ -4600,6 +4685,15 @@ function relatorioEmTexto(d: any): string {
     let aguardandoConfirmacao = 0
     const erros: string[] = []
     const tiposAguardando: string[] = []
+
+    // 08/09/2026: normaliza o envelope ANTES do gate. Sem isso, um pagamento
+    // empacotado como `registro` não é reconhecido como destrutivo e executa
+    // sem confirmação — foi exatamente o que aconteceu em 08/09. A escrita é
+    // no próprio array de propósito: a mensagem guardada e o rótulo na tela
+    // passam a mostrar o que a ação REALMENTE é.
+    for (let i = 0; i < acoes.length; i++) {
+      if (acoes[i]?.status === 'pending') acoes[i] = normalizarEnvelopeAcao(acoes[i])
+    }
 
     for (let i = 0; i < acoes.length; i++) {
       if (acoes[i].status === 'pending') {
