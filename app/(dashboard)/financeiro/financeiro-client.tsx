@@ -891,6 +891,7 @@ export default function FinanceiroClient() {
           onEditLancamento={handleEditLancamento}
           onDeleteLancamento={handleDeleteLancamento}
           onDeleteConta={handleDeleteConta}
+          onRefresh={() => { refetchContas(); refetchLancamentos() }}
         />
       )}
 

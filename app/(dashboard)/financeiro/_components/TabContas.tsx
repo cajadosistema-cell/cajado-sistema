@@ -6,8 +6,18 @@ import { useSupabaseMutation } from '@/lib/hooks/useSupabase'
 import { EmptyState } from '@/components/shared/ui'
 import { createClient } from '@/lib/supabase/client'
 import { exportarLancamentos } from '@/lib/export-utils'
+import { ModalOpenFinance } from '@/components/financeiro/ModalOpenFinance'
 
-type Conta = { id: string; nome: string; tipo: string; categoria: string; saldo_atual: number; cor?: string }
+type Conta = {
+  id: string
+  nome: string
+  tipo: string
+  categoria: string
+  saldo_atual: number
+  cor?: string
+  open_finance_id?: string
+  open_finance_sincronizado_em?: string
+}
 type Lancamento = { id: string; descricao: string; valor: number; tipo: string; status: string; data_competencia: string; conta_id: string; categoria_id?: string | null }
 type Categoria = { id: string; nome: string; tipo: string }
 
@@ -269,20 +279,21 @@ function ModalEditarConta({ conta, onClose, onSave }: { conta: Conta; onClose: (
 }
 
 // ── TabContas principal ──────────────────────────────────────
-export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImportar, onValidar, onEditLancamento, onDeleteLancamento, onDeleteConta }: {
+export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImportar, onValidar, onEditLancamento, onDeleteLancamento, onDeleteConta, onRefresh }: {
   contas: Conta[]; lancamentos: Lancamento[]; categorias: Categoria[];
   onNovaConta: () => void; onImportar: () => void;
   onValidar: (id: string, desc: string) => void
   onEditLancamento: (l: any) => void
   onDeleteLancamento: (id: string) => void
   onDeleteConta: (id: string) => void
-
+  onRefresh?: () => void
 }) {
   const contasBancarias = contas.filter(c => ['corrente', 'poupanca', 'dinheiro', 'investimento'].includes(c.tipo))
   const [contaSel, setContaSel] = useState<string>('todas')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [busca, setBusca] = useState('')
   const [modalLanc, setModalLanc] = useState(false)
+  const [modalOpenFinance, setModalOpenFinance] = useState(false)
   const [editandoConta, setEditandoConta] = useState<Conta | null>(null)
   const today = new Date().toISOString().substring(0, 10)
   const mes = new Date().toISOString().substring(0, 7)
@@ -311,7 +322,14 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
           <h2 className="text-base font-semibold text-fg">Contas Bancárias</h2>
           <p className="text-xs text-fg-tertiary">Corrente · Poupança · Caixa · Importar extrato</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          <button
+            onClick={() => setModalOpenFinance(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm border border-blue-400/30 transition-all"
+            title="Conectar e sincronizar bancos via Open Finance"
+          >
+            <span className="text-amber-300">⚡</span> Open Finance
+          </button>
           <button onClick={onImportar} className="btn-secondary text-xs hidden md:flex">📥 Importar Extrato</button>
           <button
             onClick={() => {
@@ -342,6 +360,9 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
               )}>
               <span className="w-2 h-2 rounded-full" style={{ background: c.cor || '#6b7280' }} />
               {c.nome}
+              {c.open_finance_id && (
+                <span className="text-[10px] text-amber-400" title="Sincronizado via Open Finance">⚡</span>
+              )}
               <span className="text-[9px] opacity-60">{formatCurrency(c.saldo_atual)}</span>
             </button>
             {contaSel === c.id && (
@@ -456,6 +477,14 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
           conta={editandoConta}
           onClose={() => setEditandoConta(null)}
           onSave={() => { setEditandoConta(null); onNovaConta() }}
+        />
+      )}
+      {modalOpenFinance && (
+        <ModalOpenFinance
+          onClose={() => setModalOpenFinance(false)}
+          onSuccess={() => {
+            onRefresh?.()
+          }}
         />
       )}
     </div>

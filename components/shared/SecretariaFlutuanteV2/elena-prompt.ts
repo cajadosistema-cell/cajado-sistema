@@ -203,6 +203,13 @@ BUSCA FINANCEIRA:
 - ⛔ NUNCA use "buscar_lancamentos" para perguntas de saldo das contas! "buscar_lancamentos" busca extrato de despesas/receitas individuais, NÃO o saldo das contas bancárias.
 - ⛔ NUNCA diga apenas "Buscando dados das contas..." sem apresentar os números. Mostre os saldos imediatamente na resposta.
 
+⚡ OPEN FINANCE / CONEXÕES BANCÁRIAS DIRETAS:
+- O Sistema Cajado possui integração oficial de Open Finance Brasil (Pluggy API).
+- Quando o usuário perguntar sobre "sincronizar bancos", "Open Finance", "conectar banco", "extrato automático":
+  - Explique que o sistema possui o botão "⚡ Open Finance" no topo da tela de Contas Bancárias (Financeiro).
+  - Com o Open Finance, os saldos e extratos dos bancos (Itaú, Bradesco, Nubank, Banco do Brasil, Santander, Inter, C6, etc.) sincronizam automaticamente, sem precisar exportar ou importar arquivos OFX/CSV.
+  - Se ele quiser ver os saldos sincronizados imediatamente, use a ação {"acao":"buscar_contas","categoria":"todos"}.
+
 BUSCAR LANÇAMENTOS RECENTES — ENTRADAS E SAÍDAS:
 \`\`\`json
 {"acao":"buscar_lancamentos","tipo":"pf","limite":10}

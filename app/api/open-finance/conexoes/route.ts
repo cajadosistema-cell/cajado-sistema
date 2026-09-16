@@ -1,0 +1,296 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import {
+  getPluggyItem,
+  getPluggyAccounts,
+  getPluggyTransactions,
+  deletePluggyItem,
+  PluggyAccount,
+  PluggyTransaction
+} from '@/lib/open-finance/pluggy-client'
+
+export async function GET(req: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+    }
+
+    const { data: perfil } = await (supabase.from('perfis') as any)
+      .select('empresa_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const empresaId = perfil?.empresa_id
+
+    // Buscar conexões da empresa ou do usuário
+    let query = (supabase.from('open_finance_conexoes') as any).select('*')
+    if (empresaId) {
+      query = query.eq('empresa_id', empresaId)
+    } else {
+      query = query.eq('user_id', user.id)
+    }
+
+    const { data: conexoes, error: conexoesError } = await query.order('created_at', { ascending: false })
+
+    if (conexoesError) {
+      // Se a tabela ainda não foi criada, retorna lista vazia amigável
+      if (conexoesError.code === 'PGRST205' || conexoesError.message?.includes('does not exist')) {
+        return NextResponse.json({ conexoes: [], tablePending: true })
+      }
+      throw conexoesError
+    }
+
+    // Buscar contas vinculadas a essas conexões
+    const conexaoIds = (conexoes || []).map((c: any) => c.id)
+    let contasVinculadas: any[] = []
+
+    if (conexaoIds.length > 0) {
+      const { data: contas } = await (supabase.from('contas') as any)
+        .select('id, nome, tipo, saldo_atual, open_finance_id, open_finance_conexao_id, open_finance_sincronizado_em')
+        .in('open_finance_conexao_id', conexaoIds)
+      contasVinculadas = contas || []
+    }
+
+    // Associar contas a cada conexão
+    const conexoesComContas = (conexoes || []).map((c: any) => ({
+      ...c,
+      contas: contasVinculadas.filter((acc: any) => acc.open_finance_conexao_id === c.id),
+    }))
+
+    return NextResponse.json({ conexoes: conexoesComContas })
+  } catch (error: any) {
+    console.error('Erro em GET /api/open-finance/conexoes:', error)
+    return NextResponse.json({ error: error.message || 'Erro ao listar conexões' }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const adminSupabase = await createAdminClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+    }
+
+    const body = await req.json()
+    const { itemId, connector } = body
+
+    if (!itemId) {
+      return NextResponse.json({ error: 'itemId é obrigatório' }, { status: 400 })
+    }
+
+    // Identificar empresa_id do perfil
+    const { data: perfil } = await (supabase.from('perfis') as any)
+      .select('empresa_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const empresaId = perfil?.empresa_id
+    if (!empresaId) {
+      return NextResponse.json({ error: 'Empresa não encontrada para este usuário' }, { status: 400 })
+    }
+
+    // 1. Obter informações atualizadas do Item na Pluggy
+    const itemData = await getPluggyItem(itemId).catch(() => ({
+      id: itemId,
+      connector: connector || { id: 0, name: 'Instituição Bancária' },
+      status: 'UPDATED',
+      lastUpdatedAt: new Date().toISOString(),
+    }))
+
+    const connectorName = itemData.connector?.name || connector?.name || 'Banco Conectado'
+    const connectorLogo = itemData.connector?.imageUrl || connector?.imageUrl || null
+    const connectorColor = itemData.connector?.primaryColor || connector?.primaryColor || '#3b82f6'
+
+    // 2. Salvar ou atualizar na tabela open_finance_conexoes
+    const { data: conexao, error: saveError } = await (adminSupabase.from('open_finance_conexoes') as any)
+      .upsert(
+        {
+          item_id: itemId,
+          empresa_id: empresaId,
+          user_id: user.id,
+          connector_id: itemData.connector?.id || null,
+          connector_name: connectorName,
+          connector_logo_url: connectorLogo,
+          connector_color: connectorColor,
+          status: itemData.status || 'UPDATED',
+          last_sync_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'item_id' }
+      )
+      .select()
+      .single()
+
+    if (saveError) {
+      console.error('Erro ao salvar conexao no banco:', saveError)
+      return NextResponse.json({ error: 'Erro ao registrar conexão no banco: ' + saveError.message }, { status: 500 })
+    }
+
+    // 3. Buscar contas da instituição via Pluggy
+    const pluggyAccounts = await getPluggyAccounts(itemId)
+    let contasCriadasOuAtualizadas = 0
+    let transacoesImportadas = 0
+
+    for (const pAcc of pluggyAccounts) {
+      const tipoConta = pAcc.subtype === 'CREDIT_CARD' || pAcc.type === 'CREDIT' ? 'cartao_credito' : 'corrente'
+      const saldo = typeof pAcc.balance === 'number' ? pAcc.balance : 0
+
+      // Verifica se a conta já existe vinculada
+      const { data: contaExistente } = await (adminSupabase.from('contas') as any)
+        .select('id, nome, saldo_atual')
+        .eq('empresa_id', empresaId)
+        .eq('open_finance_id', pAcc.id)
+        .maybeSingle()
+
+      let contaId: string
+
+      if (contaExistente) {
+        contaId = contaExistente.id
+        // Atualiza saldo e timestamp de sync
+        await (adminSupabase.from('contas') as any)
+          .update({
+            saldo_atual: saldo,
+            open_finance_conexao_id: conexao.id,
+            open_finance_sincronizado_em: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', contaId)
+        contasCriadasOuAtualizadas++
+      } else {
+        // Cria nova conta bancária no Cajado
+        const { data: novaConta, error: contaErr } = await (adminSupabase.from('contas') as any)
+          .insert({
+            empresa_id: empresaId,
+            user_id: user.id,
+            nome: `${pAcc.name} (${connectorName})`,
+            tipo: tipoConta,
+            categoria: 'pj',
+            saldo_inicial: saldo,
+            saldo_atual: saldo,
+            ativo: true,
+            cor: connectorColor,
+            open_finance_id: pAcc.id,
+            open_finance_conexao_id: conexao.id,
+            open_finance_sincronizado_em: new Date().toISOString(),
+            open_finance_sync_auto: true,
+          })
+          .select('id')
+          .single()
+
+        if (contaErr) {
+          console.error('Erro ao criar conta bancária no Cajado:', contaErr)
+          continue
+        }
+        contaId = novaConta.id
+        contasCriadasOuAtualizadas++
+      }
+
+      // 4. Buscar transações recentes desta conta
+      try {
+        const transacoes = await getPluggyTransactions(pAcc.id, { pageSize: 50 })
+        for (const tx of transacoes) {
+          // Idempotência: verificar se transação já foi importada
+          const { data: txExistente } = await (adminSupabase.from('lancamentos') as any)
+            .select('id')
+            .eq('open_finance_id', tx.id)
+            .maybeSingle()
+
+          if (!txExistente) {
+            const isDespesa = tx.amount < 0 || tx.type === 'DEBIT'
+            const valorAbs = Math.abs(tx.amount)
+
+            await (adminSupabase.from('lancamentos') as any).insert({
+              empresa_id: empresaId,
+              conta_id: contaId,
+              descricao: tx.description || 'Transação Open Finance',
+              valor: valorAbs,
+              tipo: isDespesa ? 'despesa' : 'receita',
+              regime: 'caixa',
+              status: 'validado',
+              data_competencia: tx.date,
+              data_caixa: tx.date,
+              open_finance_id: tx.id,
+              open_finance_tipo: tx.type,
+              observacoes: `Importado via Open Finance (${connectorName})`,
+              conciliado: true,
+              created_by: user.id,
+            })
+            transacoesImportadas++
+          }
+        }
+      } catch (txErr) {
+        console.warn(`Erro ao buscar transações para conta ${pAcc.id}:`, txErr)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      conexao,
+      contasProcessadas: contasCriadasOuAtualizadas,
+      transacoesProcessadas: transacoesImportadas,
+    })
+  } catch (error: any) {
+    console.error('Erro em POST /api/open-finance/conexoes:', error)
+    return NextResponse.json({ error: error.message || 'Erro ao registrar conexão' }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const adminSupabase = await createAdminClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    const itemId = searchParams.get('itemId')
+
+    if (!id && !itemId) {
+      return NextResponse.json({ error: 'id ou itemId é obrigatório' }, { status: 400 })
+    }
+
+    // Buscar a conexão no banco
+    let query = (adminSupabase.from('open_finance_conexoes') as any).select('*')
+    if (id) query = query.eq('id', id)
+    else if (itemId) query = query.eq('item_id', itemId)
+
+    const { data: conexao } = await query.maybeSingle()
+    if (!conexao) {
+      return NextResponse.json({ error: 'Conexão não encontrada' }, { status: 404 })
+    }
+
+    // Deletar na Pluggy
+    if (conexao.item_id) {
+      await deletePluggyItem(conexao.item_id).catch(() => null)
+    }
+
+    // Desvincular contas
+    await (adminSupabase.from('contas') as any)
+      .update({
+        open_finance_conexao_id: null,
+        open_finance_id: null,
+        open_finance_sync_auto: false,
+      })
+      .eq('open_finance_conexao_id', conexao.id)
+
+    // Deletar a conexão
+    await (adminSupabase.from('open_finance_conexoes') as any)
+      .delete()
+      .eq('id', conexao.id)
+
+    return NextResponse.json({ success: true, message: 'Conexão removida com sucesso' })
+  } catch (error: any) {
+    console.error('Erro em DELETE /api/open-finance/conexoes:', error)
+    return NextResponse.json({ error: error.message || 'Erro ao remover conexão' }, { status: 500 })
+  }
+}
