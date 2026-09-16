@@ -317,7 +317,7 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
   return (
     <div className="space-y-5 mt-4">
       {/* Header — botões de importar e nova conta ficam só no desktop */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-fg">Contas Bancárias</h2>
           <p className="text-xs text-fg-tertiary">Corrente · Poupança · Caixa · Importar extrato</p>
@@ -342,6 +342,30 @@ export function TabContas({ contas, lancamentos, categorias, onNovaConta, onImpo
           <button onClick={onNovaConta} className="btn-ghost text-xs hidden md:flex">+ Conta</button>
           <button onClick={() => setModalLanc(true)} className="btn-primary text-xs">+ Lançamento</button>
         </div>
+      </div>
+
+      {/* Banner / Card Destaque Open Finance no Mobile */}
+      <div className="md:hidden bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/20 border border-blue-500/30 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-base shadow-inner">
+            ⚡
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white flex items-center gap-1.5">
+              Open Finance Brasil
+              <span className="text-[9px] font-normal px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                Pluggy
+              </span>
+            </p>
+            <p className="text-[10px] text-gray-400">Sincronizar saldos e extratos</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setModalOpenFinance(true)}
+          className="text-xs font-semibold px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md active:scale-95 transition-all flex items-center gap-1 shrink-0"
+        >
+          <span>Conectar</span> ➔
+        </button>
       </div>
 
       {/* Seletor de contas */}

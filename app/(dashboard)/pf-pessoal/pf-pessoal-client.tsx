@@ -23,6 +23,7 @@ import { ModalNovaReceita }       from './_components/modals/ModalNovaReceita'
 import { PainelComparativoMes }   from '@/components/shared/PainelComparativoMes'
 import { PainelLimitesOrcamento } from '@/components/shared/LimitesOrcamento'
 import { VencimentosMesPF }       from './_components/VencimentosMesPF'
+import { ModalOpenFinance }       from '@/components/financeiro/ModalOpenFinance'
 
 type TabId = 'resumo' | 'lancamentos' | 'orcamentos' | 'limites' | 'previsao' | 'cartoes' | 'registros' | 'contas' | 'controle'
 
@@ -56,6 +57,7 @@ export default function PfPessoalClient() {
   const [modalReceita,    setModalReceita]    = useState(false)
   const [modalVencimentosPF, setModalVencimentosPF] = useState(false)
   const [modalNovaConta,  setModalNovaConta]  = useState(false)
+  const [modalOpenFinance, setModalOpenFinance] = useState(false)
   const [gastoEdit,    setGastoEdit]    = useState<any>(null)
   const [receitaEdit,  setReceitaEdit]  = useState<any>(null)
   const [authUserId,   setAuthUserId]   = useState('')
@@ -100,33 +102,40 @@ export default function PfPessoalClient() {
 
   // Ações contextuais: muda com a aba ativa
   const renderHeaderActions = () => {
-    if (tab === 'resumo' || tab === 'lancamentos') return (
-      <>
-        <button onClick={() => setModalVencimentosPF(true)} title="Ver agenda mensal de contas fixas" className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">📅 Contas do Mês</button>
-        <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden md:flex">+ Receita</button>
-        <button onClick={() => setModalGasto(true)}   className="btn-primary   text-xs h-8 px-3 whitespace-nowrap">+ Gasto</button>
-      </>
-    )
-    if (tab === 'contas') return (
-      <div className="flex gap-2 flex-wrap">
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
         <button
-          onClick={() => {
-            const lancContas = [...gastos, ...receitas].filter((l: any) => contas?.some((c: any) => c.id === l.conta_id))
-            exportarLancamentos(lancContas, [], contas ?? [], 'contas_pf')
-          }}
-          className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">
-          📤 Exportar CSV
+          onClick={() => setModalOpenFinance(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm border border-blue-400/30 transition-all h-8"
+          title="Conectar e sincronizar bancos via Open Finance"
+        >
+          <span className="text-amber-300">⚡</span> Open Finance
         </button>
-        <button onClick={() => setModalNovaConta(true)} className="btn-primary text-xs h-8 px-4 whitespace-nowrap">🏦 Nova Conta</button>
+        {tab === 'resumo' || tab === 'lancamentos' ? (
+          <>
+            <button onClick={() => setModalVencimentosPF(true)} title="Ver agenda mensal de contas fixas" className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden sm:flex">📅 Contas do Mês</button>
+            <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden sm:flex">+ Receita</button>
+            <button onClick={() => setModalGasto(true)}   className="btn-primary   text-xs h-8 px-3 whitespace-nowrap">+ Gasto</button>
+          </>
+        ) : tab === 'contas' ? (
+          <>
+            <button
+              onClick={() => {
+                const lancContas = [...gastos, ...receitas].filter((l: any) => contas?.some((c: any) => c.id === l.conta_id))
+                exportarLancamentos(lancContas, [], contas ?? [], 'contas_pf')
+              }}
+              className="btn-secondary text-xs h-8 px-3 whitespace-nowrap hidden sm:flex">
+              📤 Exportar CSV
+            </button>
+            <button onClick={() => setModalNovaConta(true)} className="btn-primary text-xs h-8 px-4 whitespace-nowrap">🏦 Nova Conta</button>
+          </>
+        ) : tab === 'previsao' ? (
+          <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">+ Receita Recorrente</button>
+        ) : tab === 'orcamentos' || tab === 'limites' ? (
+          <button onClick={() => setModalGasto(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">+ Gasto</button>
+        ) : null}
       </div>
     )
-    if (tab === 'previsao') return (
-      <button onClick={() => setModalReceita(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">+ Receita Recorrente</button>
-    )
-    if (tab === 'orcamentos' || tab === 'limites') return (
-      <button onClick={() => setModalGasto(true)} className="btn-secondary text-xs h-8 px-3 whitespace-nowrap">+ Gasto</button>
-    )
-    return null
   }
 
   return (
@@ -257,6 +266,14 @@ export default function PfPessoalClient() {
           modalAberto={modalNovaConta}
           onModalOpen={() => setModalNovaConta(true)}
           onModalClose={() => setModalNovaConta(false)}
+          onOpenFinance={() => setModalOpenFinance(true)}
+        />
+      )}
+
+      {modalOpenFinance && (
+        <ModalOpenFinance
+          onClose={() => setModalOpenFinance(false)}
+          onSuccess={refreshTudo}
         />
       )}
 
@@ -293,8 +310,8 @@ export default function PfPessoalClient() {
 // ── Aba Contas PF (inline no client para acessar refetch) ─────────
 // Sub-abas: 🏦 Contas Bancárias | 💳 Cartões PF
 function TabContasPFInline({
-  userId, contas, modalAberto, onModalOpen, onModalClose
-}: { userId: string; contas: any[]; modalAberto: boolean; onModalOpen: () => void; onModalClose: () => void }) {
+  userId, contas, modalAberto, onModalOpen, onModalClose, onOpenFinance
+}: { userId: string; contas: any[]; modalAberto: boolean; onModalOpen: () => void; onModalClose: () => void; onOpenFinance?: () => void }) {
   const supabase = createClient()
   const { data: todasContas, refetch } = useSupabaseQuery<any>('contas', {
     filters: { ativo: true, categoria: 'pf', user_id: userId },
@@ -426,8 +443,43 @@ function TabContasPFInline({
             <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{cartoesPF.length}</span>
           </button>
         </div>
-        <button onClick={onModalOpen} className="btn-primary text-xs h-8 px-3">
-          {subAbaContas === 'bancarias' ? '🏦 Nova Conta' : '💳 Novo Cartão'}
+        <div className="flex items-center gap-2">
+          {onOpenFinance && (
+            <button
+              onClick={onOpenFinance}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm border border-blue-400/30 transition-all h-8"
+              title="Conectar e sincronizar contas via Open Finance"
+            >
+              <span className="text-amber-300">⚡</span> Open Finance
+            </button>
+          )}
+          <button onClick={onModalOpen} className="btn-primary text-xs h-8 px-3">
+            {subAbaContas === 'bancarias' ? '🏦 Nova Conta' : '💳 Novo Cartão'}
+          </button>
+        </div>
+      </div>
+
+      {/* Banner / Card Destaque Open Finance no Mobile */}
+      <div className="sm:hidden bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-purple-900/20 border border-blue-500/30 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-base shadow-inner">
+            ⚡
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white flex items-center gap-1.5">
+              Open Finance
+              <span className="text-[9px] font-normal px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">
+                Pluggy
+              </span>
+            </p>
+            <p className="text-[10px] text-gray-400">Sincronizar bancos e extratos</p>
+          </div>
+        </div>
+        <button
+          onClick={onOpenFinance}
+          className="text-xs font-semibold px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md active:scale-95 transition-all flex items-center gap-1 shrink-0"
+        >
+          <span>Conectar</span> ➔
         </button>
       </div>
 
