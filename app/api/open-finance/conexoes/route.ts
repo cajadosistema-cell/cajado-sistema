@@ -24,10 +24,14 @@ export async function GET(req: NextRequest) {
       .maybeSingle()
 
     const empresaId = perfil?.empresa_id
+    const { searchParams } = new URL(req.url)
+    const categoriaFiltro = searchParams.get('categoria')
 
-    // Buscar conexões da empresa ou do usuário
+    // Buscar conexões garantindo isolamento multi-tenant por empresa_id ou user_id
     let query = (supabase.from('open_finance_conexoes') as any).select('*')
-    if (empresaId) {
+    if (categoriaFiltro === 'pf') {
+      query = query.eq('user_id', user.id)
+    } else if (empresaId) {
       query = query.eq('empresa_id', empresaId)
     } else {
       query = query.eq('user_id', user.id)
@@ -48,9 +52,15 @@ export async function GET(req: NextRequest) {
     let contasVinculadas: any[] = []
 
     if (conexaoIds.length > 0) {
-      const { data: contas } = await (supabase.from('contas') as any)
-        .select('id, nome, tipo, saldo_atual, open_finance_id, open_finance_conexao_id, open_finance_sincronizado_em')
+      let queryContas = (supabase.from('contas') as any)
+        .select('id, nome, tipo, categoria, saldo_atual, open_finance_id, open_finance_conexao_id, open_finance_sincronizado_em')
         .in('open_finance_conexao_id', conexaoIds)
+
+      if (categoriaFiltro) {
+        queryContas = queryContas.eq('categoria', categoriaFiltro)
+      }
+
+      const { data: contas } = await queryContas
       contasVinculadas = contas || []
     }
 
@@ -78,7 +88,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { itemId, connector } = body
+    const { itemId, connector, categoria = 'pj' } = body
 
     if (!itemId) {
       return NextResponse.json({ error: 'itemId é obrigatório' }, { status: 400 })
@@ -119,6 +129,7 @@ export async function POST(req: NextRequest) {
           connector_logo_url: connectorLogo,
           connector_color: connectorColor,
           status: itemData.status || 'UPDATED',
+          metadata: { categoria },
           last_sync_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -142,11 +153,17 @@ export async function POST(req: NextRequest) {
       const saldo = typeof pAcc.balance === 'number' ? pAcc.balance : 0
 
       // Verifica se a conta já existe vinculada
-      const { data: contaExistente } = await (adminSupabase.from('contas') as any)
+      let queryExistente = (adminSupabase.from('contas') as any)
         .select('id, nome, saldo_atual')
-        .eq('empresa_id', empresaId)
         .eq('open_finance_id', pAcc.id)
-        .maybeSingle()
+
+      if (categoria === 'pf') {
+        queryExistente = queryExistente.eq('user_id', user.id)
+      } else {
+        queryExistente = queryExistente.eq('empresa_id', empresaId)
+      }
+
+      const { data: contaExistente } = await queryExistente.maybeSingle()
 
       let contaId: string
 
@@ -163,14 +180,14 @@ export async function POST(req: NextRequest) {
           .eq('id', contaId)
         contasCriadasOuAtualizadas++
       } else {
-        // Cria nova conta bancária no Cajado
+        // Cria nova conta bancária no Cajado com categoria correta
         const { data: novaConta, error: contaErr } = await (adminSupabase.from('contas') as any)
           .insert({
             empresa_id: empresaId,
             user_id: user.id,
             nome: `${pAcc.name} (${connectorName})`,
             tipo: tipoConta,
-            categoria: 'pj',
+            categoria: categoria === 'pf' ? 'pf' : 'pj',
             saldo_inicial: saldo,
             saldo_atual: saldo,
             ativo: true,

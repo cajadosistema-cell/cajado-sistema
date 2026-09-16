@@ -272,6 +272,7 @@ export default function PfPessoalClient() {
 
       {modalOpenFinance && (
         <ModalOpenFinance
+          categoria="pf"
           onClose={() => setModalOpenFinance(false)}
           onSuccess={refreshTudo}
         />

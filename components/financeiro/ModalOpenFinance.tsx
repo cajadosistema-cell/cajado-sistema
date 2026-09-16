@@ -23,6 +23,7 @@ interface ConexaoOF {
 }
 
 interface ModalOpenFinanceProps {
+  categoria?: 'pf' | 'pj'
   onClose: () => void
   onSuccess?: () => void
 }
@@ -38,7 +39,7 @@ const BANCOS_POPULARES = [
   { id: 102, name: 'XP Investimentos', color: '#000000', logo: '📈' },
 ]
 
-export function ModalOpenFinance({ onClose, onSuccess }: ModalOpenFinanceProps) {
+export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: ModalOpenFinanceProps) {
   const [conexoes, setConexoes] = useState<ConexaoOF[]>([])
   const [loading, setLoading] = useState(true)
   const [syncingId, setSyncingId] = useState<string | null>(null)
@@ -51,7 +52,7 @@ export function ModalOpenFinance({ onClose, onSuccess }: ModalOpenFinanceProps) 
   const carregarConexoes = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/open-finance/conexoes')
+      const res = await fetch(`/api/open-finance/conexoes?categoria=${categoria}`)
       const data = await res.json()
       if (data.conexoes) {
         setConexoes(data.conexoes)
@@ -121,6 +122,7 @@ export function ModalOpenFinance({ onClose, onSuccess }: ModalOpenFinanceProps) 
                 body: JSON.stringify({
                   itemId: itemData.item.id,
                   connector: itemData.item.connector,
+                  categoria,
                 }),
               })
               const resData = await resSave.json()
@@ -154,6 +156,7 @@ export function ModalOpenFinance({ onClose, onSuccess }: ModalOpenFinanceProps) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           itemId: mockItemId,
+          categoria,
           connector: {
             id: bancoEscolhido.id,
             name: bancoEscolhido.name,
