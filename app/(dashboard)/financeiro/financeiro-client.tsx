@@ -13,6 +13,7 @@ import { TabContas } from './_components/TabContas'
 import { useToast } from '@/components/shared/toast'
 import { TabRegistros } from '../pf-pessoal/_components/tabs/TabRegistros'
 import { ModalImportarExtratoIA } from '@/components/shared/ModalImportarExtratoIA'
+import { ModalOpenFinance } from '@/components/financeiro/ModalOpenFinance'
 import { PainelComparativoMes } from '@/components/shared/PainelComparativoMes'
 import { VencimentosMes } from './_components/VencimentosMes'
 
@@ -669,6 +670,7 @@ export default function FinanceiroClient() {
   const [lancamentoEdit, setLancamentoEdit] = useState<Lancamento | null>(null)
   const [modalConta, setModalConta] = useState(false)
   const [modalImport, setModalImport] = useState(false)
+  const [modalOpenFinance, setModalOpenFinance] = useState(false)
   const [modalVencimentos, setModalVencimentos] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState('')
   const [busca, setBusca] = useState('')
@@ -799,6 +801,13 @@ export default function FinanceiroClient() {
         {/* Botões contextuais que mudam por aba */}
         {(view === 'contas' || view === 'cartoes') && (
           <>
+            <button
+              onClick={() => setModalOpenFinance(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-sm border border-blue-400/30 transition-all h-8 print:hidden"
+              title="Conectar e sincronizar contas via Open Finance"
+            >
+              <span className="text-amber-300">⚡</span> Open Finance
+            </button>
             <button
               onClick={() => setModalVencimentos(true)}
               title="Ver painel de contas fixas e vencimentos deste mês"
@@ -1352,6 +1361,13 @@ export default function FinanceiroClient() {
           contasPJ={contas}
           onClose={() => setModalImport(false)}
           onSave={refreshAll}
+        />
+      )}
+
+      {modalOpenFinance && (
+        <ModalOpenFinance
+          onClose={() => setModalOpenFinance(false)}
+          onSuccess={refreshAll}
         />
       )}
 
