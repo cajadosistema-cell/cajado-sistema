@@ -65,6 +65,15 @@ export function ModalOpenFinance({ onClose, onSuccess }: ModalOpenFinanceProps) 
 
   useEffect(() => {
     carregarConexoes()
+
+    // Carrega dinamicamente o script oficial do Pluggy Connect
+    if (typeof window !== 'undefined' && !document.getElementById('pluggy-connect-script')) {
+      const script = document.createElement('script')
+      script.id = 'pluggy-connect-script'
+      script.src = 'https://cdn.pluggy.ai/pluggy-connect/v1/pluggy-connect.js'
+      script.async = true
+      document.body.appendChild(script)
+    }
   }, [carregarConexoes])
 
   // Inicia fluxo de conexão
@@ -85,33 +94,55 @@ export function ModalOpenFinance({ onClose, onSuccess }: ModalOpenFinanceProps) 
         throw new Error(dataToken.error || 'Não foi possível gerar token de conexão')
       }
 
-      // Se for ambiente Pluggy Real com SDK no navegador
-      if (!dataToken.isMock && typeof window !== 'undefined' && (window as any).PluggyConnect) {
-        const pluggyConnect = new (window as any).PluggyConnect({
-          connectToken: dataToken.connectToken,
-          onSuccess: async (itemData: any) => {
-            await fetch('/api/open-finance/conexoes', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                itemId: itemData.item.id,
-                connector: itemData.item.connector,
-              }),
-            })
-            setFeedbackMsg({ tipo: 'success', texto: 'Banco conectado com sucesso!' })
-            setModalConectar(false)
-            carregarConexoes()
-            onSuccess?.()
-          },
-          onError: (error: any) => {
-            setFeedbackMsg({ tipo: 'error', texto: 'Erro ao conectar banco: ' + (error.message || 'Falha') })
-          },
-          onClose: () => {
-            setConectando(false)
-          },
-        })
-        pluggyConnect.init()
-        return
+      // Se for ambiente Pluggy Real: abrir o widget oficial
+      if (!dataToken.isMock && typeof window !== 'undefined') {
+        const getPluggyConstructor = async (): Promise<any> => {
+          if ((window as any).PluggyConnect) return (window as any).PluggyConnect
+          return new Promise((resolve) => {
+            const check = setInterval(() => {
+              if ((window as any).PluggyConnect) {
+                clearInterval(check)
+                resolve((window as any).PluggyConnect)
+              }
+            }, 100)
+            setTimeout(() => { clearInterval(check); resolve(null) }, 6000)
+          })
+        }
+
+        const PluggyConstructor = await getPluggyConstructor()
+        if (PluggyConstructor) {
+          const pluggyConnect = new PluggyConstructor({
+            connectToken: dataToken.connectToken,
+            onSuccess: async (itemData: any) => {
+              setFeedbackMsg({ tipo: 'success', texto: 'Sincronizando contas do banco...' })
+              const resSave = await fetch('/api/open-finance/conexoes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  itemId: itemData.item.id,
+                  connector: itemData.item.connector,
+                }),
+              })
+              const resData = await resSave.json()
+              if (resSave.ok) {
+                setFeedbackMsg({ tipo: 'success', texto: '✅ Banco conectado com sucesso! Saldos e extratos sincronizados.' })
+              } else {
+                setFeedbackMsg({ tipo: 'error', texto: resData.error || 'Erro ao salvar contas do banco' })
+              }
+              setModalConectar(false)
+              await carregarConexoes()
+              onSuccess?.()
+            },
+            onError: (error: any) => {
+              setFeedbackMsg({ tipo: 'error', texto: 'Erro ao conectar banco: ' + (error?.message || 'Falha na conexão') })
+            },
+            onClose: () => {
+              setConectando(false)
+            },
+          })
+          pluggyConnect.init()
+          return
+        }
       }
 
       // Modo Simulado / Mock para Testes Imediatos
