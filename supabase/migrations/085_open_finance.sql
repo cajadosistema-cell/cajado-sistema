@@ -76,17 +76,22 @@ CREATE INDEX IF NOT EXISTS idx_contas_open_finance_conexao ON public.contas(open
 ALTER TABLE public.open_finance_conexoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.open_finance_logs ENABLE ROW LEVEL SECURITY;
 
+-- Limpa políticas anteriores se existirem
+DROP POLICY IF EXISTS "Permitir leitura de conexoes para membros da empresa" ON public.open_finance_conexoes;
+DROP POLICY IF EXISTS "Permitir mutacao de conexoes para membros da empresa" ON public.open_finance_conexoes;
+DROP POLICY IF EXISTS "Permitir leitura de logs para membros da empresa" ON public.open_finance_logs;
+DROP POLICY IF EXISTS "Permitir insercao de logs" ON public.open_finance_logs;
+
+-- Políticas de Conexões
 CREATE POLICY "Permitir leitura de conexoes para membros da empresa"
     ON public.open_finance_conexoes
     FOR SELECT
     USING (
         empresa_id IN (
-            SELECT empresa_id FROM public.usuarios_perfis WHERE user_id = auth.uid()
+            SELECT empresa_id FROM public.perfis WHERE id = auth.uid()
         )
         OR
-        EXISTS (
-            SELECT 1 FROM public.funcionarios WHERE id = auth.uid() AND empresa_id = public.open_finance_conexoes.empresa_id
-        )
+        user_id = auth.uid()
         OR
         auth.role() = 'service_role'
     );
@@ -96,22 +101,21 @@ CREATE POLICY "Permitir mutacao de conexoes para membros da empresa"
     FOR ALL
     USING (
         empresa_id IN (
-            SELECT empresa_id FROM public.usuarios_perfis WHERE user_id = auth.uid()
+            SELECT empresa_id FROM public.perfis WHERE id = auth.uid()
         )
         OR
-        EXISTS (
-            SELECT 1 FROM public.funcionarios WHERE id = auth.uid() AND empresa_id = public.open_finance_conexoes.empresa_id
-        )
+        user_id = auth.uid()
         OR
         auth.role() = 'service_role'
     );
 
+-- Políticas de Logs
 CREATE POLICY "Permitir leitura de logs para membros da empresa"
     ON public.open_finance_logs
     FOR SELECT
     USING (
         empresa_id IN (
-            SELECT empresa_id FROM public.usuarios_perfis WHERE user_id = auth.uid()
+            SELECT empresa_id FROM public.perfis WHERE id = auth.uid()
         )
         OR
         auth.role() = 'service_role'
