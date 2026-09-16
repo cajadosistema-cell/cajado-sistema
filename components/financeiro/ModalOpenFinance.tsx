@@ -64,17 +64,64 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
     }
   }, [])
 
-  useEffect(() => {
-    carregarConexoes()
+const PLUGGY_SDK_URL = 'https://cdn.pluggy.ai/pluggy-connect/v2.11.0/pluggy-connect.js'
 
-    // Carrega dinamicamente o script oficial do Pluggy Connect
-    if (typeof window !== 'undefined' && !document.getElementById('pluggy-connect-script')) {
-      const script = document.createElement('script')
+function carregarPluggySDK(): Promise<any> {
+  if (typeof window === 'undefined') return Promise.resolve(null)
+
+  const getInst = () => (window as any).PluggyConnect?.PluggyConnect || (window as any).PluggyConnect
+  if (getInst()) return Promise.resolve(getInst())
+
+  return new Promise((resolve, reject) => {
+    let script = document.getElementById('pluggy-connect-script') as HTMLScriptElement | null
+
+    if (!script) {
+      script = document.createElement('script')
       script.id = 'pluggy-connect-script'
-      script.src = 'https://cdn.pluggy.ai/pluggy-connect/v1/pluggy-connect.js'
+      script.src = PLUGGY_SDK_URL
       script.async = true
       document.body.appendChild(script)
     }
+
+    const checkReady = () => {
+      const inst = getInst()
+      if (inst) {
+        resolve(inst)
+        return true
+      }
+      return false
+    }
+
+    if (checkReady()) return
+
+    script.addEventListener('load', () => {
+      if (!checkReady()) {
+        setTimeout(checkReady, 100)
+      }
+    }, { once: true })
+
+    script.addEventListener('error', () => {
+      reject(new Error('Falha ao baixar o componente Pluggy Connect da CDN.'))
+    }, { once: true })
+
+    // Polling fallback
+    let elapsed = 0
+    const interval = setInterval(() => {
+      elapsed += 100
+      if (checkReady()) {
+        clearInterval(interval)
+      } else if (elapsed >= 10000) {
+        clearInterval(interval)
+        resolve(null)
+      }
+    }, 100)
+  })
+}
+
+  useEffect(() => {
+    carregarConexoes()
+    // Pré-carrega o SDK oficial do Pluggy Connect
+    carregarPluggySDK().catch(() => {})
   }, [carregarConexoes])
 
   // Inicia fluxo de conexão
@@ -97,32 +144,27 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
 
       // Se for ambiente Pluggy Real: abrir o widget oficial
       if (!dataToken.isMock && typeof window !== 'undefined') {
-        const getPluggyConstructor = async (): Promise<any> => {
-          if ((window as any).PluggyConnect) return (window as any).PluggyConnect
-          return new Promise((resolve) => {
-            const check = setInterval(() => {
-              if ((window as any).PluggyConnect) {
-                clearInterval(check)
-                resolve((window as any).PluggyConnect)
-              }
-            }, 100)
-            setTimeout(() => { clearInterval(check); resolve(null) }, 6000)
-          })
+        let PluggyConstructor = (window as any).PluggyConnect?.PluggyConnect || (window as any).PluggyConnect
+
+        if (!PluggyConstructor) {
+          PluggyConstructor = await carregarPluggySDK()
         }
 
-        const PluggyConstructor = await getPluggyConstructor()
         if (PluggyConstructor) {
           const pluggyConnect = new PluggyConstructor({
             connectToken: dataToken.connectToken,
             includeSandbox: true,
             onSuccess: async (itemData: any) => {
               setFeedbackMsg({ tipo: 'success', texto: 'Sincronizando contas do banco...' })
+              const itemId = itemData?.item?.id || itemData?.id
+              const connector = itemData?.item?.connector || itemData?.connector
+
               const resSave = await fetch('/api/open-finance/conexoes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  itemId: itemData.item.id,
-                  connector: itemData.item.connector,
+                  itemId,
+                  connector,
                   categoria,
                 }),
               })
