@@ -114,6 +114,7 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
         if (PluggyConstructor) {
           const pluggyConnect = new PluggyConstructor({
             connectToken: dataToken.connectToken,
+            includeSandbox: true,
             onSuccess: async (itemData: any) => {
               setFeedbackMsg({ tipo: 'success', texto: 'Sincronizando contas do banco...' })
               const resSave = await fetch('/api/open-finance/conexoes', {
@@ -144,7 +145,16 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
           })
           pluggyConnect.init()
           return
+        } else {
+          throw new Error('Não foi possível carregar o widget da Pluggy. Verifique sua conexão à internet.')
         }
+      }
+
+      // Se for mock e não selecionou o banco ainda, abre modal de seleção
+      if (!banco) {
+        setModalConectar(true)
+        setConectando(false)
+        return
       }
 
       // Modo Simulado / Mock para Testes Imediatos
@@ -289,10 +299,11 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
                 Bancos Conectados ({conexoes.length})
               </h3>
               <button
-                onClick={() => setModalConectar(true)}
-                className="text-xs font-medium px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md flex items-center gap-1.5"
+                onClick={() => handleIniciarConexao()}
+                disabled={conectando}
+                className="text-xs font-medium px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
               >
-                <span>+</span> Conectar Banco
+                {conectando ? <span className="animate-spin">🔄</span> : <span>+</span>} Conectar Banco
               </button>
             </div>
 
@@ -308,10 +319,11 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
                   Conecte seu banco via Open Finance para atualizar saldos e puxar lançamentos automaticamente, sem precisar de arquivos OFX.
                 </p>
                 <button
-                  onClick={() => setModalConectar(true)}
-                  className="btn-primary text-xs px-4 py-2"
+                  onClick={() => handleIniciarConexao()}
+                  disabled={conectando}
+                  className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 mx-auto"
                 >
-                  ⚡ Conectar Meu Primeiro Banco
+                  {conectando ? <span className="animate-spin">🔄</span> : <span>⚡</span>} Conectar Meu Primeiro Banco
                 </button>
               </div>
             ) : (
