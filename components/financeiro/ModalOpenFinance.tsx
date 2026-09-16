@@ -179,7 +179,19 @@ function carregarPluggySDK(): Promise<any> {
               onSuccess?.()
             },
             onError: (error: any) => {
-              setFeedbackMsg({ tipo: 'error', texto: 'Erro ao conectar banco: ' + (error?.message || 'Falha na conexão') })
+              const msg = error?.message || ''
+              if (
+                msg.toLowerCase().includes('sandbox') ||
+                msg.toLowerCase().includes('contas de teste') ||
+                msg.toLowerCase().includes('dados reais')
+              ) {
+                setFeedbackMsg({
+                  tipo: 'error',
+                  texto: '⚠️ Sua conta Pluggy está em modo Sandbox de testes. Para testar o fluxo agora, selecione "Pluggy Bank" (usuário: user-ok / senha: password-ok). Para conectar bancos reais (Inter, Nubank, etc.), solicite acesso a dados reais em dashboard.pluggy.ai.',
+                })
+              } else {
+                setFeedbackMsg({ tipo: 'error', texto: 'Erro ao conectar banco: ' + (msg || 'Falha na conexão') })
+              }
             },
             onClose: () => {
               setConectando(false)
@@ -334,6 +346,22 @@ function carregarPluggySDK(): Promise<any> {
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-6">
+          {/* Dica Sandbox Pluggy */}
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3.5 flex items-start gap-3 text-xs">
+            <span className="text-base leading-none">🧪</span>
+            <div className="text-amber-200/90 leading-relaxed text-[11px]">
+              <span className="font-semibold text-amber-300">Ambiente de Testes (Sandbox):</span> Para testar o fluxo de sincronização imediata no sistema, conecte a instituição <strong className="text-white">&ldquo;Pluggy Bank&rdquo;</strong> (usuário: <code className="bg-black/40 px-1 py-0.5 rounded text-amber-100 font-mono">user-ok</code> / senha: <code className="bg-black/40 px-1 py-0.5 rounded text-amber-100 font-mono">password-ok</code>). Para conectar bancos reais com QR Code (Inter, Nubank, Itaú, etc.), solicite a ativação de produção no{' '}
+              <a
+                href="https://dashboard.pluggy.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-amber-300 hover:text-white font-medium"
+              >
+                Dashboard da Pluggy
+              </a>.
+            </div>
+          </div>
+
           {/* Active Connections List */}
           <div>
             <div className="flex items-center justify-between mb-3">
