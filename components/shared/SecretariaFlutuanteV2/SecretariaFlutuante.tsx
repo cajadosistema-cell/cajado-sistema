@@ -1003,7 +1003,10 @@ Ação: recalcule os minutos/horas relativas do pedido original, somando ao hor�
         // vinha invertido e a conversa "embolava".
         ;(async () => {
           await session.salvarHistorico(uid, 'user', userText, undefined, session.sessaoIdRef.current)
-          await session.salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined, session.sessaoIdRef.current)
+          const aiDbId = await session.salvarHistorico(uid, 'ai', textoFormatado, acoesComStatus.length > 0 ? acoesComStatus : undefined, session.sessaoIdRef.current)
+          if (aiDbId) {
+            session.setMensagens(prev => prev.map(m => m.id === aiMsgId ? { ...m, id: aiDbId } : m))
+          }
         })()
       }
 

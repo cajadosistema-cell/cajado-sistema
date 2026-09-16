@@ -41,7 +41,7 @@ interface UseElenaSessionReturn {
   micPermitidoRef: React.MutableRefObject<boolean>
   salvarMicAutorizado: (uid: string) => Promise<void>
   // Persistência de histórico
-  salvarHistorico: (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sessaoId?: string) => Promise<void>
+  salvarHistorico: (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sessaoId?: string) => Promise<string | undefined>
 }
 
 export function useElenaSession(supabase: any): UseElenaSessionReturn {
@@ -471,22 +471,25 @@ export function useElenaSession(supabase: any): UseElenaSessionReturn {
   // { error }. O try/catch antigo NUNCA disparava, então uma falha de
   // gravação (RLS, constraint) era descartada em silêncio: o histórico
   // simplesmente não era salvo e ninguém ficava sabendo.
-  const salvarHistorico = async (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sid?: string) => {
-    if (!uid || !texto || texto === '...') return
+  const salvarHistorico = async (uid: string, role: 'ai' | 'user', texto: string, acoes?: any[], sid?: string): Promise<string | undefined> => {
+    if (!uid || !texto || texto === '...') return undefined
     try {
-      const { error } = await (supabase.from('elena_conversas') as any).insert({
+      const { data, error } = await (supabase.from('elena_conversas') as any).insert({
         user_id: uid,
         sessao_id: sid || sessaoIdRef.current,
         role,
         texto: texto.substring(0, 4000),
         acoes: acoes ?? null,
-      })
+      }).select('id').maybeSingle()
       if (error) {
         console.error('[Elena] ❌ FALHA ao salvar histórico:', error.message,
           '— a conversa NÃO será recuperada ao recarregar a página.')
+        return undefined
       }
+      return data?.id
     } catch (e: any) {
       console.error('[Elena] ❌ Exceção ao salvar histórico:', e?.message || e)
+      return undefined
     }
   }
 

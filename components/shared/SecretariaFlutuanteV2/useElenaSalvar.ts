@@ -491,7 +491,19 @@ export function useElenaSalvar({
         ? { ...m, acoes: m.acoes?.map((a, i) => i === idx ? { ...a, status, errorMsg } : a) }
         : m
     ))
-  }, [setMensagens])
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msgId)
+    if (isUuid && supabase) {
+      const msgObj = mensagensRef.current.find(m => m.id === msgId)
+      if (msgObj?.acoes) {
+        const updatedAcoes = msgObj.acoes.map((a, i) => i === idx ? { ...a, status, errorMsg } : a)
+        ;(supabase.from('elena_conversas') as any)
+          .update({ acoes: updatedAcoes })
+          .eq('id', msgId)
+          .then(() => {})
+          .catch(() => {})
+      }
+    }
+  }, [setMensagens, supabase, mensagensRef])
 
   // ── exibirConfirmacaoSalvamento ───────────────────────────────
   const exibirConfirmacaoSalvamento = useCallback((
@@ -2782,37 +2794,44 @@ function relatorioEmTexto(d: any): string {
         const contas = [...listaPf, ...listaPj]
 
         if (!contas || contas.length === 0) {
-          setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto: '🏦 Nenhuma conta cadastrada ainda, Sr. Max. Posso cadastrar uma para você agora!' }])
+          const textoVazio = '🏦 Nenhuma conta cadastrada ainda, Sr. Max. Posso cadastrar uma para você agora!'
+          setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto: textoVazio }])
+          if (salvarHistorico) salvarHistorico(uid, 'ai', textoVazio, undefined, sessaoIdRef.current).catch(() => {})
         } else {
           const contasPf = contas.filter((c: any) => c.categoria === 'pf')
           const contasPj = contas.filter((c: any) => c.categoria === 'pj')
           const tipoIcon = (tipo: string) => tipo === 'cartao_credito' ? '💳' : tipo === 'cartao_debito' ? '💳' : tipo === 'poupanca' ? '🏦' : tipo === 'investimento' ? '📈' : tipo === 'carteira' ? '👛' : '🏦'
-          let texto = '🏦 **Suas contas cadastradas:**\n\n'
+          let texto = '🏦 **Suas contas cadastradas e saldos atuais:**\n\n'
           if (contasPf.length > 0) {
             texto += '**👤 Pessoal (PF):**\n'
             contasPf.forEach((c: any) => {
-              const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+              const saldoNum = Number(c.saldo_atual || 0)
+              const saldo = c.saldo_atual != null ? `R$ ${saldoNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+              const statusSaldo = saldoNum > 0 ? '🟢' : saldoNum < 0 ? '🔴' : '⚪'
               const band = c.bandeira ? ` [${c.bandeira}]` : ''
               const venc = c.dia_vencimento ? ` | 📅 dia ${c.dia_vencimento}` : ''
               const lim = c.limite ? ` | Limite: R$ ${Number(c.limite).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
               const isCartao = c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito'
-              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}${isCartao ? venc + lim : ''}\n`
+              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${statusSaldo} **${saldo}**${isCartao ? venc + lim : ''}\n`
             })
             texto += '\n'
           }
           if (contasPj.length > 0) {
             texto += '**🏢 Empresa (PJ):**\n'
             contasPj.forEach((c: any) => {
-              const saldo = c.saldo_atual != null ? `R$ ${Number(c.saldo_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+              const saldoNum = Number(c.saldo_atual || 0)
+              const saldo = c.saldo_atual != null ? `R$ ${saldoNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+              const statusSaldo = saldoNum > 0 ? '🟢' : saldoNum < 0 ? '🔴' : '⚪'
               const band = c.bandeira ? ` [${c.bandeira}]` : ''
               const venc = c.dia_vencimento ? ` | 📅 dia ${c.dia_vencimento}` : ''
               const lim = c.limite ? ` | Limite: R$ ${Number(c.limite).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''
               const isCartao = c.tipo === 'cartao_credito' || c.tipo === 'cartao_debito'
-              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${saldo}${isCartao ? venc + lim : ''}\n`
+              texto += `• ${tipoIcon(c.tipo)} ${c.nome}${band} — ${statusSaldo} **${saldo}**${isCartao ? venc + lim : ''}\n`
             })
           }
           texto += `\n_Total: ${contas.length} conta(s) ativa(s)_`
           setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto }])
+          if (salvarHistorico) salvarHistorico(uid, 'ai', texto, undefined, sessaoIdRef.current).catch(() => {})
         }
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
@@ -2859,7 +2878,7 @@ function relatorioEmTexto(d: any): string {
           const idsContas = (contasPjIds || []).map((c: any) => c.id)
           const { data: lancPj } = idsContas.length > 0
             ? await (supabase.from('lancamentos') as any)
-                .select('descricao, valor, tipo, data_competencia, categorias(nome)')
+                .select('descricao, valor, tipo, data_competencia, categorias_financeiras(nome)')
                 .in('conta_id', idsContas)
                 .order('data_competencia', { ascending: false })
                 .limit(limite)
@@ -2879,6 +2898,7 @@ function relatorioEmTexto(d: any): string {
 
         if (!texto.trim()) texto = '🔍 Nenhum lançamento encontrado para o filtro aplicado.'
         setMensagens(prev => [...prev, { id: `busca-${Date.now()}`, role: 'ai' as const, texto: texto.trim() }])
+        if (salvarHistorico) salvarHistorico(uid, 'ai', texto.trim(), undefined, sessaoIdRef.current).catch(() => {})
         setAcaoStatus(msgId, acaoIdx, 'saved')
 
 
@@ -3199,11 +3219,13 @@ function relatorioEmTexto(d: any): string {
           if (!(valor > 0)) {
             return `\n⚠️ _Marquei como pago, mas **não debitei nada**: não sei o valor. Me diga o valor que eu lanço._`
           }
+          const empId = await getEmpresaId(uid)
           const { error: errDeb } = await (supabase.from('lancamentos') as any).insert({
             conta_id: contaId, descricao,
             valor, tipo: 'despesa', regime: 'caixa', status: 'validado',
             data_competencia: dataPag, data_caixa: dataPag,
             categoria_id: CAT_DESPESA_ID, created_by: uid,
+            empresa_id: empId || null,
           })
           if (errDeb) {
             return `\n⚠️ _Não consegui lançar o débito de R$ ${valor.toFixed(2)} (${errDeb.message.substring(0, 80)}) — confira o saldo manualmente._`
@@ -3325,10 +3347,14 @@ function relatorioEmTexto(d: any): string {
           const cartaoPf = await resolverCartaoPf(nomeAlvo)
           if (!cartaoPf.id) throw new Error(`Cartão "${nomeAlvo}" não encontrado.`)
           const { data: faturaExistente } = await (supabase.from('faturas_cartoes') as any)
-            .select('id, valor_fechado, status').eq('conta_id', cartaoPf.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
+            .select('id, valor_fechado, valor_previsto, status, conta_pagamento_id').eq('conta_id', cartaoPf.id).eq('mes_referencia', mesRefAlvo).maybeSingle()
           if (!faturaExistente) throw new Error(`Fatura de ${cartaoPf.nome} de ${mesRefAlvo} ainda não foi lançada — informe o valor da fatura primeiro.`)
-          // Idempotência: fatura já paga não debita de novo.
-          if (faturaExistente.status === 'pago') {
+          
+          const valorFatura = Number(acao.dados.valor_pago) || Number(faturaExistente.valor_fechado) || Number(faturaExistente.valor_previsto) || 0
+
+          // Idempotência: só ignora se a fatura já estava paga COM valor fechado positivo E conta de pagamento registrada.
+          // Se estava 'pago' mas sem valor ou sem conta (ex: falha de débito anterior), permite concluir o débito agora.
+          if (faturaExistente.status === 'pago' && Number(faturaExistente.valor_fechado) > 0 && faturaExistente.conta_pagamento_id) {
             setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
               texto: `ℹ️ A fatura do **${cartaoPf.nome}** (${mesRefAlvo}) **já estava paga** — não lancei nada de novo pra não duplicar o débito.` }])
             setAcaoStatus(msgId, acaoIdx, 'saved')
@@ -3336,16 +3362,21 @@ function relatorioEmTexto(d: any): string {
           }
           const contaCartao = await exigirContaOrigem(`fatura do ${cartaoPf.nome} (${mesRefAlvo})`)
           const { error } = await (supabase.from('faturas_cartoes') as any)
-            .update({ status: 'pago', data_pagamento: dataPag, ...(acao.dados.valor_pago ? { valor_fechado: Number(acao.dados.valor_pago) } : {}) })
+            .update({
+              status: 'pago',
+              data_pagamento: dataPag,
+              valor_fechado: valorFatura,
+              conta_pagamento_id: contaCartao.id,
+            })
             .eq('id', faturaExistente.id)
           if (error) throw new Error(error.message)
-          const valorFatura = Number(acao.dados.valor_pago) || Number(faturaExistente.valor_fechado) || 0
           const avisoCartao = await debitarDaConta(
             contaCartao.id, contaCartao.nome, valorFatura,
             `💳 Fatura ${cartaoPf.nome} (${mesRefAlvo})`,
           )
-          setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const,
-            texto: `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.${avisoCartao}` }])
+          const msgSucesso = `✅ Fatura do **${cartaoPf.nome}** (${mesRefAlvo}) marcada como paga.${avisoCartao}`
+          setMensagens(prev => [...prev, { id: `pago-${Date.now()}`, role: 'ai' as const, texto: msgSucesso }])
+          if (salvarHistorico) salvarHistorico(uid, 'ai', msgSucesso, undefined, sessaoIdRef.current).catch(() => {})
 
         } else if (tipoAlvo === 'imovel') {
           let qIm = (supabase.from('imoveis') as any).select('id, titulo, valor_parcela, dia_vencimento, data_aquisicao, parcelas_pagas, parcelas_total, periodicidade, proximo_vencimento').ilike('titulo', `%${nomeAlvo}%`)

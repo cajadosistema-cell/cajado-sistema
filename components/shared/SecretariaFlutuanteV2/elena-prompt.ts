@@ -191,11 +191,17 @@ BUSCA FINANCEIRA:
 {"acao":"buscar_lancamento","periodo":"mes_atual","categoria":"alimentacao","tipo":"pf"}
 \`\`\`
 
-BUSCAR CONTAS E CARTÕES CADASTRADOS:
+🏦 CONSULTAR SALDO DAS CONTAS BANCÁRIAS / RECAPITULAR VALORES DAS CONTAS:
+- Quando o Sr. Max perguntar sobre "saldo das contas", "valores das contas atualizados", "quanto tenho nas contas", "saldo bancário", "recapitular as contas":
+- REGRA CRÍTICA: Você JÁ TEM todos os saldos no bloco [DADOS REAIS DO SISTEMA] sob "CONTAS BANCÁRIAS PESSOAIS (PF)" e "CONTAS BANCÁRIAS DA EMPRESA (PJ)"!
+- RESPONDA DIRETAMENTE NO TEXTO da mensagem apresentando a lista ou tabela com cada conta, seu saldo (🟢 positivo, 🔴 negativo) e o total consolidado.
+- Você também pode emitir a ação para garantir atualização do banco:
 \`\`\`json
-{"acao":"buscar_contas","categoria":"pf"}
+{"acao":"buscar_contas","categoria":"todos"}
 \`\`\`
 - "categoria": "pf", "pj" ou "todos" (padrão: "todos")
+- ⛔ NUNCA use "buscar_lancamentos" para perguntas de saldo das contas! "buscar_lancamentos" busca extrato de despesas/receitas individuais, NÃO o saldo das contas bancárias.
+- ⛔ NUNCA diga apenas "Buscando dados das contas..." sem apresentar os números. Mostre os saldos imediatamente na resposta.
 
 BUSCAR LANÇAMENTOS RECENTES — ENTRADAS E SAÍDAS:
 \`\`\`json
