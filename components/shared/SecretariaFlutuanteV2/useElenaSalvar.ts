@@ -3907,6 +3907,7 @@ function relatorioEmTexto(d: any): string {
           { data: alertasRec },
           { data: gastosMes },
           { data: receitasMes },
+          { data: receitasRecR },
           { data: ativosData },
           { data: pagamentosResumo },
           { data: contratosInvData },
@@ -3945,6 +3946,24 @@ function relatorioEmTexto(d: any): string {
             .eq('user_id', uid)
             .gte('data', dataInicio).lte('data', dataFim)
             .order('data'),
+          // 🔴 Receitas RECORRENTES (23/09/2026)
+          // `recorrente = true` cria um MOLDE, não gera uma linha por mês. O Sr.
+          // Max cadastrou o pró-labore (SALÁRIO, R$ 23.000, categoria pro_labore)
+          // em 24/07/2026 marcado como recorrente. Em julho apareceu, porque a
+          // linha tem data de julho; de agosto em diante o resumo mostrava
+          // "Entradas: R$ 0,00" — a query acima filtra por data e o molde ficou
+          // para trás. Ele reclamou em 23/09: "sempre aparece receita do mês
+          // zero, não está aparecendo no lugar correto".
+          //
+          // É o MESMO defeito das contas fixas de 04/09, do outro lado do caixa:
+          // lá os R$ 3.021,30 de compromissos recorrentes sumiam da projeção pelo
+          // mesmo motivo. A projeção já lia os recorrentes (linha ~1175); só o
+          // resumo mensal ficou sem.
+          (supabase.from('receitas_pessoais') as any)
+            .select('descricao, valor, categoria, data')
+            .eq('user_id', uid)
+            .eq('recorrente', true)
+            .order('valor', { ascending: false }),
           // Investimentos / Ativos (carteira de mercado)
           qAtivosR,
           // Histórico de pagamentos do mês (compromissos já pagos)
@@ -4486,11 +4505,51 @@ function relatorioEmTexto(d: any): string {
 
         // totalAvulsos já foi calculado na seção GASTOS AVULSOS
         const totalGastos = totalAvulsos
-        const totalReceitas = (receitasMes || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+        const totalLancado = (receitasMes || []).reduce((s: number, r: any) => s + Number(r.valor), 0)
+
+        // ── RECEITAS RECORRENTES QUE AINDA NÃO FORAM LANÇADAS NO MÊS ──
+        // Duas armadilhas aqui, e as duas já nos morderam este mês:
+        //
+        // 1) DUPLICAR. Se o Sr. Max lançar o recebimento do pró-labore como uma
+        //    receita normal de setembro, a linha concreta E o molde recorrente
+        //    somariam — R$ 46.000 de entrada num mês de R$ 23.000. Por isso o
+        //    molde só entra quando NÃO existe lançamento com a mesma descrição
+        //    no mês. Mesma regra que usamos nos boletos: o registro do mês manda
+        //    mais que o molde.
+        //
+        // 2) APARECER ANTES DE EXISTIR. Um resumo de maio/2026 não pode mostrar
+        //    um pró-labore cadastrado em julho. O molde só vale a partir do mês
+        //    em que foi criado.
+        const normalizarDesc = (t: any) => String(t || '').toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, ' ').trim()
+        const jaLancadoNoMes = new Set(
+          (receitasMes || []).map((r: any) => normalizarDesc(r.descricao)),
+        )
+        const recorrentesPendentes = (receitasRecR || []).filter((r: any) => {
+          if (jaLancadoNoMes.has(normalizarDesc(r.descricao))) return false
+          const inicio = String(r.data || '').slice(0, 10)
+          return !inicio || inicio <= dataFim
+        })
+        const totalRecorrentes = recorrentesPendentes
+          .reduce((s: number, r: any) => s + (Number(r.valor) || 0), 0)
+
+        const totalReceitas = totalLancado + totalRecorrentes
         const saldoMes = totalReceitas - totalGastos
         const saldoIcon = saldoMes >= 0 ? '🟢' : '🔴'
 
-        texto += `📈 Entradas: **${fmt(totalReceitas)}** _(${(receitasMes || []).length} lançamentos)_\n`
+        // O número sozinho não explica de onde veio. Com duas origens somando na
+        // mesma linha, o Sr. Max precisa enxergar a separação — senão a próxima
+        // dúvida dele vai ser "esses R$ 23.000 entraram mesmo?".
+        const detalheEntradas = totalRecorrentes > 0
+          ? ` _(${(receitasMes || []).length} lançamento${(receitasMes || []).length === 1 ? '' : 's'} + ${fmt(totalRecorrentes)} recorrente${recorrentesPendentes.length === 1 ? '' : 's'})_`
+          : ` _(${(receitasMes || []).length} lançamentos)_`
+        texto += `📈 Entradas: **${fmt(totalReceitas)}**${detalheEntradas}\n`
+        if (totalRecorrentes > 0) {
+          recorrentesPendentes.forEach((r: any) => {
+            texto += `    ↻ ${r.descricao} — ${fmt(Number(r.valor) || 0)} _(recorrente, ainda não lançado neste mês)_\n`
+          })
+        }
         texto += `📉 Saídas: **${fmt(totalGastos)}** _(${gastosAvulsos.length} lançamentos)_\n`
         texto += `${saldoIcon} Saldo: **${fmt(saldoMes)}**\n\n`
 

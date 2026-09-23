@@ -16,3 +16,7 @@ backups/
 *.docx
 *.xls
 *.xlsx
+
+# Scripts de infraestrutura/deploy locais
+check-railway-vars.js
+trigger-deploy.js
