@@ -27,6 +27,87 @@ async function getEmpresaCredenciais(adminSupabase: any, empresaId: string): Pro
   return null
 }
 
+// ── Nome curto da conta ──────────────────────────────────────
+// 24/09/2026. O nome era `${pAcc.name} (${connectorName})`, o que produzia
+// "PICPAY INSTITUIÇÃO DE PAGAMENTO S.A (MeuPluggy)". Esse é o texto que
+// aparece na lista de "de qual conta saiu o pagamento" — e o Sr. Max
+// escolhe conta FALANDO com a Elena. Nome que ninguém fala em voz alta não
+// serve para este sistema.
+//
+// A origem (MeuPluggy/Pluggy) sai do nome: ela já está em
+// `open_finance_conexao_id` e a tela mostra a conexão por cima.
+const MARCAS_CONHECIDAS: Record<string, string> = {
+  picpay: 'PicPay', infinitepay: 'InfinitePay', nubank: 'Nubank',
+  itau: 'Itaú', bradesco: 'Bradesco', santander: 'Santander',
+  inter: 'Inter', c6: 'C6 Bank', xp: 'XP', btg: 'BTG',
+  caixa: 'Caixa', 'banco do brasil': 'Banco do Brasil', bb: 'Banco do Brasil',
+  'mercado pago': 'Mercado Pago', neon: 'Neon', original: 'Original',
+  safra: 'Safra', sicoob: 'Sicoob', sicredi: 'Sicredi',
+  pagbank: 'PagBank', pagseguro: 'PagBank', stone: 'Stone', will: 'Will Bank',
+}
+
+// Palavras que só engordam o nome e não distinguem nada.
+const RUIDO = /\b(institui[çc][aã]o|de|pagamento|pagamentos|banco|m[uú]ltiplo|s\/?\.?a\.?|sa|ltda|me|epp|cr[eé]dito|financiamento|investimento|conta|corrente)\b/gi
+
+function semAcento(t: string) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
+function nomeCurtoDaConta(nomeBruto: string, connectorName: string): string {
+  const base = String(nomeBruto || connectorName || 'Conta').trim()
+  const chave = semAcento(base).toLowerCase()
+
+  // Marca conhecida ganha o nome bonito, independente do que o banco mandou.
+  for (const [marca, bonito] of Object.entries(MARCAS_CONHECIDAS)) {
+    if (chave.includes(marca)) return bonito
+  }
+
+  const limpo = base.replace(RUIDO, ' ').replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!limpo) return base // sobrou nada: melhor o nome feio que nome vazio
+
+  // TUDO EM CAIXA ALTA vira Capitalizado; o resto fica como veio.
+  return limpo === limpo.toUpperCase()
+    ? limpo.toLowerCase().replace(/(^|\s)\p{L}/gu, s => s.toUpperCase())
+    : limpo
+}
+
+// ── Candidata a vínculo ──────────────────────────────────────
+// O risco real: o Sr. Max já tem "PF Operacional Bradesco" cadastrada à mão,
+// e é de lá que saem os pagamentos dele. No dia que ele conectar o Bradesco
+// pelo Open Finance, criar uma conta nova faz o histórico ficar numa e o
+// saldo real na outra. Duas contas do mesmo banco, nenhuma com o número
+// certo, e ninguém entende por quê.
+//
+// Por isso, antes de criar: procura conta ATIVA, do mesmo escopo, ainda NÃO
+// vinculada ao Open Finance, cujo nome contenha a marca do banco. Com
+// exatamente UMA candidata, vincula. Com duas ou mais, não adivinha — cria a
+// nova e devolve um aviso, para a tela poder falar sobre isso.
+async function acharContaParaVincular(
+  adminSupabase: any,
+  escopo: { categoria: string; userId: string; empresaId: string },
+  nomeCurto: string,
+): Promise<{ conta: any | null; ambiguas: any[] }> {
+  const marca = semAcento(nomeCurto).toLowerCase().split(' ')[0]
+  if (!marca || marca.length < 3) return { conta: null, ambiguas: [] }
+
+  let q = (adminSupabase.from('contas') as any)
+    .select('id, nome, saldo_atual')
+    .is('open_finance_id', null)
+    .eq('ativo', true)
+
+  q = escopo.categoria === 'pf'
+    ? q.eq('user_id', escopo.userId)
+    : q.eq('empresa_id', escopo.empresaId)
+
+  const { data: candidatas } = await q.limit(50)
+  const casam = (candidatas || []).filter((c: any) =>
+    semAcento(c.nome).toLowerCase().includes(marca),
+  )
+
+  if (casam.length === 1) return { conta: casam[0], ambiguas: [] }
+  return { conta: null, ambiguas: casam }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
@@ -173,10 +254,13 @@ export async function POST(req: NextRequest) {
     const pluggyAccounts = await getPluggyAccounts(itemId, customCreds)
     let contasCriadasOuAtualizadas = 0
     let transacoesImportadas = 0
+    const contasVinculadas: string[] = []
+    const avisos: string[] = []
 
     for (const pAcc of pluggyAccounts) {
       const tipoConta = pAcc.subtype === 'CREDIT_CARD' || pAcc.type === 'CREDIT' ? 'cartao_credito' : 'corrente'
       const saldo = typeof pAcc.balance === 'number' ? pAcc.balance : 0
+      const nomeCurto = nomeCurtoDaConta(pAcc.name, connectorName)
 
       // Verifica se a conta já existe vinculada
       let queryExistente = (adminSupabase.from('contas') as any)
@@ -206,32 +290,66 @@ export async function POST(req: NextRequest) {
           .eq('id', contaId)
         contasCriadasOuAtualizadas++
       } else {
-        // Cria nova conta bancária no Cajado com categoria correta
-        const { data: novaConta, error: contaErr } = await (adminSupabase.from('contas') as any)
-          .insert({
-            empresa_id: empresaId,
-            user_id: user.id,
-            nome: `${pAcc.name} (${connectorName})`,
-            tipo: tipoConta,
-            categoria: categoria === 'pf' ? 'pf' : 'pj',
-            saldo_inicial: saldo,
-            saldo_atual: saldo,
-            ativo: true,
-            cor: connectorColor,
-            open_finance_id: pAcc.id,
-            open_finance_conexao_id: conexao.id,
-            open_finance_sincronizado_em: new Date().toISOString(),
-            open_finance_sync_auto: true,
-          })
-          .select('id')
-          .single()
+        // 🔴 ANTES DE CRIAR: existe conta manual do mesmo banco?
+        // Ver o comentário de `acharContaParaVincular`. Criar sem olhar é
+        // como o saldo do Sr. Max se parte em duas contas.
+        const { conta: paraVincular, ambiguas } = await acharContaParaVincular(
+          adminSupabase,
+          { categoria, userId: user.id, empresaId },
+          nomeCurto,
+        )
 
-        if (contaErr) {
-          console.error('Erro ao criar conta bancária no Cajado:', contaErr)
-          continue
+        if (paraVincular) {
+          contaId = paraVincular.id
+          await (adminSupabase.from('contas') as any)
+            .update({
+              saldo_atual: saldo,
+              open_finance_id: pAcc.id,
+              open_finance_conexao_id: conexao.id,
+              open_finance_sincronizado_em: new Date().toISOString(),
+              open_finance_sync_auto: true,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', contaId)
+          contasVinculadas.push(paraVincular.nome)
+          contasCriadasOuAtualizadas++
+        } else {
+          if (ambiguas.length > 1) {
+            // Não adivinha entre várias. Cria a nova e conta o que viu, para
+            // a tela poder avisar em vez de deixar o problema escondido.
+            avisos.push(
+              `Criei "${nomeCurto}" como conta nova, mas existem ${ambiguas.length} contas parecidas ` +
+              `(${ambiguas.map((a: any) => a.nome).join(', ')}). Confira se não ficou duplicada.`,
+            )
+          }
+
+          // Cria nova conta bancária no Cajado com categoria correta
+          const { data: novaConta, error: contaErr } = await (adminSupabase.from('contas') as any)
+            .insert({
+              empresa_id: empresaId,
+              user_id: user.id,
+              nome: nomeCurto,
+              tipo: tipoConta,
+              categoria: categoria === 'pf' ? 'pf' : 'pj',
+              saldo_inicial: saldo,
+              saldo_atual: saldo,
+              ativo: true,
+              cor: connectorColor,
+              open_finance_id: pAcc.id,
+              open_finance_conexao_id: conexao.id,
+              open_finance_sincronizado_em: new Date().toISOString(),
+              open_finance_sync_auto: true,
+            })
+            .select('id')
+            .single()
+
+          if (contaErr) {
+            console.error('Erro ao criar conta bancária no Cajado:', contaErr)
+            continue
+          }
+          contaId = novaConta.id
+          contasCriadasOuAtualizadas++
         }
-        contaId = novaConta.id
-        contasCriadasOuAtualizadas++
       }
 
       // 4. Buscar transações recentes desta conta
@@ -303,6 +421,11 @@ export async function POST(req: NextRequest) {
       conexao,
       contasProcessadas: contasCriadasOuAtualizadas,
       transacoesProcessadas: transacoesImportadas,
+      // Quais contas já existiam e foram VINCULADAS em vez de duplicadas.
+      // A tela deve dizer isso ao usuário: vincular conta que já tinha
+      // histórico é uma mudança grande para acontecer em silêncio.
+      contasVinculadas,
+      avisos,
     })
   } catch (error: any) {
     console.error('Erro em POST /api/open-finance/conexoes:', error)
