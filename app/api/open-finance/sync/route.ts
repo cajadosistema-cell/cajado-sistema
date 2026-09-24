@@ -7,6 +7,7 @@ import {
   getPluggyItem,
   PluggyCustomCredentials,
 } from '@/lib/open-finance/pluggy-client'
+import { nomeCurtoDaConta, importarTransacao } from '@/lib/open-finance/normalizar'
 
 /**
  * Busca credenciais Pluggy customizadas salvas para a empresa, se existirem.
@@ -113,6 +114,9 @@ export async function POST(req: NextRequest) {
         const connColor = itemInfo?.connector?.primaryColor || conexao.connector_color || '#3b82f6'
 
         // Atualizar conta no Cajado ou criar se ainda não existir
+        // `categoria` vem do CADASTRO da conta, não da tela nem do metadata
+        // da conexão: é ela que decide em qual livro a transação entra, e a
+        // conta é quem sabe se é pessoal ou da empresa.
         const { data: contaAtualizada } = await (adminSupabase.from('contas') as any)
           .update({
             saldo_atual: saldo,
@@ -120,18 +124,21 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq('open_finance_id', pAcc.id)
-          .select('id')
+          .select('id, categoria')
           .maybeSingle()
 
         let contaId: string | null = contaAtualizada?.id || null
+        let categoriaConta: string = contaAtualizada?.categoria
+          || (conexao.metadata?.categoria === 'pf' ? 'pf' : 'pj')
 
         if (!contaId) {
           const categoria = conexao.metadata?.categoria === 'pf' ? 'pf' : 'pj'
+          categoriaConta = categoria
           const { data: novaConta, error: contaErr } = await (adminSupabase.from('contas') as any)
             .insert({
               empresa_id: conexao.empresa_id,
               user_id: conexao.user_id || user.id,
-              nome: `${pAcc.name} (${connName})`,
+              nome: nomeCurtoDaConta(pAcc.name, connName),
               tipo: tipoConta,
               categoria,
               saldo_inicial: saldo,
@@ -161,59 +168,24 @@ export async function POST(req: NextRequest) {
           try {
             const transacoes = await getPluggyTransactions(pAcc.id, { pageSize: 50, customCredentials: customCreds })
             for (const tx of transacoes) {
-              const { data: txExistente } = await (adminSupabase.from('lancamentos') as any)
-                .select('id')
-                .eq('open_finance_id', tx.id)
-                .maybeSingle()
-
-              if (!txExistente) {
-                const isDespesa = tx.amount < 0 || tx.type === 'DEBIT'
-                const valorAbs = Math.abs(tx.amount)
-                const dataTx = String(tx.date ?? tx.createdAt ?? new Date().toISOString()).slice(0, 10)
-
-                // Enriquecer descrição para facilitar conciliação humana e automática
-                let descFinal = tx.description || 'Transação bancária'
-                const receiverName = tx.paymentData?.receiver?.name
-                const receiverDoc = tx.paymentData?.receiver?.documentNumber?.value
-                const payerName = tx.paymentData?.payer?.name
-                const payerDoc = tx.paymentData?.payer?.documentNumber?.value
-
-                if (isDespesa && (receiverName || receiverDoc)) {
-                  const info = receiverName || `CPF/CNPJ ${receiverDoc}`
-                  if (!descFinal.toLowerCase().includes(info.toLowerCase())) {
-                    descFinal = `${descFinal} (${info})`
-                  }
-                } else if (!isDespesa && (payerName || payerDoc)) {
-                  const info = payerName || `CPF/CNPJ ${payerDoc}`
-                  if (!descFinal.toLowerCase().includes(info.toLowerCase())) {
-                    descFinal = `${descFinal} (${info})`
-                  }
-                }
-
-                const obsPartes: string[] = [`Sincronizado Open Finance (${conexao.connector_name})`]
-                if (tx.paymentData?.paymentMethod) obsPartes.push(`Método: ${tx.paymentData.paymentMethod}`)
-                if (receiverDoc) obsPartes.push(`Destino Doc: ${receiverDoc}`)
-                if (payerDoc) obsPartes.push(`Origem Doc: ${payerDoc}`)
-                if (tx.category) obsPartes.push(`Categoria: ${tx.category}`)
-
-                await (adminSupabase.from('lancamentos') as any).insert({
-                  empresa_id: conexao.empresa_id,
-                  conta_id: contaId,
-                  descricao: descFinal,
-                  valor: valorAbs,
-                  tipo: isDespesa ? 'despesa' : 'receita',
-                  regime: 'caixa',
-                  status: 'validado',
-                  data_competencia: dataTx,
-                  data_caixa: dataTx,
-                  open_finance_id: tx.id,
-                  open_finance_tipo: tx.type,
-                  observacoes: obsPartes.join(' | '),
-                  conciliado: true,
-                  created_by: user.id,
-                })
-                novasTransacoes++
-              }
+              // 🔴 FIX (24/09/2026): esta rota gravava SEMPRE em
+              // `lancamentos` — o livro da PJ. Conta pessoal ficava com
+              // saldo certo e movimentação zerada, porque as telas de PF
+              // leem `gastos_pessoais` / `receitas_pessoais`.
+              //
+              // A regra agora mora em `lib/open-finance/normalizar.ts`,
+              // compartilhada com a rota `conexoes`. Eram duas cópias da
+              // mesma lógica, e corrigir uma só foi o que fez este bug
+              // sobreviver ao primeiro conserto.
+              const gravou = await importarTransacao(adminSupabase, tx, {
+                categoriaConta,
+                empresaId: conexao.empresa_id,
+                userId: conexao.user_id || user.id,
+                contaId,
+                connectorName: conexao.connector_name || 'Open Finance',
+                origem: 'Sincronizado Open Finance',
+              })
+              if (gravou) novasTransacoes++
             }
           } catch (txErr) {
             console.warn(`Erro ao sincronizar transações para conta ${pAcc.id}:`, txErr)
