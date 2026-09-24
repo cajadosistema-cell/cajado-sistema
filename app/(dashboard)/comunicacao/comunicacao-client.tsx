@@ -122,23 +122,44 @@ export default function ComunicacaoClient() {
     let chatSub: ReturnType<typeof supabase.channel> | null = null
 
     async function loadInitialData() {
-      if (!empresaId) return
+      // 🔴 FIX (24/09/2026): aqui havia `if (!empresaId) return`. A empresa só é
+      // necessária para a LISTA DE CONTATOS; o histórico do chat não depende
+      // dela. Com o guard no topo, enquanto o hook de empresa não resolvia,
+      // nada carregava.
       const { data: { session } } = await supabase.auth.getSession()
       if (!session || !mounted) return
       setCurrentUser(session.user)
 
-      const { data: funcs } = await supabase.from('funcionarios').select('*').eq('empresa_id', empresaId).order('nome')
-      if (funcs && mounted) setEquipe(funcs)
+      if (empresaId) {
+        const { data: funcs } = await supabase.from('funcionarios').select('*').eq('empresa_id', empresaId).order('nome')
+        if (funcs && mounted) setEquipe(funcs)
+      }
 
       const { data: vwUsers } = await supabase.from('vw_usuarios_chat').select('*')
       if (vwUsers && mounted) setAllUsers(vwUsers)
 
-      const { data: msgs } = await supabase
+      // 🔴 FIX (24/09/2026) — O BUG QUE DEIXOU O CHAT MUDO.
+      // A consulta filtrava por `.eq('empresa_id', empresaId)`, e a tabela
+      // `chat_interno` NÃO TEM essa coluna (id, remetente_id, destinatario_id,
+      // texto, audio_base64, lido, created_at — confirmado no
+      // information_schema em 24/09). Filtro em coluna inexistente faz o
+      // PostgREST devolver erro; como a linha destruturava só o `data`, o erro
+      // sumia, `msgs` vinha nulo e a lista nascia vazia. Toda vez.
+      //
+      // O efeito prático: em 23/09 o Sr. Max escreveu "Opa" às 17:31 e a Maiara
+      // "Oi" às 17:33. As duas estão no banco. Nenhum dos dois viu a do outro —
+      // quem tinha a página aberta via a mensagem chegar pelo realtime, e quem
+      // abria depois não via nada, porque o histórico nunca carregava.
+      //
+      // A visibilidade de quem vê o quê é trabalho do RLS, não de um filtro no
+      // cliente. E o `error` agora é lido: erro engolido foi o que fez isso
+      // passar despercebido.
+      const { data: msgs, error: errMsgs } = await supabase
         .from('chat_interno')
         .select('*')
-        .eq('empresa_id', empresaId)
         .order('created_at', { ascending: true })
         .limit(150)
+      if (errMsgs) console.error('[chat] histórico não carregou:', errMsgs.message)
       if (msgs && mounted) setMensagens(msgs as MensagemChat[])
 
       if (!mounted) return
@@ -167,7 +188,13 @@ export default function ComunicacaoClient() {
       // Realtime messages — nome único por mount
       chatSub = supabase.channel(`chat_db_changes_${Date.now()}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_interno' }, (payload) => {
-          if (mounted) setMensagens(prev => [...prev, payload.new as MensagemChat])
+          // Guarda contra duplicata: com o histórico voltando a carregar, uma
+          // mensagem pode chegar pelo realtime e já estar na lista (recarga da
+          // página no mesmo instante, ou dois mounts do efeito). Comparar por
+          // id é barato e evita a mensagem aparecer duas vezes na tela.
+          if (!mounted) return
+          const nova = payload.new as MensagemChat
+          setMensagens(prev => prev.some(m => m.id === nova.id) ? prev : [...prev, nova])
         })
         .subscribe()
     }
