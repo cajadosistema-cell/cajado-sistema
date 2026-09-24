@@ -54,15 +54,33 @@ export interface PluggyTransaction {
   id: string
   accountId: string
   description: string
+  descriptionRaw?: string
   amount: number
-  date: string // YYYY-MM-DD
+  date: string // YYYY-MM-DD ou ISO
+  createdAt?: string
   status: 'PENDING' | 'POSTED' | string
   type: 'DEBIT' | 'CREDIT' | string
+  operationType?: string
+  operationTypeAdditionalInfo?: string
   category?: string
+  merchant?: {
+    name?: string
+    cnpj?: string
+  } | null
   paymentData?: {
-    payer?: { name?: string }
-    receiver?: { name?: string }
+    payer?: {
+      name?: string
+      documentNumber?: { type?: string; value?: string }
+      routingNumberISPB?: string
+    }
+    receiver?: {
+      name?: string
+      documentNumber?: { type?: string; value?: string }
+      routingNumberISPB?: string
+    }
     paymentMethod?: string
+    reason?: string
+    boletoMetadata?: any
   }
 }
 
@@ -290,11 +308,11 @@ export async function getPluggyAccounts(itemId: string): Promise<PluggyAccount[]
 }
 
 /**
- * Lista as transações de uma conta
+ * Lista as transações de uma conta usando a API v2 da Pluggy (com paginação por cursor)
  */
 export async function getPluggyTransactions(
   accountId: string,
-  options?: { from?: string; pageSize?: number }
+  options?: { from?: string; pageSize?: number; de?: string; ate?: string }
 ): Promise<PluggyTransaction[]> {
   if (isPluggyMockMode() || accountId.startsWith('mock_acc_')) {
     const today = new Date()
@@ -347,20 +365,43 @@ export async function getPluggyTransactions(
   }
 
   const apiKey = await getPluggyApiKey()
-  const params = new URLSearchParams()
-  params.set('accountId', accountId)
-  if (options?.from) params.set('from', options.from)
-  if (options?.pageSize) params.set('pageSize', String(options.pageSize))
+  const todas: PluggyTransaction[] = []
+  let cursor: string | null = null
 
-  const res = await fetch(`${PLUGGY_API_URL}/transactions?${params.toString()}`, {
-    headers: { 'X-API-KEY': apiKey },
-  })
+  // 24/09/2026: Pluggy aposentou o endpoint /transactions e passou a exigir /v2/transactions.
+  // O endpoint v2 não aceita `from`, `to` ou `pageSize` na querystring — apenas `accountId` e `cursor`.
+  // Realizamos paginação por cursor (até 15 páginas) e aplicamos o filtro de data em memória.
+  for (let pagina = 0; pagina < 15; pagina++) {
+    const params = new URLSearchParams({ accountId })
+    if (cursor) params.set('cursor', cursor)
 
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`Erro ao buscar Transações Pluggy: ${res.status} - ${errText}`)
+    const res = await fetch(`${PLUGGY_API_URL}/v2/transactions?${params.toString()}`, {
+      headers: { 'X-API-KEY': apiKey },
+    })
+
+    if (!res.ok) {
+      const errText = await res.text()
+      throw new Error(`Erro ao buscar Transações Pluggy (v2): ${res.status} - ${errText}`)
+    }
+
+    const data = await res.json()
+    const lote = (data.results ?? data.data ?? []) as PluggyTransaction[]
+    if (!Array.isArray(lote) || lote.length === 0) break
+
+    todas.push(...lote)
+    cursor = data.nextCursor ?? data.next_cursor ?? data.cursor ?? null
+    if (!cursor) break
   }
 
-  const data = await res.json()
-  return data.results || []
+  const de = options?.de || options?.from
+  const ate = options?.ate
+
+  if (!de && !ate) {
+    return todas
+  }
+
+  return todas.filter(t => {
+    const d = String(t.date ?? t.createdAt ?? '').slice(0, 10)
+    return (!de || d >= de) && (!ate || d <= ate)
+  })
 }

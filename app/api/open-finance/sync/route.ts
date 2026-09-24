@@ -104,19 +104,47 @@ export async function POST(req: NextRequest) {
 
               if (!txExistente) {
                 const isDespesa = tx.amount < 0 || tx.type === 'DEBIT'
+                const valorAbs = Math.abs(tx.amount)
+                const dataTx = String(tx.date ?? tx.createdAt ?? new Date().toISOString()).slice(0, 10)
+
+                // Enriquecer descrição para facilitar conciliação humana e automática
+                let descFinal = tx.description || 'Transação bancária'
+                const receiverName = tx.paymentData?.receiver?.name
+                const receiverDoc = tx.paymentData?.receiver?.documentNumber?.value
+                const payerName = tx.paymentData?.payer?.name
+                const payerDoc = tx.paymentData?.payer?.documentNumber?.value
+
+                if (isDespesa && (receiverName || receiverDoc)) {
+                  const info = receiverName || `CPF/CNPJ ${receiverDoc}`
+                  if (!descFinal.toLowerCase().includes(info.toLowerCase())) {
+                    descFinal = `${descFinal} (${info})`
+                  }
+                } else if (!isDespesa && (payerName || payerDoc)) {
+                  const info = payerName || `CPF/CNPJ ${payerDoc}`
+                  if (!descFinal.toLowerCase().includes(info.toLowerCase())) {
+                    descFinal = `${descFinal} (${info})`
+                  }
+                }
+
+                const obsPartes: string[] = [`Sincronizado Open Finance (${conexao.connector_name})`]
+                if (tx.paymentData?.paymentMethod) obsPartes.push(`Método: ${tx.paymentData.paymentMethod}`)
+                if (receiverDoc) obsPartes.push(`Destino Doc: ${receiverDoc}`)
+                if (payerDoc) obsPartes.push(`Origem Doc: ${payerDoc}`)
+                if (tx.category) obsPartes.push(`Categoria: ${tx.category}`)
+
                 await (adminSupabase.from('lancamentos') as any).insert({
                   empresa_id: conexao.empresa_id,
                   conta_id: contaAtualizada.id,
-                  descricao: tx.description || 'Transação bancária',
-                  valor: Math.abs(tx.amount),
+                  descricao: descFinal,
+                  valor: valorAbs,
                   tipo: isDespesa ? 'despesa' : 'receita',
                   regime: 'caixa',
                   status: 'validado',
-                  data_competencia: tx.date,
-                  data_caixa: tx.date,
+                  data_competencia: dataTx,
+                  data_caixa: dataTx,
                   open_finance_id: tx.id,
                   open_finance_tipo: tx.type,
-                  observacoes: `Sincronizado Open Finance (${conexao.connector_name})`,
+                  observacoes: obsPartes.join(' | '),
                   conciliado: true,
                   created_by: user.id,
                 })
