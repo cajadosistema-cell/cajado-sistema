@@ -476,6 +476,33 @@ export default function ComunicacaoClient() {
 
   const activeChatOnline = activeChat !== null && onlineUsers.includes(activeChat)
 
+  // ── Quem está online AGORA, pelo nome ───────────────────────
+  // 24/09/2026. A presença sempre existiu (canal `equipe:sala-principal`,
+  // global — todo mundo entra), mas a bolinha verde só era desenhada na
+  // lista de contatos, e essa lista vem de `funcionarios` filtrada por
+  // empresa. O Sr. Max nunca aparecia na lista da Maiara nem ela na dele:
+  // o sistema sabia que o outro estava online e não tinha onde mostrar.
+  //
+  // `allUsers` vem de `vw_usuarios_chat`, que é carregada SEM filtro de
+  // empresa — é ela que atravessa. Cruzando com a presença, dá para dizer
+  // quem está do outro lado, inclusive no canal Geral.
+  const nomesOnline = onlineUsers
+    .filter(id => id !== currentUser?.id)
+    .map(id => {
+      const u = equipe.find(f => f.id === id) ?? allUsers.find(a => a.id === id)
+      return (u?.nome as string | undefined)?.split(' ')[0]
+    })
+    .filter((n): n is string => !!n)
+
+  // Uma linha curta: "Max online" / "Max, Carlos online" / "+2".
+  // Nome próprio diz mais que um número — "2 online" não responde à
+  // pergunta que a pessoa realmente tem, que é "ele está aí agora?".
+  const resumoOnline = nomesOnline.length === 0
+    ? 'Ninguém mais online agora'
+    : nomesOnline.length <= 2
+      ? `● ${nomesOnline.join(', ')} online`
+      : `● ${nomesOnline.slice(0, 2).join(', ')} +${nomesOnline.length - 2} online`
+
   // ── Select chat (mobile-aware) ──────────────────────────────
   const selectChat = (id: string | null) => {
     setActiveChat(id)
@@ -510,7 +537,9 @@ export default function ComunicacaoClient() {
           <span className="text-lg">🗨️</span>
           <h1 className="text-base font-bold text-fg">Chat Interno</h1>
         </div>
-        <p className="text-[11px] text-fg-tertiary">{onlineUsers.length} online agora</p>
+        <p className={cn('text-[11px] truncate', nomesOnline.length > 0 ? 'text-emerald-400' : 'text-fg-tertiary')}>
+          {nomesOnline.length > 0 ? resumoOnline : 'Só você online agora'}
+        </p>
         {currentUser && (
           <p className="text-[10px] font-semibold text-brand-gold mt-1 uppercase tracking-wider">
             Logado como: {currentUser.user_metadata?.nome || currentUser.email?.split('@')[0]}
@@ -524,7 +553,7 @@ export default function ComunicacaoClient() {
         <ContactItem
           id={null}
           name="Geral da Equipe"
-          subtitle={`${onlineUsers.length} membros online`}
+          subtitle={nomesOnline.length > 0 ? resumoOnline.replace('● ', '') : 'Só você por aqui'}
           isActive={activeChat === null && mobileView === 'chat'}
           isGeral
           onClick={() => selectChat(null)}
@@ -571,7 +600,13 @@ export default function ComunicacaoClient() {
         </button>
 
         {activeChat === null ? (
-          <div className="w-9 h-9 rounded-xl bg-brand-gold-soft border border-brand-gold/30 flex items-center justify-center text-base shrink-0">🌍</div>
+          <div className="relative shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-brand-gold-soft border border-brand-gold/30 flex items-center justify-center text-base">🌍</div>
+            {/* Bolinha no canal Geral quando tem alguém do outro lado */}
+            {nomesOnline.length > 0 && (
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#0a0d16]" />
+            )}
+          </div>
         ) : (
           <div className="relative">
             <Avatar nome={activeChatName} size="sm" />
@@ -588,7 +623,9 @@ export default function ComunicacaoClient() {
               {activeChatOnline ? '● Online' : 'Offline'}
             </p>
           ) : (
-            <p className="text-[11px] text-fg-tertiary">{onlineUsers.length} online</p>
+            <p className={cn('text-[11px] font-medium truncate', nomesOnline.length > 0 ? 'text-emerald-400' : 'text-fg-tertiary')}>
+              {resumoOnline}
+            </p>
           )}
         </div>
 
