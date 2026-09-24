@@ -50,15 +50,31 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
   const [feedbackMsg, setFeedbackMsg] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null)
   const [mostrarVincularManual, setMostrarVincularManual] = useState(false)
   const [itemIdManual, setItemIdManual] = useState('')
+  const [clientIdManual, setClientIdManual] = useState('')
+  const [clientSecretManual, setClientSecretManual] = useState('')
+  const [salvarCredenciais, setSalvarCredenciais] = useState(true)
+  const [credenciaisSalvas, setCredenciaisSalvas] = useState<{ client_id_masked: string; label: string; isGlobal?: boolean } | null>(null)
+  const [editarCredenciais, setEditarCredenciais] = useState(false)
   const [vinculandoManual, setVinculandoManual] = useState(false)
 
   const carregarConexoes = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await fetch(`/api/open-finance/conexoes?categoria=${categoria}`)
-      const data = await res.json()
-      if (data.conexoes) {
-        setConexoes(data.conexoes)
+      const [resConexoes, resCreds] = await Promise.all([
+        fetch(`/api/open-finance/conexoes?categoria=${categoria}`),
+        fetch('/api/open-finance/credenciais'),
+      ])
+      const dataConexoes = await resConexoes.json()
+      if (dataConexoes.conexoes) {
+        setConexoes(dataConexoes.conexoes)
+      }
+      const dataCreds = await resCreds.json().catch(() => null)
+      if (dataCreds?.hasCredentials && dataCreds.credencial) {
+        setCredenciaisSalvas({
+          client_id_masked: dataCreds.credencial.client_id_masked,
+          label: dataCreds.credencial.label,
+          isGlobal: dataCreds.credencial.isGlobal,
+        })
       }
     } catch (err: any) {
       console.error('Erro ao carregar conexões:', err)
@@ -252,11 +268,18 @@ function carregarPluggySDK(): Promise<any> {
     }
   }
 
-  // Vincular conexão criada no Meu Pluggy (gratuito)
+  // Vincular conexão criada no Meu Pluggy com credenciais da Demo App
   const handleVincularManual = async () => {
-    const trimmed = itemIdManual.trim()
-    if (!trimmed) {
+    const trimmedItem = itemIdManual.trim()
+    if (!trimmedItem) {
       setFeedbackMsg({ tipo: 'error', texto: 'Informe o Item ID da conexão do Meu Pluggy.' })
+      return
+    }
+
+    // Precisa de credenciais (salvas ou informadas agora)
+    const usarCredSalvas = credenciaisSalvas && !clientIdManual.trim() && !clientSecretManual.trim()
+    if (!usarCredSalvas && (!clientIdManual.trim() || !clientSecretManual.trim())) {
+      setFeedbackMsg({ tipo: 'error', texto: 'Informe o Client ID e Client Secret da Demo App do Pluggy, ou salve suas credenciais primeiro.' })
       return
     }
 
@@ -264,22 +287,51 @@ function carregarPluggySDK(): Promise<any> {
       setVinculandoManual(true)
       setFeedbackMsg(null)
 
+      // Se o usuário quer salvar as credenciais, salva primeiro
+      if (!usarCredSalvas && salvarCredenciais && clientIdManual.trim() && clientSecretManual.trim()) {
+        const resSave = await fetch('/api/open-finance/credenciais', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: clientIdManual.trim(),
+            clientSecret: clientSecretManual.trim(),
+            label: 'Minha Conta Pluggy',
+          }),
+        })
+        const saveData = await resSave.json()
+        if (!resSave.ok) {
+          setFeedbackMsg({ tipo: 'error', texto: saveData.error || 'Erro ao validar credenciais Pluggy' })
+          return
+        }
+        setCredenciaisSalvas({ client_id_masked: clientIdManual.trim().slice(0, 4) + '...' + clientIdManual.trim().slice(-4), label: 'Minha Conta Pluggy' })
+      }
+
+      // Vincular o Item
+      const bodyPayload: Record<string, unknown> = {
+        itemId: trimmedItem,
+        categoria,
+      }
+      // Envia credenciais no body se não estiverem salvas
+      if (!usarCredSalvas && clientIdManual.trim() && clientSecretManual.trim()) {
+        bodyPayload.clientId = clientIdManual.trim()
+        bodyPayload.clientSecret = clientSecretManual.trim()
+      }
+
       const resSave = await fetch('/api/open-finance/conexoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemId: trimmed,
-          categoria,
-        }),
+        body: JSON.stringify(bodyPayload),
       })
 
       const resData = await resSave.json()
       if (resSave.ok) {
         setFeedbackMsg({
           tipo: 'success',
-          texto: `✅ Banco vinculado com sucesso! ${resData.contasProcessadas || 0} conta(s) e ${resData.transacoesProcessadas || 0} lançamento(s) importados do Meu Pluggy.`,
+          texto: `✅ Banco vinculado com sucesso! ${resData.contasProcessadas || 0} conta(s) e ${resData.transacoesProcessadas || 0} lançamento(s) importados.`,
         })
         setItemIdManual('')
+        setClientIdManual('')
+        setClientSecretManual('')
         setMostrarVincularManual(false)
         await carregarConexoes()
         onSuccess?.()
@@ -441,10 +493,10 @@ function carregarPluggySDK(): Promise<any> {
                 <div className="flex items-start justify-between">
                   <div>
                     <h4 className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
-                      <span>🔗</span> Conexão Gratuita via Meu Pluggy (Item ID)
+                      <span>🔗</span> Conexão via Meu Pluggy (Demo App)
                     </h4>
                     <p className="text-[11px] text-gray-300 mt-1 leading-relaxed">
-                      Conectou sua conta bancária real no portal gratuito{' '}
+                      Conecte sua conta bancária no{' '}
                       <a
                         href="https://meu.pluggy.ai"
                         target="_blank"
@@ -453,7 +505,16 @@ function carregarPluggySDK(): Promise<any> {
                       >
                         meu.pluggy.ai
                       </a>
-                      ? Cole o <strong>Item ID</strong> da conexão abaixo para sincronizar saldos e extratos sem custo de mensalidade.
+                      , crie uma Demo App no{' '}
+                      <a
+                        href="https://dashboard.pluggy.ai"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 font-semibold underline hover:text-emerald-300"
+                      >
+                        dashboard.pluggy.ai
+                      </a>
+                      {' '}e informe as credenciais abaixo.
                     </p>
                   </div>
                   <button
@@ -464,29 +525,103 @@ function carregarPluggySDK(): Promise<any> {
                   </button>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={itemIdManual}
-                    onChange={(e) => setItemIdManual(e.target.value)}
-                    placeholder="Cole o Item ID aqui (ex: 41b2c3d4-e5f6-7890-abcd-1234567890ab)"
-                    className="flex-1 bg-black/40 border border-white/15 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none font-mono"
-                  />
-                  <button
-                    onClick={handleVincularManual}
-                    disabled={vinculandoManual || !itemIdManual.trim()}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 whitespace-nowrap"
-                  >
-                    {vinculandoManual ? <span className="animate-spin">🔄</span> : <span>⚡</span>}
-                    {vinculandoManual ? 'Sincronizando...' : 'Vincular e Importar'}
-                  </button>
+                {/* Credenciais salvas indicator */}
+                {credenciaisSalvas && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[11px] text-emerald-300">
+                      <span>🔑</span>
+                      <span>Credenciais ativas: <strong>{credenciaisSalvas.client_id_masked}</strong></span>
+                      <span className="text-emerald-500/60">•</span>
+                      <span className="text-gray-400">{credenciaisSalvas.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-emerald-400/70">✓ Prontas</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditarCredenciais(!editarCredenciais)}
+                        className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-medium ml-1"
+                      >
+                        {editarCredenciais ? 'Ocultar' : 'Alterar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Campos de credenciais (Client ID / Client Secret) */}
+                {(!credenciaisSalvas || editarCredenciais) && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1 block">
+                          Client ID (Demo App)
+                        </label>
+                        <input
+                          type="text"
+                          value={clientIdManual}
+                          onChange={(e) => setClientIdManual(e.target.value)}
+                          placeholder="Ex: 0f2f4ba8-5a16-4bc4-..."
+                          className="w-full bg-black/40 border border-white/15 focus:border-emerald-500 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1 block">
+                          Client Secret (Demo App)
+                        </label>
+                        <input
+                          type="password"
+                          value={clientSecretManual}
+                          onChange={(e) => setClientSecretManual(e.target.value)}
+                          placeholder="Ex: gd-4NSaA6uFOxGx..."
+                          className="w-full bg-black/40 border border-white/15 focus:border-emerald-500 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-[11px] text-gray-300 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={salvarCredenciais}
+                        onChange={(e) => setSalvarCredenciais(e.target.checked)}
+                        className="accent-emerald-500 rounded"
+                      />
+                      Salvar credenciais para próximas conexões (recomendado)
+                    </label>
+                  </div>
+                )}
+
+                {/* Item ID */}
+                <div>
+                  <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1 block">
+                    Item ID (do Meu Pluggy)
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={itemIdManual}
+                      onChange={(e) => setItemIdManual(e.target.value)}
+                      placeholder="Cole o Item ID aqui (ex: 41b2c3d4-e5f6-7890-abcd-1234567890ab)"
+                      className="flex-1 bg-black/40 border border-white/15 focus:border-emerald-500 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 outline-none font-mono"
+                    />
+                    <button
+                      onClick={handleVincularManual}
+                      disabled={vinculandoManual || !itemIdManual.trim()}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    >
+                      {vinculandoManual ? <span className="animate-spin">🔄</span> : <span>⚡</span>}
+                      {vinculandoManual ? 'Sincronizando...' : 'Vincular e Importar'}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="text-[10px] text-emerald-200/70 flex items-center gap-1.5">
-                  <span>💡</span>
-                  <span>
-                    No <strong>meu.pluggy.ai</strong>, clique no banco conectado e copie o código do Item ID na URL ou nos detalhes da conexão.
-                  </span>
+                {/* Instruções passo a passo */}
+                <div className="bg-black/20 rounded-lg p-3 space-y-1.5">
+                  <p className="text-[10px] text-emerald-300 font-semibold uppercase tracking-wider">Como conectar:</p>
+                  <ol className="text-[10px] text-gray-400 space-y-1 list-decimal list-inside leading-relaxed">
+                    <li>Acesse <strong className="text-white">meu.pluggy.ai</strong> e conecte seu banco</li>
+                    <li>No <strong className="text-white">dashboard.pluggy.ai</strong>, crie uma <strong className="text-white">Demo App</strong> e copie o Client ID e Secret</li>
+                    <li>No Meu Pluggy, clique na conexão do banco e copie o <strong className="text-white">Item ID</strong></li>
+                    <li>Cole as 3 informações acima e clique em &ldquo;Vincular e Importar&rdquo;</li>
+                  </ol>
                 </div>
               </div>
             )}

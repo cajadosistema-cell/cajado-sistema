@@ -88,42 +88,57 @@ const PLUGGY_API_URL = process.env.PLUGGY_API_URL || 'https://api.pluggy.ai'
 const PLUGGY_CLIENT_ID = process.env.PLUGGY_CLIENT_ID
 const PLUGGY_CLIENT_SECRET = process.env.PLUGGY_CLIENT_SECRET
 
-// Cache em memória do token de autenticação da Pluggy
-let cachedApiKey: string | null = null
-let cachedApiKeyExpiresAt = 0
+/**
+ * Credenciais customizadas (por empresa) para acessar Items de outra conta Pluggy
+ */
+export interface PluggyCustomCredentials {
+  clientId: string
+  clientSecret: string
+}
+
+// Cache em memória do token de autenticação da Pluggy (global + por clientId)
+const apiKeyCache = new Map<string, { key: string; expiresAt: number }>()
 
 /**
  * Retorna se o cliente está operando em modo Mock / Demonstração
  */
-export function isPluggyMockMode(): boolean {
+export function isPluggyMockMode(custom?: PluggyCustomCredentials | null): boolean {
+  const cid = custom?.clientId || PLUGGY_CLIENT_ID
+  const csec = custom?.clientSecret || PLUGGY_CLIENT_SECRET
   return (
-    !PLUGGY_CLIENT_ID ||
-    !PLUGGY_CLIENT_SECRET ||
-    PLUGGY_CLIENT_ID.startsWith('mock_') ||
-    PLUGGY_CLIENT_ID === 'demo' ||
-    PLUGGY_CLIENT_ID === 'mock'
+    !cid ||
+    !csec ||
+    cid.startsWith('mock_') ||
+    cid === 'demo' ||
+    cid === 'mock'
   )
 }
 
 /**
  * Obtém ou renova a API Key da Pluggy via POST /auth
+ * Suporta credenciais customizadas (por empresa) ou credenciais globais do .env
  */
-export async function getPluggyApiKey(): Promise<string> {
-  if (isPluggyMockMode()) {
+export async function getPluggyApiKey(custom?: PluggyCustomCredentials | null): Promise<string> {
+  if (isPluggyMockMode(custom)) {
     return 'mock_api_key_cajado'
   }
 
+  const clientId = custom?.clientId || PLUGGY_CLIENT_ID!
+  const clientSecret = custom?.clientSecret || PLUGGY_CLIENT_SECRET!
+  const cacheKey = clientId
+
   const now = Date.now()
-  if (cachedApiKey && cachedApiKeyExpiresAt > now + 60000) {
-    return cachedApiKey
+  const cached = apiKeyCache.get(cacheKey)
+  if (cached && cached.expiresAt > now + 60000) {
+    return cached.key
   }
 
   const res = await fetch(`${PLUGGY_API_URL}/auth`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      clientId: PLUGGY_CLIENT_ID,
-      clientSecret: PLUGGY_CLIENT_SECRET,
+      clientId,
+      clientSecret,
     }),
   })
 
@@ -133,10 +148,9 @@ export async function getPluggyApiKey(): Promise<string> {
   }
 
   const data = await res.json()
-  cachedApiKey = data.apiKey
   // Pluggy API Keys costumam durar 2 horas (7200s); renovamos preventivamente a cada 1h45m
-  cachedApiKeyExpiresAt = now + 105 * 60 * 1000
-  return cachedApiKey!
+  apiKeyCache.set(cacheKey, { key: data.apiKey, expiresAt: now + 105 * 60 * 1000 })
+  return data.apiKey
 }
 
 /**
@@ -146,15 +160,16 @@ export async function createPluggyConnectToken(options?: {
   clientUserId?: string
   itemId?: string
   webhookUrl?: string
+  customCredentials?: PluggyCustomCredentials | null
 }): Promise<{ connectToken: string; isMock: boolean }> {
-  if (isPluggyMockMode()) {
+  if (isPluggyMockMode(options?.customCredentials)) {
     return {
       connectToken: `mock_connect_token_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
       isMock: true,
     }
   }
 
-  const apiKey = await getPluggyApiKey()
+  const apiKey = await getPluggyApiKey(options?.customCredentials)
   const payload: Record<string, unknown> = {}
 
   if (options?.clientUserId) payload.clientUserId = options.clientUserId
@@ -182,8 +197,8 @@ export async function createPluggyConnectToken(options?: {
 /**
  * Obtém detalhes de um Item (conexão de um banco)
  */
-export async function getPluggyItem(itemId: string): Promise<PluggyItem> {
-  if (isPluggyMockMode() || itemId.startsWith('mock_item_')) {
+export async function getPluggyItem(itemId: string, custom?: PluggyCustomCredentials | null): Promise<PluggyItem> {
+  if (isPluggyMockMode(custom) || itemId.startsWith('mock_item_')) {
     return {
       id: itemId,
       connector: {
@@ -199,7 +214,7 @@ export async function getPluggyItem(itemId: string): Promise<PluggyItem> {
     }
   }
 
-  const apiKey = await getPluggyApiKey()
+  const apiKey = await getPluggyApiKey(custom)
   const res = await fetch(`${PLUGGY_API_URL}/items/${itemId}`, {
     headers: { 'X-API-KEY': apiKey },
   })
@@ -215,12 +230,12 @@ export async function getPluggyItem(itemId: string): Promise<PluggyItem> {
 /**
  * Deleta uma conexão de banco na Pluggy
  */
-export async function deletePluggyItem(itemId: string): Promise<boolean> {
-  if (isPluggyMockMode() || itemId.startsWith('mock_item_')) {
+export async function deletePluggyItem(itemId: string, custom?: PluggyCustomCredentials | null): Promise<boolean> {
+  if (isPluggyMockMode(custom) || itemId.startsWith('mock_item_')) {
     return true
   }
 
-  const apiKey = await getPluggyApiKey()
+  const apiKey = await getPluggyApiKey(custom)
   const res = await fetch(`${PLUGGY_API_URL}/items/${itemId}`, {
     method: 'DELETE',
     headers: { 'X-API-KEY': apiKey },
@@ -232,8 +247,8 @@ export async function deletePluggyItem(itemId: string): Promise<boolean> {
 /**
  * Dispara atualização / sincronização forçada de um Item
  */
-export async function syncPluggyItem(itemId: string): Promise<PluggyItem> {
-  if (isPluggyMockMode() || itemId.startsWith('mock_item_')) {
+export async function syncPluggyItem(itemId: string, custom?: PluggyCustomCredentials | null): Promise<PluggyItem> {
+  if (isPluggyMockMode(custom) || itemId.startsWith('mock_item_')) {
     return {
       id: itemId,
       connector: { id: 201, name: 'Banco Conectado' },
@@ -242,7 +257,7 @@ export async function syncPluggyItem(itemId: string): Promise<PluggyItem> {
     }
   }
 
-  const apiKey = await getPluggyApiKey()
+  const apiKey = await getPluggyApiKey(custom)
   const res = await fetch(`${PLUGGY_API_URL}/items/${itemId}`, {
     method: 'PATCH',
     headers: { 'X-API-KEY': apiKey },
@@ -259,8 +274,8 @@ export async function syncPluggyItem(itemId: string): Promise<PluggyItem> {
 /**
  * Lista as contas vinculadas a um Item
  */
-export async function getPluggyAccounts(itemId: string): Promise<PluggyAccount[]> {
-  if (isPluggyMockMode() || itemId.startsWith('mock_item_')) {
+export async function getPluggyAccounts(itemId: string, custom?: PluggyCustomCredentials | null): Promise<PluggyAccount[]> {
+  if (isPluggyMockMode(custom) || itemId.startsWith('mock_item_')) {
     const isBradesco = itemId.includes('bradesco')
     const isItau = itemId.includes('itau')
     const bancoNome = isBradesco ? 'Bradesco' : isItau ? 'Itaú' : 'Nubank'
@@ -293,7 +308,7 @@ export async function getPluggyAccounts(itemId: string): Promise<PluggyAccount[]
     ]
   }
 
-  const apiKey = await getPluggyApiKey()
+  const apiKey = await getPluggyApiKey(custom)
   const res = await fetch(`${PLUGGY_API_URL}/accounts?itemId=${encodeURIComponent(itemId)}`, {
     headers: { 'X-API-KEY': apiKey },
   })
@@ -312,9 +327,9 @@ export async function getPluggyAccounts(itemId: string): Promise<PluggyAccount[]
  */
 export async function getPluggyTransactions(
   accountId: string,
-  options?: { from?: string; pageSize?: number; de?: string; ate?: string }
+  options?: { from?: string; pageSize?: number; de?: string; ate?: string; customCredentials?: PluggyCustomCredentials | null }
 ): Promise<PluggyTransaction[]> {
-  if (isPluggyMockMode() || accountId.startsWith('mock_acc_')) {
+  if (isPluggyMockMode(options?.customCredentials) || accountId.startsWith('mock_acc_')) {
     const today = new Date()
     const d1 = today.toISOString().split('T')[0]
     const d2 = new Date(today.getTime() - 86400000).toISOString().split('T')[0]
@@ -364,7 +379,7 @@ export async function getPluggyTransactions(
     ]
   }
 
-  const apiKey = await getPluggyApiKey()
+  const apiKey = await getPluggyApiKey(options?.customCredentials)
   const todas: PluggyTransaction[] = []
   let cursor: string | null = null
 

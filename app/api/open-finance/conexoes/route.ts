@@ -6,8 +6,26 @@ import {
   getPluggyTransactions,
   deletePluggyItem,
   PluggyAccount,
-  PluggyTransaction
+  PluggyTransaction,
+  PluggyCustomCredentials
 } from '@/lib/open-finance/pluggy-client'
+
+/**
+ * Busca credenciais Pluggy customizadas salvas para a empresa, se existirem.
+ */
+async function getEmpresaCredenciais(adminSupabase: any, empresaId: string): Promise<PluggyCustomCredentials | null> {
+  const { data } = await (adminSupabase.from('open_finance_credenciais') as any)
+    .select('client_id, client_secret')
+    .eq('empresa_id', empresaId)
+    .eq('provider', 'pluggy')
+    .eq('ativo', true)
+    .maybeSingle()
+
+  if (data?.client_id && data?.client_secret) {
+    return { clientId: data.client_id, clientSecret: data.client_secret }
+  }
+  return null
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -88,7 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { itemId, connector, categoria = 'pj' } = body
+    const { itemId, connector, categoria = 'pj', clientId: bodyClientId, clientSecret: bodyClientSecret } = body
 
     if (!itemId) {
       return NextResponse.json({ error: 'itemId é obrigatório' }, { status: 400 })
@@ -105,8 +123,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Empresa não encontrada para este usuário' }, { status: 400 })
     }
 
+    // Resolver credenciais: prioridade body > salvas na empresa > env global
+    let customCreds: PluggyCustomCredentials | null = null
+    if (bodyClientId && bodyClientSecret) {
+      customCreds = { clientId: bodyClientId, clientSecret: bodyClientSecret }
+    } else {
+      customCreds = await getEmpresaCredenciais(adminSupabase, empresaId).catch(() => null)
+    }
+
     // 1. Obter informações atualizadas do Item na Pluggy
-    const itemData = await getPluggyItem(itemId).catch(() => ({
+    const itemData = await getPluggyItem(itemId, customCreds).catch(() => ({
       id: itemId,
       connector: connector || { id: 0, name: 'Instituição Bancária' },
       status: 'UPDATED',
@@ -144,7 +170,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Buscar contas da instituição via Pluggy
-    const pluggyAccounts = await getPluggyAccounts(itemId)
+    const pluggyAccounts = await getPluggyAccounts(itemId, customCreds)
     let contasCriadasOuAtualizadas = 0
     let transacoesImportadas = 0
 
@@ -210,7 +236,7 @@ export async function POST(req: NextRequest) {
 
       // 4. Buscar transações recentes desta conta
       try {
-        const transacoes = await getPluggyTransactions(pAcc.id, { pageSize: 50 })
+        const transacoes = await getPluggyTransactions(pAcc.id, { pageSize: 50, customCredentials: customCreds })
         for (const tx of transacoes) {
           // Idempotência: verificar se transação já foi importada
           const { data: txExistente } = await (adminSupabase.from('lancamentos') as any)
@@ -314,7 +340,12 @@ export async function DELETE(req: NextRequest) {
 
     // Deletar na Pluggy
     if (conexao.item_id) {
-      await deletePluggyItem(conexao.item_id).catch(() => null)
+      // Buscar credenciais customizadas da empresa se existirem
+      let customCreds: PluggyCustomCredentials | null = null
+      if (conexao.empresa_id) {
+        customCreds = await getEmpresaCredenciais(adminSupabase, conexao.empresa_id).catch(() => null)
+      }
+      await deletePluggyItem(conexao.item_id, customCreds).catch(() => null)
     }
 
     // Desvincular contas
