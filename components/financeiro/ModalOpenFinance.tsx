@@ -48,6 +48,9 @@ export function ModalOpenFinance({ categoria = 'pj', onClose, onSuccess }: Modal
   const [bancoSelecionado, setBancoSelecionado] = useState<typeof BANCOS_POPULARES[0] | null>(null)
   const [conectando, setConectando] = useState(false)
   const [feedbackMsg, setFeedbackMsg] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null)
+  const [mostrarVincularManual, setMostrarVincularManual] = useState(false)
+  const [itemIdManual, setItemIdManual] = useState('')
+  const [vinculandoManual, setVinculandoManual] = useState(false)
 
   const carregarConexoes = useCallback(async () => {
     try {
@@ -249,6 +252,47 @@ function carregarPluggySDK(): Promise<any> {
     }
   }
 
+  // Vincular conexão criada no Meu Pluggy (gratuito)
+  const handleVincularManual = async () => {
+    const trimmed = itemIdManual.trim()
+    if (!trimmed) {
+      setFeedbackMsg({ tipo: 'error', texto: 'Informe o Item ID da conexão do Meu Pluggy.' })
+      return
+    }
+
+    try {
+      setVinculandoManual(true)
+      setFeedbackMsg(null)
+
+      const resSave = await fetch('/api/open-finance/conexoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: trimmed,
+          categoria,
+        }),
+      })
+
+      const resData = await resSave.json()
+      if (resSave.ok) {
+        setFeedbackMsg({
+          tipo: 'success',
+          texto: `✅ Banco vinculado com sucesso! ${resData.contasProcessadas || 0} conta(s) e ${resData.transacoesProcessadas || 0} lançamento(s) importados do Meu Pluggy.`,
+        })
+        setItemIdManual('')
+        setMostrarVincularManual(false)
+        await carregarConexoes()
+        onSuccess?.()
+      } else {
+        setFeedbackMsg({ tipo: 'error', texto: resData.error || 'Erro ao vincular conexão do Meu Pluggy' })
+      }
+    } catch (err: any) {
+      setFeedbackMsg({ tipo: 'error', texto: err.message || 'Erro inesperado ao conectar' })
+    } finally {
+      setVinculandoManual(false)
+    }
+  }
+
   // Sincronizar conexão sob demanda
   const handleSincronizar = async (conexaoId: string) => {
     try {
@@ -368,14 +412,84 @@ function carregarPluggySDK(): Promise<any> {
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                 Bancos Conectados ({conexoes.length})
               </h3>
-              <button
-                onClick={() => handleIniciarConexao()}
-                disabled={conectando}
-                className="text-xs font-medium px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {conectando ? <span className="animate-spin">🔄</span> : <span>+</span>} Conectar Banco
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMostrarVincularManual(v => !v)}
+                  className={cn(
+                    'text-xs font-medium px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5',
+                    mostrarVincularManual
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'border-white/10 hover:border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400'
+                  )}
+                  title="Vincular Item ID de conexão gratuita feita no Meu Pluggy"
+                >
+                  <span>🔗</span> Vincular Item ID
+                </button>
+                <button
+                  onClick={() => handleIniciarConexao()}
+                  disabled={conectando}
+                  className="text-xs font-medium px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {conectando ? <span className="animate-spin">🔄</span> : <span>+</span>} Conectar Banco
+                </button>
+              </div>
             </div>
+
+            {/* Painel de Vinculação Manual via Meu Pluggy */}
+            {mostrarVincularManual && (
+              <div className="border border-emerald-500/30 rounded-xl p-4 bg-emerald-500/[0.05] mb-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
+                      <span>🔗</span> Conexão Gratuita via Meu Pluggy (Item ID)
+                    </h4>
+                    <p className="text-[11px] text-gray-300 mt-1 leading-relaxed">
+                      Conectou sua conta bancária real no portal gratuito{' '}
+                      <a
+                        href="https://meu.pluggy.ai"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 font-semibold underline hover:text-emerald-300"
+                      >
+                        meu.pluggy.ai
+                      </a>
+                      ? Cole o <strong>Item ID</strong> da conexão abaixo para sincronizar saldos e extratos sem custo de mensalidade.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setMostrarVincularManual(false)}
+                    className="text-gray-400 hover:text-white text-sm px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={itemIdManual}
+                    onChange={(e) => setItemIdManual(e.target.value)}
+                    placeholder="Cole o Item ID aqui (ex: 41b2c3d4-e5f6-7890-abcd-1234567890ab)"
+                    className="flex-1 bg-black/40 border border-white/15 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none font-mono"
+                  />
+                  <button
+                    onClick={handleVincularManual}
+                    disabled={vinculandoManual || !itemIdManual.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  >
+                    {vinculandoManual ? <span className="animate-spin">🔄</span> : <span>⚡</span>}
+                    {vinculandoManual ? 'Sincronizando...' : 'Vincular e Importar'}
+                  </button>
+                </div>
+
+                <div className="text-[10px] text-emerald-200/70 flex items-center gap-1.5">
+                  <span>💡</span>
+                  <span>
+                    No <strong>meu.pluggy.ai</strong>, clique no banco conectado e copie o código do Item ID na URL ou nos detalhes da conexão.
+                  </span>
+                </div>
+              </div>
+            )}
 
             {loading ? (
               <div className="py-12 text-center text-gray-500 text-xs flex items-center justify-center gap-2">
@@ -388,13 +502,21 @@ function carregarPluggySDK(): Promise<any> {
                 <p className="text-xs text-gray-400 max-w-sm mx-auto mb-4">
                   Conecte seu banco via Open Finance para atualizar saldos e puxar lançamentos automaticamente, sem precisar de arquivos OFX.
                 </p>
-                <button
-                  onClick={() => handleIniciarConexao()}
-                  disabled={conectando}
-                  className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 mx-auto"
-                >
-                  {conectando ? <span className="animate-spin">🔄</span> : <span>⚡</span>} Conectar Meu Primeiro Banco
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    onClick={() => handleIniciarConexao()}
+                    disabled={conectando}
+                    className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
+                  >
+                    {conectando ? <span className="animate-spin">🔄</span> : <span>⚡</span>} Conectar via Widget
+                  </button>
+                  <button
+                    onClick={() => setMostrarVincularManual(true)}
+                    className="text-xs px-4 py-2 rounded-xl border border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-300 font-medium transition-all flex items-center gap-1.5"
+                  >
+                    <span>🔗</span> Vincular do Meu Pluggy
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
