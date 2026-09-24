@@ -26,6 +26,11 @@ interface MensagemChat {
   // A URL assinada é pedida na hora de mostrar, logo abaixo.
   anexo_path: string | null
   anexo_tipo: string | null
+  // 24/09/2026 — pendências (migration 087). Mensagem marcada como tarefa
+  // fica aberta enquanto `resolvido_em` for nulo.
+  pendente: boolean | null
+  resolvido_em: string | null
+  resolvido_por: string | null
   created_at: string
 }
 
@@ -140,6 +145,8 @@ export default function ComunicacaoClient() {
   // URL tem validade e não pode ser guardada no banco.
   const [urlsAnexos, setUrlsAnexos] = useState<Record<string, string>>({})
   const [enviandoAnexo, setEnviandoAnexo] = useState(false)
+  // Filtro do cabeçalho: mostra só as pendências abertas da conversa.
+  const [soPendencias, setSoPendencias] = useState(false)
   const { warning } = useToast()
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -277,13 +284,45 @@ export default function ComunicacaoClient() {
   }, [mensagens])
 
   // ── Filter messages ─────────────────────────────────────────
-  const mensagensFiltradas = mensagens.filter(m => {
+  const mensagensDaConversa = mensagens.filter(m => {
     if (activeChat === null) return m.destinatario_id === null
     return (
       (m.remetente_id === currentUser?.id && m.destinatario_id === activeChat) ||
       (m.remetente_id === activeChat && m.destinatario_id === currentUser?.id)
     )
   })
+
+  // Pendência ABERTA = marcada e ainda não resolvida. O contador do
+  // cabeçalho usa isto, e é ele que responde ao "você já resolveu?" sem
+  // ninguém precisar rolar a conversa.
+  const pendenciasAbertas = mensagensDaConversa.filter(m => m.pendente && !m.resolvido_em)
+  const mensagensFiltradas = soPendencias ? pendenciasAbertas : mensagensDaConversa
+
+  // ── Marcar / desmarcar pendência ────────────────────────────
+  // Três estados, um botão: normal → pendente → resolvida → normal.
+  // A atualização é otimista (muda na tela na hora) e desfeita se o banco
+  // recusar — o erro aparece, não some.
+  const alternarPendencia = async (msg: MensagemChat) => {
+    if (!currentUser) return
+    const aberta = !!msg.pendente && !msg.resolvido_em
+    const resolvida = !!msg.pendente && !!msg.resolvido_em
+
+    const novo = aberta
+      ? { pendente: true,  resolvido_em: new Date().toISOString(), resolvido_por: currentUser.id }
+      : resolvida
+        ? { pendente: false, resolvido_em: null, resolvido_por: null }
+        : { pendente: true,  resolvido_em: null, resolvido_por: null }
+
+    const anterior = mensagens
+    setMensagens(prev => prev.map(m => m.id === msg.id ? { ...m, ...novo } as MensagemChat : m))
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('chat_interno') as any).update(novo).eq('id', msg.id)
+    if (error) {
+      setMensagens(anterior)
+      warning(`Não consegui marcar: ${error.message}`)
+    }
+  }
 
   // ── Web Push helper ─────────────────────────────────────────
   const sendPush = async (destinatario: string | null, texto: string) => {
@@ -552,15 +591,46 @@ export default function ComunicacaoClient() {
             <p className="text-[11px] text-fg-tertiary">{onlineUsers.length} online</p>
           )}
         </div>
+
+        {/* Filtro de pendências — é a razão de existir deste chat em vez
+            do WhatsApp: o que está em aberto fica a um toque, em vez de
+            rolar para cima e sumir. */}
+        <button
+          onClick={() => setSoPendencias(v => !v)}
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all shrink-0',
+            soPendencias
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+              : pendenciasAbertas.length > 0
+                ? 'text-amber-400/80 hover:bg-muted border border-transparent'
+                : 'text-fg-disabled hover:bg-muted border border-transparent'
+          )}
+          title={soPendencias ? 'Mostrar a conversa inteira' : 'Mostrar só o que está em aberto'}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill={pendenciasAbertas.length > 0 ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+          </svg>
+          {pendenciasAbertas.length > 0 ? pendenciasAbertas.length : ''}
+        </button>
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-4 md:px-5 space-y-3 scroll-smooth">
         {mensagensFiltradas.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-fg-disabled select-none">
-            <span className="text-5xl mb-3 opacity-20">💬</span>
-            <p className="text-sm">Nenhuma mensagem ainda</p>
-            <p className="text-xs mt-1">Seja o primeiro a dizer algo!</p>
+            {soPendencias ? (
+              <>
+                <span className="text-5xl mb-3 opacity-20">✅</span>
+                <p className="text-sm">Nada em aberto por aqui</p>
+                <p className="text-xs mt-1">Toque em ⚑ numa mensagem para marcar como pendência.</p>
+              </>
+            ) : (
+              <>
+                <span className="text-5xl mb-3 opacity-20">💬</span>
+                <p className="text-sm">Nenhuma mensagem ainda</p>
+                <p className="text-xs mt-1">Seja o primeiro a dizer algo!</p>
+              </>
+            )}
           </div>
         )}
 
@@ -570,7 +640,7 @@ export default function ComunicacaoClient() {
           const remetente = getRemetente(msg.remetente_id)
 
           return (
-            <div key={msg.id} className={cn('flex gap-2', isMe ? 'flex-row-reverse' : 'flex-row', !showHeader && (isMe ? 'pr-0' : 'pl-0'))}>
+            <div key={msg.id} className={cn('group flex gap-2', isMe ? 'flex-row-reverse' : 'flex-row', !showHeader && (isMe ? 'pr-0' : 'pl-0'))}>
               {/* Avatar - only on first of group, other side */}
               {!isMe && showHeader && (
                 <Avatar nome={remetente.nome} size="sm" />
@@ -585,7 +655,11 @@ export default function ComunicacaoClient() {
                   'px-3.5 py-2.5 text-sm break-words leading-relaxed shadow-sm',
                   isMe
                     ? 'bg-violet-600 text-white rounded-2xl rounded-tr-sm'
-                    : 'bg-[#141928] text-fg border border-border-subtle/80 rounded-2xl rounded-tl-sm'
+                    : 'bg-[#141928] text-fg border border-border-subtle/80 rounded-2xl rounded-tl-sm',
+                  // Pendência aberta ganha uma faixa âmbar na lateral. É a
+                  // marca que faz o combinado não se confundir com conversa.
+                  msg.pendente && !msg.resolvido_em && 'border-l-4 border-l-amber-400',
+                  msg.pendente && msg.resolvido_em && 'opacity-70',
                 )}>
                   {msg.texto && <p style={{ whiteSpace: 'pre-wrap' }}>{msg.texto}</p>}
                   {msg.anexo_path && (
@@ -630,6 +704,30 @@ export default function ComunicacaoClient() {
                     {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
+
+                {/* Botão de pendência. Fica FORA da bolha, discreto, e só
+                    ganha cor quando a mensagem vira tarefa. Três estados
+                    num toque só: marcar → resolver → desmarcar. */}
+                <button
+                  onClick={() => alternarPendencia(msg)}
+                  className={cn(
+                    'mt-1 flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-lg transition-colors',
+                    msg.pendente && !msg.resolvido_em
+                      ? 'text-amber-400 hover:bg-amber-500/10'
+                      : msg.pendente && msg.resolvido_em
+                        ? 'text-emerald-400/80 hover:bg-emerald-500/10'
+                        : 'text-fg-disabled opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-muted md:opacity-0 max-md:opacity-60',
+                  )}
+                  title={
+                    msg.pendente && !msg.resolvido_em ? 'Marcar como resolvida'
+                    : msg.pendente ? 'Tirar a marcação'
+                    : 'Marcar como pendência'
+                  }
+                >
+                  {msg.pendente && !msg.resolvido_em ? '⚑ pendente'
+                    : msg.pendente ? '✓ resolvida'
+                    : '⚑ marcar'}
+                </button>
               </div>
             </div>
           )
