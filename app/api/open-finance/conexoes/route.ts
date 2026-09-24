@@ -356,14 +356,28 @@ export async function POST(req: NextRequest) {
       try {
         const transacoes = await getPluggyTransactions(pAcc.id, { pageSize: 50, customCredentials: customCreds })
         for (const tx of transacoes) {
-          // Idempotência: verificar se transação já foi importada
-          const { data: txExistente } = await (adminSupabase.from('lancamentos') as any)
+          const isDespesa = tx.amount < 0 || tx.type === 'DEBIT'
+          const ehPessoal = categoria === 'pf'
+
+          // 🔴 FIX (24/09/2026) — O LIVRO CERTO.
+          // Antes, TODA transação ia para `lancamentos`, que é o livro da
+          // PJ. Conta pessoal aparecia com saldo certo e movimentação
+          // zerada, porque as telas de PF leem `gastos_pessoais` e
+          // `receitas_pessoais`. A Maiara viu em 24/09: PicPay com R$ 8,53
+          // e "LANÇAMENTOS 0".
+          const tabelaDestino = ehPessoal
+            ? (isDespesa ? 'gastos_pessoais' : 'receitas_pessoais')
+            : 'lancamentos'
+
+          // Idempotência: verificar se transação já foi importada.
+          // (A trava de verdade é o índice único da migration 088; esta
+          // consulta evita o trabalho inútil no caminho normal.)
+          const { data: txExistente } = await (adminSupabase.from(tabelaDestino) as any)
             .select('id')
             .eq('open_finance_id', tx.id)
             .maybeSingle()
 
           if (!txExistente) {
-            const isDespesa = tx.amount < 0 || tx.type === 'DEBIT'
             const valorAbs = Math.abs(tx.amount)
             const dataTx = String(tx.date ?? tx.createdAt ?? new Date().toISOString()).slice(0, 10)
 
@@ -392,7 +406,28 @@ export async function POST(req: NextRequest) {
             if (payerDoc) obsPartes.push(`Origem Doc: ${payerDoc}`)
             if (tx.category) obsPartes.push(`Categoria: ${tx.category}`)
 
-            await (adminSupabase.from('lancamentos') as any).insert({
+            // As duas famílias de tabela têm formatos diferentes de propósito:
+            // a PJ é contábil (regime, competência × caixa, status), a PF é
+            // simples (uma data, uma categoria em texto). Montar cada uma com
+            // os campos que ela tem, em vez de forçar um formato só.
+            const linhaPessoal: Record<string, any> = {
+              user_id: user.id,
+              conta_id: contaId,
+              descricao: descFinal,
+              valor: valorAbs,
+              categoria: tx.category || 'outros',
+              data: dataTx,
+              recorrente: false,
+              notas: obsPartes.join(' | '),
+              open_finance_id: tx.id,
+            }
+            // `forma_pagamento` só existe em gastos_pessoais.
+            if (isDespesa) {
+              linhaPessoal.forma_pagamento =
+                String(tx.paymentData?.paymentMethod || 'outro').toLowerCase()
+            }
+
+            const linhaEmpresa = {
               empresa_id: empresaId,
               conta_id: contaId,
               descricao: descFinal,
@@ -407,8 +442,20 @@ export async function POST(req: NextRequest) {
               observacoes: obsPartes.join(' | '),
               conciliado: true,
               created_by: user.id,
-            })
-            transacoesImportadas++
+            }
+
+            const { error: errIns } = await (adminSupabase.from(tabelaDestino) as any)
+              .insert(ehPessoal ? linhaPessoal : linhaEmpresa)
+
+            if (errIns) {
+              // 23505 = índice único: a transação já existe. Não é erro,
+              // é a trava fazendo o trabalho dela — segue para a próxima.
+              if (errIns.code !== '23505') {
+                console.warn(`Não importei a transação ${tx.id} para ${tabelaDestino}:`, errIns.message)
+              }
+            } else {
+              transacoesImportadas++
+            }
           }
         }
       } catch (txErr) {
