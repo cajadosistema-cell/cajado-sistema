@@ -21,7 +21,36 @@ interface MensagemChat {
   destinatario_id: string | null
   texto: string | null
   audio_base64: string | null
+  // 24/09/2026 — anexos (migration 086). `anexo_path` é o CAMINHO no bucket
+  // privado `chat-anexos`, não uma URL: não dá para usar direto num src.
+  // A URL assinada é pedida na hora de mostrar, logo abaixo.
+  anexo_path: string | null
+  anexo_tipo: string | null
   created_at: string
+}
+
+// ── prepararImagem ────────────────────────────────────────────
+// Reduz a foto ANTES de subir. O Sr. Max fotografa boleto pelo celular e
+// saem 3-4 MB; com 1600px no lado maior e JPEG 0.8 fica em ~300 KB, e o
+// código de barras continua perfeitamente legível. Isso economiza o 4G
+// dele, o espaço do plano e o tempo de abrir a conversa.
+//
+// O limite de 10 MB do bucket continua valendo como segunda trava, para
+// o caso de alguém contornar a tela.
+async function prepararImagem(file: File): Promise<Blob> {
+  const LADO_MAX = 1600
+  const bitmap = await createImageBitmap(file)
+  const escala = Math.min(1, LADO_MAX / Math.max(bitmap.width, bitmap.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(bitmap.width * escala)
+  canvas.height = Math.round(bitmap.height * escala)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return file
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close?.()
+  return await new Promise<Blob>(resolve => {
+    canvas.toBlob(b => resolve(b ?? file), 'image/jpeg', 0.8)
+  })
 }
 
 // ── Avatar helpers ────────────────────────────────────────────
@@ -107,6 +136,10 @@ export default function ComunicacaoClient() {
   const [recordingTime, setRecordingTime] = useState(0)
   // Mobile: null = mostra lista, qualquer valor = mostra chat
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
+  // Anexos: caminho no bucket → URL assinada. O bucket é privado, então a
+  // URL tem validade e não pode ser guardada no banco.
+  const [urlsAnexos, setUrlsAnexos] = useState<Record<string, string>>({})
+  const [enviandoAnexo, setEnviandoAnexo] = useState(false)
   const { warning } = useToast()
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -114,6 +147,7 @@ export default function ComunicacaoClient() {
   const timerRef = useRef<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Load data & realtime ────────────────────────────────────
   useEffect(() => {
@@ -215,6 +249,33 @@ export default function ComunicacaoClient() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensagens, activeChat])
 
+  // ── URLs assinadas dos anexos ───────────────────────────────
+  // Bucket privado não tem URL fixa: cada arquivo precisa de uma URL com
+  // validade. Pedimos em LOTE (`createSignedUrls`) só para os caminhos que
+  // ainda não temos — uma conversa com trinta fotos faria trinta chamadas
+  // se fosse uma a uma.
+  useEffect(() => {
+    const faltando = Array.from(new Set(
+      mensagens
+        .map(m => m.anexo_path)
+        .filter((p): p is string => !!p && !urlsAnexos[p])
+    ))
+    if (faltando.length === 0) return
+    let ativo = true
+    supabase.storage.from('chat-anexos').createSignedUrls(faltando, 3600)
+      .then(({ data, error }) => {
+        if (error) { console.error('[chat] anexos sem URL:', error.message); return }
+        if (!ativo || !data) return
+        const novas: Record<string, string> = {}
+        data.forEach(d => { if (d.path && d.signedUrl) novas[d.path] = d.signedUrl })
+        setUrlsAnexos(prev => ({ ...prev, ...novas }))
+      })
+    return () => { ativo = false }
+  // `urlsAnexos` fora das dependências de propósito: ele é ESCRITO aqui, e
+  // incluí-lo faria o efeito se chamar em laço.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensagens])
+
   // ── Filter messages ─────────────────────────────────────────
   const mensagensFiltradas = mensagens.filter(m => {
     if (activeChat === null) return m.destinatario_id === null
@@ -255,6 +316,61 @@ export default function ComunicacaoClient() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText() }
+  }
+
+  // ── Anexo (foto ou PDF) ─────────────────────────────────────
+  // Sobe o arquivo para o bucket privado e grava só o caminho na mensagem.
+  // O caminho é `<user_id>/<timestamp>-<aleatório>.<ext>`: a política do
+  // Storage exige que a primeira pasta seja o id de quem está logado, então
+  // ninguém grava na pasta de outro.
+  const handleAnexo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // permite reenviar o MESMO arquivo em seguida
+    if (!file || !currentUser) return
+
+    const ehImagem = file.type.startsWith('image/')
+    const ehPdf = file.type === 'application/pdf'
+    if (!ehImagem && !ehPdf) {
+      warning('Por enquanto dá para enviar imagem (JPG, PNG, WEBP) ou PDF.')
+      return
+    }
+
+    setEnviandoAnexo(true)
+    try {
+      const corpo = ehImagem ? await prepararImagem(file) : file
+      const tipo = ehImagem ? 'image/jpeg' : 'application/pdf'
+      const ext = ehImagem ? 'jpg' : 'pdf'
+      const path = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+
+      const { error: errUp } = await supabase.storage
+        .from('chat-anexos')
+        .upload(path, corpo, { contentType: tipo, upsert: false })
+      if (errUp) throw new Error(errUp.message)
+
+      // A legenda que estiver digitada vai junto, como no WhatsApp.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: errIns } = await (supabase.from('chat_interno') as any).insert({
+        remetente_id: currentUser.id,
+        destinatario_id: activeChat,
+        texto: texto.trim() || null,
+        audio_base64: null,
+        anexo_path: path,
+        anexo_tipo: tipo,
+      })
+      if (errIns) throw new Error(errIns.message)
+
+      setTexto('')
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+      sendPush(activeChat, ehImagem ? '📷 Foto' : '📄 Documento')
+    } catch (err) {
+      // Erro visível de propósito. Anexo que "some" sem avisar é pior que
+      // anexo que não vai — foi assim que o histórico do chat ficou mudo
+      // por semanas.
+      const msg = err instanceof Error ? err.message : 'erro desconhecido'
+      warning(`Não consegui enviar o anexo: ${msg}`)
+    } finally {
+      setEnviandoAnexo(false)
+    }
   }
 
   // ── Audio ───────────────────────────────────────────────────
@@ -472,6 +588,38 @@ export default function ComunicacaoClient() {
                     : 'bg-[#141928] text-fg border border-border-subtle/80 rounded-2xl rounded-tl-sm'
                 )}>
                   {msg.texto && <p style={{ whiteSpace: 'pre-wrap' }}>{msg.texto}</p>}
+                  {msg.anexo_path && (
+                    <div className="my-1">
+                      {msg.anexo_tipo?.startsWith('image/') ? (
+                        urlsAnexos[msg.anexo_path] ? (
+                          <a href={urlsAnexos[msg.anexo_path]} target="_blank" rel="noreferrer" title="Abrir em tamanho real">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={urlsAnexos[msg.anexo_path]}
+                              alt="Anexo"
+                              className="rounded-xl max-w-[240px] max-h-[320px] object-cover cursor-zoom-in"
+                            />
+                          </a>
+                        ) : (
+                          // Enquanto a URL assinada não chega. Mantém a altura
+                          // para a conversa não pular quando a imagem entra.
+                          <div className="w-[240px] h-[160px] rounded-xl bg-muted/40 animate-pulse" />
+                        )
+                      ) : (
+                        <a
+                          href={urlsAnexos[msg.anexo_path] ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted/40 hover:bg-muted transition"
+                        >
+                          <span className="text-lg">📄</span>
+                          <span className="text-xs font-semibold underline">
+                            {urlsAnexos[msg.anexo_path] ? 'Abrir documento' : 'Carregando...'}
+                          </span>
+                        </a>
+                      )}
+                    </div>
+                  )}
                   {msg.audio_base64 && (
                     <div className="my-1">
                       <audio src={msg.audio_base64} controls className="h-8 max-w-[200px] rounded" />
@@ -520,6 +668,25 @@ export default function ComunicacaoClient() {
               onKeyDown={handleKeyDown}
             />
             <div className="flex gap-1 pb-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="hidden"
+                onChange={handleAnexo}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={enviandoAnexo}
+                className="p-2.5 text-fg-tertiary hover:text-violet-400 hover:bg-muted active:bg-zinc-700 rounded-xl transition-all disabled:opacity-40"
+                title="Enviar foto ou PDF"
+              >
+                {enviandoAnexo ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                )}
+              </button>
               <button
                 onClick={startRecording}
                 className="p-2.5 text-fg-tertiary hover:text-violet-400 hover:bg-muted active:bg-zinc-700 rounded-xl transition-all"
